@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BarChart3, Database, FileText, BookOpen } from "lucide-react";
+import { BarChart3, BookOpen, Database, FileText } from "lucide-react";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { WorkspaceModulePage } from "@/components/WorkspaceModulePage";
 
@@ -10,6 +10,12 @@ export const Route = createFileRoute("/accounts/")({
         eyebrow="Workspace / Accounts"
         title="Accounts"
         description="Maintain the bank and cash account records for every branch."
+        tabs={[
+          { label: "Masters", to: "/accounts/masters" },
+          { label: "Journal", to: "/accounts/journal" },
+          { label: "Ledger", to: "/accounts/ledger" },
+          { label: "Final Account", to: "/accounts/final" },
+        ]}
         tiles={[
           {
             key: "masters",
@@ -24,6 +30,13 @@ export const Route = createFileRoute("/accounts/")({
             desc: "Balanced journal entries and vouchers",
             icon: FileText,
             to: "/accounts/journal",
+          },
+          {
+            key: "ledger",
+            label: "Ledger",
+            desc: "Create, list and view ledger statements",
+            icon: BookOpen,
+            to: "/accounts/ledger",
           },
           {
             key: "final-accounts",

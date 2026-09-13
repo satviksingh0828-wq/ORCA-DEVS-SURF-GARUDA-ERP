@@ -15,18 +15,25 @@ type WorkspaceTile = {
   roles?: readonly ("admin" | "semi_admin" | "basic" | "viewer")[];
 };
 
+type WorkspaceTab = {
+  label: string;
+  to: string;
+};
+
 export function WorkspaceModulePage({
   title,
   description,
   tiles,
   eyebrow,
   allowedRoles = ["admin", "semi_admin", "viewer"],
+  tabs,
 }: {
   title: string;
   description: string;
   tiles: WorkspaceTile[];
   eyebrow: string;
   allowedRoles?: readonly ("admin" | "semi_admin" | "basic" | "viewer")[];
+  tabs?: readonly WorkspaceTab[];
 }) {
   const navigate = useNavigate();
   const { user } = useSession();
@@ -55,6 +62,15 @@ export function WorkspaceModulePage({
         </span>
       }
     >
+      {tabs && tabs.length > 0 && (
+        <nav aria-label={`${title} tabs`} className="mb-8 flex flex-wrap gap-2 rounded-2xl border border-border bg-card p-2">
+          {tabs.map((tab) => (
+            <Link key={tab.to} to={tab.to} className="rounded-xl px-4 py-2.5 text-sm font-semibold text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">
+              {tab.label}
+            </Link>
+          ))}
+        </nav>
+      )}
       <div className="animate-fade-up">
         <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">{eyebrow}</p>
         <h1 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h1>
