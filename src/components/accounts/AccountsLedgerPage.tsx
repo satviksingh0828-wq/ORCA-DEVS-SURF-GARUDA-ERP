@@ -9,6 +9,7 @@ import {
   Loader2,
   Plus,
   Save,
+  Scale,
   Search,
   Upload,
   WalletCards,
@@ -29,7 +30,7 @@ import { openBrandedTablePdf } from "@/lib/branded-pdf";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-type LedgerTab = "capital" | "create" | "list" | "view";
+type LedgerTab = "capital" | "create" | "list" | "view" | "trial-balance";
 type LedgerType =
   | "asset"
   | "liability"
@@ -68,6 +69,15 @@ type JournalLine = {
     reference: string | null;
     status: string;
   } | null;
+};
+
+type TrialBalanceRow = {
+  branch_id: string;
+  ledger_account_id: string;
+  account_name: string;
+  ledger_type: LedgerType;
+  debit: number;
+  credit: number;
 };
 
 type FormState = {
@@ -224,6 +234,10 @@ export function AccountsLedgerPage() {
   const [viewRows, setViewRows] = useState<JournalLine[]>([]);
   const [viewOpeningNet, setViewOpeningNet] = useState(0);
   const [viewLoading, setViewLoading] = useState(false);
+  const [trialBranch, setTrialBranch] = useState("all");
+  const [trialAsOf, setTrialAsOf] = useState(today);
+  const [trialRows, setTrialRows] = useState<TrialBalanceRow[]>([]);
+  const [trialLoading, setTrialLoading] = useState(false);
   const [capitalBranch, setCapitalBranch] = useState("");
   const [capitalOpening, setCapitalOpening] = useState("0");
   const [capitalDate, setCapitalDate] = useState(today);
@@ -262,6 +276,79 @@ export function AccountsLedgerPage() {
     if (!viewBranch && branches[0]) setViewBranch(branches[0].id);
     if (!capitalBranch && branches[0]) setCapitalBranch(branches[0].id);
   }, [branches, viewBranch, capitalBranch]);
+
+  async function loadTrialBalance() {
+    if (!trialAsOf) return;
+    setTrialLoading(true);
+    try {
+      const { data, error } = await db
+        .from("journal_lines")
+        .select(
+          "ledger_account_id,debit,credit,ledger_account:ledger_accounts!inner(account_name,ledger_type,branch_id),journal_entry:journal_entries!inner(entry_date,status,branch_id)",
+        )
+        .eq("journal_entry.status", "approved")
+        .lte("journal_entry.entry_date", trialAsOf)
+        .limit(10000);
+      if (error) throw new Error(error.message);
+      const totals = new Map<string, TrialBalanceRow>();
+      for (const row of (data ?? []) as Array<{
+        ledger_account_id: string;
+        debit: number | string | null;
+        credit: number | string | null;
+        ledger_account?: {
+          account_name: string;
+          ledger_type: LedgerType;
+          branch_id: string;
+        } | null;
+        journal_entry?: { branch_id: string } | null;
+      }>) {
+        const account = row.ledger_account;
+        const branchId = account?.branch_id ?? row.journal_entry?.branch_id;
+        if (!account || !branchId || (trialBranch !== "all" && branchId !== trialBranch)) continue;
+        const key = `${branchId}:${row.ledger_account_id}`;
+        const current = totals.get(key) ?? {
+          branch_id: branchId,
+          ledger_account_id: row.ledger_account_id,
+          account_name: account.account_name,
+          ledger_type: account.ledger_type,
+          debit: 0,
+          credit: 0,
+        };
+        current.debit += money(row.debit);
+        current.credit += money(row.credit);
+        totals.set(key, current);
+      }
+      setTrialRows(
+        [...totals.values()].sort((a, b) =>
+          `${branchById.get(a.branch_id)?.branch_name ?? ""}-${a.account_name}`.localeCompare(
+            `${branchById.get(b.branch_id)?.branch_name ?? ""}-${b.account_name}`,
+          ),
+        ),
+      );
+    } catch (error) {
+      toast.error(
+        `Could not load trial balance: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      setTrialRows([]);
+    } finally {
+      setTrialLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (tab === "trial-balance") void loadTrialBalance();
+    // Trial balance is intentionally refreshed when its branch/date filters change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, trialBranch, trialAsOf]);
+
+  const trialTotals = useMemo(
+    () =>
+      trialRows.reduce(
+        (totals, row) => ({ debit: totals.debit + row.debit, credit: totals.credit + row.credit }),
+        { debit: 0, credit: 0 },
+      ),
+    [trialRows],
+  );
 
   const filteredList = useMemo(() => {
     const search = listSearch.trim().toLowerCase();
@@ -996,6 +1083,120 @@ export function AccountsLedgerPage() {
                         ))
                       )}
                     </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          )}
+
+          {tab === "trial-balance" && (
+            <div className="space-y-5 animate-fade-up">
+              <section className="surface-card p-5">
+                <div className="flex flex-wrap items-end gap-3">
+                  <label className="min-w-52 flex-1 space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">Branch</span>
+                    <select
+                      value={trialBranch}
+                      onChange={(event) => setTrialBranch(event.target.value)}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                    >
+                      <option value="all">All branches</option>
+                      {branches.map((branch) => (
+                        <option key={branch.id} value={branch.id}>
+                          {branch.branch_name}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="min-w-44 flex-1 space-y-1.5">
+                    <span className="text-xs font-medium text-muted-foreground">As of date</span>
+                    <Input
+                      type="date"
+                      value={trialAsOf}
+                      onChange={(event) => setTrialAsOf(event.target.value)}
+                    />
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void loadTrialBalance()}
+                    disabled={trialLoading}
+                    className="gap-2"
+                  >
+                    {trialLoading ? <Loader2 className="size-4 animate-spin" /> : <Scale className="size-4" />}
+                    {trialLoading ? "Refreshing…" : "Refresh"}
+                  </Button>
+                </div>
+                <p className="mt-4 text-sm text-muted-foreground">
+                  Live approved journal postings through {dateText(trialAsOf)}. Select a branch to
+                  review that branch&apos;s books, or keep All branches for a consolidated view.
+                </p>
+              </section>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <p className="text-sm text-muted-foreground">
+                  {trialRows.length} ledger account{trialRows.length === 1 ? "" : "s"}
+                </p>
+                <div className="flex gap-4 text-sm">
+                  <span>Total debit: <strong>{moneyText(trialTotals.debit)}</strong></span>
+                  <span>Total credit: <strong>{moneyText(trialTotals.credit)}</strong></span>
+                </div>
+              </div>
+              <section className="overflow-hidden rounded-2xl border border-border bg-card">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        <th className="px-4 py-3">Branch</th>
+                        <th className="px-4 py-3">Ledger account</th>
+                        <th className="px-4 py-3">Type</th>
+                        <th className="px-4 py-3 text-right">Debit</th>
+                        <th className="px-4 py-3 text-right">Credit</th>
+                        <th className="px-4 py-3 text-right">Balance</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {trialLoading ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                            <Loader2 className="mx-auto size-5 animate-spin" />
+                          </td>
+                        </tr>
+                      ) : trialRows.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                            No approved journal postings exist for this branch and date.
+                          </td>
+                        </tr>
+                      ) : (
+                        trialRows.map((row) => {
+                          const net = row.debit - row.credit;
+                          return (
+                            <tr key={`${row.branch_id}-${row.ledger_account_id}`} className="hover:bg-muted/30">
+                              <td className="px-4 py-3">{branchById.get(row.branch_id)?.branch_name ?? "—"}</td>
+                              <td className="px-4 py-3 font-semibold">{row.account_name}</td>
+                              <td className="px-4 py-3"><LedgerTypeBadge type={row.ledger_type} /></td>
+                              <td className="px-4 py-3 text-right tabular-nums">{moneyText(row.debit)}</td>
+                              <td className="px-4 py-3 text-right tabular-nums">{moneyText(row.credit)}</td>
+                              <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                                {moneyText(Math.abs(net))} {net >= 0 ? "Dr" : "Cr"}
+                              </td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    {trialRows.length > 0 && (
+                      <tfoot>
+                        <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+                          <td colSpan={3} className="px-4 py-3">Total</td>
+                          <td className="px-4 py-3 text-right tabular-nums">{moneyText(trialTotals.debit)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums">{moneyText(trialTotals.credit)}</td>
+                          <td className="px-4 py-3 text-right tabular-nums">
+                            {Math.abs(trialTotals.debit - trialTotals.credit) < 0.005 ? "Balanced" : "Difference " + moneyText(Math.abs(trialTotals.debit - trialTotals.credit))}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
               </section>
