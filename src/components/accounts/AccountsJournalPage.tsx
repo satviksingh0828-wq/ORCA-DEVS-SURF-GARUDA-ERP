@@ -1,5 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
+  ChevronDown,
+  ChevronRight,
   Download,
   FileDown,
   FileSpreadsheet,
@@ -87,6 +89,7 @@ function JournalPage() {
   const [transferReference, setTransferReference] = useState("");
   const [transferSaving, setTransferSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [expandedEntryId, setExpandedEntryId] = useState<string | null>(null);
 
   const branchMap = useMemo(
     () => new Map(branches.map((branch) => [branch.id, branch.branch_name])),
@@ -900,57 +903,138 @@ function JournalPage() {
                             <Loader2 className="mx-auto size-5 animate-spin" />
                           </td>
                         </tr>
+                      ) : filteredEntries.length === 0 ? (
+                        <tr>
+                          <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                            No journal entries match the selected filters.
+                          </td>
+                        </tr>
                       ) : (
-                        filteredEntries.map((entry) => (
-                          <tr key={entry.id} className="hover:bg-muted/30">
-                            <td className="px-4 py-3 font-semibold">{entry.voucher_number}</td>
-                            <td className="px-4 py-3">{entry.entry_date}</td>
-                            <td className="px-4 py-3">{branchMap.get(entry.branch_id) ?? "—"}</td>
-                            <td className="px-4 py-3">
-                              <p>{entry.description}</p>
-                              <p className="text-xs text-muted-foreground">
-                                {entry.reference ?? ""}
-                              </p>
-                            </td>
-                            <td className="px-4 py-3">
-                              <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold">
-                                {entry.source_module === "auto" ? "Automatic opening" : "Manual"}
-                              </span>
-                            </td>
-                            <td className="flex gap-2 px-4 py-3">
-                              <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                onClick={() => void exportPdf(entry)}
-                              >
-                                PDF
-                              </Button>
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="gap-1.5 text-destructive hover:text-destructive"
-                                disabled={
-                                  entry.source_module !== "manual" || deletingId === entry.id
-                                }
-                                title={
-                                  entry.source_module === "manual"
-                                    ? "Delete journal entry"
-                                    : "Automatic entries must be removed from their source transaction"
-                                }
-                                onClick={() => void deleteEntry(entry)}
-                              >
-                                {deletingId === entry.id ? (
-                                  <Loader2 className="size-3.5 animate-spin" />
-                                ) : (
-                                  <Trash2 className="size-3.5" />
-                                )}
-                                Delete
-                              </Button>
-                            </td>
-                          </tr>
-                        ))
+                        filteredEntries.map((entry) => {
+                          const expanded = expandedEntryId === entry.id;
+                          return (
+                            <Fragment key={entry.id}>
+                              <tr className="hover:bg-muted/30">
+                                <td className="px-4 py-3 font-semibold">
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center gap-1.5 text-left hover:text-primary"
+                                    onClick={() => setExpandedEntryId(expanded ? null : entry.id)}
+                                    aria-expanded={expanded}
+                                    aria-label={`${expanded ? "Hide" : "Show"} lines for ${entry.voucher_number}`}
+                                  >
+                                    {expanded ? (
+                                      <ChevronDown className="size-4" />
+                                    ) : (
+                                      <ChevronRight className="size-4" />
+                                    )}
+                                    {entry.voucher_number}
+                                  </button>
+                                </td>
+                                <td className="px-4 py-3">{entry.entry_date}</td>
+                                <td className="px-4 py-3">{branchMap.get(entry.branch_id) ?? "—"}</td>
+                                <td className="px-4 py-3">
+                                  <p>{entry.description || "—"}</p>
+                                  {entry.reference && (
+                                    <p className="text-xs text-muted-foreground">Ref: {entry.reference}</p>
+                                  )}
+                                </td>
+                                <td className="px-4 py-3">
+                                  <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold">
+                                    {entry.source_module === "auto" ? "Automatic opening" : "Manual"}
+                                  </span>
+                                </td>
+                                <td className="flex gap-2 px-4 py-3">
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => setExpandedEntryId(expanded ? null : entry.id)}
+                                  >
+                                    {expanded ? "Hide lines" : "View lines"}
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => void exportPdf(entry)}
+                                  >
+                                    PDF
+                                  </Button>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    className="gap-1.5 text-destructive hover:text-destructive"
+                                    disabled={
+                                      entry.source_module !== "manual" || deletingId === entry.id
+                                    }
+                                    title={
+                                      entry.source_module === "manual"
+                                        ? "Delete journal entry"
+                                        : "Automatic entries must be removed from their source transaction"
+                                    }
+                                    onClick={() => void deleteEntry(entry)}
+                                  >
+                                    {deletingId === entry.id ? (
+                                      <Loader2 className="size-3.5 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="size-3.5" />
+                                    )}
+                                    Delete
+                                  </Button>
+                                </td>
+                              </tr>
+                              {expanded && (
+                                <tr key={`${entry.id}-details`} className="bg-muted/20">
+                                  <td colSpan={6} className="px-6 py-4">
+                                    <div className="rounded-xl border border-border bg-background p-4">
+                                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                                        <div>
+                                          <h3 className="font-semibold">Journal lines</h3>
+                                          <p className="text-xs text-muted-foreground">
+                                            {entry.lines?.length ?? 0} line{entry.lines?.length === 1 ? "" : "s"} · Status: {entry.status}
+                                          </p>
+                                        </div>
+                                        <div className="flex gap-4 text-sm">
+                                          <span>Debit: <strong>₹{totalFor(entry, "debit").toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></span>
+                                          <span>Credit: <strong>₹{totalFor(entry, "credit").toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></span>
+                                        </div>
+                                      </div>
+                                      <div className="overflow-x-auto">
+                                        <table className="w-full text-left text-sm">
+                                          <thead>
+                                            <tr className="border-b border-border text-xs uppercase tracking-wider text-muted-foreground">
+                                              <th className="px-3 py-2">#</th>
+                                              <th className="px-3 py-2">Account</th>
+                                              <th className="px-3 py-2">Description</th>
+                                              <th className="px-3 py-2 text-right">Debit</th>
+                                              <th className="px-3 py-2 text-right">Credit</th>
+                                            </tr>
+                                          </thead>
+                                          <tbody className="divide-y divide-border">
+                                            {(entry.lines ?? []).map((line) => (
+                                              <tr key={`${entry.id}-${line.line_no}`}>
+                                                <td className="px-3 py-2 text-muted-foreground">{line.line_no}</td>
+                                                <td className="px-3 py-2 font-medium">
+                                                  {line.ledger_account?.account_name ?? "Unknown account"}
+                                                  <span className="ml-2 text-xs text-muted-foreground">{line.ledger_account?.ledger_type ?? ""}</span>
+                                                </td>
+                                                <td className="px-3 py-2 text-muted-foreground">{line.line_description || "—"}</td>
+                                                <td className="px-3 py-2 text-right tabular-nums">{amount(line.debit) ? `₹${amount(line.debit).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}</td>
+                                                <td className="px-3 py-2 text-right tabular-nums">{amount(line.credit) ? `₹${amount(line.credit).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}</td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
