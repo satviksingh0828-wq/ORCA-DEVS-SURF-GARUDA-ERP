@@ -95,6 +95,16 @@ export function FinalAccountsRoute() {
   const inScope = (id: string) => branchId === "all" || accountById.get(id)?.branch_id === branchId;
   const balanceRows = useMemo(() => {
     const totals = new Map<string, ReportRow>();
+    const profitLossByBranch = new Map<string, number>();
+    for (const posting of postings) {
+      if (posting.entry_date > asOf) continue;
+      const account = accountById.get(posting.ledger_account_id);
+      if (!account || !["income", "expenditure"].includes(account.ledger_type)) continue;
+      const result = account.ledger_type === "income"
+        ? amount(posting.credit) - amount(posting.debit)
+        : amount(posting.debit) - amount(posting.credit);
+      profitLossByBranch.set(account.branch_id, (profitLossByBranch.get(account.branch_id) ?? 0) + result);
+    }
     for (const account of accounts) {
       if (branchId !== "all" && account.branch_id !== branchId) continue;
       const isBalanceType = ["asset", "bank", "cash", "liability", "capital"].includes(account.ledger_type);
@@ -109,8 +119,21 @@ export function FinalAccountsRoute() {
       const displayAmount = Math.abs(net);
       if (displayAmount > 0.005) { current.amount = displayAmount; totals.set(account.id, { ...current, side }); }
     }
+    for (const [branchId, profitLoss] of profitLossByBranch) {
+      if (Math.abs(profitLoss) <= 0.005) continue;
+      const capital = [...totals.values()].find((row) => row.branch_id === branchId && row.ledger_type === "capital" && !/branch\s*\/??\s*a\/c|branch account/i.test(row.account_name));
+      if (!capital) continue;
+      if (profitLoss > 0) {
+        capital.credit += profitLoss;
+      } else {
+        capital.debit += Math.abs(profitLoss);
+      }
+      const net = capital.debit - capital.credit;
+      capital.amount = Math.abs(net);
+      capital.side = net >= 0 ? "Dr" : "Cr";
+    }
     return [...totals.values()].sort((a, b) => `${branchById.get(a.branch_id)?.branch_name}-${a.account_name}`.localeCompare(`${branchById.get(b.branch_id)?.branch_name}-${b.account_name}`));
-  }, [accounts, asOf, branchId, branchById, postings]);
+  }, [accountById, accounts, asOf, branchId, branchById, postings]);
 
   const pnlRows = useMemo(() => {
     const totals = new Map<string, ReportRow>();
