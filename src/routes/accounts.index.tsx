@@ -10,12 +10,6 @@ export const Route = createFileRoute("/accounts/")({
         eyebrow="Workspace / Accounts"
         title="Accounts"
         description="Maintain the bank and cash account records for every branch."
-        tabs={[
-          { label: "Masters", to: "/accounts/masters" },
-          { label: "Journal", to: "/accounts/journal" },
-          { label: "Ledger", to: "/accounts/ledger" },
-          { label: "Final Account", to: "/accounts/final" },
-        ]}
         tiles={[
           {
             key: "masters",
