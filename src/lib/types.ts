@@ -258,6 +258,8 @@ export function effectivePaymentStatus(p: Pick<Payroll, 'payment_status'>): Payr
 export interface Loan {
   id: string;
   employee_id: string;
+  /** Branch bank/cash ledger used to disburse the loan or advance. */
+  disbursement_ledger_id: string | null;
   principal: number;
   interest_rate: number;
   interest_method: InterestMethod;

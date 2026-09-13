@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Banknote, HandCoins, Plus, CheckCircle2, Trash2, Download, ChevronDown, ChevronRight, FileText, AlertCircle, SplitSquareHorizontal, SkipForward, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,6 +22,7 @@ import { computeEMI, loanRemaining, loanRemainingFromInstallments } from '@/lib/
 import { ymd } from '@/lib/attendance-utils';
 import { exportLoanDetailPdf, exportLoansSummaryPdf, getLoanDetailPdfBase64 } from '@/lib/pdf-export';
 import { isWaConnected, sendWaPdf, normalizeWaNumber } from '@/lib/whatsapp';
+import { supabase } from '@/integrations/supabase/client';
 
 function money(n: number) {
   return '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -642,13 +643,42 @@ function LoanForm({ mode, employees, onDone, onCreate }: {
   const [months, setMonths]         = useState('1');
   const [start, setStart]           = useState(ymd(new Date()));
   const [notes, setNotes]           = useState('');
+  const [disbursementLedgerId, setDisbursementLedgerId] = useState('');
+  const [disbursementLedgers, setDisbursementLedgers] = useState<Array<{ id: string; account_name: string; ledger_type: string }>>([]);
+  const [loadingDisbursementLedgers, setLoadingDisbursementLedgers] = useState(false);
+  const [disbursementError, setDisbursementError] = useState('');
 
   const emiCalc    = useMemo(() => computeEMI(Number(principal), Number(rate), method, Number(months)), [principal, rate, method, months]);
   const selectedEmp = useMemo(() => employees.find(e => e.id === employeeId) ?? null, [employees, employeeId]);
   const minStart    = selectedEmp?.joining_date ?? undefined;
 
+  useEffect(() => {
+    let cancelled = false;
+    setDisbursementLedgerId('');
+    setDisbursementLedgers([]);
+    setDisbursementError('');
+    if (!selectedEmp?.accounting_branch_id) return;
+    setLoadingDisbursementLedgers(true);
+    void supabase
+      .from('ledger_accounts')
+      .select('id,account_name,ledger_type')
+      .eq('branch_id', selectedEmp.accounting_branch_id)
+      .eq('is_active', true)
+      .in('ledger_type', ['bank', 'cash'])
+      .order('account_name')
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) setDisbursementError(error.message);
+        setDisbursementLedgers((data ?? []) as Array<{ id: string; account_name: string; ledger_type: string }>);
+      })
+      .finally(() => { if (!cancelled) setLoadingDisbursementLedgers(false); });
+    return () => { cancelled = true; };
+  }, [selectedEmp?.accounting_branch_id]);
+
   const submit = async () => {
     if (!employeeId) { toast.error('Select an employee'); return; }
+    if (!selectedEmp?.accounting_branch_id) { toast.error('Select an Accounting Branch for this employee first'); return; }
+    if (!disbursementLedgerId) { toast.error(`Select the bank or cash account from which this ${mode} will be given`); return; }
     const P = Number(principal), n = Number(months);
     if (!(P > 0) || !(n > 0)) { toast.error('Enter valid amount and months'); return; }
     if (selectedEmp && start < selectedEmp.joining_date) {
@@ -660,6 +690,7 @@ function LoanForm({ mode, employees, onDone, onCreate }: {
     try {
       await onCreate({
         employee_id: employeeId,
+        disbursement_ledger_id: disbursementLedgerId,
         principal: P,
         interest_rate: Number(rate) || 0,
         interest_method: method,
@@ -698,6 +729,18 @@ function LoanForm({ mode, employees, onDone, onCreate }: {
               {selectedEmp.date_of_leaving ? ` · Left ${new Date(selectedEmp.date_of_leaving).toLocaleDateString('en-IN')}` : ''}
             </div>
           )}
+        </div>
+        <div className="space-y-1">
+          <Label>Paid from (employee Accounting Branch)</Label>
+          <Select value={disbursementLedgerId} onValueChange={setDisbursementLedgerId} disabled={!selectedEmp?.accounting_branch_id || loadingDisbursementLedgers}>
+            <SelectTrigger><SelectValue placeholder={loadingDisbursementLedgers ? 'Loading bank/cash accounts…' : 'Select bank or cash account'} /></SelectTrigger>
+            <SelectContent>
+              {disbursementLedgers.map(ledger => <SelectItem key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {!selectedEmp?.accounting_branch_id && <p className="text-xs text-muted-foreground">This employee has no Accounting Branch selected.</p>}
+          {selectedEmp?.accounting_branch_id && !loadingDisbursementLedgers && !disbursementError && disbursementLedgers.length === 0 && <p className="text-xs text-muted-foreground">No active bank or cash accounts found for this Accounting Branch.</p>}
+          {disbursementError && <p className="text-xs text-destructive">Could not load bank/cash accounts: {disbursementError}</p>}
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1"><Label>Principal</Label><Input type="number" value={principal} onChange={e => setPrincipal(e.target.value)} /></div>
