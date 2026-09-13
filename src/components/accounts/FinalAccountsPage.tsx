@@ -99,8 +99,10 @@ export function FinalAccountsRoute() {
       if (branchId !== "all" && account.branch_id !== branchId) continue;
       const isBalanceType = ["asset", "bank", "cash", "liability", "capital"].includes(account.ledger_type);
       if (!isBalanceType) continue;
-      const opening = amount(account.opening_balance);
-      const current = { branch_id: account.branch_id, account_id: account.id, account_name: account.account_name, ledger_type: account.ledger_type, amount: 0, debit: account.opening_balance_side === "dr" ? opening : 0, credit: account.opening_balance_side === "cr" ? opening : 0 };
+      // Trial Balance is based on approved journal lines. Opening balances are
+      // represented by those journal lines, so do not add ledger master opening
+      // values a second time here.
+      const current = { branch_id: account.branch_id, account_id: account.id, account_name: account.account_name, ledger_type: account.ledger_type, amount: 0, debit: 0, credit: 0 };
       for (const posting of postings) if (posting.ledger_account_id === account.id && posting.entry_date <= asOf) { current.debit += amount(posting.debit); current.credit += amount(posting.credit); }
       const net = current.debit - current.credit;
       const side = net >= 0 ? "Dr" : "Cr";
