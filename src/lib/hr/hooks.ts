@@ -418,7 +418,7 @@ export function useIncentiveAmounts(employeeId?: string) {
 export function useCreateIncentiveAmount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (values: { employee_id: string; amount: number; reason?: string | null }) => {
+    mutationFn: async (values: { employee_id: string; amount: number; reason?: string | null; journal_date: string }) => {
       const { data, error } = await sb.from('incentive_amounts').insert({ ...values, status: 'pending' }).select().single();
       if (error) throw error;
       return data as IncentiveAmount;

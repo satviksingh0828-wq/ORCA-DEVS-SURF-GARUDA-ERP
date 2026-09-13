@@ -34,6 +34,7 @@ export function LossDeductionsView() {
   const [empId, setEmpId] = useState('');
   const [amt, setAmt] = useState('0');
   const [reason, setReason] = useState('');
+  const [journalDate, setJournalDate] = useState(ymd(new Date()));
 
   const totals = useMemo(() => {
     const all = list ?? [];
@@ -47,7 +48,7 @@ export function LossDeductionsView() {
   const submit = async () => {
     if (!empId || !(Number(amt) > 0)) { toast.error('Select employee and amount'); return; }
     try {
-      await create.mutateAsync({ employee_id: empId, amount: Number(amt), reason: reason.trim(), status: 'pending', payroll_id: null, deducted_on: null });
+      await create.mutateAsync({ employee_id: empId, amount: Number(amt), reason: reason.trim(), journal_date: journalDate, status: 'pending', payroll_id: null, deducted_on: null });
       toast.success('Added — will deduct in next payroll');
       // Auto-send WA notification if enabled
       if (settings?.wa_send_loss_deduction) {
@@ -65,7 +66,7 @@ export function LossDeductionsView() {
           } catch { /* silent */ }
         }
       }
-      setShowAdd(false); setEmpId(''); setAmt('0'); setReason('');
+      setShowAdd(false); setEmpId(''); setAmt('0'); setReason(''); setJournalDate(ymd(new Date()));
     } catch (e) { toast.error((e as Error).message); }
   };
 
@@ -122,6 +123,7 @@ export function LossDeductionsView() {
           </div>
           <div className="grid gap-3 sm:grid-cols-2">
             <div className="space-y-1"><Label>Amount</Label><Input type="number" value={amt} onChange={e => setAmt(e.target.value)} /></div>
+            <div className="space-y-1"><Label>Journal date</Label><Input type="date" value={journalDate} onChange={e => setJournalDate(e.target.value)} /></div>
           </div>
           <div className="space-y-1"><Label>Reason</Label><Textarea rows={2} value={reason} onChange={e => setReason(e.target.value)} /></div>
           <div className="flex justify-end gap-2 pt-2">

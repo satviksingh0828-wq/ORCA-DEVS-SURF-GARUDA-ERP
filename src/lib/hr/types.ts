@@ -273,6 +273,8 @@ export interface IncentiveAmount {
   employee_id: string;
   amount: number;
   reason: string | null;
+  /** Date used only for the automatic accounting journal. */
+  journal_date: string;
   status: IncentiveStatus;
   payroll_id: string | null;
   added_on: string | null;

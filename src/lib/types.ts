@@ -332,6 +332,8 @@ export interface LossDeduction {
   employee_id: string;
   amount: number;
   reason: string;
+  /** Date used only for the automatic accounting journal. */
+  journal_date: string;
   status: LossDedStatus;
   payroll_id: string | null;
   deducted_on: string | null;
