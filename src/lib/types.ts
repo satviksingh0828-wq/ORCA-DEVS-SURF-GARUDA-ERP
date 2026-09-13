@@ -34,6 +34,7 @@ export interface Employee {
   inactive_reason: string | null;
   date_of_leaving: string | null;
   department_id: string | null;
+  accounting_branch_id: string | null;
   position_id: string | null;
   /** Employee's work location (branch, site, city, etc.) */
   location: string | null;

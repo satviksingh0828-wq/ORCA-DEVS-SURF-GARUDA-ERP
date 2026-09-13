@@ -12,6 +12,7 @@ import { computeSalary, type Employee, type EmployeeInput, type Gender, type Emp
 import { useCreateEmployee, useUpdateEmployee, useDepartments, useAllPositions } from '@/lib/hooks';
 import { employeeDocumentsApi, type EmployeeDocumentRecord } from '@/lib/employee-documents';
 import { serverListBasicUsers, type BasicUserOption } from '@/lib/user-auth';
+import { useBranches } from '@/lib/use-branches';
 
 type FormState = {
   employee_number: string;
@@ -43,6 +44,7 @@ type FormState = {
   inactive_reason: string;
   date_of_leaving: string;
   department_id: string;
+  accounting_branch_id: string;
   position_id: string;
   basic_user_id: string;
   bank_account_number: string;
@@ -91,6 +93,7 @@ function fromEmployee(e?: Employee): FormState {
     inactive_reason:              e?.inactive_reason ?? '',
     date_of_leaving:              e?.date_of_leaving ?? '',
     department_id:                e?.department_id ?? '',
+    accounting_branch_id:         e?.accounting_branch_id ?? '',
     position_id:                  e?.position_id ?? '',
     basic_user_id:                e?.basic_user_id ?? '',
     bank_account_number:          e?.bank_account_number ?? '',
@@ -110,6 +113,7 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
   const update     = useUpdateEmployee();
   const { data: departments = [] } = useDepartments();
   const { data: allPositions = [] } = useAllPositions();
+  const branches = useBranches();
   const [basicUsers, setBasicUsers] = useState<BasicUserOption[]>([]);
   const [step, setStep] = useState(0);
   const [f, setF] = useState<FormState>(() => fromEmployee(employee));
@@ -217,6 +221,7 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
       inactive_reason:             f.status === 'inactive' ? f.inactive_reason.trim() : null,
       date_of_leaving:             f.status === 'inactive' ? f.date_of_leaving : null,
             department_id:               f.department_id || null,
+            accounting_branch_id:        f.accounting_branch_id || null,
       position_id:                  f.department_id && f.position_id ? f.position_id : null,
       basic_user_id:                f.basic_user_id || null,
       bank_account_number:         f.bank_account_number.trim() || null,
@@ -604,6 +609,16 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
                         {(u.full_name || u.username) + (u.is_active ? '' : ' (inactive)')}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Accounting Branch</Label>
+                <Select value={f.accounting_branch_id || 'none'} onValueChange={v => set('accounting_branch_id', v === 'none' ? '' : v)}>
+                  <SelectTrigger className={inputCls}><SelectValue placeholder="Select accounting branch" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    {branches.map(branch => <SelectItem key={branch.id} value={branch.id}>{branch.branch_name}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
