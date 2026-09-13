@@ -350,6 +350,80 @@ export function AccountsLedgerPage() {
     [trialRows],
   );
 
+  function exportTrialBalanceExcel() {
+    const rows = trialRows.map((row) => {
+      const net = row.debit - row.credit;
+      return {
+        Branch: branchById.get(row.branch_id)?.branch_name ?? "—",
+        "Ledger account": row.account_name,
+        Type: labelForType(row.ledger_type),
+        Debit: row.debit,
+        Credit: row.credit,
+        Balance: Math.abs(net),
+        Side: net >= 0 ? "Dr" : "Cr",
+        "As of": trialAsOf,
+      };
+    });
+    rows.push({
+      Branch: "TOTAL",
+      "Ledger account": "",
+      Type: "",
+      Debit: trialTotals.debit,
+      Credit: trialTotals.credit,
+      Balance: Math.abs(trialTotals.debit - trialTotals.credit),
+      Side: trialTotals.debit >= trialTotals.credit ? "Dr" : "Cr",
+      "As of": trialAsOf,
+    });
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), "Trial Balance");
+    XLSX.writeFile(
+      workbook,
+      `trial-balance-${trialBranch === "all" ? "all-branches" : branchById.get(trialBranch)?.branch_name ?? "branch"}-${trialAsOf}.xlsx`,
+    );
+  }
+
+  async function exportTrialBalancePdf() {
+    const rows = trialRows.map((row) => {
+      const net = row.debit - row.credit;
+      return [
+        branchById.get(row.branch_id)?.branch_name ?? "—",
+        row.account_name,
+        labelForType(row.ledger_type),
+        row.debit ? pdfMoneyText(row.debit) : "—",
+        row.credit ? pdfMoneyText(row.credit) : "—",
+        `${pdfMoneyText(Math.abs(net))} ${net >= 0 ? "Dr" : "Cr"}`,
+      ];
+    });
+    rows.push([
+      "TOTAL",
+      "",
+      "",
+      pdfMoneyText(trialTotals.debit),
+      pdfMoneyText(trialTotals.credit),
+      Math.abs(trialTotals.debit - trialTotals.credit) < 0.005
+        ? "Balanced"
+        : `Difference ${pdfMoneyText(Math.abs(trialTotals.debit - trialTotals.credit))}`,
+    ]);
+    await openBrandedTablePdf({
+      title: "Trial Balance",
+      subtitle: `${trialBranch === "all" ? "All branches" : branchById.get(trialBranch)?.branch_name ?? "Branch"} · As of ${dateText(trialAsOf)}`,
+      filename: `trial-balance-${trialBranch === "all" ? "all-branches" : "branch"}-${trialAsOf}.pdf`,
+      orientation: "landscape",
+      columns: ["Branch", "Ledger account", "Type", "Debit", "Credit", "Balance"],
+      rows,
+      summary: [
+        ["Total debit", pdfMoneyText(trialTotals.debit)],
+        ["Total credit", pdfMoneyText(trialTotals.credit)],
+        [
+          "Status",
+          Math.abs(trialTotals.debit - trialTotals.credit) < 0.005
+            ? "Balanced"
+            : `Difference ${pdfMoneyText(Math.abs(trialTotals.debit - trialTotals.credit))}`,
+        ],
+      ],
+    });
+  }
+
   const filteredList = useMemo(() => {
     const search = listSearch.trim().toLowerCase();
     return ledgers.filter((ledger) => {
@@ -1125,6 +1199,26 @@ export function AccountsLedgerPage() {
                   >
                     {trialLoading ? <Loader2 className="size-4 animate-spin" /> : <Scale className="size-4" />}
                     {trialLoading ? "Refreshing…" : "Refresh"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={exportTrialBalanceExcel}
+                    disabled={!trialRows.length || trialLoading}
+                    className="gap-2"
+                  >
+                    <FileSpreadsheet className="size-4" />
+                    Excel
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => void exportTrialBalancePdf()}
+                    disabled={!trialRows.length || trialLoading}
+                    className="gap-2"
+                  >
+                    <FileDown className="size-4" />
+                    PDF
                   </Button>
                 </div>
                 <p className="mt-4 text-sm text-muted-foreground">
