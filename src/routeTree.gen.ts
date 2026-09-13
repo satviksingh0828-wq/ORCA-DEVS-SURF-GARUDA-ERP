@@ -33,6 +33,7 @@ import { Route as AccountsIndexRouteImport } from './routes/accounts.index'
 import { Route as AccountsAutoRulesRouteImport } from './routes/accounts.auto-rules'
 import { Route as AccountsBankRouteImport } from './routes/accounts.bank'
 import { Route as AccountsCashRouteImport } from './routes/accounts.cash'
+import { Route as AccountsFinalRouteImport } from './routes/accounts.final'
 import { Route as AccountsJournalRouteImport } from './routes/accounts.journal'
 import { Route as AccountsLedgerRouteImport } from './routes/accounts.ledger'
 import { Route as AccountsMastersRouteImport } from './routes/accounts.masters'
@@ -206,6 +207,11 @@ const AccountsBankRoute = AccountsBankRouteImport.update({
 const AccountsCashRoute = AccountsCashRouteImport.update({
   id: '/cash',
   path: '/cash',
+  getParentRoute: () => AccountsRoute,
+} as any)
+const AccountsFinalRoute = AccountsFinalRouteImport.update({
+  id: '/final',
+  path: '/final',
   getParentRoute: () => AccountsRoute,
 } as any)
 const AccountsJournalRoute = AccountsJournalRouteImport.update({
@@ -512,6 +518,7 @@ export interface FileRoutesByFullPath {
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
+  '/accounts/final': typeof AccountsFinalRoute
   '/accounts/journal': typeof AccountsJournalRoute
   '/accounts/ledger': typeof AccountsLedgerRoute
   '/accounts/masters': typeof AccountsMastersRouteWithChildren
@@ -587,6 +594,7 @@ export interface FileRoutesByTo {
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
+  '/accounts/final': typeof AccountsFinalRoute
   '/accounts/journal': typeof AccountsJournalRoute
   '/accounts/ledger': typeof AccountsLedgerRoute
   '/api/notify-admin': typeof ApiNotifyAdminRoute
@@ -665,6 +673,7 @@ export interface FileRoutesById {
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
+  '/accounts/final': typeof AccountsFinalRoute
   '/accounts/journal': typeof AccountsJournalRoute
   '/accounts/ledger': typeof AccountsLedgerRoute
   '/accounts/masters': typeof AccountsMastersRouteWithChildren
@@ -747,6 +756,7 @@ export interface FileRouteTypes {
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
+    | '/accounts/final'
     | '/accounts/journal'
     | '/accounts/ledger'
     | '/accounts/masters'
@@ -822,6 +832,7 @@ export interface FileRouteTypes {
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
+    | '/accounts/final'
     | '/accounts/journal'
     | '/accounts/ledger'
     | '/api/notify-admin'
@@ -899,6 +910,7 @@ export interface FileRouteTypes {
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
+    | '/accounts/final'
     | '/accounts/journal'
     | '/accounts/ledger'
     | '/accounts/masters'
@@ -1163,6 +1175,13 @@ declare module '@tanstack/react-router' {
       path: '/cash'
       fullPath: '/accounts/cash'
       preLoaderRoute: typeof AccountsCashRouteImport
+      parentRoute: typeof AccountsRoute
+    }
+    '/accounts/final': {
+      id: '/accounts/final'
+      path: '/final'
+      fullPath: '/accounts/final'
+      preLoaderRoute: typeof AccountsFinalRouteImport
       parentRoute: typeof AccountsRoute
     }
     '/accounts/journal': {
@@ -1568,6 +1587,7 @@ interface AccountsRouteChildren {
   AccountsAutoRulesRoute: typeof AccountsAutoRulesRoute
   AccountsBankRoute: typeof AccountsBankRoute
   AccountsCashRoute: typeof AccountsCashRoute
+  AccountsFinalRoute: typeof AccountsFinalRoute
   AccountsJournalRoute: typeof AccountsJournalRoute
   AccountsLedgerRoute: typeof AccountsLedgerRoute
   AccountsMastersRoute: typeof AccountsMastersRouteWithChildren
@@ -1578,6 +1598,7 @@ const AccountsRouteChildren: AccountsRouteChildren = {
   AccountsAutoRulesRoute: AccountsAutoRulesRoute,
   AccountsBankRoute: AccountsBankRoute,
   AccountsCashRoute: AccountsCashRoute,
+  AccountsFinalRoute: AccountsFinalRoute,
   AccountsJournalRoute: AccountsJournalRoute,
   AccountsLedgerRoute: AccountsLedgerRoute,
   AccountsMastersRoute: AccountsMastersRouteWithChildren,

@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BookOpen, Database, FileText } from "lucide-react";
+import { BarChart3, Database, FileText } from "lucide-react";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { WorkspaceModulePage } from "@/components/WorkspaceModulePage";
 
@@ -19,18 +19,18 @@ export const Route = createFileRoute("/accounts/")({
             to: "/accounts/masters",
           },
           {
-            key: "ledger",
-            label: "Ledger",
-            desc: "Create, list, view and export branch ledgers",
-            icon: BookOpen,
-            to: "/accounts/ledger",
-          },
-          {
             key: "journal",
             label: "Journal",
             desc: "Balanced journal entries and vouchers",
             icon: FileText,
             to: "/accounts/journal",
+          },
+          {
+            key: "final-accounts",
+            label: "Final Accounts",
+            desc: "Balance Sheet and Profit & Loss reports",
+            icon: BarChart3,
+            to: "/accounts/final",
           },
         ]}
       />
