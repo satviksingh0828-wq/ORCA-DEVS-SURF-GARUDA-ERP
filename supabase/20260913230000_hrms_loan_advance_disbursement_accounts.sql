@@ -133,7 +133,7 @@ begin
   end if;
 
   select id into v_existing from public.journal_entries
-  where reference = 'hrms:queue:' || q.id::text and source_module = 'hrms';
+  where reference = 'hrms:queue:' || q.id::text and source_module = 'auto';
   if v_existing is not null then
     update public.hrms_accounting_queue
     set status = 'posted', journal_entry_id = v_existing, posted_at = coalesce(posted_at, now())
@@ -142,7 +142,7 @@ begin
   end if;
 
   insert into public.journal_entries(entry_date, branch_id, description, reference, source_module, status, approved_at)
-  values (q.event_date, q.branch_id, q.description, 'hrms:queue:' || q.id::text, 'hrms', 'approved', now())
+  values (q.event_date, q.branch_id, q.description, 'hrms:queue:' || q.id::text, 'auto', 'approved', now())
   returning id into v_entry;
 
   insert into public.journal_lines(
