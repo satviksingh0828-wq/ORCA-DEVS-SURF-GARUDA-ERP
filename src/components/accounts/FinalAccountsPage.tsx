@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
+import { TrialBalanceView } from "@/components/accounts/TrialBalanceView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +16,7 @@ import { openBrandedTablePdf } from "@/lib/branded-pdf";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
 
-type FinalTab = "balance-sheet" | "profit-loss";
+type FinalTab = "trial-balance" | "balance-sheet" | "profit-loss";
 type AccountType = "asset" | "liability" | "income" | "expenditure" | "capital" | "bank" | "cash";
 type Branch = { id: string; branch_name: string };
 type Account = {
@@ -39,6 +40,7 @@ const labelType = (value: AccountType) => value === "bank" ? "Bank" : value === 
 
 function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab) => void }) {
   const items = [
+    { key: "trial-balance" as const, label: "Trial Balance", desc: "Debit and credit totals", icon: Scale },
     { key: "balance-sheet" as const, label: "Balance Sheet", desc: "Assets, liabilities and capital", icon: Scale },
     { key: "profit-loss" as const, label: "Profit & Loss", desc: "Income and expenditure for a period", icon: BarChart3 },
   ];
@@ -46,7 +48,7 @@ function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab
     <nav aria-label="Final Accounts tabs" className="space-y-1">
       <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Final Accounts</p>
       <Link to="/accounts/ledger" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-        <BookOpen className="size-4" /><span><span className="block text-sm font-semibold">Ledger</span><span className="block text-[11px] opacity-70">Create, list, view and trial balance</span></span>
+        <BookOpen className="size-4" /><span><span className="block text-sm font-semibold">Ledger</span><span className="block text-[11px] opacity-70">Create, list and view statements</span></span>
       </Link>
       {items.map(({ key, label, desc, icon: Icon }) => (
         <button key={key} type="button" onClick={() => onTab(key)} aria-current={tab === key ? "page" : undefined} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${tab === key ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
@@ -58,7 +60,7 @@ function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab
 }
 
 function MobileFinalNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab) => void }) {
-  return <div className="mb-4 flex gap-2 overflow-x-auto lg:hidden"><Link to="/accounts/ledger" className="whitespace-nowrap rounded-lg border px-3 py-2 text-sm">Ledger</Link><button type="button" onClick={() => onTab("balance-sheet")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "balance-sheet" ? "bg-primary-soft" : ""}`}>Balance Sheet</button><button type="button" onClick={() => onTab("profit-loss")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "profit-loss" ? "bg-primary-soft" : ""}`}>Profit & Loss</button></div>;
+  return <div className="mb-4 flex gap-2 overflow-x-auto lg:hidden"><Link to="/accounts/ledger" className="whitespace-nowrap rounded-lg border px-3 py-2 text-sm">Ledger</Link><button type="button" onClick={() => onTab("trial-balance")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "trial-balance" ? "bg-primary-soft" : ""}`}>Trial Balance</button><button type="button" onClick={() => onTab("balance-sheet")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "balance-sheet" ? "bg-primary-soft" : ""}`}>Balance Sheet</button><button type="button" onClick={() => onTab("profit-loss")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "profit-loss" ? "bg-primary-soft" : ""}`}>Profit & Loss</button></div>;
 }
 
 export function FinalAccountsRoute() {
@@ -146,7 +148,7 @@ export function FinalAccountsRoute() {
     await openBrandedTablePdf({ title: "Profit & Loss", subtitle: `${branchId === "all" ? "All branches" : branchById.get(branchId)?.branch_name ?? "Branch"} · ${dateText(start)} to ${dateText(end)}`, filename: `profit-loss-${start}-to-${end}.pdf`, orientation: "landscape", columns: ["Branch", "Account", "Type", "Debit", "Credit", "Result"], rows, summary: [["Income", pdfMoney(pnlTotals.income)], ["Expenditure", pdfMoney(pnlTotals.expenditure)], [profit >= 0 ? "Net profit" : "Net loss", pdfMoney(Math.abs(profit))]] });
   }
 
-  return <AccountsAccessGuard><AppShell breadcrumb={<span className="flex items-center gap-1.5 text-sm text-muted-foreground"><Link to="/home">Workspace</Link><span>/</span><Link to="/accounts">Accounts</Link><span>/</span><span className="text-foreground">Final Accounts</span></span>}><div className="grid items-start gap-6 lg:grid-cols-[250px_1fr]"><aside className="hidden lg:block lg:sticky lg:top-20"><FinalAccountsNav tab={tab} onTab={setTab} /></aside><main className="min-w-0"><MobileFinalNav tab={tab} onTab={setTab} /><header className="mb-6"><p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">Accounts / Final Accounts</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Final Accounts</h1><p className="mt-2 max-w-3xl text-sm text-muted-foreground">Prepare live branch-wise Balance Sheet and Profit & Loss reports from approved journal postings.</p></header>{loading ? <div className="surface-card py-16 text-center"><Loader2 className="mx-auto size-6 animate-spin" /></div> : tab === "balance-sheet" ? <BalanceSheetView branches={branches} branchId={branchId} setBranchId={setBranchId} asOf={asOf} setAsOf={setAsOf} rows={balanceRows} totals={balanceTotals} exportExcel={exportBalanceExcel} exportPdf={() => void exportBalancePdf()} /> : <ProfitLossView branches={branches} branchId={branchId} setBranchId={setBranchId} start={start} setStart={setStart} end={end} setEnd={setEnd} rows={pnlRows} totals={pnlTotals} profit={profit} exportExcel={exportPnlExcel} exportPdf={() => void exportPnlPdf()} />}</main></div></AppShell></AccountsAccessGuard>;
+  return <AccountsAccessGuard><AppShell breadcrumb={<span className="flex items-center gap-1.5 text-sm text-muted-foreground"><Link to="/home">Workspace</Link><span>/</span><Link to="/accounts">Accounts</Link><span>/</span><span className="text-foreground">Final Accounts</span></span>}><div className="grid items-start gap-6 lg:grid-cols-[250px_1fr]"><aside className="hidden lg:block lg:sticky lg:top-20"><FinalAccountsNav tab={tab} onTab={setTab} /></aside><main className="min-w-0"><MobileFinalNav tab={tab} onTab={setTab} /><header className="mb-6"><p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">Accounts / Final Accounts</p><h1 className="mt-2 text-3xl font-semibold tracking-tight">Final Accounts</h1><p className="mt-2 max-w-3xl text-sm text-muted-foreground">Prepare live branch-wise Balance Sheet and Profit & Loss reports from approved journal postings.</p></header>{loading ? <div className="surface-card py-16 text-center"><Loader2 className="mx-auto size-6 animate-spin" /></div> : tab === "trial-balance" ? <TrialBalanceView /> : tab === "balance-sheet" ? <BalanceSheetView branches={branches} branchId={branchId} setBranchId={setBranchId} asOf={asOf} setAsOf={setAsOf} rows={balanceRows} totals={balanceTotals} exportExcel={exportBalanceExcel} exportPdf={() => void exportBalancePdf()} /> : <ProfitLossView branches={branches} branchId={branchId} setBranchId={setBranchId} start={start} setStart={setStart} end={end} setEnd={setEnd} rows={pnlRows} totals={pnlTotals} profit={profit} exportExcel={exportPnlExcel} exportPdf={() => void exportPnlPdf()} />}</main></div></AppShell></AccountsAccessGuard>;
 }
 
 function BranchSelect({ branches, value, onChange }: { branches: Branch[]; value: string; onChange: (value: string) => void }) { return <select value={value} onChange={(event) => onChange(event.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="all">All branches</option>{branches.map((branch) => <option key={branch.id} value={branch.id}>{branch.branch_name}</option>)}</select>; }

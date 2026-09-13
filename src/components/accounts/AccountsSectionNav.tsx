@@ -1,8 +1,8 @@
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ArrowRightLeft, Banknote, BookOpen, Landmark, List, Plus, Scale, Settings2, ShieldCheck, Users } from "lucide-react";
+import { ArrowRightLeft, Banknote, BookOpen, Landmark, List, Plus, Settings2, ShieldCheck, Users } from "lucide-react";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 
-export type LedgerTab = "capital" | "create" | "list" | "view" | "trial-balance";
+export type LedgerTab = "capital" | "create" | "list" | "view";
 type SectionMode = "masters" | "ledger" | "journal" | "auto-rules";
 export type JournalTab = "create" | "transfer" | "list";
 export type AutoRulesTab = "verify" | "base" | "rules";
@@ -23,7 +23,6 @@ const ledgerLinks = [
   { key: "create", label: "Create", description: "Create revenue ledger", icon: Plus },
   { key: "list", label: "List", description: "Browse ledgers", icon: List },
   { key: "view", label: "View", description: "View statement", icon: BookOpen },
-  { key: "trial-balance", label: "Trial balance", description: "Branch-wise debit and credit totals", icon: Scale },
 ] as const;
 
 const masterMobileTabs = masterLinks.map((item) => ({ id: item.to, label: item.label, desc: item.description, icon: item.icon }));

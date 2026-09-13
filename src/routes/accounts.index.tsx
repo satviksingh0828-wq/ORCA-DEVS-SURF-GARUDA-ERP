@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BarChart3, Database, FileText } from "lucide-react";
+import { BarChart3, Database, FileText, BookOpen } from "lucide-react";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { WorkspaceModulePage } from "@/components/WorkspaceModulePage";
 
