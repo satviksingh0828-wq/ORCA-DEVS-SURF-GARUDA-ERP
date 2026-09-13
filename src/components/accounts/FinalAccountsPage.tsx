@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { BarChart3, BookOpen, FileDown, FileSpreadsheet, Loader2, Scale } from "lucide-react";
+import { BarChart3, FileDown, FileSpreadsheet, Loader2, Scale } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
@@ -47,9 +47,6 @@ function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab
   return (
     <nav aria-label="Final Accounts tabs" className="space-y-1">
       <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Final Accounts</p>
-      <Link to="/accounts/ledger" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-muted-foreground hover:bg-muted hover:text-foreground">
-        <BookOpen className="size-4" /><span><span className="block text-sm font-semibold">Ledger</span><span className="block text-[11px] opacity-70">Create, list and view statements</span></span>
-      </Link>
       {items.map(({ key, label, desc, icon: Icon }) => (
         <button key={key} type="button" onClick={() => onTab(key)} aria-current={tab === key ? "page" : undefined} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${tab === key ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
           <Icon className={`size-4 ${tab === key ? "text-primary" : ""}`} /><span><span className="block text-sm font-semibold">{label}</span><span className="block text-[11px] opacity-70">{desc}</span></span>
@@ -60,7 +57,7 @@ function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab
 }
 
 function MobileFinalNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab) => void }) {
-  return <div className="mb-4 flex gap-2 overflow-x-auto lg:hidden"><Link to="/accounts/ledger" className="whitespace-nowrap rounded-lg border px-3 py-2 text-sm">Ledger</Link><button type="button" onClick={() => onTab("trial-balance")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "trial-balance" ? "bg-primary-soft" : ""}`}>Trial Balance</button><button type="button" onClick={() => onTab("balance-sheet")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "balance-sheet" ? "bg-primary-soft" : ""}`}>Balance Sheet</button><button type="button" onClick={() => onTab("profit-loss")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "profit-loss" ? "bg-primary-soft" : ""}`}>Profit & Loss</button></div>;
+  return <div className="mb-4 flex gap-2 overflow-x-auto lg:hidden"><button type="button" onClick={() => onTab("trial-balance")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "trial-balance" ? "bg-primary-soft" : ""}`}>Trial Balance</button><button type="button" onClick={() => onTab("balance-sheet")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "balance-sheet" ? "bg-primary-soft" : ""}`}>Balance Sheet</button><button type="button" onClick={() => onTab("profit-loss")} className={`whitespace-nowrap rounded-lg border px-3 py-2 text-sm ${tab === "profit-loss" ? "bg-primary-soft" : ""}`}>Profit & Loss</button></div>;
 }
 
 export function FinalAccountsRoute() {
