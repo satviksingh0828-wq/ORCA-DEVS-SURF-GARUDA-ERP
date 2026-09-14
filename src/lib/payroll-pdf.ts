@@ -237,7 +237,7 @@ export function exportPayrollPdf(opts: {
   if (paidLeavePayout > 0) {
     earningsRows.push(['Paid leave payout (final settlement)', money(paidLeavePayout)]);
   }
-  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + paidLeavePayout)]);
+  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay)]);
 
   autoTable(doc, {
     startY: bannerY,
@@ -428,7 +428,7 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
   if (paidLeavePayout > 0) earningsRows.push(['Paid leave payout (final settlement)', money(paidLeavePayout)]);
   const incentiveAmount = Number(payroll.incentive_amount) || 0;
   if (incentiveAmount > 0) earningsRows.push(['One-time incentive', money(incentiveAmount)]);
-  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + incentiveAmount + paidLeavePayout)]);
+  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + incentiveAmount)]);
 
   autoTable(doc, { startY: bannerY, head: [['Earnings', 'Amount']], body: earningsRows, styles: { fontSize: 10 }, headStyles: { fillColor: [155, 28, 28] }, margin: { left: 36, right: 36 } });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
