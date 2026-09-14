@@ -66,7 +66,7 @@ export interface PayrollComputation {
   perDay: number;
   /** Deduction for unpaid leaves this period (using custom rate if set, else pro-rata). */
   unpaidLeaveDeduction: number;
-  /** Payout for unused paid leaves — non-zero only in final (leaving) payroll. */
+  /** Separate payout for paid leave taken in this payroll period. */
   paidLeavePayout: number;
 }
 
@@ -78,7 +78,8 @@ export interface PayrollComputation {
  * - If `emp.unpaid_leave_deduction_rate > 0`, deduction = rate × unpaidLeaves (0.5 rate for half-days
  *   is already handled because unpaidLeavesThisPeriod uses 0.5 for half-days).
  * - Otherwise falls back to pro-rata (gross / workingDays × unpaidLeaves).
- * - `paidLeavePayout` = `paidLeavesLeftBefore × paid_leave_payout_rate`, only when `isFinalPayroll`.
+ * - `paidLeavePayout` = paid leaves used this period × calendar-day salary rate.
+ * - `extraWorkPay` = extra work days × calendar-day salary rate.
  *
  * EMI logic: handled externally via installment records — not in this function.
  */
@@ -153,13 +154,14 @@ export function computePayroll(
   const perDay = calendarDaysInMonth > 0 ? monthlyGross / calendarDaysInMonth : 0;
   const gross = perDay * payable.size;
   const unpaidLeaveDeduction = perDay * unpaidLeavesThisPeriod;
-  // Unused paid leave is paid out only in the employee's final payroll.
-  const paidLeavePayout = isFinalPayroll
-    ? Math.max(0, leftBefore) * n(emp.paid_leave_payout_rate)
-    : 0;
+  // Paid leave payout is a separate earning: paid leave taken this period
+  // multiplied by the employee's calculated calendar-day salary rate.
+  const paidLeavePayout = paidLeavesUsedThisPeriod * perDay;
   const factor = payable.size > 0 ? Math.max(0, Math.min(1, (payable.size - unpaidLeavesThisPeriod) / payable.size)) : 0;
   const presentCounted = present + halfDay * 0.5;
-  const extraWorkPay = extraWorkDays * n(emp.pay_per_extra_work_day);
+  // Extra work is also paid separately at the calculated daily salary rate;
+  // do not use the employee's fixed extra-work amount field here.
+  const extraWorkPay = extraWorkDays * perDay;
 
   return {
     workingDays, fullPeriodWorkingDays, joinLeaveFactor,

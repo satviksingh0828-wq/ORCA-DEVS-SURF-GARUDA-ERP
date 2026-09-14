@@ -25,9 +25,9 @@ export interface Employee {
   paid_holidays_per_month: number;
   /** Fixed deduction per unpaid day (half for half-day). If 0, falls back to pro-rata gross/workingDays. */
   unpaid_leave_deduction_rate: number;
-  /** Fixed payout per unused paid leave, applied only in the final (leaving) payroll. */
+  /** Legacy configured payout rate; payroll payout uses the calculated daily salary rate. */
   paid_leave_payout_rate: number;
-  /** Extra pay per day worked on a non-working day (weekend / holiday). */
+  /** Legacy configured extra-work rate; payroll payout uses the calculated daily salary rate. */
   pay_per_extra_work_day: number;
   emergency_contact: string | null;
   status: EmployeeStatus;
@@ -217,7 +217,7 @@ export interface Payroll {
   advance_deduction: number;
   loss_deduction: number;
   unpaid_leave_deduction: number;
-  /** Payout for unused paid leaves — non-zero only in the final (leaving) payroll. */
+  /** Separate payout for paid leave taken in this payroll period. */
   paid_leave_payout_amount: number;
   net: number;
   working_days: number;
