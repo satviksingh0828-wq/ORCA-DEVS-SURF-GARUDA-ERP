@@ -49,7 +49,7 @@ function GenerateCalculationDialog({ emp, preview, period, onClose }: { emp: Emp
     </div>
   );
   const monthlyGross = Number(emp.basic_salary) + Number(emp.hra) + Number(emp.travel_allowance) + Number(emp.special_allowance) + Number(emp.other_allowance);
-  const totalEarnings = preview.c.gross + preview.incentiveAmount + preview.c.paidLeavePayout + preview.c.extraWorkPay;
+  const totalEarnings = preview.c.gross + preview.incentiveAmount;
   const totalDeductions = preview.pf + preview.tax + preview.c.unpaidLeaveDeduction + preview.loanDed + preview.advDed + preview.lossDed;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -229,7 +229,7 @@ export function PayrollGenerate() {
     const pf     = n(emp.pf_deduction)  * halfF * c.joinLeaveFactor;
     const tax    = n(emp.tax_deduction) * halfF * c.joinLeaveFactor;
     const totalDed = pf + tax + loanDed + advDed + lossDed + c.unpaidLeaveDeduction;
-    const net = c.gross + incentiveAmount + c.paidLeavePayout + c.extraWorkPay - totalDed;
+    const net = c.gross + incentiveAmount - totalDed;
 
     return { c, loanDed, advDed, lossDed, incentiveAmount, pf, tax, net };
   }, [emp, dept, holidays, allAttendance, period, periodType, activeLoans, activeAdvances,
@@ -575,7 +575,7 @@ export function PayrollGenerate() {
                   {Number(existingPayroll.incentive_amount) > 0 && <Row label="One-time incentive" v={Number(existingPayroll.incentive_amount)} />}
                   <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
                     <span>Gross</span>
-                    <span>{money(Number(existingPayroll.gross) + Number(existingPayroll.extra_work_pay) + Number(existingPayroll.paid_leave_payout_amount))}</span>
+                    <span>{money(Number(existingPayroll.gross) + Number(existingPayroll.incentive_amount || 0))}</span>
                   </div>
                 </>
               ) : (
@@ -590,7 +590,7 @@ export function PayrollGenerate() {
                   <Row label="One-time incentive" v={preview.incentiveAmount} />
                   <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
                     <span>Gross</span>
-                    <span>{money(preview.c.gross + preview.incentiveAmount + preview.c.paidLeavePayout + preview.c.extraWorkPay)}</span>
+                    <span>{money(preview.c.gross + preview.incentiveAmount)}</span>
                   </div>
                 </>
               )}
