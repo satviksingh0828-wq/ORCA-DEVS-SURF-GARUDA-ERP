@@ -68,16 +68,8 @@ export interface PayrollComputation {
   unpaidLeaveDeduction: number;
   /** Payout for unused paid leaves — non-zero only in final (leaving) payroll. */
   paidLeavePayout: number;
-}
-
-function countSundays(from: Date, to: Date): number {
-  let count = 0;
-  const cur = new Date(from);
-  while (cur <= to) {
-    if (cur.getDay() === 0) count++;
-    cur.setDate(cur.getDate() + 1);
-  }
-  return count;
+  payableDates: number;
+  calendarDaysInMonth: number;
 }
 
 /**
@@ -106,100 +98,87 @@ export function computePayroll(
   const fullPeriodWorkingDays = countWorkingDays(from, to, dept, holidays);
   const { from: cf, to: ct } = clampToEmployment(from, to, emp);
   const workingDays = countWorkingDays(cf, ct, dept, holidays);
-  const fullPeriodSundays = countSundays(from, to);
-  const employedSundays = cf <= ct ? countSundays(cf, ct) : 0;
-  const periodPaidLeaves = (emp.paid_holidays_per_month ?? 0) * (periodType === 'half_month' ? 0.5 : 1);
-  const eligibleFullDays = fullPeriodWorkingDays + fullPeriodSundays + periodPaidLeaves;
-  const eligibleEmployedDays = workingDays + employedSundays + periodPaidLeaves;
-  const joinLeaveFactor = eligibleFullDays > 0 ? eligibleEmployedDays / eligibleFullDays : 1;
-
+  const calendarDaysInMonth = new Date(from.getFullYear(), from.getMonth() + 1, 0).getDate();
+  const eligiblePeriodDays = cf <= ct ? Math.floor((ct.getTime() - cf.getTime()) / 86400000) + 1 : 0;
+  const joinLeaveFactor = calendarDaysInMonth > 0 ? eligiblePeriodDays / calendarDaysInMonth : 0;
   const empAtt = allAttendance.filter(a => a.employee_id === emp.id);
   const byDate = new Map(empAtt.map(a => [a.date, a] as const));
+  const weekDays = dept?.working_days_of_week?.length ? dept.working_days_of_week : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
+  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const payable = new Set<string>();
   let present = 0, halfDay = 0, absent = 0, extraWorkDays = 0;
   const cur = new Date(cf);
   while (cur <= ct) {
-    const r = byDate.get(ymd(cur));
+    const key = ymd(cur);
+    const r = byDate.get(key);
+    const weeklyDay = weekDays.includes(dayNames[cur.getDay()]);
+    const holiday = holidays.some(h => h.date === key && !(dept && h.exempt_department_ids?.includes(dept.id)));
+    // Weekly off days are included as payable dates, matching the previous Sunday rule.
+    // Set semantics ensure a weekly off plus holiday is counted only once.
+    if (weeklyDay || !weeklyDay || holiday) payable.add(key);
     if (isWorkingDay(cur, dept, holidays)) {
-      if (r?.status === 'present')   present++;
+      if (r?.status === 'present') present++;
       else if (r?.status === 'half_day') halfDay++;
-      else if (r?.status === 'absent')   absent++;
-    } else {
-      if (r?.status === 'extra_work') extraWorkDays++;
-      else if (r?.status === 'half_extra_work') extraWorkDays += 0.5;
+      else if (r?.status === 'absent') absent++;
+    } else if (r?.status === 'extra_work') {
+      extraWorkDays++;
+      payable.add(key);
+    } else if (r?.status === 'half_extra_work') {
+      extraWorkDays += 0.5;
+      payable.add(key);
     }
     cur.setDate(cur.getDate() + 1);
   }
-  const marked   = present + halfDay + absent;
+  const marked = present + halfDay + absent;
   const unmarked = Math.max(0, workingDays - marked);
 
-  // ── Paid-leave balance (carry-forward from last payroll snapshot) ──────────
   const perMonth = emp.paid_holidays_per_month ?? 0;
-  const join     = parseYmd(emp.joining_date);
+  const join = parseYmd(emp.joining_date);
   let leftBefore: number;
   let paidLeavesEarned: number;
   let usedBefore: number;
-
   if (lastPayroll) {
-    const lastEnd    = parseYmd(lastPayroll.period_end);
-    const monthsSince = Math.max(
-      0,
-      (ct.getFullYear() - lastEnd.getFullYear()) * 12 + (ct.getMonth() - lastEnd.getMonth()),
-    );
-    leftBefore       = Number(lastPayroll.paid_leaves_left) + monthsSince * perMonth;
+    const lastEnd = parseYmd(lastPayroll.period_end);
+    const monthsSince = Math.max(0, (ct.getFullYear() - lastEnd.getFullYear()) * 12 + (ct.getMonth() - lastEnd.getMonth()));
+    leftBefore = Number(lastPayroll.paid_leaves_left) + monthsSince * perMonth;
     paidLeavesEarned = leftBefore + Number(lastPayroll.paid_leaves_used);
-    usedBefore       = Number(lastPayroll.paid_leaves_used);
+    usedBefore = Number(lastPayroll.paid_leaves_used);
   } else {
-    const monthsFromJoin =
-      (ct.getFullYear() - join.getFullYear()) * 12 +
-      (ct.getMonth() - join.getMonth()) +
-      (ct.getDate() >= join.getDate() ? 1 : 0);
-    paidLeavesEarned  = Math.max(0, monthsFromJoin) * perMonth;
-    const absentsBefore = empAtt.filter(a => a.status === 'absent'   && parseYmd(a.date) < cf).length;
-    const halfBefore    = empAtt.filter(a => a.status === 'half_day' && parseYmd(a.date) < cf).length;
-    usedBefore          = absentsBefore + halfBefore * 0.5;
-    leftBefore          = paidLeavesEarned - usedBefore;
+    const monthsFromJoin = (ct.getFullYear() - join.getFullYear()) * 12 + (ct.getMonth() - join.getMonth()) + (ct.getDate() >= join.getDate() ? 1 : 0);
+    paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
+    const absentsBefore = empAtt.filter(a => a.status === 'absent' && parseYmd(a.date) < cf).length;
+    const halfBefore = empAtt.filter(a => a.status === 'half_day' && parseYmd(a.date) < cf).length;
+    usedBefore = absentsBefore + halfBefore * 0.5;
+    leftBefore = paidLeavesEarned - usedBefore;
+  }
+  const requestedThisPeriod = absent + halfDay * 0.5;
+  const paidLeavesUsedThisPeriod = Math.max(0, Math.min(requestedThisPeriod, leftBefore));
+  const unpaidLeavesThisPeriod = Math.max(0, requestedThisPeriod - paidLeavesUsedThisPeriod);
+  const paidLeavesLeftAfter = leftBefore - paidLeavesUsedThisPeriod;
+  let paidLeaveSlots = paidLeavesUsedThisPeriod;
+  for (const a of empAtt.filter(a => a.date >= ymd(cf) && a.date <= ymd(ct)).sort((a, b) => a.date.localeCompare(b.date))) {
+    if (paidLeaveSlots <= 0 || (a.status !== 'absent' && a.status !== 'half_day')) continue;
+    payable.add(a.date);
+    paidLeaveSlots -= a.status === 'half_day' ? 0.5 : 1;
   }
 
-  // ── This period's leave usage ──────────────────────────────────────────────
-  const requestedThisPeriod      = absent + halfDay * 0.5;
-  const paidLeavesUsedThisPeriod = Math.max(0, Math.min(requestedThisPeriod, leftBefore));
-  const unpaidLeavesThisPeriod   = Math.max(0, requestedThisPeriod - paidLeavesUsedThisPeriod);
-  const paidLeavesLeftAfter      = leftBefore - paidLeavesUsedThisPeriod;
-
-  // ── Gross ──────────────────────────────────────────────────────────────────
   const n = (v: number | string) => Number(v) || 0;
   const monthlyGross = n(emp.basic_salary) + n(emp.hra) + n(emp.travel_allowance) + n(emp.special_allowance) + n(emp.other_allowance);
-  const periodGross  = periodType === 'half_month' ? monthlyGross / 2 : monthlyGross;
-  const gross        = periodGross * joinLeaveFactor;
-  const perDay       = eligibleFullDays > 0 ? periodGross / eligibleFullDays : 0;
-
-  // ── Unpaid leave deduction ─────────────────────────────────────────────────
-  // Unpaid leave is always deducted automatically using the same daily rate as
-  // the new working-days + Sundays + paid-leaves salary basis.
+  const perDay = calendarDaysInMonth > 0 ? monthlyGross / calendarDaysInMonth : 0;
+  const gross = perDay * payable.size;
   const unpaidLeaveDeduction = perDay * unpaidLeavesThisPeriod;
-
-  // ── Paid-leave payout (final payroll only) ─────────────────────────────────
-  // Uses paidLeavesLeftAfter (not leftBefore) so leaves consumed THIS period are not double-paid:
-  // those days were already paid as "present" via paid-leave cover, not deducted.
   const paidLeavePayout = 0;
-
-  // Clamp factor to [0,1] — unpaidLeavesThisPeriod could theoretically exceed workingDays
-  // if attendance data was entered incorrectly (e.g. absences on non-working days counted).
-  const factor = workingDays > 0
-    ? Math.max(0, Math.min(1, (workingDays - unpaidLeavesThisPeriod) / workingDays))
-    : 0;
+  const factor = payable.size > 0 ? Math.max(0, Math.min(1, (payable.size - unpaidLeavesThisPeriod) / payable.size)) : 0;
   const presentCounted = present + halfDay * 0.5;
-
-  // ── Extra work pay ─────────────────────────────────────────────────────────
-  const extraWorkPay = extraWorkDays * (n(emp.pay_per_extra_work_day));
 
   return {
     workingDays, fullPeriodWorkingDays, joinLeaveFactor,
     present: presentCounted, halfDay, absent, unmarked,
-    extraWorkDays, extraWorkPay,
+    extraWorkDays, extraWorkPay: 0,
     paidLeavesEarned, paidLeavesUsedBefore: usedBefore, paidLeavesLeftBefore: leftBefore,
     paidLeavesUsedThisPeriod, unpaidLeavesThisPeriod, paidLeavesLeftAfter,
     factor, gross, perDay, unpaidLeaveDeduction, paidLeavePayout,
+    payableDates: payable.size, calendarDaysInMonth,
   };
 }
 

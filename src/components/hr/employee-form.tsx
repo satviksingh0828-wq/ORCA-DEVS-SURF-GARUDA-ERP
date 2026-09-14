@@ -35,7 +35,6 @@ type FormState = {
   pf_deduction: string;
   tax_deduction: string;
   paid_holidays_per_month: string;
-  pay_per_extra_work_day: string;
   emergency_contact: string;
   location: string;
   status: EmployeeStatus;
@@ -82,7 +81,6 @@ function fromEmployee(e?: Employee): FormState {
     pf_deduction:                 e ? String(e.pf_deduction) : '',
     tax_deduction:                e ? String(e.tax_deduction) : '0',
     paid_holidays_per_month:      e ? String(e.paid_holidays_per_month) : '1',
-    pay_per_extra_work_day:       e ? String(e.pay_per_extra_work_day ?? 0) : '0',
     emergency_contact:            e?.emergency_contact ?? '',
     location:                     e?.location ?? '',
     status:                       e?.status ?? 'active',
@@ -208,7 +206,9 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
       pf_deduction:                Number(f.pf_deduction),
       tax_deduction:               Number(f.tax_deduction || 0),
       paid_holidays_per_month:     Number(f.paid_holidays_per_month || 0),
-      pay_per_extra_work_day:      Number(f.pay_per_extra_work_day || 0),
+      unpaid_leave_deduction_rate: 0,
+      paid_leave_payout_rate:      0,
+      pay_per_extra_work_day:      0,
       emergency_contact:           f.emergency_contact.trim() || null,
       location:                    f.location.trim() || null,
       status:                      f.status,
@@ -370,47 +370,6 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
                   />
                 </div>
               ))}
-            </div>
-
-            <div className="rounded-md border border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20 p-3 space-y-2">
-              <div className="text-sm font-semibold text-blue-900 dark:text-blue-300">Automatic leave calculation</div>
-              <p className="text-xs text-muted-foreground">
-                Salary uses department working days, Sundays, and paid leaves. Unpaid leave is deducted automatically using the same daily salary basis. Manual leave deduction and payout rates are not required.
-              </p>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Pay per extra work day (₹ / day)</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      className={inputCls}
-                      inputMode="decimal"
-                      placeholder="0 = no extra pay"
-                      value={f.pay_per_extra_work_day}
-                      onChange={e => set('pay_per_extra_work_day', e.target.value.replace(/[^\d.]/g, ''))}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="shrink-0 text-xs"
-                      title="Auto-calculate from Gross ÷ working days/month"
-                      onClick={() => {
-                        if (!salary.gross) return;
-                        const dept = departments.find(d => d.id === f.department_id);
-                        const wdPerWeek = dept?.working_days_of_week?.length ?? 6;
-                        const avgDaysPerMonth = Math.round(wdPerWeek * 52 / 12);
-                        const rate = salary.gross / avgDaysPerMonth;
-                        set('pay_per_extra_work_day', String(Math.round(rate * 100) / 100));
-                      }}
-                    >
-                      Auto
-                    </Button>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    Amount paid per day worked on a non-working day (weekend / holiday). Click <strong>Auto</strong> to fill from Gross ÷ avg working days/month.
-                  </p>
-                </div>
-              </div>
             </div>
 
             <div className="rounded-md border bg-muted/40 p-3 text-sm">

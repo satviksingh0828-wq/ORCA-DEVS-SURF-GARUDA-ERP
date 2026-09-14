@@ -23,11 +23,9 @@ export interface Employee {
   pf_deduction: number;
   tax_deduction: number;
   paid_holidays_per_month: number;
-  /** Fixed deduction per unpaid day (half for half-day). If 0, falls back to pro-rata gross/workingDays. */
+  /** Legacy fields retained for database compatibility; payroll no longer uses them. */
   unpaid_leave_deduction_rate: number;
-  /** Fixed payout per unused paid leave, applied only in the final (leaving) payroll. */
   paid_leave_payout_rate: number;
-  /** Extra pay per day worked on a non-working day (weekend / holiday). */
   pay_per_extra_work_day: number;
   emergency_contact: string | null;
   status: EmployeeStatus;
@@ -241,13 +239,12 @@ export interface Payroll {
   paid_leaves_used: number;
   paid_leaves_left: number;
   unpaid_leaves: number;
-  /** Snapshot of employee's unpaid_leave_deduction_rate at generation time. */
+  /** Legacy snapshots retained for database compatibility; always zero for new payrolls. */
   unpaid_leave_deduction_rate: number;
-  /** Snapshot of employee's paid_leave_payout_rate at generation time. */
   paid_leave_payout_rate: number;
   /** Number of extra days worked on non-working days (weekends / holidays). */
   extra_work_days: number;
-  /** Pay earned for extra work days (extra_work_days × pay_per_extra_work_day). */
+  /** Legacy field retained for database compatibility; always zero for new payrolls. */
   extra_work_pay: number;
   /** One-time incentive total snapshotted into this payroll. */
   incentive_amount?: number;

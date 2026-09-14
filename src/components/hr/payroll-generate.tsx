@@ -193,7 +193,7 @@ export function PayrollGenerate() {
     const pf     = n(emp.pf_deduction)  * halfF * c.joinLeaveFactor;
     const tax    = n(emp.tax_deduction) * halfF * c.joinLeaveFactor;
     const totalDed = pf + tax + loanDed + advDed + lossDed + c.unpaidLeaveDeduction;
-    const net = c.gross + c.extraWorkPay + incentiveAmount - totalDed + c.paidLeavePayout;
+    const net = c.gross + incentiveAmount - totalDed;
 
     return { c, loanDed, advDed, lossDed, incentiveAmount, pf, tax, net };
   }, [emp, dept, holidays, allAttendance, period, periodType, activeLoans, activeAdvances,
@@ -230,8 +230,6 @@ export function PayrollGenerate() {
     if (alreadyGenerated)  { toast.error('Payroll for this period already exists'); return; }
 
     const { c, loanDed, advDed, lossDed, incentiveAmount, pf, tax, net } = preview;
-    const extraWorkPay = c.extraWorkPay;
-
     if (net < 0) {
       const confirmed = window.confirm(
         `⚠️ Warning: Net pay is negative (${money(net)}).\n\n` +
@@ -244,7 +242,7 @@ export function PayrollGenerate() {
     }
 
     const halfF = periodType === 'half_month' ? 0.5 : 1;
-    const scale = halfF * c.joinLeaveFactor;
+    const scale = c.calendarDaysInMonth > 0 ? c.payableDates / c.calendarDaysInMonth : 0;
     const n = (v: number | string) => Number(v) || 0;
 
     const values: PayrollInput = {
@@ -266,7 +264,7 @@ export function PayrollGenerate() {
       unpaid_leave_deduction:    c.unpaidLeaveDeduction,
       paid_leave_payout_amount:  c.paidLeavePayout,
       extra_work_days:           c.extraWorkDays,
-      extra_work_pay:            extraWorkPay,
+      extra_work_pay:            0,
       incentive_amount:         incentiveAmount,
       net,
       working_days:              c.workingDays,
@@ -274,8 +272,8 @@ export function PayrollGenerate() {
       paid_leaves_used:          c.paidLeavesUsedThisPeriod,
       paid_leaves_left:          c.paidLeavesLeftAfter,
       unpaid_leaves:             c.unpaidLeavesThisPeriod,
-      unpaid_leave_deduction_rate: n(emp.unpaid_leave_deduction_rate),
-      paid_leave_payout_rate:    n(emp.paid_leave_payout_rate),
+      unpaid_leave_deduction_rate: 0,
+      paid_leave_payout_rate:    0,
       // Payment status: generated — salary not disbursed yet
       payment_status: 'generated',
       payment_date:   null,
@@ -546,16 +544,10 @@ export function PayrollGenerate() {
                   <Row label="Travel"  v={Number(emp.travel_allowance)  * scale} />
                   <Row label="Special" v={Number(emp.special_allowance) * scale} />
                   <Row label="Other"   v={Number(emp.other_allowance)   * scale} />
-                  {preview.c.extraWorkDays > 0 && (
-                    <Row label={`Extra work days (${preview.c.extraWorkDays} days × ${money(Number(emp.pay_per_extra_work_day))})`} v={preview.c.extraWorkPay} />
-                  )}
-                  {preview.c.paidLeavePayout > 0 && (
-                    <Row label={`Paid leave payout (${preview.c.paidLeavesLeftBefore} days × ${money(Number(emp.paid_leave_payout_rate))})`} v={preview.c.paidLeavePayout} />
-                  )}
                   <Row label="One-time incentive" v={preview.incentiveAmount} />
                   <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
                     <span>Gross</span>
-                    <span>{money(preview.c.gross + preview.c.extraWorkPay + preview.incentiveAmount + preview.c.paidLeavePayout)}</span>
+                    <span>{money(preview.c.gross + preview.incentiveAmount)}</span>
                   </div>
                 </>
               )}
@@ -579,7 +571,7 @@ export function PayrollGenerate() {
                 <>
                   <Row label="PF"          v={preview.pf} />
                   <Row label="Tax"         v={preview.tax} />
-                  <Row label={`Unpaid leave (${preview.c.unpaidLeavesThisPeriod} days${Number(emp.unpaid_leave_deduction_rate) > 0 ? ` × ${money(Number(emp.unpaid_leave_deduction_rate))}` : ' pro-rata'})`} v={preview.c.unpaidLeaveDeduction} />
+                  <Row label={`Unpaid leave (${preview.c.unpaidLeavesThisPeriod} days × calendar-day rate)`} v={preview.c.unpaidLeaveDeduction} />
                   <Row label={`Loan EMI (${loanEmiSummary.loanCount} loans)`}     v={preview.loanDed} />
                   <Row label={`Advance EMI (${loanEmiSummary.advCount} advances)`} v={preview.advDed} />
                   <Row label={`Loss (${pendingDeds.length})`}                      v={preview.lossDed} />
