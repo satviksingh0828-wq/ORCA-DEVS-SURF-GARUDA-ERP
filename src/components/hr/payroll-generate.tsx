@@ -229,7 +229,7 @@ export function PayrollGenerate() {
     const pf     = n(emp.pf_deduction)  * halfF * c.joinLeaveFactor;
     const tax    = n(emp.tax_deduction) * halfF * c.joinLeaveFactor;
     const totalDed = pf + tax + loanDed + advDed + lossDed + c.unpaidLeaveDeduction;
-    const net = c.gross + incentiveAmount - totalDed;
+    const net = c.gross + incentiveAmount + c.paidLeavePayout + c.extraWorkPay - totalDed;
 
     return { c, loanDed, advDed, lossDed, incentiveAmount, pf, tax, net };
   }, [emp, dept, holidays, allAttendance, period, periodType, activeLoans, activeAdvances,
@@ -300,7 +300,7 @@ export function PayrollGenerate() {
       unpaid_leave_deduction:    c.unpaidLeaveDeduction,
       paid_leave_payout_amount:  c.paidLeavePayout,
       extra_work_days:           c.extraWorkDays,
-      extra_work_pay:            0,
+      extra_work_pay:            c.extraWorkPay,
       incentive_amount:         incentiveAmount,
       net,
       working_days:              c.workingDays,
@@ -590,7 +590,7 @@ export function PayrollGenerate() {
                   <Row label="One-time incentive" v={preview.incentiveAmount} />
                   <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
                     <span>Gross</span>
-                    <span>{money(preview.c.gross + preview.incentiveAmount)}</span>
+                    <span>{money(preview.c.gross + preview.incentiveAmount + preview.c.paidLeavePayout + preview.c.extraWorkPay)}</span>
                   </div>
                 </>
               )}

@@ -153,10 +153,13 @@ export function computePayroll(
   const perDay = calendarDaysInMonth > 0 ? monthlyGross / calendarDaysInMonth : 0;
   const gross = perDay * payable.size;
   const unpaidLeaveDeduction = perDay * unpaidLeavesThisPeriod;
-  const paidLeavePayout = 0;
+  // Unused paid leave is paid out only in the employee's final payroll.
+  const paidLeavePayout = isFinalPayroll
+    ? Math.max(0, leftBefore) * n(emp.paid_leave_payout_rate)
+    : 0;
   const factor = payable.size > 0 ? Math.max(0, Math.min(1, (payable.size - unpaidLeavesThisPeriod) / payable.size)) : 0;
   const presentCounted = present + halfDay * 0.5;
-  const extraWorkPay = 0;
+  const extraWorkPay = extraWorkDays * n(emp.pay_per_extra_work_day);
 
   return {
     workingDays, fullPeriodWorkingDays, joinLeaveFactor,
