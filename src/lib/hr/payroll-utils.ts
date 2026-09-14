@@ -103,19 +103,16 @@ export function computePayroll(
   const joinLeaveFactor = calendarDaysInMonth > 0 ? eligiblePeriodDays / calendarDaysInMonth : 0;
   const empAtt = allAttendance.filter(a => a.employee_id === emp.id);
   const byDate = new Map(empAtt.map(a => [a.date, a] as const));
-  const weekDays = dept?.working_days_of_week?.length ? dept.working_days_of_week : ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
-  const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
   const payable = new Set<string>();
   let present = 0, halfDay = 0, absent = 0, extraWorkDays = 0;
   const cur = new Date(cf);
   while (cur <= ct) {
     const key = ymd(cur);
     const r = byDate.get(key);
-    const weeklyDay = weekDays.includes(dayNames[cur.getDay()]);
-    const holiday = holidays.some(h => h.date === key && !(dept && h.exempt_department_ids?.includes(dept.id)));
-    // Weekly off days are included as payable dates, matching the previous Sunday rule.
-    // Set semantics ensure a weekly off plus holiday is counted only once.
-    if (weeklyDay || !weeklyDay || holiday) payable.add(key);
+    // Every eligible calendar date belongs to either a configured working day or
+    // a weekly off. Holidays and leave are layered on top of those dates. The Set
+    // guarantees a holiday/week-off/extra-work overlap is counted only once.
+    payable.add(key);
     if (isWorkingDay(cur, dept, holidays)) {
       if (r?.status === 'present') present++;
       else if (r?.status === 'half_day') halfDay++;
