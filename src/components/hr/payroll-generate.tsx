@@ -565,7 +565,7 @@ export function PayrollGenerate() {
               <div className="mb-2 text-sm font-semibold">Earnings</div>
               {alreadyGenerated && existingPayroll ? (
                 <>
-                  <Row label="Basic"   v={Number(existingPayroll.basic_salary)} />
+                  <Row label="Basic"   v={Number(existingPayroll.basic_salary) - Number(existingPayroll.extra_work_pay || 0) - Number(existingPayroll.paid_leave_payout_amount || 0)} />
                   <Row label="HRA"     v={Number(existingPayroll.hra)} />
                   <Row label="Travel"  v={Number(existingPayroll.travel_allowance)} />
                   <Row label="Special" v={Number(existingPayroll.special_allowance)} />
@@ -580,7 +580,7 @@ export function PayrollGenerate() {
                 </>
               ) : (
                 <>
-                  <Row label="Basic"   v={Number(emp.basic_salary)      * scale} />
+                  <Row label="Basic"   v={Number(emp.basic_salary)      * scale - preview.c.extraWorkPay - preview.c.paidLeavePayout} />
                   <Row label="HRA"     v={Number(emp.hra)               * scale} />
                   <Row label="Travel"  v={Number(emp.travel_allowance)  * scale} />
                   <Row label="Special" v={Number(emp.special_allowance) * scale} />

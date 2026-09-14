@@ -225,7 +225,7 @@ export function exportPayrollPdf(opts: {
   const extraWorkDays   = Number(payroll.extra_work_days) || 0;
   const extraWorkPay    = Number(payroll.extra_work_pay) || 0;
   const earningsRows: [string, string][] = [
-    ['Basic',            money(payroll.basic_salary)],
+    ['Basic',            money(Number(payroll.basic_salary) - extraWorkPay - paidLeavePayout)],
     ['HRA',              money(payroll.hra)],
     ['Travel allowance', money(payroll.travel_allowance)],
     ['Special allowance',money(payroll.special_allowance)],
@@ -418,7 +418,7 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
   const extraWorkDays   = Number(payroll.extra_work_days) || 0;
   const extraWorkPay    = Number(payroll.extra_work_pay) || 0;
   const earningsRows: [string, string][] = [
-    ['Basic',            money(payroll.basic_salary)],
+    ['Basic',            money(Number(payroll.basic_salary) - extraWorkPay - paidLeavePayout)],
     ['HRA',              money(payroll.hra)],
     ['Travel allowance', money(payroll.travel_allowance)],
     ['Special allowance',money(payroll.special_allowance)],
