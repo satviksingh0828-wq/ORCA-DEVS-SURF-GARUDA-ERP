@@ -231,12 +231,8 @@ export function exportPayrollPdf(opts: {
     ['Special allowance',money(payroll.special_allowance)],
     ['Other allowance',  money(payroll.other_allowance)],
   ];
-  if (extraWorkPay > 0) {
-    earningsRows.push([`Extra work days (${extraWorkDays} days)`, money(extraWorkPay)]);
-  }
-  if (paidLeavePayout > 0) {
-    earningsRows.push(['Paid leave payout (final settlement)', money(paidLeavePayout)]);
-  }
+  earningsRows.push([`Extra Work Day Payout (${extraWorkDays} days)`, money(extraWorkPay)]);
+  earningsRows.push(['Paid Leave Payout', money(paidLeavePayout)]);
   earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + paidLeavePayout)]);
 
   autoTable(doc, {
@@ -255,7 +251,7 @@ export function exportPayrollPdf(opts: {
   const deductionRows: [string, string][] = [
     ['PF',           money(payroll.pf_deduction)],
     ['Tax',          money(payroll.tax_deduction)],
-    ['Unpaid leave', money(payroll.unpaid_leave_deduction)],
+    [`Unpaid Leave Deduction (${Number(payroll.unpaid_leaves) || 0} days × calendar-day rate)`, money(payroll.unpaid_leave_deduction)],
     ['Loan EMI',     money(payroll.loan_deduction)],
     ['Advance EMI',  money(payroll.advance_deduction)],
   ];
@@ -424,8 +420,8 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
     ['Special allowance',money(payroll.special_allowance)],
     ['Other allowance',  money(payroll.other_allowance)],
   ];
-  if (extraWorkPay > 0) earningsRows.push([`Extra work days (${extraWorkDays} days)`, money(extraWorkPay)]);
-  if (paidLeavePayout > 0) earningsRows.push(['Paid leave payout (final settlement)', money(paidLeavePayout)]);
+  earningsRows.push([`Extra Work Day Payout (${extraWorkDays} days)`, money(extraWorkPay)]);
+  earningsRows.push(['Paid Leave Payout', money(paidLeavePayout)]);
   const incentiveAmount = Number(payroll.incentive_amount) || 0;
   if (incentiveAmount > 0) earningsRows.push(['One-time incentive', money(incentiveAmount)]);
   earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + incentiveAmount + paidLeavePayout)]);
@@ -437,7 +433,7 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
   const deductionRows: [string, string][] = [
     ['PF',           money(payroll.pf_deduction)],
     ['Tax',          money(payroll.tax_deduction)],
-    ['Unpaid leave', money(payroll.unpaid_leave_deduction)],
+    [`Unpaid Leave Deduction (${Number(payroll.unpaid_leaves) || 0} days × calendar-day rate)`, money(payroll.unpaid_leave_deduction)],
     ['Loan EMI',     money(payroll.loan_deduction)],
     ['Advance EMI',  money(payroll.advance_deduction)],
   ];

@@ -525,12 +525,8 @@ export function PayrollGenerate() {
                   <Row label="Travel"  v={Number(existingPayroll.travel_allowance)} />
                   <Row label="Special" v={Number(existingPayroll.special_allowance)} />
                   <Row label="Other"   v={Number(existingPayroll.other_allowance)} />
-                  {Number(existingPayroll.extra_work_pay) > 0 && (
-                    <Row label={`Extra work days (${existingPayroll.extra_work_days} days)`} v={Number(existingPayroll.extra_work_pay)} />
-                  )}
-                  {Number(existingPayroll.paid_leave_payout_amount) > 0 && (
-                    <Row label="Paid leave payout (final settlement)" v={Number(existingPayroll.paid_leave_payout_amount)} />
-                  )}
+                  <Row label={`Extra Work Day Payout (${Number(existingPayroll.extra_work_days) || 0} days)`} v={Number(existingPayroll.extra_work_pay) || 0} />
+                  <Row label="Paid Leave Payout" v={Number(existingPayroll.paid_leave_payout_amount) || 0} />
                   {Number(existingPayroll.incentive_amount) > 0 && <Row label="One-time incentive" v={Number(existingPayroll.incentive_amount)} />}
                   <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
                     <span>Gross</span>
@@ -544,6 +540,8 @@ export function PayrollGenerate() {
                   <Row label="Travel"  v={Number(emp.travel_allowance)  * scale} />
                   <Row label="Special" v={Number(emp.special_allowance) * scale} />
                   <Row label="Other"   v={Number(emp.other_allowance)   * scale} />
+                  <Row label={`Extra Work Day Payout (${preview.c.extraWorkDays} days)`} v={preview.c.extraWorkPay} />
+                  <Row label="Paid Leave Payout" v={preview.c.paidLeavePayout} />
                   <Row label="One-time incentive" v={preview.incentiveAmount} />
                   <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
                     <span>Gross</span>
@@ -558,7 +556,7 @@ export function PayrollGenerate() {
                 <>
                   <Row label="PF"           v={Number(existingPayroll.pf_deduction)} />
                   <Row label="Tax"          v={Number(existingPayroll.tax_deduction)} />
-                  <Row label="Unpaid leave" v={Number(existingPayroll.unpaid_leave_deduction)} />
+                  <Row label={`Unpaid Leave Deduction (${Number(existingPayroll.unpaid_leaves) || 0} days × calendar-day rate)`} v={Number(existingPayroll.unpaid_leave_deduction) || 0} />
                   <Row label="Loan EMI"     v={Number(existingPayroll.loan_deduction)} />
                   <Row label="Advance EMI"  v={Number(existingPayroll.advance_deduction)} />
                   <Row label="Loss"         v={Number(existingPayroll.loss_deduction)} />
@@ -571,7 +569,7 @@ export function PayrollGenerate() {
                 <>
                   <Row label="PF"          v={preview.pf} />
                   <Row label="Tax"         v={preview.tax} />
-                  <Row label={`Unpaid leave (${preview.c.unpaidLeavesThisPeriod} days × calendar-day rate)`} v={preview.c.unpaidLeaveDeduction} />
+                  <Row label={`Unpaid Leave Deduction (${preview.c.unpaidLeavesThisPeriod} days × calendar-day rate)`} v={preview.c.unpaidLeaveDeduction} />
                   <Row label={`Loan EMI (${loanEmiSummary.loanCount} loans)`}     v={preview.loanDed} />
                   <Row label={`Advance EMI (${loanEmiSummary.advCount} advances)`} v={preview.advDed} />
                   <Row label={`Loss (${pendingDeds.length})`}                      v={preview.lossDed} />
