@@ -124,6 +124,45 @@ function PayDialog({
   );
 }
 
+/* ── Calculation popup ───────────────────────────────────────────────────── */
+function CalculationDialog({ payroll, employee, onClose }: { payroll: Payroll; employee?: Employee; onClose: () => void }) {
+  const n = (v: unknown) => Number(v) || 0;
+  const monthlyGross = employee
+    ? n(employee.basic_salary) + n(employee.hra) + n(employee.travel_allowance) + n(employee.special_allowance) + n(employee.other_allowance)
+    : n(payroll.gross);
+  const monthDays = new Date(new Date(payroll.period_start).getFullYear(), new Date(payroll.period_start).getMonth() + 1, 0).getDate();
+  const dailyRate = monthDays > 0 ? monthlyGross / monthDays : 0;
+  const payableDays = dailyRate > 0 ? n(payroll.gross) / dailyRate : 0;
+  const incentive = n(payroll.incentive_amount);
+  const paidLeavePayout = n(payroll.paid_leave_payout_amount);
+  const extraWorkPayout = n(payroll.extra_work_pay);
+  const totalEarnings = n(payroll.gross) + incentive + paidLeavePayout + extraWorkPayout;
+  const totalDeductions = n(payroll.pf_deduction) + n(payroll.tax_deduction) + n(payroll.unpaid_leave_deduction) + n(payroll.loan_deduction) + n(payroll.advance_deduction) + n(payroll.loss_deduction);
+  const Row = ({ label, value, className = '' }: { label: string; value: number; className?: string }) => (
+    <div className={`flex items-start justify-between gap-4 border-b py-2 last:border-0 ${className}`}>
+      <span className="text-muted-foreground">{label}</span><span className="text-right font-medium">{money(value)}</span>
+    </div>
+  );
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-background p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between gap-3">
+          <div><h2 className="text-lg font-semibold">Payroll Calculation</h2><p className="text-xs text-muted-foreground">{employee ? fullName(employee) : 'Employee'} · {new Date(payroll.period_start).toLocaleDateString('en-IN')} – {new Date(payroll.period_end).toLocaleDateString('en-IN')}</p></div>
+          <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+        </div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Salary-day calculation</div><p className="mb-2 text-xs text-muted-foreground">Weekly offs, working days, applicable holidays, paid leave, and extra-work dates are counted as unique payable dates.</p>
+            <Row label="Monthly gross salary" value={monthlyGross} /><Row label={`Calendar days in month (${monthDays})`} value={monthDays} /><Row label="Daily salary rate" value={dailyRate} /><Row label="Payable salary days" value={payableDays} /><Row label="Gross salary for period" value={n(payroll.gross)} className="font-semibold" />
+          </div>
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Earnings</div><Row label="Basic salary" value={n(payroll.basic_salary)} /><Row label="HRA" value={n(payroll.hra)} /><Row label="Travel allowance" value={n(payroll.travel_allowance)} /><Row label="Special allowance" value={n(payroll.special_allowance)} /><Row label="Other allowance" value={n(payroll.other_allowance)} /><Row label="Extra Work Day Payout" value={extraWorkPayout} /><Row label="Paid Leave Payout" value={paidLeavePayout} /><Row label="Pending incentive" value={incentive} /><Row label="Total earnings" value={totalEarnings} className="font-semibold" /></div>
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Deductions</div><Row label="Unpaid Leave Deduction" value={n(payroll.unpaid_leave_deduction)} /><div className="mb-1 text-xs text-muted-foreground">{n(payroll.unpaid_leaves)} unpaid leave day(s) × calendar-day rate</div><Row label="PF" value={n(payroll.pf_deduction)} /><Row label="Tax" value={n(payroll.tax_deduction)} /><Row label="Loan EMI" value={n(payroll.loan_deduction)} /><Row label="Advance EMI" value={n(payroll.advance_deduction)} /><Row label="Loss deduction" value={n(payroll.loss_deduction)} /><Row label="Total deductions" value={totalDeductions} className="font-semibold text-destructive" /></div>
+          <div className="rounded-lg border bg-muted/30 p-3"><div className="mb-1 font-semibold">Final calculation</div><p className="text-sm">{money(totalEarnings)} earnings − {money(totalDeductions)} deductions</p><div className={`mt-3 flex justify-between border-t pt-3 text-lg font-bold ${n(payroll.net) < 0 ? 'text-destructive' : ''}`}><span>Net salary</span><span>{money(n(payroll.net))}</span></div></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ── Detail panel (expandable under each row) ───────────────────────────── */
 function DetailPanel({
   payroll,
@@ -339,6 +378,7 @@ export function PayrollPending() {
   const [sortDir, setSortDir]     = useState<SortDir>('desc');
   const [filterPeriod, setFilterPeriod] = useState('__all__');
   const [payDialog, setPayDialog] = useState<Payroll | null>(null);
+  const [calculationPayroll, setCalculationPayroll] = useState<Payroll | null>(null);
   const [expanded, setExpanded]   = useState<string | null>(null);
 
   const empMap = useMemo(
@@ -459,6 +499,9 @@ export function PayrollPending() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-4">
+      {calculationPayroll && (
+        <CalculationDialog payroll={calculationPayroll} employee={empMap.get(calculationPayroll.employee_id)} onClose={() => setCalculationPayroll(null)} />
+      )}
       {payDialog && (
         <PayDialog
           payroll={payDialog}
@@ -595,15 +638,15 @@ export function PayrollPending() {
                             )}
                           </td>
                           <td className="px-4 py-3 text-right" onClick={e => e.stopPropagation()}>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-xs"
-                              onClick={() => setPayDialog(p)}
-                            >
-                              <CheckCircle2 className="mr-1 h-3 w-3" />
-                              {status === 'partial_paid' ? 'Pay balance' : 'Mark paid'}
-                            </Button>
+                            <div className="flex justify-end gap-1.5">
+                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setCalculationPayroll(p)}>
+                                <FileText className="mr-1 h-3 w-3" />View Calculation
+                              </Button>
+                              <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setPayDialog(p)}>
+                                <CheckCircle2 className="mr-1 h-3 w-3" />
+                                {status === 'partial_paid' ? 'Pay balance' : 'Mark paid'}
+                              </Button>
+                            </div>
                           </td>
                         </tr>
                         {isOpen && (
