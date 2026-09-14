@@ -70,15 +70,25 @@ export interface PayrollComputation {
   paidLeavePayout: number;
 }
 
+function countSundays(from: Date, to: Date): number {
+  let count = 0;
+  const cur = new Date(from);
+  while (cur <= to) {
+    if (cur.getDay() === 0) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return count;
+}
+
 /**
  * Compute a payroll period.
  *
  * Leave logic:
  * - Unpaid leaves are strictly per-period (reset to 0 after each period — no carry-forward).
- * - If `emp.unpaid_leave_deduction_rate > 0`, deduction = rate × unpaidLeaves (0.5 rate for half-days
- *   is already handled because unpaidLeavesThisPeriod uses 0.5 for half-days).
- * - Otherwise falls back to pro-rata (gross / workingDays × unpaidLeaves).
- * - `paidLeavePayout` = `paidLeavesLeftBefore × paid_leave_payout_rate`, only when `isFinalPayroll`.
+ * - Salary days are scheduled working days + Sundays + paid-leave entitlement.
+ * - Joining/leaving periods use only the eligible days inside employment.
+ * - Unpaid leave is always deducted automatically at the period's eligible-day rate.
+ * - Paid leaves are already included in salary; no separate final-pay payout is made.
  *
  * EMI logic: handled externally via installment records — not in this function.
  */
@@ -96,7 +106,12 @@ export function computePayroll(
   const fullPeriodWorkingDays = countWorkingDays(from, to, dept, holidays);
   const { from: cf, to: ct } = clampToEmployment(from, to, emp);
   const workingDays = countWorkingDays(cf, ct, dept, holidays);
-  const joinLeaveFactor = fullPeriodWorkingDays > 0 ? workingDays / fullPeriodWorkingDays : 1;
+  const fullPeriodSundays = countSundays(from, to);
+  const employedSundays = cf <= ct ? countSundays(cf, ct) : 0;
+  const periodPaidLeaves = (emp.paid_holidays_per_month ?? 0) * (periodType === 'half_month' ? 0.5 : 1);
+  const eligibleFullDays = fullPeriodWorkingDays + fullPeriodSundays + periodPaidLeaves;
+  const eligibleEmployedDays = workingDays + employedSundays + periodPaidLeaves;
+  const joinLeaveFactor = eligibleFullDays > 0 ? eligibleEmployedDays / eligibleFullDays : 1;
 
   const empAtt = allAttendance.filter(a => a.employee_id === emp.id);
   const byDate = new Map(empAtt.map(a => [a.date, a] as const));
@@ -156,22 +171,17 @@ export function computePayroll(
   const monthlyGross = n(emp.basic_salary) + n(emp.hra) + n(emp.travel_allowance) + n(emp.special_allowance) + n(emp.other_allowance);
   const periodGross  = periodType === 'half_month' ? monthlyGross / 2 : monthlyGross;
   const gross        = periodGross * joinLeaveFactor;
-  const perDay       = workingDays > 0 ? gross / workingDays : 0;
+  const perDay       = eligibleFullDays > 0 ? periodGross / eligibleFullDays : 0;
 
   // ── Unpaid leave deduction ─────────────────────────────────────────────────
-  // Use fixed custom rate if set; otherwise fall back to pro-rata (gross / workingDays).
-  const customRate = n(emp.unpaid_leave_deduction_rate);
-  const unpaidLeaveDeduction = customRate > 0
-    ? customRate * unpaidLeavesThisPeriod      // half-day already 0.5 in unpaidLeavesThisPeriod
-    : perDay * unpaidLeavesThisPeriod;
+  // Unpaid leave is always deducted automatically using the same daily rate as
+  // the new working-days + Sundays + paid-leaves salary basis.
+  const unpaidLeaveDeduction = perDay * unpaidLeavesThisPeriod;
 
   // ── Paid-leave payout (final payroll only) ─────────────────────────────────
   // Uses paidLeavesLeftAfter (not leftBefore) so leaves consumed THIS period are not double-paid:
   // those days were already paid as "present" via paid-leave cover, not deducted.
-  const payoutRate     = n(emp.paid_leave_payout_rate);
-  const paidLeavePayout = isFinalPayroll && payoutRate > 0
-    ? payoutRate * paidLeavesLeftAfter
-    : 0;
+  const paidLeavePayout = 0;
 
   // Clamp factor to [0,1] — unpaidLeavesThisPeriod could theoretically exceed workingDays
   // if attendance data was entered incorrectly (e.g. absences on non-working days counted).

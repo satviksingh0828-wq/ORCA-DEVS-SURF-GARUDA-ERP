@@ -35,8 +35,6 @@ type FormState = {
   pf_deduction: string;
   tax_deduction: string;
   paid_holidays_per_month: string;
-  unpaid_leave_deduction_rate: string;
-  paid_leave_payout_rate: string;
   pay_per_extra_work_day: string;
   emergency_contact: string;
   location: string;
@@ -84,8 +82,6 @@ function fromEmployee(e?: Employee): FormState {
     pf_deduction:                 e ? String(e.pf_deduction) : '',
     tax_deduction:                e ? String(e.tax_deduction) : '0',
     paid_holidays_per_month:      e ? String(e.paid_holidays_per_month) : '1',
-    unpaid_leave_deduction_rate:  e ? String(e.unpaid_leave_deduction_rate ?? 0) : '0',
-    paid_leave_payout_rate:       e ? String(e.paid_leave_payout_rate ?? 0) : '0',
     pay_per_extra_work_day:       e ? String(e.pay_per_extra_work_day ?? 0) : '0',
     emergency_contact:            e?.emergency_contact ?? '',
     location:                     e?.location ?? '',
@@ -212,8 +208,6 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
       pf_deduction:                Number(f.pf_deduction),
       tax_deduction:               Number(f.tax_deduction || 0),
       paid_holidays_per_month:     Number(f.paid_holidays_per_month || 0),
-      unpaid_leave_deduction_rate: Number(f.unpaid_leave_deduction_rate || 0),
-      paid_leave_payout_rate:      Number(f.paid_leave_payout_rate || 0),
       pay_per_extra_work_day:      Number(f.pay_per_extra_work_day || 0),
       emergency_contact:           f.emergency_contact.trim() || null,
       location:                    f.location.trim() || null,
@@ -378,36 +372,12 @@ export function EmployeeForm({ employee }: { employee?: Employee }) {
               ))}
             </div>
 
-            {/* ── Leave rate fields ── */}
-            <div className="rounded-md border border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20 p-3 space-y-3">
-              <div className="text-sm font-semibold text-blue-900 dark:text-blue-300">Leave deduction & payout rates</div>
+            <div className="rounded-md border border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20 p-3 space-y-2">
+              <div className="text-sm font-semibold text-blue-900 dark:text-blue-300">Automatic leave calculation</div>
+              <p className="text-xs text-muted-foreground">
+                Salary uses department working days, Sundays, and paid leaves. Unpaid leave is deducted automatically using the same daily salary basis. Manual leave deduction and payout rates are not required.
+              </p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
-                  <Label>Unpaid leave deduction rate (₹ / day)</Label>
-                  <Input
-                    className={inputCls}
-                    inputMode="decimal"
-                    placeholder="0 = auto pro-rata"
-                    value={f.unpaid_leave_deduction_rate}
-                    onChange={e => set('unpaid_leave_deduction_rate', e.target.value.replace(/[^\d.]/g, ''))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Amount deducted per unpaid day. Half-day unpaid = ½ this rate. Leave at 0 to use auto pro-rata (Gross ÷ Working Days).
-                  </p>
-                </div>
-                <div className="space-y-2">
-                  <Label>Paid leave payout rate (₹ / day)</Label>
-                  <Input
-                    className={inputCls}
-                    inputMode="decimal"
-                    placeholder="0 = no payout"
-                    value={f.paid_leave_payout_rate}
-                    onChange={e => set('paid_leave_payout_rate', e.target.value.replace(/[^\d.]/g, ''))}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Amount paid per unused paid leave in the final (leaving) payroll. If salary changes, the old rate applies up to the change date; new rate applies after.
-                  </p>
-                </div>
                 <div className="space-y-2">
                   <Label>Pay per extra work day (₹ / day)</Label>
                   <div className="flex gap-2">
