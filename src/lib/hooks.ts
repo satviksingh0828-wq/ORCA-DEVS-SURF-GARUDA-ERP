@@ -493,7 +493,11 @@ export function useCreatePayroll() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (values: PayrollInput) => {
-      const { data, error } = await sb.from('payrolls').insert(values).select().single();
+      const payload = {
+        ...values,
+        payment_status: values.payment_status || 'generated',
+      };
+      const { data, error } = await sb.from('payrolls').insert(payload).select().single();
       if (error) throw error;
       return data as Payroll;
     },
