@@ -32,6 +32,41 @@ const PAYMENT_STATUS_LABEL: Record<string, { label: string; className: string }>
   partial_paid: { label: 'Partially paid', className: 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300' },
 };
 
+type GenerateCalculationPreview = {
+  c: {
+    gross: number; perDay: number; calendarDaysInMonth: number; payableDates: number;
+    workingDays: number; present: number; extraWorkDays: number;
+    paidLeavesUsedThisPeriod: number; paidLeavesLeftAfter: number;
+    unpaidLeavesThisPeriod: number; unpaidLeaveDeduction: number; paidLeavePayout: number; extraWorkPay: number;
+  };
+  pf: number; tax: number; loanDed: number; advDed: number; lossDed: number; incentiveAmount: number; net: number;
+};
+
+function GenerateCalculationDialog({ emp, preview, period, onClose }: { emp: Employee; preview: GenerateCalculationPreview; period: { label: string }; onClose: () => void }) {
+  const Row = ({ label, value, className = '' }: { label: string; value: number; className?: string }) => (
+    <div className={`flex items-start justify-between gap-4 border-b py-2 last:border-0 ${className}`}>
+      <span className="text-muted-foreground">{label}</span><span className="text-right font-medium">{money(value)}</span>
+    </div>
+  );
+  const monthlyGross = Number(emp.basic_salary) + Number(emp.hra) + Number(emp.travel_allowance) + Number(emp.special_allowance) + Number(emp.other_allowance);
+  const totalEarnings = preview.c.gross + preview.incentiveAmount + preview.c.paidLeavePayout + preview.c.extraWorkPay;
+  const totalDeductions = preview.pf + preview.tax + preview.c.unpaidLeaveDeduction + preview.loanDed + preview.advDed + preview.lossDed;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
+      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border bg-background p-5 shadow-xl" onClick={e => e.stopPropagation()}>
+        <div className="mb-1 flex items-center justify-between gap-3"><div><h2 className="text-lg font-semibold">Payroll Calculation</h2><p className="text-xs text-muted-foreground">{fullName(emp)} · {period.label}</p></div><Button variant="outline" size="sm" onClick={onClose}>Close</Button></div>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 1 — Gross salary</div><p className="mb-2 text-xs text-muted-foreground">Basic salary plus all configured allowances.</p><Row label="Basic salary" value={Number(emp.basic_salary)} /><Row label="HRA" value={Number(emp.hra)} /><Row label="Travel allowance" value={Number(emp.travel_allowance)} /><Row label="Special allowance" value={Number(emp.special_allowance)} /><Row label="Other allowance" value={Number(emp.other_allowance)} /><Row label="Monthly gross salary" value={monthlyGross} className="font-semibold" /></div>
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 2 — Payable dates</div><p className="mb-2 text-xs text-muted-foreground">Dates are counted uniquely, so a weekly off, holiday, leave, or extra-work date is never counted twice.</p><Row label={`Calendar days in month (${preview.c.calendarDaysInMonth})`} value={preview.c.calendarDaysInMonth} /><Row label="Daily salary rate" value={preview.c.perDay} /><Row label="Department working days" value={preview.c.workingDays} /><Row label="Unique payable salary days" value={preview.c.payableDates} /><Row label="Gross salary for period" value={preview.c.gross} className="font-semibold" /></div>
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 3 — Leave calculation</div><Row label="Paid leave used" value={preview.c.paidLeavesUsedThisPeriod} /><Row label="Paid leave balance after payroll" value={preview.c.paidLeavesLeftAfter} /><Row label="Unpaid leave" value={preview.c.unpaidLeavesThisPeriod} /><Row label="Unpaid Leave Deduction" value={preview.c.unpaidLeaveDeduction} className="font-semibold text-destructive" /><Row label="Paid Leave Payout" value={preview.c.paidLeavePayout} /></div>
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 4 — Other earnings</div><Row label={`Extra Work Day Payout (${preview.c.extraWorkDays} days)`} value={preview.c.extraWorkPay} /><Row label="Pending incentive" value={preview.incentiveAmount} /><Row label="Total earnings" value={totalEarnings} className="font-semibold" /></div>
+          <div className="rounded-lg border p-3 sm:col-span-2"><div className="mb-1 font-semibold">Step 5 — Deductions and net salary</div><div className="grid gap-x-6 sm:grid-cols-2"><Row label="PF" value={preview.pf} /><Row label="Tax" value={preview.tax} /><Row label="Loan EMI" value={preview.loanDed} /><Row label="Advance EMI" value={preview.advDed} /><Row label="Loss deduction" value={preview.lossDed} /><Row label="Unpaid Leave Deduction" value={preview.c.unpaidLeaveDeduction} /></div><div className="mt-3 border-t pt-3"><p className="text-sm">{money(totalEarnings)} earnings − {money(totalDeductions)} deductions</p><div className={`mt-2 flex justify-between text-lg font-bold ${preview.net < 0 ? 'text-destructive' : ''}`}><span>Net salary</span><span>{money(preview.net)}</span></div></div></div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function PayrollGenerate() {
   const now = new Date();
   const { data: employees, isLoading: le } = useEmployees();
@@ -47,6 +82,7 @@ export function PayrollGenerate() {
   const { data: allAdvInst } = useAllAdvanceInstallments();
 
   const [empId, setEmpId] = useState<string>('');
+  const [calculationOpen, setCalculationOpen] = useState(false);
   const [year, setYear] = useState<number>(now.getFullYear());
   const [month, setMonth] = useState<number>(now.getMonth());
   const [periodType, setPeriodType] = useState<'month' | 'half_month'>('month');
@@ -406,7 +442,7 @@ export function PayrollGenerate() {
     }
   };
 
-  const scale = preview ? (periodType === 'half_month' ? 0.5 : 1) * preview.c.joinLeaveFactor : 1;
+  const scale = preview ? (preview.c.calendarDaysInMonth > 0 ? preview.c.payableDates / preview.c.calendarDaysInMonth : 0) : 1;
 
   const loanEmiSummary = useMemo(() => {
     if (!allLoanInst) return { loanCount: 0, advCount: 0 };
@@ -474,6 +510,10 @@ export function PayrollGenerate() {
         )}
       </div>
 
+      {calculationOpen && emp && preview && (
+        <GenerateCalculationDialog emp={emp} preview={preview} period={period} onClose={() => setCalculationOpen(false)} />
+      )}
+
       {emp && preview && (
         <div className="space-y-3 rounded-lg border bg-card p-4 sm:p-6">
           <div className="flex flex-wrap items-center justify-between gap-2">
@@ -501,12 +541,17 @@ export function PayrollGenerate() {
                 <div className="mt-1 text-xs text-muted-foreground">Paid-leave balance carried from payroll ending {new Date(lastPayroll.period_end).toLocaleDateString('en-IN')}</div>
               )}
             </div>
-            <Button
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setCalculationOpen(true)} disabled={!preview}>
+                View Calculation
+              </Button>
+              <Button
               onClick={generate}
               disabled={create.isPending || alreadyGenerated || !!outsideEmployment || !!halfMonthBlocked}
             >
               {outsideEmployment ? 'Not applicable' : halfMonthBlocked ? 'Half-month not allowed' : alreadyGenerated ? 'Already generated' : create.isPending ? 'Generating…' : 'Generate & export PDF'}
-            </Button>
+              </Button>
+            </div>
           </div>
 
           {/* When payroll already exists for this period, show snapshotted values (not live employee data) */}
