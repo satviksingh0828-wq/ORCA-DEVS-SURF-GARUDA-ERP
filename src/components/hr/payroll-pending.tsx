@@ -136,7 +136,7 @@ function CalculationDialog({ payroll, employee, onClose }: { payroll: Payroll; e
   const incentive = n(payroll.incentive_amount);
   const paidLeavePayout = n(payroll.paid_leave_payout_amount);
   const extraWorkPayout = n(payroll.extra_work_pay);
-  const totalEarnings = n(payroll.gross) + incentive;
+  const totalEarnings = n(payroll.gross) + incentive + paidLeavePayout + extraWorkPayout;
   const totalDeductions = n(payroll.pf_deduction) + n(payroll.tax_deduction) + n(payroll.unpaid_leave_deduction) + n(payroll.loan_deduction) + n(payroll.advance_deduction) + n(payroll.loss_deduction);
   const Row = ({ label, value, className = '' }: { label: string; value: number; className?: string }) => (
     <div className={`flex items-start justify-between gap-4 border-b py-2 last:border-0 ${className}`}>
@@ -193,7 +193,7 @@ function DetailPanel({
   const net        = Number(payroll.net);
   const paidAmt    = Number(payroll.payment_amount || 0);
   const outstanding = ps === 'partial_paid' ? Math.max(0, net - paidAmt) : net;
-  const gross       = Number(payroll.gross);
+  const gross       = Number(payroll.gross) + Number(payroll.paid_leave_payout_amount || 0);
   const totalDed    =
     Number(payroll.pf_deduction) + Number(payroll.tax_deduction) +
     Number(payroll.unpaid_leave_deduction) + Number(payroll.loan_deduction) +
