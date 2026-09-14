@@ -121,16 +121,21 @@ export function FinalAccountsRoute() {
     }
     for (const [branchId, profitLoss] of profitLossByBranch) {
       if (Math.abs(profitLoss) <= 0.005) continue;
-      const capital = [...totals.values()].find((row) => row.branch_id === branchId && row.ledger_type === "capital" && !/branch\s*\/??\s*a\/c|branch account/i.test(row.account_name));
-      if (!capital) continue;
-      if (profitLoss > 0) {
-        capital.credit += profitLoss;
-      } else {
-        capital.debit += Math.abs(profitLoss);
-      }
-      const net = capital.debit - capital.credit;
-      capital.amount = Math.abs(net);
-      capital.side = net >= 0 ? "Dr" : "Cr";
+      // Keep the Capital ledger at its actual posted balance. Present the
+      // period result separately so a loss is not incorrectly folded into
+      // the Capital row's debit side.
+      const resultDebit = profitLoss < 0 ? Math.abs(profitLoss) : 0;
+      const resultCredit = profitLoss > 0 ? profitLoss : 0;
+      totals.set(`profit-loss-${branchId}`, {
+        branch_id: branchId,
+        account_id: `profit-loss-${branchId}`,
+        account_name: profitLoss < 0 ? "Net Loss" : "Net Profit",
+        ledger_type: "capital",
+        amount: Math.abs(profitLoss),
+        debit: resultDebit,
+        credit: resultCredit,
+        side: profitLoss < 0 ? "Dr" : "Cr",
+      });
     }
     return [...totals.values()].sort((a, b) => `${branchById.get(a.branch_id)?.branch_name}-${a.account_name}`.localeCompare(`${branchById.get(b.branch_id)?.branch_name}-${b.account_name}`));
   }, [accountById, accounts, asOf, branchId, branchById, postings]);
