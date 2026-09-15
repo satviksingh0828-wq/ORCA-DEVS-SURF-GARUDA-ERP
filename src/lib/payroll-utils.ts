@@ -190,7 +190,7 @@ export function computePayroll(
   const requestedThisPeriod = absent + halfDay * 0.5;
   const paidLeavesUsedThisPeriod = Math.max(0, Math.min(requestedThisPeriod, leftBefore));
   const unpaidLeavesThisPeriod = Math.max(0, requestedThisPeriod - paidLeavesUsedThisPeriod);
-  const paidLeavesLeftAfter = leftBefore - paidLeavesUsedThisPeriod;
+  const paidLeavesLeftAfter = Math.max(0, leftBefore - paidLeavesUsedThisPeriod);
 
   const n = (v: number | string) => Number(v) || 0;
   const monthlyGross = n(emp.basic_salary) + n(emp.hra) + n(emp.travel_allowance) + n(emp.special_allowance) + n(emp.other_allowance);
