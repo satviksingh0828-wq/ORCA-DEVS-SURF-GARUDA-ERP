@@ -27,6 +27,19 @@ function money(n: number) {
   return '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function correctedPayrollNet(payroll: Payroll) {
+  const earnings = Number(payroll.gross || 0)
+    + Number(payroll.paid_leave_final_settlement_amount || 0)
+    + Number(payroll.incentive_amount || 0);
+  const deductions = Number(payroll.pf_deduction || 0)
+    + Number(payroll.tax_deduction || 0)
+    + Number(payroll.unpaid_leave_deduction || 0)
+    + Number(payroll.loan_deduction || 0)
+    + Number(payroll.advance_deduction || 0)
+    + Number(payroll.loss_deduction || 0);
+  return earnings - deductions;
+}
+
 const PAYMENT_STATUS_LABEL: Record<string, { label: string; className: string }> = {
   generated:    { label: 'Generated — Payment pending', className: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300' },
   paid:         { label: 'Paid', className: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300' },
@@ -663,7 +676,7 @@ export function PayrollGenerate() {
                   <Row label="Loss"         v={Number(existingPayroll.loss_deduction)} />
                   <div className={`mt-2 flex justify-between border-t pt-2 text-sm font-semibold ${Number(existingPayroll.net) < 0 ? 'text-destructive' : ''}`}>
                     <span>Net</span>
-                    <span>{money(Number(existingPayroll.net))}</span>
+                    <span>{money(correctedPayrollNet(existingPayroll))}</span>
                   </div>
                 </>
               ) : (
