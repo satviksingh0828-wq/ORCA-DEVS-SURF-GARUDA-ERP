@@ -156,8 +156,8 @@ export function AccountsRulesPage() {
     const credit = ledgers.find((item) => item.id === rule.default_bank_cash_ledger_id);
     if (!debit || debit.branch_id !== branchId)
       return toast.error("Select a debit ledger from the selected branch.");
-    if (rule.rule_key === "payroll_paid" && debit.ledger_type !== "revenue")
-      return toast.error("Salary paid must debit a revenue ledger.");
+    if (rule.rule_key === "payroll_paid" && debit.ledger_type !== "expenditure")
+      return toast.error("Salary paid must debit an active expenditure ledger from the employee branch.");
     if (rule.rule_key !== "payroll_paid" && !["asset", "capital"].includes(debit.ledger_type))
       return toast.error("Loan and advance rules must debit an asset or capital ledger.");
     if (!credit || credit.branch_id !== branchId || !["bank", "cash"].includes(credit.ledger_type))

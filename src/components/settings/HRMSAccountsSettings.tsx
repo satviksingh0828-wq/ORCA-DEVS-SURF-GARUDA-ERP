@@ -13,7 +13,7 @@ const FIELDS = [
   ["incentive_ledger_id", "Incentive", "income-expenditure"],
   ["incentive_payable_ledger_id", "Incentive Payable", "liability"],
   ["salary_deduction_ledger_id", "Salary Deduction", "income-expenditure"],
-  ["loss_deduction_ledger_id", "Loss Deduction", "income-expenditure"],
+  ["loss_deduction_ledger_id", "Loss Deduction", "income"],
   ["unpaid_leave_deduction_ledger_id", "Unpaid Leave Deduction", "income-expenditure"],
   ["paid_leave_payout_ledger_id", "Paid Leave Payout", "income-expenditure"],
   ["extra_work_day_payout_ledger_id", "Extra Work Day Payout", "income-expenditure"],
@@ -53,6 +53,7 @@ export function HRMSAccountsSettings() {
   const ledgersByType = useMemo(() => ({
     asset: ledgers.filter((ledger) => ledger.ledger_type === "asset"),
     liability: ledgers.filter((ledger) => ledger.ledger_type === "liability"),
+    income: ledgers.filter((ledger) => ledger.ledger_type === "income"),
     incomeExpenditure: ledgers.filter((ledger) => ["income", "expenditure"].includes(ledger.ledger_type)),
   }), [ledgers]);
 
@@ -80,7 +81,7 @@ export function HRMSAccountsSettings() {
       </div>
     </section>
     {loading ? <div className="surface-card flex justify-center py-14"><Loader2 className="size-5 animate-spin" /></div> : mapping ? <section className="surface-card p-6"><div className="mb-4 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">All choices are active ledgers belonging to this branch. Employee Advance and Employee Loan require asset ledgers; Salary Payable and Incentive Payable require liability ledgers; other HRMS mappings use income or expenditure ledgers.</div><div className="grid gap-4 sm:grid-cols-2">
-      {FIELDS.map(([key, label, type]) => { const choices = type === "asset" ? ledgersByType.asset : type === "liability" ? ledgersByType.liability : ledgersByType.incomeExpenditure; return <label key={key} className="space-y-1.5"><span className="text-sm font-medium">{label}</span><select value={mapping[key] ?? "none"} onChange={(event) => setMapping((current) => current ? { ...current, [key]: event.target.value === "none" ? null : event.target.value } : current)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="none">Not mapped</option>{choices.map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</option>)}</select></label>; })}
+      {FIELDS.map(([key, label, type]) => { const choices = type === "asset" ? ledgersByType.asset : type === "liability" ? ledgersByType.liability : type === "income" ? ledgersByType.income : ledgersByType.incomeExpenditure; return <label key={key} className="space-y-1.5"><span className="text-sm font-medium">{label}</span><select value={mapping[key] ?? "none"} onChange={(event) => setMapping((current) => current ? { ...current, [key]: event.target.value === "none" ? null : event.target.value } : current)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"><option value="none">Not mapped</option>{choices.map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</option>)}</select></label>; })}
     </div><div className="mt-6 flex justify-end"><Button type="button" onClick={() => void save()} disabled={saving} className="gap-2">{saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}Save mappings</Button></div></section> : <div className="surface-card p-8 text-center text-sm text-muted-foreground">Select a branch to configure HRMS accounts.</div>}
   </div>;
 }
