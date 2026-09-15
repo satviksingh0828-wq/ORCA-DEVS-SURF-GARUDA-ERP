@@ -82,7 +82,6 @@ export function PayrollGenerate() {
   const { data: settings } = useAppSettings();
   const { data: allLoanInst } = useAllLoanInstallments();
   const { data: allAdvInst } = useAllAdvanceInstallments();
-  const { data: paidLeaveAccruals } = usePaidLeaveAccruals(empId || undefined);
 
   const [empId, setEmpId] = useState<string>('');
   const [calculationOpen, setCalculationOpen] = useState(false);
@@ -90,6 +89,7 @@ export function PayrollGenerate() {
   const [month, setMonth] = useState<number>(now.getMonth());
   const [periodType, setPeriodType] = useState<'month' | 'half_month'>('month');
   const [half, setHalf] = useState<'first' | 'second'>('first');
+  const { data: paidLeaveAccruals } = usePaidLeaveAccruals(empId || undefined);
   const { data: incentiveAmounts } = useIncentiveAmounts(empId || undefined);
 
   const emp = useMemo(() => (employees ?? []).find(e => e.id === empId) ?? null, [employees, empId]);
