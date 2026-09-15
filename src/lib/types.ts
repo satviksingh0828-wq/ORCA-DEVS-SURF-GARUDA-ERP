@@ -219,6 +219,8 @@ export interface Payroll {
   unpaid_leave_deduction: number;
   /** Separate payout for paid leave taken in this payroll period. */
   paid_leave_payout_amount: number;
+  /** Final settlement payout for all remaining paid leave balance. */
+  paid_leave_final_settlement_amount: number;
   net: number;
   working_days: number;
   present_days: number;

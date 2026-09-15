@@ -68,6 +68,10 @@ export interface PayrollComputation {
   unpaidLeaveDeduction: number;
   /** Separate payout for paid leave taken in this payroll period. */
   paidLeavePayout: number;
+  /** Payout of all remaining paid leave balance in the employee's final payroll. */
+  paidLeaveFinalSettlement: number;
+  payableDates: number;
+  calendarDaysInMonth: number;
 }
 
 /**
@@ -79,6 +83,8 @@ export interface PayrollComputation {
  *   is already handled because unpaidLeavesThisPeriod uses 0.5 for half-days).
  * - Otherwise falls back to pro-rata (gross / workingDays × unpaidLeaves).
  * - `paidLeavePayout` = paid leaves used this period × calendar-day salary rate.
+ * - `paidLeaveFinalSettlement` = remaining paid-leave balance × calendar-day salary rate,
+ *   only when this is the employee's leaving period.
  * - `extraWorkPay` = extra work days × calendar-day salary rate.
  *
  * EMI logic: handled externally via installment records — not in this function.
@@ -157,6 +163,7 @@ export function computePayroll(
   // Paid leave payout is a separate earning: paid leave taken this period
   // multiplied by the employee's calculated calendar-day salary rate.
   const paidLeavePayout = paidLeavesUsedThisPeriod * perDay;
+  const paidLeaveFinalSettlement = isFinalPayroll ? Math.max(0, paidLeavesLeftAfter) * perDay : 0;
   const factor = payable.size > 0 ? Math.max(0, Math.min(1, (payable.size - unpaidLeavesThisPeriod) / payable.size)) : 0;
   const presentCounted = present + halfDay * 0.5;
   // Extra work is also paid separately at the calculated daily salary rate;
@@ -169,7 +176,7 @@ export function computePayroll(
     extraWorkDays, extraWorkPay,
     paidLeavesEarned, paidLeavesUsedBefore: usedBefore, paidLeavesLeftBefore: leftBefore,
     paidLeavesUsedThisPeriod, unpaidLeavesThisPeriod, paidLeavesLeftAfter,
-    factor, gross, perDay, unpaidLeaveDeduction, paidLeavePayout,
+    factor, gross, perDay, unpaidLeaveDeduction, paidLeavePayout, paidLeaveFinalSettlement,
     payableDates: payable.size, calendarDaysInMonth,
   };
 }

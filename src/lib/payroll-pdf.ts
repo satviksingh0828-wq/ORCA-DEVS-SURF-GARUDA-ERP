@@ -222,6 +222,7 @@ export function exportPayrollPdf(opts: {
   const bannerY = drawPaymentStatus(doc, payroll, 266);
 
   const paidLeavePayout = Number(payroll.paid_leave_payout_amount) || 0;
+  const paidLeaveFinalSettlement = Number(payroll.paid_leave_final_settlement_amount) || 0;
   const extraWorkDays   = Number(payroll.extra_work_days) || 0;
   const extraWorkPay    = Number(payroll.extra_work_pay) || 0;
   const earningsRows: [string, string][] = [
@@ -234,10 +235,9 @@ export function exportPayrollPdf(opts: {
   if (extraWorkPay > 0) {
     earningsRows.push([`Extra work days (${extraWorkDays} days)`, money(extraWorkPay)]);
   }
-  if (paidLeavePayout > 0) {
-    earningsRows.push(['Paid leave payout (final settlement)', money(paidLeavePayout)]);
-  }
-  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay)]);
+  if (paidLeavePayout > 0) earningsRows.push(['Paid leave payout', money(paidLeavePayout)]);
+  if (paidLeaveFinalSettlement > 0) earningsRows.push(['Paid leave payout (final settlement)', money(paidLeaveFinalSettlement)]);
+  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + paidLeavePayout + paidLeaveFinalSettlement)]);
 
   autoTable(doc, {
     startY: bannerY,
@@ -344,7 +344,14 @@ export function exportPayrollPdf(opts: {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(80);
-    doc.text('(Includes paid leave payout of ' + money(paidLeavePayout) + ' for final settlement)', 36, y3 + 46);
+    doc.text('(Includes paid leave payout of ' + money(paidLeavePayout) + ')', 36, y3 + 46);
+    doc.setTextColor(0);
+  }
+  if (paidLeaveFinalSettlement > 0) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(80);
+    doc.text('(Final settlement includes all remaining paid leave balance: ' + money(paidLeaveFinalSettlement) + ')', 36, y3 + 58);
     doc.setTextColor(0);
   }
 
@@ -415,6 +422,7 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
   const bannerY = drawPaymentStatus(doc, payroll, 266);
 
   const paidLeavePayout = Number(payroll.paid_leave_payout_amount) || 0;
+  const paidLeaveFinalSettlement = Number(payroll.paid_leave_final_settlement_amount) || 0;
   const extraWorkDays   = Number(payroll.extra_work_days) || 0;
   const extraWorkPay    = Number(payroll.extra_work_pay) || 0;
   const earningsRows: [string, string][] = [
@@ -425,10 +433,11 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
     ['Other allowance',  money(payroll.other_allowance)],
   ];
   if (extraWorkPay > 0) earningsRows.push([`Extra work days (${extraWorkDays} days)`, money(extraWorkPay)]);
-  if (paidLeavePayout > 0) earningsRows.push(['Paid leave payout (final settlement)', money(paidLeavePayout)]);
+  if (paidLeavePayout > 0) earningsRows.push(['Paid leave payout', money(paidLeavePayout)]);
+  if (paidLeaveFinalSettlement > 0) earningsRows.push(['Paid leave payout (final settlement)', money(paidLeaveFinalSettlement)]);
   const incentiveAmount = Number(payroll.incentive_amount) || 0;
   if (incentiveAmount > 0) earningsRows.push(['One-time incentive', money(incentiveAmount)]);
-  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + incentiveAmount)]);
+  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + paidLeavePayout + paidLeaveFinalSettlement + incentiveAmount)]);
 
   autoTable(doc, { startY: bannerY, head: [['Earnings', 'Amount']], body: earningsRows, styles: { fontSize: 10 }, headStyles: { fillColor: [155, 28, 28] }, margin: { left: 36, right: 36 } });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -481,7 +490,12 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
   doc.setTextColor(0);
   if (paidLeavePayout > 0) {
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80);
-    doc.text('(Includes paid leave payout of ' + money(paidLeavePayout) + ' for final settlement)', 36, y3 + 46);
+    doc.text('(Includes paid leave payout of ' + money(paidLeavePayout) + ')', 36, y3 + 46);
+    doc.setTextColor(0);
+  }
+  if (paidLeaveFinalSettlement > 0) {
+    doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(80);
+    doc.text('(Final settlement includes all remaining paid leave balance: ' + money(paidLeaveFinalSettlement) + ')', 36, y3 + 58);
     doc.setTextColor(0);
   }
   doc.setFont('helvetica', 'italic'); doc.setFontSize(7.5); doc.setTextColor(100);

@@ -37,7 +37,7 @@ type GenerateCalculationPreview = {
     gross: number; perDay: number; calendarDaysInMonth: number; payableDates: number;
     workingDays: number; present: number; extraWorkDays: number;
     paidLeavesUsedThisPeriod: number; paidLeavesLeftAfter: number;
-    unpaidLeavesThisPeriod: number; unpaidLeaveDeduction: number; paidLeavePayout: number; extraWorkPay: number;
+    unpaidLeavesThisPeriod: number; unpaidLeaveDeduction: number; paidLeavePayout: number; paidLeaveFinalSettlement: number; extraWorkPay: number;
   };
   pf: number; tax: number; loanDed: number; advDed: number; lossDed: number; incentiveAmount: number; net: number;
 };
@@ -49,7 +49,7 @@ function GenerateCalculationDialog({ emp, preview, period, onClose }: { emp: Emp
     </div>
   );
   const monthlyGross = Number(emp.basic_salary) + Number(emp.hra) + Number(emp.travel_allowance) + Number(emp.special_allowance) + Number(emp.other_allowance);
-  const totalEarnings = preview.c.gross + preview.c.extraWorkPay + preview.incentiveAmount;
+  const totalEarnings = preview.c.gross + preview.c.extraWorkPay + preview.c.paidLeaveFinalSettlement + preview.incentiveAmount;
   const totalDeductions = preview.pf + preview.tax + preview.c.unpaidLeaveDeduction + preview.loanDed + preview.advDed + preview.lossDed;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -58,7 +58,7 @@ function GenerateCalculationDialog({ emp, preview, period, onClose }: { emp: Emp
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 1 — Gross salary</div><p className="mb-2 text-xs text-muted-foreground">Basic salary plus all configured allowances.</p><Row label="Basic salary" value={Number(emp.basic_salary)} /><Row label="HRA" value={Number(emp.hra)} /><Row label="Travel allowance" value={Number(emp.travel_allowance)} /><Row label="Special allowance" value={Number(emp.special_allowance)} /><Row label="Other allowance" value={Number(emp.other_allowance)} /><Row label="Monthly gross salary" value={monthlyGross} className="font-semibold" /></div>
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 2 — Payable dates</div><p className="mb-2 text-xs text-muted-foreground">Dates are counted uniquely, so a weekly off, holiday, leave, or extra-work date is never counted twice.</p><Row label={`Calendar days in month (${preview.c.calendarDaysInMonth})`} value={preview.c.calendarDaysInMonth} raw /><Row label="Daily salary rate" value={preview.c.perDay} /><Row label="Department working days" value={preview.c.workingDays} raw /><Row label="Unique payable salary days" value={preview.c.payableDates} raw /><Row label="Gross salary for period" value={preview.c.gross} className="font-semibold" /></div>
-          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 3 — Leave calculation</div><Row label="Paid leave used" value={preview.c.paidLeavesUsedThisPeriod} raw /><Row label="Paid leave balance after payroll" value={preview.c.paidLeavesLeftAfter} raw /><Row label="Unpaid leave" value={preview.c.unpaidLeavesThisPeriod} raw /><Row label="Unpaid Leave Deduction" value={preview.c.unpaidLeaveDeduction} className="font-semibold text-destructive" /><Row label="Paid Leave Payout" value={preview.c.paidLeavePayout} /></div>
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 3 — Leave calculation</div><Row label="Paid leave used" value={preview.c.paidLeavesUsedThisPeriod} raw /><Row label="Paid leave balance after payroll" value={preview.c.paidLeavesLeftAfter} raw /><Row label="Unpaid leave" value={preview.c.unpaidLeavesThisPeriod} raw /><Row label="Unpaid Leave Deduction" value={preview.c.unpaidLeaveDeduction} className="font-semibold text-destructive" /><Row label="Paid leave payout" value={preview.c.paidLeavePayout} />{preview.c.paidLeaveFinalSettlement > 0 && <Row label="Paid leave payout (final settlement)" value={preview.c.paidLeaveFinalSettlement} className="font-semibold text-emerald-700" />}</div>
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 4 — Other earnings</div><Row label={`Extra Work Day Payout (${preview.c.extraWorkDays} days)`} value={preview.c.extraWorkPay} /><Row label="Pending incentive" value={preview.incentiveAmount} /><Row label="Total earnings" value={totalEarnings} className="font-semibold" /></div>
           <div className="rounded-lg border p-3 sm:col-span-2"><div className="mb-1 font-semibold">Step 5 — Deductions and net salary</div><div className="grid gap-x-6 sm:grid-cols-2"><Row label="PF" value={preview.pf} /><Row label="Tax" value={preview.tax} /><Row label="Loan EMI" value={preview.loanDed} /><Row label="Advance EMI" value={preview.advDed} /><Row label="Loss deduction" value={preview.lossDed} /><Row label="Unpaid Leave Deduction" value={preview.c.unpaidLeaveDeduction} /></div><div className="mt-3 border-t pt-3"><p className="text-sm">{money(totalEarnings)} earnings − {money(totalDeductions)} deductions</p><div className={`mt-2 flex justify-between text-lg font-bold ${preview.net < 0 ? 'text-destructive' : ''}`}><span>Net salary</span><span>{money(preview.net)}</span></div></div></div>
         </div>
@@ -229,7 +229,7 @@ export function PayrollGenerate() {
     const pf     = n(emp.pf_deduction)  * halfF * c.joinLeaveFactor;
     const tax    = n(emp.tax_deduction) * halfF * c.joinLeaveFactor;
     const totalDed = pf + tax + loanDed + advDed + lossDed + c.unpaidLeaveDeduction;
-    const net = c.gross + c.extraWorkPay + incentiveAmount - totalDed;
+    const net = c.gross + c.extraWorkPay + c.paidLeaveFinalSettlement + incentiveAmount - totalDed;
 
     return { c, loanDed, advDed, lossDed, incentiveAmount, pf, tax, net };
   }, [emp, dept, holidays, allAttendance, period, periodType, activeLoans, activeAdvances,
@@ -299,6 +299,7 @@ export function PayrollGenerate() {
       loss_deduction:            lossDed,
       unpaid_leave_deduction:    c.unpaidLeaveDeduction,
       paid_leave_payout_amount:  c.paidLeavePayout,
+      paid_leave_final_settlement_amount: c.paidLeaveFinalSettlement,
       extra_work_days:           c.extraWorkDays,
       extra_work_pay:            c.extraWorkPay,
       incentive_amount:         incentiveAmount,
@@ -571,7 +572,8 @@ export function PayrollGenerate() {
                   <Row label="Special" v={Number(existingPayroll.special_allowance)} />
                   <Row label="Other"   v={Number(existingPayroll.other_allowance)} />
                   <Row label={`Extra Work Day Payout (${Number(existingPayroll.extra_work_days) || 0} days)`} v={Number(existingPayroll.extra_work_pay) || 0} />
-                  <Row label="Paid Leave Payout" v={Number(existingPayroll.paid_leave_payout_amount) || 0} />
+                  <Row label="Paid leave payout" v={Number(existingPayroll.paid_leave_payout_amount) || 0} />
+                  {Number(existingPayroll.paid_leave_final_settlement_amount) > 0 && <Row label="Paid leave payout (final settlement)" v={Number(existingPayroll.paid_leave_final_settlement_amount) || 0} />}
                   {Number(existingPayroll.incentive_amount) > 0 && <Row label="One-time incentive" v={Number(existingPayroll.incentive_amount)} />}
                   <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
                     <span>Gross</span>
