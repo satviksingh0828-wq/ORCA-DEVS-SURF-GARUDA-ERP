@@ -150,6 +150,7 @@ function CalculationDialog({ payroll, employee, onClose }: { payroll: Payroll; e
   const paidLeavePayout = n(payroll.paid_leave_payout_amount);
   const extraWorkPayout = n(payroll.extra_work_pay);
   const finalSettlement = n(payroll.paid_leave_final_settlement_amount);
+  const paidLeavePayoutTotal = paidLeavePayout + finalSettlement;
   const totalEarnings = n(payroll.gross) + finalSettlement + incentive;
   const totalDeductions = n(payroll.pf_deduction) + n(payroll.tax_deduction) + n(payroll.unpaid_leave_deduction) + n(payroll.loan_deduction) + n(payroll.advance_deduction) + n(payroll.loss_deduction);
   const Row = ({ label, value, className = '' }: { label: string; value: number; className?: string }) => (
@@ -168,7 +169,7 @@ function CalculationDialog({ payroll, employee, onClose }: { payroll: Payroll; e
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Salary-day calculation</div><p className="mb-2 text-xs text-muted-foreground">Weekly offs, working days, applicable holidays, paid leave, and extra-work dates are counted as unique payable dates.</p>
             <Row label="Monthly gross salary" value={monthlyGross} /><Row label={`Calendar days in month (${monthDays})`} value={monthDays} /><Row label="Daily salary rate" value={dailyRate} /><Row label="Payable salary days" value={payableDays} /><Row label="Gross salary for period" value={n(payroll.gross)} className="font-semibold" />
           </div>
-          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Earnings</div><Row label="Basic salary" value={n(payroll.basic_salary) - extraWorkPayout - paidLeavePayout} /><Row label="HRA" value={n(payroll.hra)} /><Row label="Travel allowance" value={n(payroll.travel_allowance)} /><Row label="Special allowance" value={n(payroll.special_allowance)} /><Row label="Other allowance" value={n(payroll.other_allowance)} /><Row label="Extra Work Day Payout" value={extraWorkPayout} /><Row label="Paid Leave Payout" value={paidLeavePayout} /><Row label="Pending incentive" value={incentive} /><Row label="Total earnings" value={totalEarnings} className="font-semibold" /></div>
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Earnings</div><Row label="Basic salary" value={n(payroll.basic_salary) - extraWorkPayout - paidLeavePayout} /><Row label="HRA" value={n(payroll.hra)} /><Row label="Travel allowance" value={n(payroll.travel_allowance)} /><Row label="Special allowance" value={n(payroll.special_allowance)} /><Row label="Other allowance" value={n(payroll.other_allowance)} /><Row label="Extra Work Day Payout" value={extraWorkPayout} /><Row label="Paid Leave Payout" value={paidLeavePayoutTotal} /><Row label="Pending incentive" value={incentive} /><Row label="Total earnings" value={totalEarnings} className="font-semibold" /></div>
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Deductions</div><Row label="Unpaid Leave Deduction" value={n(payroll.unpaid_leave_deduction)} /><div className="mb-1 text-xs text-muted-foreground">{n(payroll.unpaid_leaves)} unpaid leave day(s) × calendar-day rate</div><Row label="PF" value={n(payroll.pf_deduction)} /><Row label="Tax" value={n(payroll.tax_deduction)} /><Row label="Loan EMI" value={n(payroll.loan_deduction)} /><Row label="Advance EMI" value={n(payroll.advance_deduction)} /><Row label="Loss deduction" value={n(payroll.loss_deduction)} /><Row label="Total deductions" value={totalDeductions} className="font-semibold text-destructive" /></div>
           <div className="rounded-lg border bg-muted/30 p-3"><div className="mb-1 font-semibold">Final calculation</div><p className="text-sm">{money(totalEarnings)} earnings − {money(totalDeductions)} deductions</p><div className={`mt-3 flex justify-between border-t pt-3 text-lg font-bold ${correctedPayrollNet(payroll) < 0 ? 'text-destructive' : ''}`}><span>Net salary</span><span>{money(correctedPayrollNet(payroll))}</span></div></div>
         </div>
@@ -258,8 +259,8 @@ function DetailPanel({
               <DetailRow k="Travel allowance"  v={Number(payroll.travel_allowance)} />
               <DetailRow k="Special allowance" v={Number(payroll.special_allowance)} />
               <DetailRow k="Other allowance"   v={Number(payroll.other_allowance)} />
-              {Number(payroll.paid_leave_payout_amount) > 0 && (
-                <DetailRow k="Leave payout" v={Number(payroll.paid_leave_payout_amount)} />
+              {(Number(payroll.paid_leave_payout_amount) + Number(payroll.paid_leave_final_settlement_amount)) > 0 && (
+                <DetailRow k="Paid Leave Payout" v={Number(payroll.paid_leave_payout_amount) + Number(payroll.paid_leave_final_settlement_amount)} />
               )}
             </tbody>
             <tfoot>
