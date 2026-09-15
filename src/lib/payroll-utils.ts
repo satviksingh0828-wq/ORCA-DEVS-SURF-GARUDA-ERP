@@ -175,17 +175,23 @@ export function computePayroll(
   let usedBefore: number;
   if (lastPayroll) {
     const lastEnd = parseYmd(lastPayroll.period_end);
-    const sameMonth = lastEnd.getFullYear() === ct.getFullYear() && lastEnd.getMonth() === ct.getMonth();
-    // Paid leave is a monthly allowance, not a carry-forward balance. A
-    // second half-month payroll shares the first half's remaining allowance;
-    // every new calendar month starts with its configured allowance again.
-    leftBefore = sameMonth ? Number(lastPayroll.paid_leaves_left) : perMonth;
-    paidLeavesEarned = perMonth;
-    usedBefore = Math.max(0, perMonth - leftBefore);
+    const monthsSince = Math.max(0, (ct.getFullYear() - lastEnd.getFullYear()) * 12 + (ct.getMonth() - lastEnd.getMonth()));
+    leftBefore = Number(lastPayroll.paid_leaves_left) + monthsSince * perMonth;
+    const join = parseYmd(emp.joining_date);
+    const monthsFromJoin = (cf.getFullYear() - join.getFullYear()) * 12 + (cf.getMonth() - join.getMonth()) + (cf.getDate() >= join.getDate() ? 1 : 0);
+    paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
+    // The saved field is period-only, not cumulative. Derive cumulative
+    // historical usage from the earned balance so stale accrual rows do not
+    // make already-used leave look available for final settlement.
+    usedBefore = Math.max(0, paidLeavesEarned - leftBefore);
   } else {
-    paidLeavesEarned = perMonth;
-    usedBefore = 0;
-    leftBefore = perMonth;
+    const join = parseYmd(emp.joining_date);
+    const monthsFromJoin = (ct.getFullYear() - join.getFullYear()) * 12 + (ct.getMonth() - join.getMonth()) + (ct.getDate() >= join.getDate() ? 1 : 0);
+    paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
+    const absentsBefore = empAtt.filter(a => a.status === 'absent' && parseYmd(a.date) < cf).length;
+    const halfBefore = empAtt.filter(a => a.status === 'half_day' && parseYmd(a.date) < cf).length;
+    usedBefore = absentsBefore + halfBefore * 0.5;
+    leftBefore = paidLeavesEarned - usedBefore;
   }
   const requestedThisPeriod = absent + halfDay * 0.5;
   const paidLeavesUsedThisPeriod = Math.max(0, Math.min(requestedThisPeriod, leftBefore));
