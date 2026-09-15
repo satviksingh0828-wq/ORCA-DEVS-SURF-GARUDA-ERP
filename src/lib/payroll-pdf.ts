@@ -10,6 +10,19 @@ function money(n: number) {
   return 'Rs. ' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
+function correctedPayrollNet(payroll: Payroll) {
+  const earnings = Number(payroll.gross || 0)
+    + Number(payroll.paid_leave_final_settlement_amount || 0)
+    + Number(payroll.incentive_amount || 0);
+  const deductions = Number(payroll.pf_deduction || 0)
+    + Number(payroll.tax_deduction || 0)
+    + Number(payroll.unpaid_leave_deduction || 0)
+    + Number(payroll.loan_deduction || 0)
+    + Number(payroll.advance_deduction || 0)
+    + Number(payroll.loss_deduction || 0);
+  return earnings - deductions;
+}
+
 function downloadPdf(doc: jsPDF, filename: string) {
   const blob = doc.output('blob');
   const url = URL.createObjectURL(blob);
@@ -237,7 +250,7 @@ export function exportPayrollPdf(opts: {
   }
   if (paidLeavePayout > 0) earningsRows.push(['Paid leave payout', money(paidLeavePayout)]);
   if (paidLeaveFinalSettlement > 0) earningsRows.push(['Paid leave payout (final settlement)', money(paidLeaveFinalSettlement)]);
-  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + paidLeavePayout + paidLeaveFinalSettlement)]);
+  earningsRows.push(['Gross', money(Number(payroll.gross) + paidLeaveFinalSettlement)]);
 
   autoTable(doc, {
     startY: bannerY,
@@ -326,7 +339,7 @@ export function exportPayrollPdf(opts: {
   }
 
   // ── Net payable ────────────────────────────────────────────────────────────
-  const net = Number(payroll.net);
+  const net = correctedPayrollNet(payroll);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
@@ -437,7 +450,7 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
   if (paidLeaveFinalSettlement > 0) earningsRows.push(['Paid leave payout (final settlement)', money(paidLeaveFinalSettlement)]);
   const incentiveAmount = Number(payroll.incentive_amount) || 0;
   if (incentiveAmount > 0) earningsRows.push(['One-time incentive', money(incentiveAmount)]);
-  earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + paidLeavePayout + paidLeaveFinalSettlement + incentiveAmount)]);
+  earningsRows.push(['Gross', money(Number(payroll.gross) + paidLeaveFinalSettlement + incentiveAmount)]);
 
   autoTable(doc, { startY: bannerY, head: [['Earnings', 'Amount']], body: earningsRows, styles: { fontSize: 10 }, headStyles: { fillColor: [155, 28, 28] }, margin: { left: 36, right: 36 } });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -477,7 +490,7 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
     y3 = (doc as any).lastAutoTable?.finalY ?? y2 + 40;
   }
 
-  const net = Number(payroll.net);
+  const net = correctedPayrollNet(payroll);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   if (net < 0) {
