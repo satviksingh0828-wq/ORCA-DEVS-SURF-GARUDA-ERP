@@ -102,6 +102,7 @@ export function PayrollGenerate() {
   const [month, setMonth] = useState<number>(now.getMonth());
   const [periodType, setPeriodType] = useState<'month' | 'half_month'>('month');
   const [half, setHalf] = useState<'first' | 'second'>('first');
+  const [finalSettlementRate, setFinalSettlementRate] = useState('');
   const { data: paidLeaveAccruals } = usePaidLeaveAccruals(empId || undefined);
   const { data: incentiveAmounts } = useIncentiveAmounts(empId || undefined);
 
@@ -168,6 +169,10 @@ export function PayrollGenerate() {
     const l = new Date(emp.date_of_leaving);
     return l >= period.from && l <= period.to;
   }, [emp, period]);
+
+  const finalSettlementRateValue = finalSettlementRate.trim() === '' ? undefined : Number(finalSettlementRate);
+  const finalSettlementRateValid = finalSettlementRateValue !== undefined
+    && Number.isFinite(finalSettlementRateValue) && finalSettlementRateValue >= 0;
 
   const halfMonthBlocked = useMemo(() => {
     if (periodType !== 'half_month' || !emp) return null;
@@ -250,7 +255,7 @@ export function PayrollGenerate() {
     if (!emp) return null;
     const c = computePayroll(
       emp, dept, holidays ?? [], allAttendance ?? [],
-      period.from, period.to, periodType, lastPayroll, isLeavingPeriod, paidLeaveAccruals ?? [],
+      period.from, period.to, periodType, lastPayroll, isLeavingPeriod, paidLeaveAccruals ?? [], finalSettlementRateValue,
     );
 
     const loanDed = activeLoans.reduce((s, l) => s + loanEmiAmount(l), 0);
@@ -269,7 +274,7 @@ export function PayrollGenerate() {
 
     return { c, loanDed, advDed, lossDed, incentiveAmount, pf, tax, net };
   }, [emp, dept, holidays, allAttendance, period, periodType, activeLoans, activeAdvances,
-    pendingDeds, isLeavingPeriod, lastPayroll, loanEmiAmount, advEmiAmount, incentiveAmounts, paidLeaveAccruals]);
+    pendingDeds, isLeavingPeriod, lastPayroll, loanEmiAmount, advEmiAmount, incentiveAmounts, paidLeaveAccruals, finalSettlementRateValue]);
 
   const alreadyGenerated = useMemo(
     () => (history ?? []).some(p => p.period_start === ymd(period.from) && p.period_end === ymd(period.to)),
@@ -300,6 +305,10 @@ export function PayrollGenerate() {
     if (!emp || !preview) return;
     if (outsideEmployment) { toast.error(outsideEmployment); return; }
     if (alreadyGenerated)  { toast.error('Payroll for this period already exists'); return; }
+    if (isLeavingPeriod && !finalSettlementRateValid) {
+      toast.error('Enter the final settlement rate per paid leave before generating payroll.');
+      return;
+    }
 
     const { c, loanDed, advDed, lossDed, incentiveAmount, pf, tax, net } = preview;
     if (net < 0) {
@@ -347,7 +356,7 @@ export function PayrollGenerate() {
       paid_leaves_left:          c.paidLeavesLeftAfter,
       unpaid_leaves:             c.unpaidLeavesThisPeriod,
       unpaid_leave_deduction_rate: 0,
-      paid_leave_payout_rate:    0,
+      paid_leave_payout_rate:    isLeavingPeriod ? finalSettlementRateValue! : 0,
       // Payment status: generated — salary not disbursed yet
       payment_status: 'generated',
       payment_date:   null,
@@ -594,8 +603,10 @@ export function PayrollGenerate() {
                 <div className="mt-1 text-xs text-muted-foreground">Joining period — salary & leave rates prorated ({Math.round(preview.c.joinLeaveFactor * 100)}%)</div>
               )}
               {isLeavingPeriod && !outsideEmployment && (
-                <div className="mt-1 text-xs text-amber-600 dark:text-amber-400 font-medium">
-                  Final payroll — all remaining EMIs charged + paid leave balance paid out
+                <div className="mt-2 max-w-sm rounded-md border border-amber-300 bg-amber-50/60 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
+                  <Label htmlFor="final-settlement-rate" className="font-medium">Final settlement rate per paid leave</Label>
+                  <Input id="final-settlement-rate" type="number" min="0" step="0.01" value={finalSettlementRate} onChange={e => setFinalSettlementRate(e.target.value)} placeholder="Enter amount" className="mt-1 h-8 bg-background" />
+                  <p className="mt-1">Enter the amount to pay for each remaining leave. The balance payout is calculated only from this rate.</p>
                 </div>
               )}
               {(partialEmiInfo.loanPartials > 0 || partialEmiInfo.advPartials > 0) && (
@@ -615,7 +626,7 @@ export function PayrollGenerate() {
               </Button>
               <Button
               onClick={generate}
-              disabled={create.isPending || alreadyGenerated || !!outsideEmployment || !!halfMonthBlocked}
+              disabled={create.isPending || alreadyGenerated || !!outsideEmployment || !!halfMonthBlocked || (isLeavingPeriod && !finalSettlementRateValid)}
             >
               {outsideEmployment ? 'Not applicable' : halfMonthBlocked ? 'Half-month not allowed' : alreadyGenerated ? 'Already generated' : create.isPending ? 'Generating…' : 'Generate & export PDF'}
               </Button>
@@ -656,6 +667,8 @@ export function PayrollGenerate() {
                   <Row label="Other"   v={Number(emp.other_allowance)   * scale} />
                   <Row label={`Extra Work Day Payout (${preview.c.extraWorkDays} days)`} v={preview.c.extraWorkPay} />
                   <Row label="Paid Leave Payout" v={preview.c.paidLeavePayout} />
+                  {isLeavingPeriod && <Row label="Leave balance final settlement" v={preview.c.paidLeaveFinalSettlement} />}
+                  {isLeavingPeriod && <Row label="Total Paid Leave Payout" v={preview.c.paidLeavePayout + preview.c.paidLeaveFinalSettlement} />}
                   <Row label="One-time incentive" v={preview.incentiveAmount} />
                   <div className="mt-2 flex justify-between border-t pt-2 text-sm font-semibold">
                     <span>Gross</span>
