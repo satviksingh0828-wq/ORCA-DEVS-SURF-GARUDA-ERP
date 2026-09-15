@@ -371,21 +371,25 @@ export function PayrollGenerate() {
       // Persist this month's entitlement, then record FIFO leave usage and
       // final-settlement allocations against their source month.
       const accrualMonth = `${periodYear}-${String(periodMonth + 1).padStart(2, '0')}-01`;
-      const { data: currentAccrual, error: accrualError } = await supabase.from('paid_leave_accruals').upsert({
-        employee_id: emp.id,
-        accrual_month: accrualMonth,
-        earned_units: Number(emp.paid_holidays_per_month) || 0,
-        daily_pay_rate: c.perDay,
-        source_payroll_id: created.id,
-      }, { onConflict: 'employee_id,accrual_month' }).select().single();
-      if (accrualError) throw accrualError;
+      let currentAccrualId: string | null = null;
+      if (!isLeavingPeriod) {
+        const { data: currentAccrual, error: accrualError } = await supabase.from('paid_leave_accruals').upsert({
+          employee_id: emp.id,
+          accrual_month: accrualMonth,
+          earned_units: Number(emp.paid_holidays_per_month) || 0,
+          daily_pay_rate: c.perDay,
+          source_payroll_id: created.id,
+        }, { onConflict: 'employee_id,accrual_month' }).select().single();
+        if (accrualError) throw accrualError;
+        currentAccrualId = currentAccrual.id;
+      }
       const usageRows = [
         ...c.paidLeaveUsedAllocations.map(a => ({
-          employee_id: emp.id, payroll_id: created.id, accrual_id: a.accrualId === '__current__' ? currentAccrual.id : a.accrualId,
+          employee_id: emp.id, payroll_id: created.id, accrual_id: a.accrualId === '__current__' ? currentAccrualId! : a.accrualId,
           usage_type: 'leave_used', units: a.units, amount: a.amount,
         })),
         ...c.paidLeaveFinalSettlementAllocations.filter(a => a.accrualId !== '__untracked__').map(a => ({
-          employee_id: emp.id, payroll_id: created.id, accrual_id: a.accrualId === '__current__' ? currentAccrual.id : a.accrualId,
+          employee_id: emp.id, payroll_id: created.id, accrual_id: a.accrualId === '__current__' ? currentAccrualId! : a.accrualId,
           usage_type: 'final_settlement', units: a.units, amount: a.amount,
         })),
       ];
