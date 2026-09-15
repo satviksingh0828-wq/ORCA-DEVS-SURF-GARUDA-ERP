@@ -196,7 +196,7 @@ export function computePayroll(
   const requestedThisPeriod = absent + halfDay * 0.5;
   const paidLeavesUsedThisPeriod = Math.max(0, Math.min(requestedThisPeriod, leftBefore));
   const unpaidLeavesThisPeriod = Math.max(0, requestedThisPeriod - paidLeavesUsedThisPeriod);
-  const paidLeavesLeftAfter = leftBefore - paidLeavesUsedThisPeriod;
+  const paidLeavesLeftAfter = Math.max(0, leftBefore - paidLeavesUsedThisPeriod);
 
   const n = (v: number | string) => Number(v) || 0;
   const monthlyGross = n(emp.basic_salary) + n(emp.hra) + n(emp.travel_allowance) + n(emp.special_allowance) + n(emp.other_allowance);
@@ -214,7 +214,7 @@ export function computePayroll(
   // current month is the only accrual that may be synthesized here; future
   // rows must never be paid in an earlier final settlement.
   const historicalAccruals = paidLeaveAccruals
-    .filter(row => row.accrual_month.slice(0, 7) <= currentMonth.slice(0, 7))
+    .filter(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7))
     .map(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7)
       ? { ...row, earned_units: Math.max(Number(row.earned_units) || 0, perMonth), daily_pay_rate: Number(row.daily_pay_rate) || perDay }
       : row);
