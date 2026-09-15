@@ -49,6 +49,7 @@ test("reconciles a February leave used in payroll history before final settlemen
     lastPayroll,
     true,
     accruals,
+    1000,
   );
 
   assert.ok(result.paidLeaveFinalSettlement > 0);
@@ -56,11 +57,11 @@ test("reconciles a February leave used in payroll history before final settlemen
     result.paidLeaveFinalSettlementAllocations
       .filter((row) => row.accrualMonth.startsWith("2026-"))
       .map((row) => row.accrualMonth.slice(0, 7)),
-    ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07", "2026-08"],
+    ["2026-03", "2026-04", "2026-05", "2026-06", "2026-07"],
   );
 });
 
-test("includes unused current-month leave even when the current accrual row is stale", () => {
+test("does not include a current-month accrual in the final settlement", () => {
   const accruals = [
     ...["2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"].map((month) =>
       accrual(month),
@@ -78,12 +79,59 @@ test("includes unused current-month leave even when the current accrual row is s
     lastPayroll,
     true,
     accruals,
+    1000,
   );
 
   assert.ok(result.paidLeaveFinalSettlement > 0);
   const current = result.paidLeaveFinalSettlementAllocations.find((row) =>
     row.accrualMonth.startsWith("2026-08"),
   );
-  assert.ok(current);
-  assert.equal(current.units, 1);
+  assert.equal(current, undefined);
+});
+
+test("uses the payroll user's final-settlement rate instead of automatically using salary rate", () => {
+  const result = computePayroll(
+    employee, null, [], [], new Date(2026, 7, 1), new Date(2026, 7, 31), "month", lastPayroll, true,
+    ["2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"].map(month => accrual(month)),
+    750,
+  );
+
+  assert.equal(result.paidLeavesLeftAfter, 6);
+  assert.equal(result.paidLeaveFinalSettlement, 4500);
+  assert.ok(result.paidLeaveFinalSettlementAllocations.every(row => row.dailyRate === 750));
+});
+
+test("does not calculate a final settlement until the user supplies a rate", () => {
+  const result = computePayroll(
+    employee, null, [], [], new Date(2026, 7, 1), new Date(2026, 7, 31), "month", lastPayroll, true,
+    ["2026-02", "2026-03", "2026-04", "2026-05", "2026-06", "2026-07"].map(month => accrual(month)),
+  );
+
+  assert.equal(result.paidLeaveFinalSettlement, 0);
+});
+
+test("adds only one monthly leave after an August balance of five", () => {
+  const septemberLastPayroll = {
+    period_end: "2026-08-31",
+    paid_leaves_left: 5,
+  } as Payroll;
+  const result = computePayroll(
+    { ...employee, date_of_leaving: null }, null, [], [],
+    new Date(2026, 8, 1), new Date(2026, 8, 30), "month", septemberLastPayroll,
+  );
+
+  assert.equal(result.paidLeavesLeftBefore, 6);
+  assert.equal(result.paidLeavesLeftAfter, 6);
+});
+
+test("does not add a leave in September when September is the final payroll month", () => {
+  const augustPayroll = { period_end: "2026-08-31", paid_leaves_left: 5 } as Payroll;
+  const result = computePayroll(
+    { ...employee, date_of_leaving: "2026-09-30" }, null, [], [],
+    new Date(2026, 8, 1), new Date(2026, 8, 30), "month", augustPayroll, true, [], 750,
+  );
+
+  assert.equal(result.paidLeavesUsedThisPeriod, 0);
+  assert.equal(result.paidLeavesLeftAfter, 5);
+  assert.equal(result.paidLeaveFinalSettlement, 3750);
 });
