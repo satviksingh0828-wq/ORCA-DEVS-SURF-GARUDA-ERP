@@ -374,7 +374,7 @@ export function PayrollGenerate() {
           employee_id: emp.id, payroll_id: created.id, accrual_id: a.accrualId === '__current__' ? currentAccrual.id : a.accrualId,
           usage_type: 'leave_used', units: a.units, amount: a.amount,
         })),
-        ...c.paidLeaveFinalSettlementAllocations.map(a => ({
+        ...c.paidLeaveFinalSettlementAllocations.filter(a => a.accrualId !== '__untracked__').map(a => ({
           employee_id: emp.id, payroll_id: created.id, accrual_id: a.accrualId === '__current__' ? currentAccrual.id : a.accrualId,
           usage_type: 'final_settlement', units: a.units, amount: a.amount,
         })),

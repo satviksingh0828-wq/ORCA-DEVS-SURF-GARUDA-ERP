@@ -174,8 +174,12 @@ export function computePayroll(
     const lastEnd = parseYmd(lastPayroll.period_end);
     const monthsSince = Math.max(0, (ct.getFullYear() - lastEnd.getFullYear()) * 12 + (ct.getMonth() - lastEnd.getMonth()));
     leftBefore = Number(lastPayroll.paid_leaves_left) + monthsSince * perMonth;
-    paidLeavesEarned = leftBefore + Number(lastPayroll.paid_leaves_used);
-    usedBefore = Number(lastPayroll.paid_leaves_used);
+    const monthsFromJoin = (cf.getFullYear() - join.getFullYear()) * 12 + (cf.getMonth() - join.getMonth()) + (cf.getDate() >= join.getDate() ? 1 : 0);
+    paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
+    // The saved field is period-only, not cumulative. Derive cumulative
+    // historical usage from the earned balance so stale accrual rows do not
+    // make already-used leave look available for final settlement.
+    usedBefore = Math.max(0, paidLeavesEarned - leftBefore);
   } else {
     const monthsFromJoin = (ct.getFullYear() - join.getFullYear()) * 12 + (ct.getMonth() - join.getMonth()) + (ct.getDate() >= join.getDate() ? 1 : 0);
     paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
@@ -197,11 +201,38 @@ export function computePayroll(
   // Paid leave payout is a separate earning: paid leave taken this period
   // multiplied by the employee's calculated calendar-day salary rate.
   const paidLeavePayout = paidLeavesUsedThisPeriod * perDay;
-  const currentAccrual = { id: '__current__', accrual_month: ymd(new Date(from.getFullYear(), from.getMonth(), 1)), earned_units: perMonth, used_units: 0, daily_pay_rate: perDay };
-  const accrualRows = paidLeaveAccruals.length > 0 ? [...paidLeaveAccruals, currentAccrual] : [];
+  const currentMonth = ymd(new Date(from.getFullYear(), from.getMonth(), 1));
+  const currentAccrual = { id: '__current__', accrual_month: currentMonth, earned_units: perMonth, used_units: 0, daily_pay_rate: perDay };
+  let missingHistoricalUsage = Math.max(
+    0,
+    usedBefore - paidLeaveAccruals.reduce((sum, row) => sum + Number(row.used_units || 0), 0),
+  );
+  const reconciledAccruals = paidLeaveAccruals.map((row) => {
+    if (missingHistoricalUsage <= 0) return row;
+    const available = Math.max(0, Number(row.earned_units) - Number(row.used_units || 0));
+    const consume = Math.min(available, missingHistoricalUsage);
+    missingHistoricalUsage -= consume;
+    return consume > 0 ? { ...row, used_units: Number(row.used_units || 0) + consume } : row;
+  });
+  const hasCurrentAccrual = reconciledAccruals.some(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7));
+  const accrualRows = hasCurrentAccrual ? reconciledAccruals : [...reconciledAccruals, currentAccrual];
   const allocation = accrualRows.length > 0
     ? allocatePaidLeaveByAccrual(accrualRows, paidLeavesUsedThisPeriod, isFinalPayroll)
     : { settlementAllocations: [], settlementAmount: isFinalPayroll ? Math.max(0, paidLeavesLeftAfter) * perDay : 0 };
+  if (isFinalPayroll) {
+    const allocatedUnits = allocation.settlementAllocations.reduce((sum, row) => sum + row.units, 0);
+    const untrackedUnits = Math.max(0, paidLeavesLeftAfter - allocatedUnits);
+    if (untrackedUnits > 0) {
+      allocation.settlementAllocations.push({
+        accrualId: '__untracked__',
+        accrualMonth: 'Balance carried forward',
+        units: untrackedUnits,
+        dailyRate: perDay,
+        amount: untrackedUnits * perDay,
+      });
+      allocation.settlementAmount += untrackedUnits * perDay;
+    }
+  }
   const paidLeaveFinalSettlement = allocation.settlementAmount;
   const factor = payable.size > 0 ? Math.max(0, Math.min(1, (payable.size - unpaidLeavesThisPeriod) / payable.size)) : 0;
   const presentCounted = present + halfDay * 0.5;
