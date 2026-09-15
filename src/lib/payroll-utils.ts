@@ -1,5 +1,5 @@
-import type { Attendance, Department, Employee, Holiday, InterestMethod, Payroll, PaidLeaveAccrual } from './types';
-import { countWorkingDays, isWorkingDay, parseYmd, ymd } from './attendance-utils';
+import type { Attendance, Department, Employee, Holiday, InterestMethod, Payroll, PaidLeaveAccrual } from './types.ts';
+import { countWorkingDays, isWorkingDay, parseYmd, ymd } from './attendance-utils.ts';
 
 export function computeEMI(
   principal: number,
@@ -203,11 +203,21 @@ export function computePayroll(
   const paidLeavePayout = paidLeavesUsedThisPeriod * perDay;
   const currentMonth = ymd(new Date(from.getFullYear(), from.getMonth(), 1));
   const currentAccrual = { id: '__current__', accrual_month: currentMonth, earned_units: perMonth, used_units: 0, daily_pay_rate: perDay };
+  // Accrual rows can be created by an earlier half-month payroll or by a
+  // partially migrated database. Keep the settlement ledger chronological and
+  // ensure the selected month has its configured monthly entitlement. The
+  // current month is the only accrual that may be synthesized here; future
+  // rows must never be paid in an earlier final settlement.
+  const historicalAccruals = paidLeaveAccruals
+    .filter(row => row.accrual_month.slice(0, 7) <= currentMonth.slice(0, 7))
+    .map(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7)
+      ? { ...row, earned_units: Math.max(Number(row.earned_units) || 0, perMonth), daily_pay_rate: Number(row.daily_pay_rate) || perDay }
+      : row);
   let missingHistoricalUsage = Math.max(
     0,
-    usedBefore - paidLeaveAccruals.reduce((sum, row) => sum + Number(row.used_units || 0), 0),
+    usedBefore - historicalAccruals.reduce((sum, row) => sum + Number(row.used_units || 0), 0),
   );
-  const reconciledAccruals = paidLeaveAccruals.map((row) => {
+  const reconciledAccruals = historicalAccruals.map((row) => {
     if (missingHistoricalUsage <= 0) return row;
     const available = Math.max(0, Number(row.earned_units) - Number(row.used_units || 0));
     const consume = Math.min(available, missingHistoricalUsage);

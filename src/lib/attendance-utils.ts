@@ -1,4 +1,4 @@
-import type { Attendance, Department, Employee, Holiday } from './types';
+import type { Attendance, Department, Employee, Holiday } from './types.ts';
 
 export const DAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
