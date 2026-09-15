@@ -13,7 +13,7 @@ const FIELDS = [
   ["incentive_ledger_id", "Incentive", "income-expenditure"],
   ["incentive_payable_ledger_id", "Incentive Payable", "liability"],
   ["salary_deduction_ledger_id", "Salary Deduction", "income-expenditure"],
-  ["loss_deduction_ledger_id", "Loss Deduction", "income"],
+  ["loss_deduction_ledger_id", "Loss Deduction", "income-expenditure"],
   ["unpaid_leave_deduction_ledger_id", "Unpaid Leave Deduction", "income-expenditure"],
   ["paid_leave_payout_ledger_id", "Paid Leave Payout", "income-expenditure"],
   ["extra_work_day_payout_ledger_id", "Extra Work Day Payout", "income-expenditure"],

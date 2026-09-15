@@ -58,23 +58,26 @@ declare
   v_description text;
 begin
   v_branch_id := public.hrms_branch_for_employee(new.employee_id);
-  select salary_payable_ledger_id, salary_deduction_ledger_id
+  select salary_payable_ledger_id, loss_deduction_ledger_id
     into v_debit, v_credit
     from public.hrms_account_ledger_mappings
    where branch_id = v_branch_id;
   if v_debit is null or v_credit is null then
-    raise exception 'HRMS loss deduction journal requires Salary Payable and Salary Deduction ledger mappings';
+    raise exception 'HRMS loss deduction journal requires Salary Payable and Loss Deduction ledger mappings';
   end if;
   if not exists (
     select 1 from public.ledger_accounts
     where id = v_debit and branch_id = v_branch_id
       and ledger_type = 'liability' and is_active
-  ) or not exists (
+  ) then
+    raise exception 'Salary Payable must be an active liability ledger from the employee branch';
+  end if;
+  if not exists (
     select 1 from public.ledger_accounts
     where id = v_credit and branch_id = v_branch_id
       and ledger_type in ('income', 'expenditure') and is_active
   ) then
-    raise exception 'Salary Payable must be an active liability ledger and Salary Deduction must be an active income/expenditure ledger from the employee branch';
+    raise exception 'Loss Deduction must be an active income or expenditure ledger from the employee branch';
   end if;
   v_description := 'Loss deduction' || case when nullif(trim(new.reason), '') is null then '' else ' - ' || trim(new.reason) end;
   select id into v_existing from public.journal_entries
