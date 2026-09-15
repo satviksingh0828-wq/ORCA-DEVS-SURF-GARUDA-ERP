@@ -1,4 +1,4 @@
-import type { Attendance, Department, Employee, Holiday, InterestMethod, Payroll } from './types';
+import type { Attendance, Department, Employee, Holiday, InterestMethod, Payroll, PaidLeaveAccrual } from './types';
 import { countWorkingDays, isWorkingDay, parseYmd, ymd } from './attendance-utils';
 
 export function computeEMI(
@@ -72,6 +72,39 @@ export interface PayrollComputation {
   paidLeaveFinalSettlement: number;
   payableDates: number;
   calendarDaysInMonth: number;
+  paidLeaveFinalSettlementAllocations: Array<{ accrualId: string; accrualMonth: string; units: number; dailyRate: number; amount: number }>;
+  paidLeaveUsedAllocations: Array<{ accrualId: string; units: number; amount: number }>;
+}
+
+export function allocatePaidLeaveByAccrual(
+  accruals: Array<Pick<PaidLeaveAccrual, 'id' | 'accrual_month' | 'earned_units' | 'used_units' | 'daily_pay_rate'>>,
+  leaveUsedThisPeriod: number,
+  finalSettlement: boolean,
+) {
+  let remainingUsage = Math.max(0, leaveUsedThisPeriod);
+  const rows = accruals.slice().sort((a, b) => a.accrual_month.localeCompare(b.accrual_month));
+  const usedAllocations: Array<{ accrualId: string; units: number; amount: number }> = [];
+  for (const row of rows) {
+    const available = Math.max(0, Number(row.earned_units) - Number(row.used_units));
+    const units = Math.min(available, remainingUsage);
+    if (units > 0) {
+      usedAllocations.push({ accrualId: row.id, units, amount: units * Number(row.daily_pay_rate) });
+      remainingUsage -= units;
+    }
+  }
+  const settlementAllocations = finalSettlement
+    ? rows.map(row => {
+        const alreadyUsed = usedAllocations.find(a => a.accrualId === row.id)?.units ?? 0;
+        const units = Math.max(0, Number(row.earned_units) - Number(row.used_units) - alreadyUsed);
+        return { accrualId: row.id, accrualMonth: row.accrual_month, units, dailyRate: Number(row.daily_pay_rate), amount: units * Number(row.daily_pay_rate) };
+      }).filter(row => row.units > 0)
+    : [];
+  return {
+    usedAllocations,
+    settlementAllocations,
+    settlementAmount: settlementAllocations.reduce((sum, row) => sum + row.amount, 0),
+    remainingUnits: settlementAllocations.reduce((sum, row) => sum + row.units, 0),
+  };
 }
 
 /**
@@ -99,6 +132,7 @@ export function computePayroll(
   periodType: 'month' | 'half_month',
   lastPayroll?: Payroll | null,
   isFinalPayroll = false,
+  paidLeaveAccruals: PaidLeaveAccrual[] = [],
 ): PayrollComputation {
   const fullPeriodWorkingDays = countWorkingDays(from, to, dept, holidays);
   const { from: cf, to: ct } = clampToEmployment(from, to, emp);
@@ -163,7 +197,12 @@ export function computePayroll(
   // Paid leave payout is a separate earning: paid leave taken this period
   // multiplied by the employee's calculated calendar-day salary rate.
   const paidLeavePayout = paidLeavesUsedThisPeriod * perDay;
-  const paidLeaveFinalSettlement = isFinalPayroll ? Math.max(0, paidLeavesLeftAfter) * perDay : 0;
+  const currentAccrual = { id: '__current__', accrual_month: ymd(new Date(from.getFullYear(), from.getMonth(), 1)), earned_units: perMonth, used_units: 0, daily_pay_rate: perDay };
+  const accrualRows = paidLeaveAccruals.length > 0 ? [...paidLeaveAccruals, currentAccrual] : [];
+  const allocation = accrualRows.length > 0
+    ? allocatePaidLeaveByAccrual(accrualRows, paidLeavesUsedThisPeriod, isFinalPayroll)
+    : { settlementAllocations: [], settlementAmount: isFinalPayroll ? Math.max(0, paidLeavesLeftAfter) * perDay : 0 };
+  const paidLeaveFinalSettlement = allocation.settlementAmount;
   const factor = payable.size > 0 ? Math.max(0, Math.min(1, (payable.size - unpaidLeavesThisPeriod) / payable.size)) : 0;
   const presentCounted = present + halfDay * 0.5;
   // Extra work is also paid separately at the calculated daily salary rate;
@@ -177,6 +216,8 @@ export function computePayroll(
     paidLeavesEarned, paidLeavesUsedBefore: usedBefore, paidLeavesLeftBefore: leftBefore,
     paidLeavesUsedThisPeriod, unpaidLeavesThisPeriod, paidLeavesLeftAfter,
     factor, gross, perDay, unpaidLeaveDeduction, paidLeavePayout, paidLeaveFinalSettlement,
+    paidLeaveFinalSettlementAllocations: allocation.settlementAllocations,
+    paidLeaveUsedAllocations: allocation.usedAllocations,
     payableDates: payable.size, calendarDaysInMonth,
   };
 }

@@ -10,12 +10,13 @@ import {
   useEmployees, useDepartments, useAllPositions, useHolidays,
   useAllAttendance, usePayrolls, useCreatePayroll, useDeletePayroll,
   useLoans, useAdvances, useLossDeductions, useUpdateLossDeduction, useAppSettings,
-  useAllLoanInstallments, useAllAdvanceInstallments,
+  useAllLoanInstallments, useAllAdvanceInstallments, usePaidLeaveAccruals,
   useMarkLoanInstallmentPayroll, useMarkAdvanceInstallmentPayroll, useIncentiveAmounts,
 } from '@/lib/hooks';
 import { fullName, effectivePaymentStatus } from '@/lib/types';
 import type { Employee, PayrollInput, Loan, Advance, LossDeduction, Payroll, LoanInstallment, AdvanceInstallment } from '@/lib/types';
 import { computePayroll, halfMonthPeriods, monthPeriod, loanRemaining } from '@/lib/payroll-utils';
+import { supabase } from '@/integrations/supabase/client';
 import { ymd, parseYmd } from '@/lib/attendance-utils';
 import { exportPayrollPdf, getPayrollPdfBase64 } from '@/lib/payroll-pdf';
 import { sendPayrollEmail } from '@/lib/payroll-email';
@@ -38,6 +39,7 @@ type GenerateCalculationPreview = {
     workingDays: number; present: number; extraWorkDays: number;
     paidLeavesUsedThisPeriod: number; paidLeavesLeftAfter: number;
     unpaidLeavesThisPeriod: number; unpaidLeaveDeduction: number; paidLeavePayout: number; paidLeaveFinalSettlement: number; extraWorkPay: number;
+    paidLeaveFinalSettlementAllocations: Array<{ accrualId: string; accrualMonth: string; units: number; dailyRate: number; amount: number }>;
   };
   pf: number; tax: number; loanDed: number; advDed: number; lossDed: number; incentiveAmount: number; net: number;
 };
@@ -49,7 +51,7 @@ function GenerateCalculationDialog({ emp, preview, period, onClose }: { emp: Emp
     </div>
   );
   const monthlyGross = Number(emp.basic_salary) + Number(emp.hra) + Number(emp.travel_allowance) + Number(emp.special_allowance) + Number(emp.other_allowance);
-  const totalEarnings = preview.c.gross + preview.c.extraWorkPay + preview.c.paidLeaveFinalSettlement + preview.incentiveAmount;
+  const totalEarnings = preview.c.gross + preview.c.extraWorkPay + preview.c.paidLeavePayout + preview.c.paidLeaveFinalSettlement + preview.incentiveAmount;
   const totalDeductions = preview.pf + preview.tax + preview.c.unpaidLeaveDeduction + preview.loanDed + preview.advDed + preview.lossDed;
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={onClose}>
@@ -58,7 +60,7 @@ function GenerateCalculationDialog({ emp, preview, period, onClose }: { emp: Emp
         <div className="mt-4 grid gap-4 sm:grid-cols-2">
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 1 — Gross salary</div><p className="mb-2 text-xs text-muted-foreground">Basic salary plus all configured allowances.</p><Row label="Basic salary" value={Number(emp.basic_salary)} /><Row label="HRA" value={Number(emp.hra)} /><Row label="Travel allowance" value={Number(emp.travel_allowance)} /><Row label="Special allowance" value={Number(emp.special_allowance)} /><Row label="Other allowance" value={Number(emp.other_allowance)} /><Row label="Monthly gross salary" value={monthlyGross} className="font-semibold" /></div>
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 2 — Payable dates</div><p className="mb-2 text-xs text-muted-foreground">Dates are counted uniquely, so a weekly off, holiday, leave, or extra-work date is never counted twice.</p><Row label={`Calendar days in month (${preview.c.calendarDaysInMonth})`} value={preview.c.calendarDaysInMonth} raw /><Row label="Daily salary rate" value={preview.c.perDay} /><Row label="Department working days" value={preview.c.workingDays} raw /><Row label="Unique payable salary days" value={preview.c.payableDates} raw /><Row label="Gross salary for period" value={preview.c.gross} className="font-semibold" /></div>
-          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 3 — Leave calculation</div><Row label="Paid leave used" value={preview.c.paidLeavesUsedThisPeriod} raw /><Row label="Paid leave balance after payroll" value={preview.c.paidLeavesLeftAfter} raw /><Row label="Unpaid leave" value={preview.c.unpaidLeavesThisPeriod} raw /><Row label="Unpaid Leave Deduction" value={preview.c.unpaidLeaveDeduction} className="font-semibold text-destructive" /><Row label="Paid leave payout" value={preview.c.paidLeavePayout} />{preview.c.paidLeaveFinalSettlement > 0 && <Row label="Paid leave payout (final settlement)" value={preview.c.paidLeaveFinalSettlement} className="font-semibold text-emerald-700" />}</div>
+          <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 3 — Leave calculation</div><Row label="Paid leave used" value={preview.c.paidLeavesUsedThisPeriod} raw /><Row label="Paid leave balance after payroll" value={preview.c.paidLeavesLeftAfter} raw /><Row label="Unpaid leave" value={preview.c.unpaidLeavesThisPeriod} raw /><Row label="Unpaid Leave Deduction" value={preview.c.unpaidLeaveDeduction} className="font-semibold text-destructive" /><Row label="Paid leave payout" value={preview.c.paidLeavePayout} />{preview.c.paidLeaveFinalSettlement > 0 && <><Row label="Paid leave payout (final settlement)" value={preview.c.paidLeaveFinalSettlement} className="font-semibold text-emerald-700" /><div className="mt-2 rounded bg-muted/40 p-2 text-xs"><div className="mb-1 font-medium">Final settlement source months</div>{preview.c.paidLeaveFinalSettlementAllocations.map(a => <div key={a.accrualId} className="flex justify-between gap-2"><span>{a.accrualMonth.slice(0, 7)} · {a.units} leave × {money(a.dailyRate)}</span><span>{money(a.amount)}</span></div>)}</div></>}</div>
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Step 4 — Other earnings</div><Row label={`Extra Work Day Payout (${preview.c.extraWorkDays} days)`} value={preview.c.extraWorkPay} /><Row label="Pending incentive" value={preview.incentiveAmount} /><Row label="Total earnings" value={totalEarnings} className="font-semibold" /></div>
           <div className="rounded-lg border p-3 sm:col-span-2"><div className="mb-1 font-semibold">Step 5 — Deductions and net salary</div><div className="grid gap-x-6 sm:grid-cols-2"><Row label="PF" value={preview.pf} /><Row label="Tax" value={preview.tax} /><Row label="Loan EMI" value={preview.loanDed} /><Row label="Advance EMI" value={preview.advDed} /><Row label="Loss deduction" value={preview.lossDed} /><Row label="Unpaid Leave Deduction" value={preview.c.unpaidLeaveDeduction} /></div><div className="mt-3 border-t pt-3"><p className="text-sm">{money(totalEarnings)} earnings − {money(totalDeductions)} deductions</p><div className={`mt-2 flex justify-between text-lg font-bold ${preview.net < 0 ? 'text-destructive' : ''}`}><span>Net salary</span><span>{money(preview.net)}</span></div></div></div>
         </div>
@@ -80,6 +82,7 @@ export function PayrollGenerate() {
   const { data: settings } = useAppSettings();
   const { data: allLoanInst } = useAllLoanInstallments();
   const { data: allAdvInst } = useAllAdvanceInstallments();
+  const { data: paidLeaveAccruals } = usePaidLeaveAccruals(empId || undefined);
 
   const [empId, setEmpId] = useState<string>('');
   const [calculationOpen, setCalculationOpen] = useState(false);
@@ -216,7 +219,7 @@ export function PayrollGenerate() {
     if (!emp) return null;
     const c = computePayroll(
       emp, dept, holidays ?? [], allAttendance ?? [],
-      period.from, period.to, periodType, lastPayroll, isLeavingPeriod,
+      period.from, period.to, periodType, lastPayroll, isLeavingPeriod, paidLeaveAccruals ?? [],
     );
 
     const loanDed = activeLoans.reduce((s, l) => s + loanEmiAmount(l), 0);
@@ -229,11 +232,11 @@ export function PayrollGenerate() {
     const pf     = n(emp.pf_deduction)  * halfF * c.joinLeaveFactor;
     const tax    = n(emp.tax_deduction) * halfF * c.joinLeaveFactor;
     const totalDed = pf + tax + loanDed + advDed + lossDed + c.unpaidLeaveDeduction;
-    const net = c.gross + c.extraWorkPay + c.paidLeaveFinalSettlement + incentiveAmount - totalDed;
+    const net = c.gross + c.extraWorkPay + c.paidLeavePayout + c.paidLeaveFinalSettlement + incentiveAmount - totalDed;
 
     return { c, loanDed, advDed, lossDed, incentiveAmount, pf, tax, net };
   }, [emp, dept, holidays, allAttendance, period, periodType, activeLoans, activeAdvances,
-    pendingDeds, isLeavingPeriod, lastPayroll, loanEmiAmount, advEmiAmount, incentiveAmounts]);
+    pendingDeds, isLeavingPeriod, lastPayroll, loanEmiAmount, advEmiAmount, incentiveAmounts, paidLeaveAccruals]);
 
   const alreadyGenerated = useMemo(
     () => (history ?? []).some(p => p.period_start === ymd(period.from) && p.period_end === ymd(period.to)),
@@ -300,6 +303,7 @@ export function PayrollGenerate() {
       unpaid_leave_deduction:    c.unpaidLeaveDeduction,
       paid_leave_payout_amount:  c.paidLeavePayout,
       paid_leave_final_settlement_amount: c.paidLeaveFinalSettlement,
+      paid_leave_daily_rate:          c.perDay,
       extra_work_days:           c.extraWorkDays,
       extra_work_pay:            c.extraWorkPay,
       incentive_amount:         incentiveAmount,
@@ -320,6 +324,36 @@ export function PayrollGenerate() {
 
     try {
       const created = await create.mutateAsync(values);
+
+      // Persist the current month's accrual at this month's rate, then record
+      // FIFO usage and final-settlement allocations against their source month.
+      const accrualMonth = `${periodYear}-${String(periodMonth + 1).padStart(2, '0')}-01`;
+      const { data: currentAccrual, error: accrualError } = await supabase.from('paid_leave_accruals').upsert({
+        employee_id: emp.id,
+        accrual_month: accrualMonth,
+        earned_units: Number(emp.paid_holidays_per_month) || 0,
+        daily_pay_rate: c.perDay,
+        source_payroll_id: created.id,
+      }, { onConflict: 'employee_id,accrual_month' }).select().single();
+      if (accrualError) throw accrualError;
+      const usageRows = [
+        ...c.paidLeaveUsedAllocations.map(a => ({
+          employee_id: emp.id, payroll_id: created.id, accrual_id: a.accrualId === '__current__' ? currentAccrual.id : a.accrualId,
+          usage_type: 'leave_used', units: a.units, amount: a.amount,
+        })),
+        ...c.paidLeaveFinalSettlementAllocations.map(a => ({
+          employee_id: emp.id, payroll_id: created.id, accrual_id: a.accrualId === '__current__' ? currentAccrual.id : a.accrualId,
+          usage_type: 'final_settlement', units: a.units, amount: a.amount,
+        })),
+      ];
+      if (usageRows.length) {
+        const { error: usageError } = await supabase.from('paid_leave_usage_allocations').upsert(usageRows, { onConflict: 'payroll_id,accrual_id,usage_type' });
+        if (usageError) throw usageError;
+        for (const row of usageRows) {
+          const { data: accrual } = await supabase.from('paid_leave_accruals').select('used_units').eq('id', row.accrual_id).single();
+          await supabase.from('paid_leave_accruals').update({ used_units: Number(accrual?.used_units || 0) + Number(row.units) }).eq('id', row.accrual_id);
+        }
+      }
 
       const pdfOpts = {
         payroll: created, employee: emp, department: dept, position, settings,

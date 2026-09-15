@@ -193,6 +193,7 @@ create table if not exists public.payrolls (
   unpaid_leave_deduction numeric(14,2) not null default 0,
   paid_leave_payout_amount numeric(14,2) not null default 0,
   paid_leave_final_settlement_amount numeric(14,2) not null default 0,
+  paid_leave_daily_rate numeric(14,6) not null default 0,
   net numeric(14,2) not null default 0,
   working_days numeric(8,2) not null default 0,
   present_days numeric(8,2) not null default 0,

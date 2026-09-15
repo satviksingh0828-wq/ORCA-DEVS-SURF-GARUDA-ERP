@@ -478,6 +478,20 @@ export function usePayrolls(employeeId?: string) {
   });
 }
 
+export function usePaidLeaveAccruals(employeeId?: string) {
+  return useQuery({
+    queryKey: ['paid_leave_accruals', employeeId ?? 'all'],
+    enabled: Boolean(employeeId),
+    queryFn: async () => {
+      let q = sb.from('paid_leave_accruals').select('*').order('accrual_month', { ascending: true });
+      if (employeeId) q = q.eq('employee_id', employeeId);
+      const { data, error } = await q;
+      if (error) throw error;
+      return data as import('./types').PaidLeaveAccrual[];
+    },
+  });
+}
+
 export function useAllPayrolls() {
   return useQuery({
     queryKey: ['payrolls', 'all'],

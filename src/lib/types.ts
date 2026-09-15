@@ -221,6 +221,8 @@ export interface Payroll {
   paid_leave_payout_amount: number;
   /** Final settlement payout for all remaining paid leave balance. */
   paid_leave_final_settlement_amount: number;
+  /** Calendar-day salary rate for this payroll month, used to value its accrued leave. */
+  paid_leave_daily_rate: number;
   net: number;
   working_days: number;
   present_days: number;
@@ -251,6 +253,18 @@ export interface Payroll {
   updated_at: string;
 }
 export type PayrollInput = Omit<Payroll, 'id' | 'created_at' | 'updated_at'>;
+
+export interface PaidLeaveAccrual {
+  id: string;
+  employee_id: string;
+  accrual_month: string;
+  earned_units: number;
+  used_units: number;
+  daily_pay_rate: number;
+  source_payroll_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
 
 /** Returns the effective payment status, defaulting old records (null) to 'paid'. */
 export function effectivePaymentStatus(p: Pick<Payroll, 'payment_status'>): PayrollPaymentStatus {
