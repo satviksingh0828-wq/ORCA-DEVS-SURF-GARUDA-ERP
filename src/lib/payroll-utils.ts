@@ -107,6 +107,29 @@ export function allocatePaidLeaveByAccrual(
   };
 }
 
+function averageHistoricalDailySalary(payrolls: Payroll[], fallback: number): number {
+  const latestByMonth = new Map<string, Payroll>();
+  for (const payroll of payrolls) {
+    const month = payroll.period_start.slice(0, 7);
+    const existing = latestByMonth.get(month);
+    if (!existing || payroll.period_end > existing.period_end) latestByMonth.set(month, payroll);
+  }
+  let salaryTotal = 0;
+  let dayTotal = 0;
+  for (const payroll of latestByMonth.values()) {
+    const monthStart = parseYmd(`${payroll.period_start.slice(0, 7)}-01`);
+    const days = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0).getDate();
+    const savedDailyRate = Number(payroll.paid_leave_daily_rate) || 0;
+    const monthlySalary = savedDailyRate > 0
+      ? savedDailyRate * days
+      : [payroll.basic_salary, payroll.hra, payroll.travel_allowance, payroll.special_allowance, payroll.other_allowance]
+        .reduce((sum, value) => sum + (Number(value) || 0), 0);
+    salaryTotal += monthlySalary;
+    dayTotal += days;
+  }
+  return dayTotal > 0 ? salaryTotal / dayTotal : fallback;
+}
+
 /**
  * Compute a payroll period.
  *
@@ -133,6 +156,7 @@ export function computePayroll(
   lastPayroll?: Payroll | null,
   isFinalPayroll = false,
   paidLeaveAccruals: PaidLeaveAccrual[] = [],
+  historicalPayrolls: Payroll[] = [],
 ): PayrollComputation {
   const fullPeriodWorkingDays = countWorkingDays(from, to, dept, holidays);
   const { from: cf, to: ct } = clampToEmployment(from, to, emp);
@@ -201,6 +225,7 @@ export function computePayroll(
   // Paid leave payout is a separate earning: paid leave taken this period
   // multiplied by the employee's calculated calendar-day salary rate.
   const paidLeavePayout = paidLeavesUsedThisPeriod * perDay;
+  const finalSettlementDailyRate = averageHistoricalDailySalary(historicalPayrolls, perDay);
   const currentMonth = ymd(new Date(from.getFullYear(), from.getMonth(), 1));
   const currentAccrual = { id: '__current__', accrual_month: currentMonth, earned_units: perMonth, used_units: 0, daily_pay_rate: perDay };
   // Accrual rows can be created by an earlier half-month payroll or by a
@@ -237,11 +262,17 @@ export function computePayroll(
         accrualId: '__untracked__',
         accrualMonth: 'Balance carried forward',
         units: untrackedUnits,
-        dailyRate: perDay,
-        amount: untrackedUnits * perDay,
+        dailyRate: finalSettlementDailyRate,
+        amount: untrackedUnits * finalSettlementDailyRate,
       });
-      allocation.settlementAmount += untrackedUnits * perDay;
+      allocation.settlementAmount += untrackedUnits * finalSettlementDailyRate;
     }
+    allocation.settlementAllocations = allocation.settlementAllocations.map(row => ({
+      ...row,
+      dailyRate: finalSettlementDailyRate,
+      amount: row.units * finalSettlementDailyRate,
+    }));
+    allocation.settlementAmount = allocation.settlementAllocations.reduce((sum, row) => sum + row.amount, 0);
   }
   const paidLeaveFinalSettlement = allocation.settlementAmount;
   const factor = payable.size > 0 ? Math.max(0, Math.min(1, (payable.size - unpaidLeavesThisPeriod) / payable.size)) : 0;

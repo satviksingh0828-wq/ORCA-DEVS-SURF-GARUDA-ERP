@@ -20,6 +20,27 @@ const lastPayroll = {
   paid_leaves_left: 6,
 } as Payroll;
 
+const historicalPayrolls = [
+  {
+    period_start: "2026-01-01",
+    period_end: "2026-01-31",
+    basic_salary: 30000,
+    hra: 0,
+    travel_allowance: 0,
+    special_allowance: 0,
+    other_allowance: 0,
+  },
+  {
+    period_start: "2026-02-01",
+    period_end: "2026-02-28",
+    basic_salary: 60000,
+    hra: 0,
+    travel_allowance: 0,
+    special_allowance: 0,
+    other_allowance: 0,
+  },
+] as Payroll[];
+
 function accrual(month: string, used_units = 0): PaidLeaveAccrual {
   return {
     id: `accrual-${month}`,
@@ -49,9 +70,14 @@ test("reconciles a February leave used in payroll history before final settlemen
     lastPayroll,
     true,
     accruals,
+    historicalPayrolls,
   );
 
   assert.ok(result.paidLeaveFinalSettlement > 0);
+  assert.equal(
+    result.paidLeaveFinalSettlementAllocations[0]?.dailyRate,
+    (30000 + 60000) / (31 + 28),
+  );
   assert.deepEqual(
     result.paidLeaveFinalSettlementAllocations
       .filter((row) => row.accrualMonth.startsWith("2026-"))
@@ -78,6 +104,7 @@ test("includes unused current-month leave even when the current accrual row is s
     lastPayroll,
     true,
     accruals,
+    historicalPayrolls,
   );
 
   assert.ok(result.paidLeaveFinalSettlement > 0);
