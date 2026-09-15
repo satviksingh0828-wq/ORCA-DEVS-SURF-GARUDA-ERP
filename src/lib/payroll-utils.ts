@@ -170,30 +170,22 @@ export function computePayroll(
   const unmarked = Math.max(0, workingDays - marked);
 
   const perMonth = emp.paid_holidays_per_month ?? 0;
-  const join = parseYmd(emp.joining_date);
   let leftBefore: number;
   let paidLeavesEarned: number;
   let usedBefore: number;
   if (lastPayroll) {
     const lastEnd = parseYmd(lastPayroll.period_end);
-    const monthsSince = Math.max(0, (ct.getFullYear() - lastEnd.getFullYear()) * 12 + (ct.getMonth() - lastEnd.getMonth()));
-    // The employee earns the configured entitlement in every payroll month,
-    // including a leaving month. The previous balance is always clamped so a
-    // historic bad value cannot turn future paid leave into a negative balance.
-    leftBefore = Math.max(0, Number(lastPayroll.paid_leaves_left)) + monthsSince * perMonth;
-    const monthsFromJoin = (cf.getFullYear() - join.getFullYear()) * 12 + (cf.getMonth() - join.getMonth()) + (cf.getDate() >= join.getDate() ? 1 : 0);
-    paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
-    // The saved field is period-only, not cumulative. Derive cumulative
-    // historical usage from the earned balance so stale accrual rows do not
-    // make already-used leave look available for final settlement.
-    usedBefore = Math.max(0, paidLeavesEarned - leftBefore);
+    const sameMonth = lastEnd.getFullYear() === ct.getFullYear() && lastEnd.getMonth() === ct.getMonth();
+    // Paid leave is a monthly allowance, not a carry-forward balance. A
+    // second half-month payroll shares the first half's remaining allowance;
+    // every new calendar month starts with its configured allowance again.
+    leftBefore = sameMonth ? Number(lastPayroll.paid_leaves_left) : perMonth;
+    paidLeavesEarned = perMonth;
+    usedBefore = Math.max(0, perMonth - leftBefore);
   } else {
-    const monthsFromJoin = (ct.getFullYear() - join.getFullYear()) * 12 + (ct.getMonth() - join.getMonth()) + (ct.getDate() >= join.getDate() ? 1 : 0);
-    paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
-    const absentsBefore = empAtt.filter(a => a.status === 'absent' && parseYmd(a.date) < cf).length;
-    const halfBefore = empAtt.filter(a => a.status === 'half_day' && parseYmd(a.date) < cf).length;
-    usedBefore = absentsBefore + halfBefore * 0.5;
-    leftBefore = Math.max(0, paidLeavesEarned - usedBefore);
+    paidLeavesEarned = perMonth;
+    usedBefore = 0;
+    leftBefore = perMonth;
   }
   const requestedThisPeriod = absent + halfDay * 0.5;
   const paidLeavesUsedThisPeriod = Math.max(0, Math.min(requestedThisPeriod, leftBefore));
@@ -216,7 +208,7 @@ export function computePayroll(
   // current month is the only accrual that may be synthesized here; future
   // rows must never be paid in an earlier final settlement.
   const historicalAccruals = paidLeaveAccruals
-    .filter(row => row.accrual_month.slice(0, 7) <= currentMonth.slice(0, 7))
+    .filter(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7))
     .map(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7)
       ? { ...row, earned_units: Math.max(Number(row.earned_units) || 0, perMonth), daily_pay_rate: Number(row.daily_pay_rate) || perDay }
       : row);
