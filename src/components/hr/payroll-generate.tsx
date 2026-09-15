@@ -120,7 +120,7 @@ export function PayrollGenerate() {
     return (employees ?? []).filter((employee) => {
       const joined = parseYmd(employee.joining_date);
       const left = employee.date_of_leaving ? parseYmd(employee.date_of_leaving) : null;
-      return joined <= ymd(period.to) && (!left || left >= ymd(period.from));
+      return joined <= period.to && (!left || left >= period.from);
     });
   }, [employees, period]);
 
