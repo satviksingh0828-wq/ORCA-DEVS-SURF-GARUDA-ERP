@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Download, Trash2, Wallet, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -111,6 +111,24 @@ export function PayrollGenerate() {
     const p = half === 'first' ? hs[0] : hs[1];
     return { from: p.from, to: p.to, label: `${p.label} of ${p.from.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}` };
   }, [periodType, half, year, month]);
+
+  // An employee is selectable when their employment overlaps the selected
+  // payroll period. This intentionally includes employees who left during the
+  // period (for example, a January leaver remains available in January but is
+  // excluded from February onward).
+  const periodEmployees = useMemo(() => {
+    return (employees ?? []).filter((employee) => {
+      const joined = parseYmd(employee.joining_date);
+      const left = employee.date_of_leaving ? parseYmd(employee.date_of_leaving) : null;
+      return joined <= ymd(period.to) && (!left || left >= ymd(period.from));
+    });
+  }, [employees, period]);
+
+  useEffect(() => {
+    if (empId && employees && !periodEmployees.some((employee) => employee.id === empId)) {
+      setEmpId('');
+    }
+  }, [empId, employees, periodEmployees]);
 
   const periodYear  = period.from.getFullYear();
   const periodMonth = period.from.getMonth();
@@ -501,7 +519,7 @@ export function PayrollGenerate() {
           <Select value={empId} onValueChange={setEmpId}>
             <SelectTrigger><SelectValue placeholder="Select employee" /></SelectTrigger>
             <SelectContent>
-              {le ? <div className="p-2 text-sm">Loading...</div> : (employees ?? []).filter(e => e.status === 'active').map(e => (
+              {le ? <div className="p-2 text-sm">Loading...</div> : periodEmployees.map(e => (
                 <SelectItem key={e.id} value={e.id}>{fullName(e)}</SelectItem>
               ))}
             </SelectContent>
