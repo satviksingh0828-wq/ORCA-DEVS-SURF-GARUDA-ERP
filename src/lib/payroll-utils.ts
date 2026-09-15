@@ -80,6 +80,7 @@ export function allocatePaidLeaveByAccrual(
   accruals: Array<Pick<PaidLeaveAccrual, 'id' | 'accrual_month' | 'earned_units' | 'used_units' | 'daily_pay_rate'>>,
   leaveUsedThisPeriod: number,
   finalSettlement: boolean,
+  finalSettlementRate?: number,
 ) {
   let remainingUsage = Math.max(0, leaveUsedThisPeriod);
   const rows = accruals.slice().sort((a, b) => a.accrual_month.localeCompare(b.accrual_month));
@@ -96,7 +97,8 @@ export function allocatePaidLeaveByAccrual(
     ? rows.map(row => {
         const alreadyUsed = usedAllocations.find(a => a.accrualId === row.id)?.units ?? 0;
         const units = Math.max(0, Number(row.earned_units) - Number(row.used_units) - alreadyUsed);
-        return { accrualId: row.id, accrualMonth: row.accrual_month, units, dailyRate: Number(row.daily_pay_rate), amount: units * Number(row.daily_pay_rate) };
+        const dailyRate = finalSettlementRate ?? Number(row.daily_pay_rate);
+        return { accrualId: row.id, accrualMonth: row.accrual_month, units, dailyRate, amount: units * dailyRate };
       }).filter(row => row.units > 0)
     : [];
   return {
@@ -117,7 +119,8 @@ export function allocatePaidLeaveByAccrual(
  * - Otherwise falls back to pro-rata (gross / workingDays × unpaidLeaves).
  * - `paidLeavePayout` = paid leaves used this period × calendar-day salary rate.
  * - `paidLeaveFinalSettlement` = remaining paid-leave balance × calendar-day salary rate,
- *   only when this is the employee's leaving period.
+ *   only when this is the employee's leaving period and a final-settlement
+ *   rate has been supplied by the payroll user.
  * - `extraWorkPay` = extra work days × calendar-day salary rate.
  *
  * EMI logic: handled externally via installment records — not in this function.
@@ -133,6 +136,7 @@ export function computePayroll(
   lastPayroll?: Payroll | null,
   isFinalPayroll = false,
   paidLeaveAccruals: PaidLeaveAccrual[] = [],
+  finalSettlementRate?: number,
 ): PayrollComputation {
   const fullPeriodWorkingDays = countWorkingDays(from, to, dept, holidays);
   const { from: cf, to: ct } = clampToEmployment(from, to, emp);
@@ -226,10 +230,13 @@ export function computePayroll(
   });
   const hasCurrentAccrual = reconciledAccruals.some(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7));
   const accrualRows = hasCurrentAccrual ? reconciledAccruals : [...reconciledAccruals, currentAccrual];
+  const manualFinalSettlementRate = Number(finalSettlementRate);
+  const hasFinalSettlementRate = Number.isFinite(manualFinalSettlementRate) && manualFinalSettlementRate >= 0;
+  const shouldSettlePaidLeave = isFinalPayroll && hasFinalSettlementRate;
   const allocation = accrualRows.length > 0
-    ? allocatePaidLeaveByAccrual(accrualRows, paidLeavesUsedThisPeriod, isFinalPayroll)
-    : { settlementAllocations: [], settlementAmount: isFinalPayroll ? Math.max(0, paidLeavesLeftAfter) * perDay : 0 };
-  if (isFinalPayroll) {
+    ? allocatePaidLeaveByAccrual(accrualRows, paidLeavesUsedThisPeriod, shouldSettlePaidLeave, manualFinalSettlementRate)
+    : { settlementAllocations: [], settlementAmount: 0 };
+  if (shouldSettlePaidLeave) {
     const allocatedUnits = allocation.settlementAllocations.reduce((sum, row) => sum + row.units, 0);
     const untrackedUnits = Math.max(0, paidLeavesLeftAfter - allocatedUnits);
     if (untrackedUnits > 0) {
@@ -237,10 +244,10 @@ export function computePayroll(
         accrualId: '__untracked__',
         accrualMonth: 'Balance carried forward',
         units: untrackedUnits,
-        dailyRate: perDay,
-        amount: untrackedUnits * perDay,
+        dailyRate: manualFinalSettlementRate,
+        amount: untrackedUnits * manualFinalSettlementRate,
       });
-      allocation.settlementAmount += untrackedUnits * perDay;
+      allocation.settlementAmount += untrackedUnits * manualFinalSettlementRate;
     }
   }
   const paidLeaveFinalSettlement = allocation.settlementAmount;
