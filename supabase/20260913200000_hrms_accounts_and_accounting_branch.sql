@@ -18,6 +18,7 @@ create table if not exists public.hrms_account_ledger_mappings (
   incentive_ledger_id uuid references public.ledger_accounts(id) on delete set null,
   incentive_payable_ledger_id uuid references public.ledger_accounts(id) on delete set null,
   salary_deduction_ledger_id uuid references public.ledger_accounts(id) on delete set null,
+  loss_deduction_ledger_id uuid references public.ledger_accounts(id) on delete set null,
   unpaid_leave_deduction_ledger_id uuid references public.ledger_accounts(id) on delete set null,
   paid_leave_payout_ledger_id uuid references public.ledger_accounts(id) on delete set null,
   extra_work_day_payout_ledger_id uuid references public.ledger_accounts(id) on delete set null,

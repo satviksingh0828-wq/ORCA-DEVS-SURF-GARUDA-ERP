@@ -39,6 +39,7 @@ The examples below use a monthly gross salary and calendar-day rate only to make
 | 8. Joining month | Employee joins on the 15th; accrual policy gives 1 unit for the month; daily rate is ₹1,000 | Only eligible employment-period attendance is considered | Settlement is based on the actual ledger balance, not a full pre-joining month |
 | 9. Payroll generated twice for the same period | Same employee, same period start/end | Second generation is blocked as duplicate | No duplicate accrual or settlement allocation is created |
 | 10. Old payroll before ledger migration | Existing payroll has aggregate `paid_leaves_left` but no month-level accrual rows | Existing aggregate remains available for display | Exact historic rate cannot be reconstructed if it was never saved; create an opening accrual using an approved rate before final settlement |
+| 11. Balance 4, monthly allowance 1, used 3 | Opening balance before the month is 4; current month earns 1; employee uses 3 | Available = 4 + 1 = 5; paid leave used = 3; balance after payroll = **2**; regular paid-leave payout = `3 × current-month daily rate` | If this is the final month, settlement is the value of the 2 remaining units using their accrual-month rates; otherwise ₹0 |
 
 ## What to inspect in Supabase
 
