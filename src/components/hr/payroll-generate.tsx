@@ -372,17 +372,15 @@ export function PayrollGenerate() {
       // final-settlement allocations against their source month.
       const accrualMonth = `${periodYear}-${String(periodMonth + 1).padStart(2, '0')}-01`;
       let currentAccrualId: string | null = null;
-      if (!isLeavingPeriod) {
-        const { data: currentAccrual, error: accrualError } = await supabase.from('paid_leave_accruals').upsert({
-          employee_id: emp.id,
-          accrual_month: accrualMonth,
-          earned_units: Number(emp.paid_holidays_per_month) || 0,
-          daily_pay_rate: c.perDay,
-          source_payroll_id: created.id,
-        }, { onConflict: 'employee_id,accrual_month' }).select().single();
-        if (accrualError) throw accrualError;
-        currentAccrualId = currentAccrual.id;
-      }
+      const { data: currentAccrual, error: accrualError } = await supabase.from('paid_leave_accruals').upsert({
+        employee_id: emp.id,
+        accrual_month: accrualMonth,
+        earned_units: Number(emp.paid_holidays_per_month) || 0,
+        daily_pay_rate: c.perDay,
+        source_payroll_id: created.id,
+      }, { onConflict: 'employee_id,accrual_month' }).select().single();
+      if (accrualError) throw accrualError;
+      currentAccrualId = currentAccrual.id;
       const usageRows = [
         ...c.paidLeaveUsedAllocations.map(a => ({
           employee_id: emp.id, payroll_id: created.id, accrual_id: a.accrualId === '__current__' ? currentAccrualId! : a.accrualId,

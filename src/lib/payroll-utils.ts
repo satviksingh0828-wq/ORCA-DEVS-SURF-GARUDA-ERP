@@ -177,28 +177,28 @@ export function computePayroll(
   if (lastPayroll) {
     const lastEnd = parseYmd(lastPayroll.period_end);
     const monthsSince = Math.max(0, (ct.getFullYear() - lastEnd.getFullYear()) * 12 + (ct.getMonth() - lastEnd.getMonth()));
-    // A leaving month pays out the balance accumulated through the previous
-    // payroll; it does not earn another monthly paid-leave unit.
-    const accruedMonthsSinceLastPayroll = Math.max(0, monthsSince - (isFinalPayroll ? 1 : 0));
-    leftBefore = Number(lastPayroll.paid_leaves_left) + accruedMonthsSinceLastPayroll * perMonth;
-    const monthsFromJoin = (cf.getFullYear() - join.getFullYear()) * 12 + (cf.getMonth() - join.getMonth()) + (cf.getDate() >= join.getDate() ? 1 : 0) - (isFinalPayroll ? 1 : 0);
+    // The employee earns the configured entitlement in every payroll month,
+    // including a leaving month. The previous balance is always clamped so a
+    // historic bad value cannot turn future paid leave into a negative balance.
+    leftBefore = Math.max(0, Number(lastPayroll.paid_leaves_left)) + monthsSince * perMonth;
+    const monthsFromJoin = (cf.getFullYear() - join.getFullYear()) * 12 + (cf.getMonth() - join.getMonth()) + (cf.getDate() >= join.getDate() ? 1 : 0);
     paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
     // The saved field is period-only, not cumulative. Derive cumulative
     // historical usage from the earned balance so stale accrual rows do not
     // make already-used leave look available for final settlement.
     usedBefore = Math.max(0, paidLeavesEarned - leftBefore);
   } else {
-    const monthsFromJoin = (ct.getFullYear() - join.getFullYear()) * 12 + (ct.getMonth() - join.getMonth()) + (ct.getDate() >= join.getDate() ? 1 : 0) - (isFinalPayroll ? 1 : 0);
+    const monthsFromJoin = (ct.getFullYear() - join.getFullYear()) * 12 + (ct.getMonth() - join.getMonth()) + (ct.getDate() >= join.getDate() ? 1 : 0);
     paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
     const absentsBefore = empAtt.filter(a => a.status === 'absent' && parseYmd(a.date) < cf).length;
     const halfBefore = empAtt.filter(a => a.status === 'half_day' && parseYmd(a.date) < cf).length;
     usedBefore = absentsBefore + halfBefore * 0.5;
-    leftBefore = paidLeavesEarned - usedBefore;
+    leftBefore = Math.max(0, paidLeavesEarned - usedBefore);
   }
   const requestedThisPeriod = absent + halfDay * 0.5;
   const paidLeavesUsedThisPeriod = Math.max(0, Math.min(requestedThisPeriod, leftBefore));
   const unpaidLeavesThisPeriod = Math.max(0, requestedThisPeriod - paidLeavesUsedThisPeriod);
-  const paidLeavesLeftAfter = leftBefore - paidLeavesUsedThisPeriod;
+  const paidLeavesLeftAfter = Math.max(0, leftBefore - paidLeavesUsedThisPeriod);
 
   const n = (v: number | string) => Number(v) || 0;
   const monthlyGross = n(emp.basic_salary) + n(emp.hra) + n(emp.travel_allowance) + n(emp.special_allowance) + n(emp.other_allowance);
@@ -209,16 +209,14 @@ export function computePayroll(
   // multiplied by the employee's calculated calendar-day salary rate.
   const paidLeavePayout = paidLeavesUsedThisPeriod * perDay;
   const currentMonth = ymd(new Date(from.getFullYear(), from.getMonth(), 1));
-  const currentAccrual = { id: '__current__', accrual_month: currentMonth, earned_units: isFinalPayroll ? 0 : perMonth, used_units: 0, daily_pay_rate: perDay };
+  const currentAccrual = { id: '__current__', accrual_month: currentMonth, earned_units: perMonth, used_units: 0, daily_pay_rate: perDay };
   // Accrual rows can be created by an earlier half-month payroll or by a
   // partially migrated database. Keep the settlement ledger chronological and
   // ensure the selected month has its configured monthly entitlement. The
   // current month is the only accrual that may be synthesized here; future
   // rows must never be paid in an earlier final settlement.
   const historicalAccruals = paidLeaveAccruals
-    .filter(row => isFinalPayroll
-      ? row.accrual_month.slice(0, 7) < currentMonth.slice(0, 7)
-      : row.accrual_month.slice(0, 7) <= currentMonth.slice(0, 7))
+    .filter(row => row.accrual_month.slice(0, 7) <= currentMonth.slice(0, 7))
     .map(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7)
       ? { ...row, earned_units: Math.max(Number(row.earned_units) || 0, perMonth), daily_pay_rate: Number(row.daily_pay_rate) || perDay }
       : row);
