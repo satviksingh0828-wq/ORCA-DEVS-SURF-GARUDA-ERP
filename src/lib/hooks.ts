@@ -535,6 +535,7 @@ export function useMarkPayrollPaid() {
       payrollId,
       paymentDate,
       paymentAmount,
+      paymentLedgerId,
       partial,
       historyEntry,
       existingHistory,
@@ -542,6 +543,7 @@ export function useMarkPayrollPaid() {
       payrollId: string;
       paymentDate: string;
       paymentAmount: number;
+      paymentLedgerId: string;
       partial: boolean;
       /** The incentiveal amount being paid in this transaction */
       historyEntry: { date: string; amount: number };
@@ -553,6 +555,7 @@ export function useMarkPayrollPaid() {
         payment_status: partial ? 'partial_paid' : 'paid',
         payment_date: paymentDate,
         payment_amount: paymentAmount,
+        payment_ledger_id: paymentLedgerId,
         payment_history: newHistory,
       }).eq('id', payrollId);
       if (error) throw error;

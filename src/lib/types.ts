@@ -246,6 +246,8 @@ export interface Payroll {
   payment_date: string | null;
   /** Actual amount disbursed. Used for partial payments; null means full net. */
   payment_amount: number | null;
+  /** Bank or cash ledger selected from the employee's Accounting Branch. */
+  payment_ledger_id?: string | null;
   /** Full chronological log of every payment made against this payroll. */
   payment_history?: { date: string; amount: number }[] | null;
   notes: string | null;

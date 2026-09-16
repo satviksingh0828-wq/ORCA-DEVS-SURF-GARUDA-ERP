@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import React from 'react';
 import {
   Clock, CheckCircle2, Download, Search,
@@ -19,6 +19,7 @@ import {
 } from '@/lib/hooks';
 import { fullName, effectivePaymentStatus } from '@/lib/types';
 import type { Payroll, Employee } from '@/lib/types';
+import { supabase } from '@/integrations/supabase/client';
 import { ymd } from '@/lib/attendance-utils';
 import { exportPendingPayrolls } from '@/lib/excel-io';
 import { exportPayrollPdf, getPayrollPdfBase64 } from '@/lib/payroll-pdf';
@@ -30,6 +31,7 @@ function money(n: number) {
 
 function correctedPayrollNet(payroll: Payroll) {
   const earnings = Number(payroll.gross || 0)
+    + Number(payroll.extra_work_pay || 0)
     + Number(payroll.paid_leave_final_settlement_amount || 0)
     + Number(payroll.incentive_amount || 0);
   const deductions = Number(payroll.pf_deduction || 0)
@@ -54,29 +56,50 @@ function PayDialog({
   payroll, employeeName, onConfirm, onClose,
 }: {
   payroll: Payroll;
+  employee: Employee | undefined;
   employeeName: string;
-  onConfirm: (opts: { partial: boolean; amount: number; date: string }) => void;
+  onConfirm: (opts: { partial: boolean; amount: number; date: string; paymentLedgerId: string }) => void;
   onClose: () => void;
 }) {
   const ps       = effectivePaymentStatus(payroll);
-  const net      = Number(payroll.net);
+  const net      = correctedPayrollNet(payroll);
   const alreadyPaid = ps === 'partial_paid' ? Number(payroll.payment_amount || 0) : 0;
   const remaining   = Math.max(0, net - alreadyPaid);
 
   const [partial, setPartial] = useState(false);
   const [amount, setAmount]   = useState(String(remaining.toFixed(2)));
   const [date, setDate]       = useState(ymd(new Date()));
+  const [paymentLedgerId, setPaymentLedgerId] = useState('');
+  const [paymentLedgers, setPaymentLedgers] = useState<Array<{ id: string; account_name: string; ledger_type: 'bank' | 'cash' }>>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!employee?.accounting_branch_id) { setPaymentLedgers([]); return; }
+    void supabase.from('ledger_accounts')
+      .select('id, account_name, ledger_type')
+      .eq('branch_id', employee.accounting_branch_id)
+      .eq('is_active', true)
+      .in('ledger_type', ['bank', 'cash'])
+      .order('account_name')
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { toast.error(`Could not load bank/cash accounts: ${error.message}`); return; }
+        setPaymentLedgers((data ?? []) as Array<{ id: string; account_name: string; ledger_type: 'bank' | 'cash' }>);
+      });
+    return () => { cancelled = true; };
+  }, [employee?.accounting_branch_id]);
 
   const handleConfirm = () => {
     const amt = Number(amount);
     if (!(amt > 0)) { toast.error('Enter a valid payment amount'); return; }
     if (amt > remaining) { toast.error(`Amount exceeds outstanding balance (${money(remaining)})`); return; }
     if (!date) { toast.error('Select payment date'); return; }
+    if (!paymentLedgerId) { toast.error('Select the bank or cash account used for this payment'); return; }
     if (partial && amt >= remaining) {
       toast.error('For full payment, choose "Full payment". Enter less than the balance for partial.');
       return;
     }
-    onConfirm({ partial, amount: amt, date });
+    onConfirm({ partial, amount: amt, date, paymentLedgerId });
   };
 
   return (
@@ -118,6 +141,18 @@ function PayDialog({
             <div className="text-xs text-muted-foreground">
               Net payable: {money(net)}{alreadyPaid > 0 ? ` · Balance due: ${money(remaining)}` : ''}
             </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs">Paid from (employee Accounting Branch)</Label>
+            <Select value={paymentLedgerId} onValueChange={setPaymentLedgerId} disabled={!employee?.accounting_branch_id}>
+              <SelectTrigger><SelectValue placeholder="Select bank or cash account" /></SelectTrigger>
+              <SelectContent>
+                {paymentLedgers.map(ledger => <SelectItem key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</SelectItem>)}
+              </SelectContent>
+            </Select>
+            {!employee?.accounting_branch_id && <p className="text-xs text-muted-foreground">This employee has no Accounting Branch selected.</p>}
+            {employee?.accounting_branch_id && paymentLedgers.length === 0 && <p className="text-xs text-muted-foreground">No active bank or cash accounts found for this Accounting Branch.</p>}
           </div>
 
           <div className="space-y-1">
@@ -208,7 +243,7 @@ function DetailPanel({
   const net        = correctedPayrollNet(payroll);
   const paidAmt    = Number(payroll.payment_amount || 0);
   const outstanding = ps === 'partial_paid' ? Math.max(0, net - paidAmt) : net;
-  const gross       = Number(payroll.gross) + Number(payroll.paid_leave_final_settlement_amount || 0) + Number(payroll.incentive_amount || 0);
+  const gross       = Number(payroll.gross) + Number(payroll.extra_work_pay || 0) + Number(payroll.paid_leave_final_settlement_amount || 0) + Number(payroll.incentive_amount || 0);
   const totalDed    =
     Number(payroll.pf_deduction) + Number(payroll.tax_deduction) +
     Number(payroll.unpaid_leave_deduction) + Number(payroll.loan_deduction) +
@@ -458,7 +493,7 @@ export function PayrollPending() {
       : <ArrowDown className="ml-1 inline h-3 w-3" />;
   };
 
-  const handleMarkPaid = async (opts: { partial: boolean; amount: number; date: string }) => {
+  const handleMarkPaid = async (opts: { partial: boolean; amount: number; date: string; paymentLedgerId: string }) => {
     if (!payDialog) return;
     const ps        = effectivePaymentStatus(payDialog);
     const alreadyPaid = ps === 'partial_paid' ? Number(payDialog.payment_amount || 0) : 0;
@@ -468,6 +503,7 @@ export function PayrollPending() {
         payrollId:       payDialog.id,
         paymentDate:     opts.date,
         paymentAmount:   totalPaid,
+        paymentLedgerId: opts.paymentLedgerId,
         partial:         opts.partial,
         historyEntry:    { date: opts.date, amount: opts.amount },
         existingHistory: payDialog.payment_history ?? null,
@@ -520,6 +556,7 @@ export function PayrollPending() {
       {payDialog && (
         <PayDialog
           payroll={payDialog}
+          employee={empMap.get(payDialog.employee_id)}
           employeeName={empName(payDialog)}
           onConfirm={handleMarkPaid}
           onClose={() => setPayDialog(null)}
@@ -632,7 +669,7 @@ export function PayrollPending() {
                             <div>{p.period_type === 'half_month' ? 'Half month' : 'Full month'}</div>
                           </td>
                           <td className="px-4 py-3 text-right">
-                            {money(Number(p.gross) + Number(p.paid_leave_final_settlement_amount || 0) + Number(p.incentive_amount || 0))}
+                            {money(Number(p.gross) + Number(p.extra_work_pay || 0) + Number(p.paid_leave_final_settlement_amount || 0) + Number(p.incentive_amount || 0))}
                           </td>
                           <td className="px-4 py-3 text-right text-destructive">−{money(deductions)}</td>
                           <td className="px-4 py-3 text-right font-semibold">
