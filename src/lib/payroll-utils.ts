@@ -1,5 +1,13 @@
-import type { Attendance, Department, Employee, Holiday, InterestMethod, Payroll, PaidLeaveAccrual } from './types.ts';
-import { countWorkingDays, isWorkingDay, parseYmd, ymd } from './attendance-utils.ts';
+import type {
+  Attendance,
+  Department,
+  Employee,
+  Holiday,
+  InterestMethod,
+  Payroll,
+  PaidLeaveAccrual,
+} from "./types.ts";
+import { countWorkingDays, isWorkingDay, parseYmd, ymd } from "./attendance-utils.ts";
 
 export function computeEMI(
   principal: number,
@@ -10,8 +18,8 @@ export function computeEMI(
   const P = Number(principal) || 0;
   const n = Math.max(1, Math.floor(Number(months) || 1));
   const rate = (Number(ratePct) || 0) / 100;
-  if (method === 'none' || rate === 0) return { emi: P / n, total: P };
-  if (method === 'simple') {
+  if (method === "none" || rate === 0) return { emi: P / n, total: P };
+  if (method === "simple") {
     const interest = P * rate * (n / 12);
     const total = P + interest;
     return { emi: total / n, total };
@@ -25,18 +33,21 @@ export function monthPeriod(year: number, month: number): { from: Date; to: Date
   return { from: new Date(year, month, 1), to: new Date(year, month + 1, 0) };
 }
 
-export function halfMonthPeriods(year: number, month: number): Array<{ from: Date; to: Date; label: string }> {
+export function halfMonthPeriods(
+  year: number,
+  month: number,
+): Array<{ from: Date; to: Date; label: string }> {
   const last = new Date(year, month + 1, 0).getDate();
   return [
-    { from: new Date(year, month, 1), to: new Date(year, month, 15), label: '1st half' },
-    { from: new Date(year, month, 16), to: new Date(year, month, last), label: '2nd half' },
+    { from: new Date(year, month, 1), to: new Date(year, month, 15), label: "1st half" },
+    { from: new Date(year, month, 16), to: new Date(year, month, last), label: "2nd half" },
   ];
 }
 
 export function clampToEmployment(
   from: Date,
   to: Date,
-  emp: Pick<Employee, 'joining_date' | 'date_of_leaving'>,
+  emp: Pick<Employee, "joining_date" | "date_of_leaving">,
 ): { from: Date; to: Date } {
   const join = parseYmd(emp.joining_date);
   const leave = emp.date_of_leaving ? parseYmd(emp.date_of_leaving) : null;
@@ -72,12 +83,23 @@ export interface PayrollComputation {
   paidLeaveFinalSettlement: number;
   payableDates: number;
   calendarDaysInMonth: number;
-  paidLeaveFinalSettlementAllocations: Array<{ accrualId: string; accrualMonth: string; units: number; dailyRate: number; amount: number }>;
+  paidLeaveFinalSettlementAllocations: Array<{
+    accrualId: string;
+    accrualMonth: string;
+    units: number;
+    dailyRate: number;
+    amount: number;
+  }>;
   paidLeaveUsedAllocations: Array<{ accrualId: string; units: number; amount: number }>;
 }
 
 export function allocatePaidLeaveByAccrual(
-  accruals: Array<Pick<PaidLeaveAccrual, 'id' | 'accrual_month' | 'earned_units' | 'used_units' | 'daily_pay_rate'>>,
+  accruals: Array<
+    Pick<
+      PaidLeaveAccrual,
+      "id" | "accrual_month" | "earned_units" | "used_units" | "daily_pay_rate"
+    >
+  >,
   leaveUsedThisPeriod: number,
   finalSettlement: boolean,
   finalSettlementRate?: number,
@@ -89,17 +111,32 @@ export function allocatePaidLeaveByAccrual(
     const available = Math.max(0, Number(row.earned_units) - Number(row.used_units));
     const units = Math.min(available, remainingUsage);
     if (units > 0) {
-      usedAllocations.push({ accrualId: row.id, units, amount: units * Number(row.daily_pay_rate) });
+      usedAllocations.push({
+        accrualId: row.id,
+        units,
+        amount: units * Number(row.daily_pay_rate),
+      });
       remainingUsage -= units;
     }
   }
   const settlementAllocations = finalSettlement
-    ? rows.map(row => {
-        const alreadyUsed = usedAllocations.find(a => a.accrualId === row.id)?.units ?? 0;
-        const units = Math.max(0, Number(row.earned_units) - Number(row.used_units) - alreadyUsed);
-        const dailyRate = finalSettlementRate ?? Number(row.daily_pay_rate);
-        return { accrualId: row.id, accrualMonth: row.accrual_month, units, dailyRate, amount: units * dailyRate };
-      }).filter(row => row.units > 0)
+    ? rows
+        .map((row) => {
+          const alreadyUsed = usedAllocations.find((a) => a.accrualId === row.id)?.units ?? 0;
+          const units = Math.max(
+            0,
+            Number(row.earned_units) - Number(row.used_units) - alreadyUsed,
+          );
+          const dailyRate = finalSettlementRate ?? Number(row.daily_pay_rate);
+          return {
+            accrualId: row.id,
+            accrualMonth: row.accrual_month,
+            units,
+            dailyRate,
+            amount: units * dailyRate,
+          };
+        })
+        .filter((row) => row.units > 0)
     : [];
   return {
     usedAllocations,
@@ -132,7 +169,7 @@ export function computePayroll(
   allAttendance: Attendance[],
   from: Date,
   to: Date,
-  periodType: 'month' | 'half_month',
+  periodType: "month" | "half_month",
   lastPayroll?: Payroll | null,
   isFinalPayroll = false,
   paidLeaveAccruals: PaidLeaveAccrual[] = [],
@@ -142,12 +179,16 @@ export function computePayroll(
   const { from: cf, to: ct } = clampToEmployment(from, to, emp);
   const workingDays = countWorkingDays(cf, ct, dept, holidays);
   const calendarDaysInMonth = new Date(from.getFullYear(), from.getMonth() + 1, 0).getDate();
-  const eligiblePeriodDays = cf <= ct ? Math.floor((ct.getTime() - cf.getTime()) / 86400000) + 1 : 0;
+  const eligiblePeriodDays =
+    cf <= ct ? Math.floor((ct.getTime() - cf.getTime()) / 86400000) + 1 : 0;
   const joinLeaveFactor = calendarDaysInMonth > 0 ? eligiblePeriodDays / calendarDaysInMonth : 0;
-  const empAtt = allAttendance.filter(a => a.employee_id === emp.id);
-  const byDate = new Map(empAtt.map(a => [a.date, a] as const));
+  const empAtt = allAttendance.filter((a) => a.employee_id === emp.id);
+  const byDate = new Map(empAtt.map((a) => [a.date, a] as const));
   const payable = new Set<string>();
-  let present = 0, halfDay = 0, absent = 0, extraWorkDays = 0;
+  let present = 0,
+    halfDay = 0,
+    absent = 0,
+    extraWorkDays = 0;
   const cur = new Date(cf);
   while (cur <= ct) {
     const key = ymd(cur);
@@ -156,12 +197,12 @@ export function computePayroll(
     // Holidays, paid leave, and extra work are overlays; Set semantics count a date once.
     payable.add(key);
     if (isWorkingDay(cur, dept, holidays)) {
-      if (r?.status === 'present') present++;
-      else if (r?.status === 'half_day') halfDay++;
-      else if (r?.status === 'absent') absent++;
-    } else if (r?.status === 'extra_work') {
+      if (r?.status === "present") present++;
+      else if (r?.status === "half_day") halfDay++;
+      else if (r?.status === "absent") absent++;
+    } else if (r?.status === "extra_work") {
       extraWorkDays++;
-    } else if (r?.status === 'half_extra_work') {
+    } else if (r?.status === "half_extra_work") {
       extraWorkDays += 0.5;
     }
     cur.setDate(cur.getDate() + 1);
@@ -175,10 +216,16 @@ export function computePayroll(
   let usedBefore: number;
   if (lastPayroll) {
     const lastEnd = parseYmd(lastPayroll.period_end);
-    const monthsSince = Math.max(0, (ct.getFullYear() - lastEnd.getFullYear()) * 12 + (ct.getMonth() - lastEnd.getMonth()));
+    const monthsSince = Math.max(
+      0,
+      (ct.getFullYear() - lastEnd.getFullYear()) * 12 + (ct.getMonth() - lastEnd.getMonth()),
+    );
     leftBefore = Number(lastPayroll.paid_leaves_left) + monthsSince * perMonth;
     const join = parseYmd(emp.joining_date);
-    const monthsFromJoin = (cf.getFullYear() - join.getFullYear()) * 12 + (cf.getMonth() - join.getMonth()) + (cf.getDate() >= join.getDate() ? 1 : 0);
+    const monthsFromJoin =
+      (cf.getFullYear() - join.getFullYear()) * 12 +
+      (cf.getMonth() - join.getMonth()) +
+      (cf.getDate() >= join.getDate() ? 1 : 0);
     paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
     // The saved field is period-only, not cumulative. Derive cumulative
     // historical usage from the earned balance so stale accrual rows do not
@@ -186,10 +233,17 @@ export function computePayroll(
     usedBefore = Math.max(0, paidLeavesEarned - leftBefore);
   } else {
     const join = parseYmd(emp.joining_date);
-    const monthsFromJoin = (ct.getFullYear() - join.getFullYear()) * 12 + (ct.getMonth() - join.getMonth()) + (ct.getDate() >= join.getDate() ? 1 : 0);
+    const monthsFromJoin =
+      (ct.getFullYear() - join.getFullYear()) * 12 +
+      (ct.getMonth() - join.getMonth()) +
+      (ct.getDate() >= join.getDate() ? 1 : 0);
     paidLeavesEarned = Math.max(0, monthsFromJoin) * perMonth;
-    const absentsBefore = empAtt.filter(a => a.status === 'absent' && parseYmd(a.date) < cf).length;
-    const halfBefore = empAtt.filter(a => a.status === 'half_day' && parseYmd(a.date) < cf).length;
+    const absentsBefore = empAtt.filter(
+      (a) => a.status === "absent" && parseYmd(a.date) < cf,
+    ).length;
+    const halfBefore = empAtt.filter(
+      (a) => a.status === "half_day" && parseYmd(a.date) < cf,
+    ).length;
     usedBefore = absentsBefore + halfBefore * 0.5;
     leftBefore = paidLeavesEarned - usedBefore;
   }
@@ -199,7 +253,12 @@ export function computePayroll(
   const paidLeavesLeftAfter = Math.max(0, leftBefore - paidLeavesUsedThisPeriod);
 
   const n = (v: number | string) => Number(v) || 0;
-  const monthlyGross = n(emp.basic_salary) + n(emp.hra) + n(emp.travel_allowance) + n(emp.special_allowance) + n(emp.other_allowance);
+  const monthlyGross =
+    n(emp.basic_salary) +
+    n(emp.hra) +
+    n(emp.travel_allowance) +
+    n(emp.special_allowance) +
+    n(emp.other_allowance);
   const perDay = calendarDaysInMonth > 0 ? monthlyGross / calendarDaysInMonth : 0;
   const gross = perDay * payable.size;
   const unpaidLeaveDeduction = perDay * unpaidLeavesThisPeriod;
@@ -207,17 +266,29 @@ export function computePayroll(
   // multiplied by the employee's calculated calendar-day salary rate.
   const paidLeavePayout = paidLeavesUsedThisPeriod * perDay;
   const currentMonth = ymd(new Date(from.getFullYear(), from.getMonth(), 1));
-  const currentAccrual = { id: '__current__', accrual_month: currentMonth, earned_units: perMonth, used_units: 0, daily_pay_rate: perDay };
+  const currentAccrual = {
+    id: "__current__",
+    accrual_month: currentMonth,
+    earned_units: perMonth,
+    used_units: 0,
+    daily_pay_rate: perDay,
+  };
   // Accrual rows can be created by an earlier half-month payroll or by a
   // partially migrated database. Keep the settlement ledger chronological and
   // ensure the selected month has its configured monthly entitlement. The
   // current month is the only accrual that may be synthesized here; future
   // rows must never be paid in an earlier final settlement.
   const historicalAccruals = paidLeaveAccruals
-    .filter(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7))
-    .map(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7)
-      ? { ...row, earned_units: Math.max(Number(row.earned_units) || 0, perMonth), daily_pay_rate: Number(row.daily_pay_rate) || perDay }
-      : row);
+    .filter((row) => row.accrual_month.slice(0, 7) <= currentMonth.slice(0, 7))
+    .map((row) =>
+      row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7)
+        ? {
+            ...row,
+            earned_units: Math.max(Number(row.earned_units) || 0, perMonth),
+            daily_pay_rate: Number(row.daily_pay_rate) || perDay,
+          }
+        : row,
+    );
   let missingHistoricalUsage = Math.max(
     0,
     usedBefore - historicalAccruals.reduce((sum, row) => sum + Number(row.used_units || 0), 0),
@@ -229,21 +300,35 @@ export function computePayroll(
     missingHistoricalUsage -= consume;
     return consume > 0 ? { ...row, used_units: Number(row.used_units || 0) + consume } : row;
   });
-  const hasCurrentAccrual = reconciledAccruals.some(row => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7));
-  const accrualRows = hasCurrentAccrual ? reconciledAccruals : [...reconciledAccruals, currentAccrual];
+  const hasCurrentAccrual = reconciledAccruals.some(
+    (row) => row.accrual_month.slice(0, 7) === currentMonth.slice(0, 7),
+  );
+  const accrualRows = hasCurrentAccrual
+    ? reconciledAccruals
+    : [...reconciledAccruals, currentAccrual];
   const manualFinalSettlementRate = Number(finalSettlementRate);
-  const hasFinalSettlementRate = Number.isFinite(manualFinalSettlementRate) && manualFinalSettlementRate >= 0;
+  const hasFinalSettlementRate =
+    Number.isFinite(manualFinalSettlementRate) && manualFinalSettlementRate >= 0;
   const shouldSettlePaidLeave = isFinalPayroll && hasFinalSettlementRate;
-  const allocation = accrualRows.length > 0
-    ? allocatePaidLeaveByAccrual(accrualRows, paidLeavesUsedThisPeriod, shouldSettlePaidLeave, manualFinalSettlementRate)
-    : { settlementAllocations: [], settlementAmount: 0 };
+  const allocation =
+    accrualRows.length > 0
+      ? allocatePaidLeaveByAccrual(
+          accrualRows,
+          paidLeavesUsedThisPeriod,
+          shouldSettlePaidLeave,
+          manualFinalSettlementRate,
+        )
+      : { settlementAllocations: [], settlementAmount: 0 };
   if (shouldSettlePaidLeave) {
-    const allocatedUnits = allocation.settlementAllocations.reduce((sum, row) => sum + row.units, 0);
+    const allocatedUnits = allocation.settlementAllocations.reduce(
+      (sum, row) => sum + row.units,
+      0,
+    );
     const untrackedUnits = Math.max(0, paidLeavesLeftAfter - allocatedUnits);
     if (untrackedUnits > 0) {
       allocation.settlementAllocations.push({
-        accrualId: '__untracked__',
-        accrualMonth: 'Balance carried forward',
+        accrualId: "__untracked__",
+        accrualMonth: "Balance carried forward",
         units: untrackedUnits,
         dailyRate: manualFinalSettlementRate,
         amount: untrackedUnits * manualFinalSettlementRate,
@@ -252,22 +337,41 @@ export function computePayroll(
     }
   }
   const paidLeaveFinalSettlement = allocation.settlementAmount;
-  const factor = payable.size > 0 ? Math.max(0, Math.min(1, (payable.size - unpaidLeavesThisPeriod) / payable.size)) : 0;
+  const factor =
+    payable.size > 0
+      ? Math.max(0, Math.min(1, (payable.size - unpaidLeavesThisPeriod) / payable.size))
+      : 0;
   const presentCounted = present + halfDay * 0.5;
   // Extra work is also paid separately at the calculated daily salary rate;
   // do not use the employee's fixed extra-work amount field here.
   const extraWorkPay = extraWorkDays * perDay;
 
   return {
-    workingDays, fullPeriodWorkingDays, joinLeaveFactor,
-    present: presentCounted, halfDay, absent, unmarked,
-    extraWorkDays, extraWorkPay,
-    paidLeavesEarned, paidLeavesUsedBefore: usedBefore, paidLeavesLeftBefore: leftBefore,
-    paidLeavesUsedThisPeriod, unpaidLeavesThisPeriod, paidLeavesLeftAfter,
-    factor, gross, perDay, unpaidLeaveDeduction, paidLeavePayout, paidLeaveFinalSettlement,
+    workingDays,
+    fullPeriodWorkingDays,
+    joinLeaveFactor,
+    present: presentCounted,
+    halfDay,
+    absent,
+    unmarked,
+    extraWorkDays,
+    extraWorkPay,
+    paidLeavesEarned,
+    paidLeavesUsedBefore: usedBefore,
+    paidLeavesLeftBefore: leftBefore,
+    paidLeavesUsedThisPeriod,
+    unpaidLeavesThisPeriod,
+    paidLeavesLeftAfter,
+    factor,
+    gross,
+    perDay,
+    unpaidLeaveDeduction,
+    paidLeavePayout,
+    paidLeaveFinalSettlement,
     paidLeaveFinalSettlementAllocations: allocation.settlementAllocations,
     paidLeaveUsedAllocations: allocation.usedAllocations,
-    payableDates: payable.size, calendarDaysInMonth,
+    payableDates: payable.size,
+    calendarDaysInMonth,
   };
 }
 
@@ -278,7 +382,7 @@ export function loanRemaining(l: {
   months: number;
   status: string;
 }): number {
-  if (l.status === 'paid') return 0;
+  if (l.status === "paid") return 0;
   const paid = l.emi * l.paid_months;
   return Math.max(0, l.total_payable - paid);
 }
@@ -297,8 +401,8 @@ export function loanRemainingFromInstallments(
   insts: Array<{ status: string; amount: number; paid_amount?: number | null }>,
 ): number {
   return insts.reduce((sum, i) => {
-    if (i.status === 'pending') return sum + Math.max(0, Number(i.amount));
-    if (i.status === 'paid_partial_manual') {
+    if (i.status === "pending") return sum + Math.max(0, Number(i.amount));
+    if (i.status === "paid_partial_manual") {
       return sum + Math.max(0, Number(i.amount) - Number(i.paid_amount || 0));
     }
     return sum;
@@ -310,10 +414,16 @@ export function generateInstallmentSchedule(
   startDate: string,
   months: number,
   emiAmount: number,
-): Array<{ emi_number: number; due_year: number; due_month: number; due_date: string; amount: number }> {
+): Array<{
+  emi_number: number;
+  due_year: number;
+  due_month: number;
+  due_date: string;
+  amount: number;
+}> {
   const start = parseYmd(startDate);
   return Array.from({ length: months }, (_, i) => {
-    const targetYear  = start.getFullYear();
+    const targetYear = start.getFullYear();
     const targetMonth = start.getMonth() + i;
     // Clamp to the last day of the target month to avoid JS Date overflow
     // (e.g. Jan 31 + 1 month must be Feb 28, not Mar 3).
@@ -322,10 +432,10 @@ export function generateInstallmentSchedule(
     const d = new Date(targetYear, targetMonth, day);
     return {
       emi_number: i + 1,
-      due_year:  d.getFullYear(),
+      due_year: d.getFullYear(),
       due_month: d.getMonth(),
-      due_date:  ymd(d),
-      amount:    emiAmount,
+      due_date: ymd(d),
+      amount: emiAmount,
     };
   });
 }
