@@ -310,8 +310,10 @@ export interface LoanInstallment {
    * Amount already paid directly by cash (partial payment).
    * Relevant for 'paid_partial_manual', 'partial_skipped', and preserved on 'paid_payroll'.
    * Old records without this field default to 0.
-   */
+  */
   paid_amount: number;
+  direct_payment_journal_entry_id?: string | null;
+  direct_payment_ledger_id?: string | null;
   /**
    * True for installments auto-generated at the end of the schedule
    * to absorb deferred amounts from skipped/partial_skipped periods.
@@ -336,6 +338,8 @@ export interface AdvanceInstallment {
   amount: number;
   /** Amount already paid directly (partial payment). Old records default to 0. */
   paid_amount: number;
+  direct_payment_journal_entry_id?: string | null;
+  direct_payment_ledger_id?: string | null;
   /** True for tail installments auto-generated to absorb deferred skip amounts. */
   skip_generated?: boolean;
   created_at: string;

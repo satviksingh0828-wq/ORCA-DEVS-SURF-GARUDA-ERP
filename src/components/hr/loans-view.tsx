@@ -184,6 +184,28 @@ function LoanRow({
   // Partial payment dialog state
   const [partialInstId, setPartialInstId] = useState<string | null>(null);
   const [partialAmt, setPartialAmt]       = useState('');
+  const [directPayInstId, setDirectPayInstId] = useState<string | null>(null);
+  const [paymentLedgerId, setPaymentLedgerId] = useState('');
+  const [paymentLedgers, setPaymentLedgers] = useState<Array<{ id: string; account_name: string; ledger_type: 'bank' | 'cash' }>>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!emp?.accounting_branch_id) { setPaymentLedgers([]); setPaymentLedgerId(''); return; }
+    void supabase.from('ledger_accounts')
+      .select('id,account_name,ledger_type')
+      .eq('branch_id', emp.accounting_branch_id)
+      .eq('is_active', true)
+      .in('ledger_type', ['bank', 'cash'])
+      .order('account_name')
+      .then(({ data, error }) => {
+        if (cancelled) return;
+        if (error) { toast.error(`Could not load cash/bank accounts: ${error.message}`); return; }
+        const rows = (data ?? []) as Array<{ id: string; account_name: string; ledger_type: 'bank' | 'cash' }>;
+        setPaymentLedgers(rows);
+        if (!rows.some(row => row.id === paymentLedgerId)) setPaymentLedgerId('');
+      });
+    return () => { cancelled = true; };
+  }, [emp?.accounting_branch_id]);
 
   const partialInst = partialInstId
     ? installments.find(i => i.id === partialInstId)
@@ -213,14 +235,16 @@ function LoanRow({
   const handleMarkInstallmentPaid = async (inst: LoanInstallment | AdvanceInstallment) => {
     if (inst.status === 'paid_manual') { toast.info('This EMI is already marked as paid manually'); return; }
     const wasPayroll = inst.status === 'paid_payroll';
+    if (!wasPayroll && !paymentLedgerId) { setDirectPayInstId(inst.id); return; }
     try {
       if (isLoan) {
         const li = inst as LoanInstallment;
-        await markLoanPaid.mutateAsync({ installmentId: li.id, loanId: li.loan_id, currentStatus: li.status, payrollId: li.payroll_id });
+        await markLoanPaid.mutateAsync({ installmentId: li.id, loanId: li.loan_id, currentStatus: li.status, payrollId: li.payroll_id, directPaymentLedgerId: paymentLedgerId || undefined });
       } else {
         const ai = inst as AdvanceInstallment;
-        await markAdvPaid.mutateAsync({ installmentId: ai.id, advanceId: ai.advance_id, currentStatus: ai.status, payrollId: ai.payroll_id });
+        await markAdvPaid.mutateAsync({ installmentId: ai.id, advanceId: ai.advance_id, currentStatus: ai.status, payrollId: ai.payroll_id, directPaymentLedgerId: paymentLedgerId || undefined });
       }
+      setDirectPayInstId(null);
       if (wasPayroll) {
         toast.warning(`EMI #${inst.emi_number} marked as paid directly. The payroll that deducted it should be deleted and regenerated.`);
       } else {
@@ -261,13 +285,14 @@ function LoanRow({
     const maxAmt = Number(partialInst.amount);
     if (!(amt > 0)) { toast.error('Enter a valid amount'); return; }
     if (amt >= maxAmt) { toast.error(`Amount must be less than the full EMI (${money(maxAmt)}). Use "Mark paid" for full payment.`); return; }
+    if (!paymentLedgerId) { toast.error('Select the cash or bank account that received the EMI'); return; }
     try {
       if (isLoan) {
         const li = partialInst as LoanInstallment;
-        await markLoanPartial.mutateAsync({ installmentId: li.id, loanId: li.loan_id, paidAmount: amt });
+        await markLoanPartial.mutateAsync({ installmentId: li.id, loanId: li.loan_id, paidAmount: amt, paymentLedgerId });
       } else {
         const ai = partialInst as AdvanceInstallment;
-        await markAdvPartial.mutateAsync({ installmentId: ai.id, advanceId: ai.advance_id, paidAmount: amt });
+        await markAdvPartial.mutateAsync({ installmentId: ai.id, advanceId: ai.advance_id, paidAmount: amt, paymentLedgerId });
       }
       toast.success(
         `EMI #${partialInst.emi_number}: ${money(amt)} recorded as direct payment. ` +
@@ -288,6 +313,7 @@ function LoanRow({
     if ((skipMode === 'cash' || skipMode === 'payroll') && amt >= maxAmt) {
       toast.error(`Amount must be less than the full EMI (${money(maxAmt)}). Use "Mark paid" for full payment.`); return;
     }
+    if (skipMode === 'cash' && !paymentLedgerId) { toast.error('Select the cash or bank account that received the EMI'); return; }
     try {
       if (isLoan) {
         const li = skipInst as LoanInstallment;
@@ -295,6 +321,7 @@ function LoanRow({
           installmentId: li.id, loanId: li.loan_id,
           paidAmount:    skipMode === 'cash'    ? amt : 0,
           payrollAmount: skipMode === 'payroll' ? amt : 0,
+          paymentLedgerId: skipMode === 'cash' ? paymentLedgerId : undefined,
         });
       } else {
         const ai = skipInst as AdvanceInstallment;
@@ -302,6 +329,7 @@ function LoanRow({
           installmentId: ai.id, advanceId: ai.advance_id,
           paidAmount:    skipMode === 'cash'    ? amt : 0,
           payrollAmount: skipMode === 'payroll' ? amt : 0,
+          paymentLedgerId: skipMode === 'cash' ? paymentLedgerId : undefined,
         });
       }
       const deferred = maxAmt - (skipMode === 'skip' ? 0 : amt);
@@ -430,6 +458,29 @@ function LoanRow({
               <div className="text-xs text-muted-foreground">No installment schedule found.</div>
             ) : (
               <>
+                {(directPayInstId || partialInstId || (skipInstId && skipMode === 'cash')) && (
+                  <div className="mb-3 rounded-lg border border-emerald-300 bg-emerald-50 p-3 dark:bg-emerald-950/20">
+                    <Label className="text-xs text-emerald-800 dark:text-emerald-300">Received through (employee accounting branch)</Label>
+                    <Select value={paymentLedgerId} onValueChange={setPaymentLedgerId}>
+                      <SelectTrigger className="mt-1 h-8 bg-background text-sm"><SelectValue placeholder="Select cash or bank account" /></SelectTrigger>
+                      <SelectContent>
+                        {paymentLedgers.map(account => (
+                          <SelectItem key={account.id} value={account.id}>{account.account_name} ({account.ledger_type})</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {!paymentLedgers.length && <p className="mt-1 text-xs text-destructive">No active cash or bank account is configured for this employee&apos;s accounting branch.</p>}
+                    {directPayInstId && (
+                      <div className="mt-2 flex gap-2">
+                        <Button size="sm" className="h-8" disabled={!paymentLedgerId} onClick={() => {
+                          const selected = installments.find(item => item.id === directPayInstId);
+                          if (selected) void handleMarkInstallmentPaid(selected);
+                        }}>Confirm direct receipt</Button>
+                        <Button size="sm" variant="outline" className="h-8" onClick={() => setDirectPayInstId(null)}>Cancel</Button>
+                      </div>
+                    )}
+                  </div>
+                )}
                 {/* Partial payment panel */}
                 {partialInstId && partialInst && (
                   <div className="mb-3 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/30 p-3 text-sm">

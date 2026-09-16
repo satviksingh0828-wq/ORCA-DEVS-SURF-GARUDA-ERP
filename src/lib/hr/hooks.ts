@@ -439,7 +439,10 @@ export function useMarkIncentivePaid() {
 export function useDeleteIncentiveAmount() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (id: string) => { const { error } = await sb.from('incentive_amounts').delete().eq('id', id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const { error } = await sb.rpc('hrms_delete_with_reversal', { p_record_kind: 'incentive', p_record_id: id });
+      if (error) throw error;
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['incentive_amounts'] }),
   });
 }

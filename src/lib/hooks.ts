@@ -679,8 +679,7 @@ export function useDeleteLoan() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await sb.from('loan_installments').delete().eq('loan_id', id);
-      const { error } = await sb.from('loans').delete().eq('id', id);
+      const { error } = await sb.rpc('hrms_delete_with_reversal', { p_record_kind: 'loan', p_record_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -745,8 +744,7 @@ export function useDeleteAdvance() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      await sb.from('advance_installments').delete().eq('advance_id', id);
-      const { error } = await sb.from('advances').delete().eq('id', id);
+      const { error } = await sb.rpc('hrms_delete_with_reversal', { p_record_kind: 'advance', p_record_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
@@ -879,15 +877,26 @@ export function useLoanInstallments(loanId: string) {
 export function useMarkLoanInstallmentPaid() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ installmentId, loanId, currentStatus, payrollId }: {
+    mutationFn: async ({ installmentId, loanId, currentStatus, payrollId, directPaymentLedgerId }: {
       installmentId: string;
       loanId: string;
       currentStatus: string;
       payrollId: string | null;
+      directPaymentLedgerId?: string;
     }) => {
+      if (directPaymentLedgerId && currentStatus !== 'paid_payroll') {
+        const { error } = await sb.rpc('hrms_record_direct_emi_payment', {
+          p_installment_kind: 'loan', p_installment_id: installmentId,
+          p_payment_ledger_id: directPaymentLedgerId, p_amount: (await sb.from('loan_installments').select('amount').eq('id', installmentId).single()).data?.amount,
+          p_status: 'paid_manual',
+        });
+        if (error) throw error;
+      } else {
       const updates: Record<string, unknown> = { status: 'paid_manual', paid_amount: 0 };
       if (currentStatus === 'paid_payroll') updates.payroll_id = null;
-      await sb.from('loan_installments').update(updates).eq('id', installmentId);
+      const { error } = await sb.from('loan_installments').update(updates).eq('id', installmentId);
+      if (error) throw error;
+      }
       const { data: allInst } = await sb.from('loan_installments').select('*').eq('loan_id', loanId);
       const arr  = (allInst ?? []) as LoanInstallment[];
       const paid = arr.filter(i => ['paid_manual','paid_payroll','paid_partial_manual'].includes(i.status)).length;
@@ -911,16 +920,18 @@ export function useMarkLoanInstallmentPaid() {
 export function useMarkLoanInstallmentPartialPaid() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ installmentId, loanId, paidAmount }: {
+    mutationFn: async ({ installmentId, loanId, paidAmount, paymentLedgerId }: {
       installmentId: string;
       loanId: string;
       paidAmount: number;
+      paymentLedgerId: string;
     }) => {
-      await sb.from('loan_installments').update({
-        status: 'paid_partial_manual',
-        paid_amount: paidAmount,
-        payroll_id: null,
-      }).eq('id', installmentId);
+      const { error } = await sb.rpc('hrms_record_direct_emi_payment', {
+        p_installment_kind: 'loan', p_installment_id: installmentId,
+        p_payment_ledger_id: paymentLedgerId, p_amount: paidAmount,
+        p_status: 'paid_partial_manual',
+      });
+      if (error) throw error;
       // paid_months unchanged — installment is not fully settled yet
     },
     onSuccess: () => {
@@ -935,7 +946,16 @@ export function useMarkLoanInstallmentUnpaid() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ installmentId, loanId }: { installmentId: string; loanId: string }) => {
-      await sb.from('loan_installments').update({ status: 'pending', payroll_id: null, paid_amount: 0 }).eq('id', installmentId);
+      const { data: current } = await sb.from('loan_installments').select('direct_payment_journal_entry_id').eq('id', installmentId).single();
+      if (current?.direct_payment_journal_entry_id) {
+        const { error } = await sb.rpc('hrms_reverse_journal_entry', {
+          p_original_entry_id: current.direct_payment_journal_entry_id,
+          p_reference: `hrms:reversal:loan-emi:undo:${installmentId}:${current.direct_payment_journal_entry_id}`,
+          p_description: 'Reversal of direct loan EMI receipt',
+        });
+        if (error) throw error;
+      }
+      await sb.from('loan_installments').update({ status: 'pending', payroll_id: null, paid_amount: 0, direct_payment_journal_entry_id: null, direct_payment_ledger_id: null }).eq('id', installmentId);
       // Re-fetch and rebuild skip tail (handles undoing a 'skipped'/'partial_skipped' installment)
       const { data: allInst } = await sb.from('loan_installments').select('*').eq('loan_id', loanId);
       const arr = (allInst ?? []) as LoanInstallment[];
@@ -985,21 +1005,30 @@ export function useMarkLoanInstallmentPayroll() {
 export function useSkipLoanInstallment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ installmentId, loanId, paidAmount, payrollAmount = 0 }: {
+    mutationFn: async ({ installmentId, loanId, paidAmount, payrollAmount = 0, paymentLedgerId }: {
       installmentId: string;
       loanId: string;
       paidAmount: number;    // 0 = full skip; >0 = partial cash collected + rest deferred
       payrollAmount?: number; // >0 = partial deducted from payroll + rest deferred
+      paymentLedgerId?: string;
     }) => {
       const isPayrollPartial = payrollAmount > 0;
       const isPartial = !isPayrollPartial && paidAmount > 0;
       const status     = isPayrollPartial ? 'payroll_partial_skipped' : (isPartial ? 'partial_skipped' : 'skipped');
       const storedPaid = isPayrollPartial ? payrollAmount : paidAmount;
-      await sb.from('loan_installments').update({
-        status,
-        paid_amount: storedPaid,
-        payroll_id: null,
-      }).eq('id', installmentId);
+      if (isPartial) {
+        const { error } = await sb.rpc('hrms_record_direct_emi_payment', {
+          p_installment_kind: 'loan', p_installment_id: installmentId,
+          p_payment_ledger_id: paymentLedgerId, p_amount: paidAmount,
+          p_status: 'partial_skipped',
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from('loan_installments').update({
+          status, paid_amount: storedPaid, payroll_id: null,
+        }).eq('id', installmentId);
+        if (error) throw error;
+      }
 
       const { data: allInst } = await sb.from('loan_installments').select('*').eq('loan_id', loanId);
       const arr = (allInst ?? []) as LoanInstallment[];
@@ -1052,15 +1081,27 @@ export function useAdvanceInstallments(advanceId: string) {
 export function useMarkAdvanceInstallmentPaid() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ installmentId, advanceId, currentStatus, payrollId }: {
+    mutationFn: async ({ installmentId, advanceId, currentStatus, payrollId, directPaymentLedgerId }: {
       installmentId: string;
       advanceId: string;
       currentStatus: string;
       payrollId: string | null;
+      directPaymentLedgerId?: string;
     }) => {
+      if (directPaymentLedgerId && currentStatus !== 'paid_payroll') {
+        const { data: row } = await sb.from('advance_installments').select('amount').eq('id', installmentId).single();
+        const { error } = await sb.rpc('hrms_record_direct_emi_payment', {
+          p_installment_kind: 'advance', p_installment_id: installmentId,
+          p_payment_ledger_id: directPaymentLedgerId, p_amount: row?.amount,
+          p_status: 'paid_manual',
+        });
+        if (error) throw error;
+      } else {
       const updates: Record<string, unknown> = { status: 'paid_manual', paid_amount: 0 };
       if (currentStatus === 'paid_payroll') updates.payroll_id = null;
-      await sb.from('advance_installments').update(updates).eq('id', installmentId);
+      const { error } = await sb.from('advance_installments').update(updates).eq('id', installmentId);
+      if (error) throw error;
+      }
       const { data: allInst } = await sb.from('advance_installments').select('*').eq('advance_id', advanceId);
       const arr  = (allInst ?? []) as AdvanceInstallment[];
       const paid = arr.filter(i => ['paid_manual','paid_payroll','paid_partial_manual'].includes(i.status)).length;
@@ -1084,16 +1125,18 @@ export function useMarkAdvanceInstallmentPaid() {
 export function useMarkAdvanceInstallmentPartialPaid() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ installmentId, advanceId, paidAmount }: {
+    mutationFn: async ({ installmentId, advanceId, paidAmount, paymentLedgerId }: {
       installmentId: string;
       advanceId: string;
       paidAmount: number;
+      paymentLedgerId: string;
     }) => {
-      await sb.from('advance_installments').update({
-        status: 'paid_partial_manual',
-        paid_amount: paidAmount,
-        payroll_id: null,
-      }).eq('id', installmentId);
+      const { error } = await sb.rpc('hrms_record_direct_emi_payment', {
+        p_installment_kind: 'advance', p_installment_id: installmentId,
+        p_payment_ledger_id: paymentLedgerId, p_amount: paidAmount,
+        p_status: 'paid_partial_manual',
+      });
+      if (error) throw error;
     },
     onSuccess: () => {
       hrLog('partial_paid', 'advance_installment');
@@ -1107,7 +1150,16 @@ export function useMarkAdvanceInstallmentUnpaid() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ installmentId, advanceId }: { installmentId: string; advanceId: string }) => {
-      await sb.from('advance_installments').update({ status: 'pending', payroll_id: null, paid_amount: 0 }).eq('id', installmentId);
+      const { data: current } = await sb.from('advance_installments').select('direct_payment_journal_entry_id').eq('id', installmentId).single();
+      if (current?.direct_payment_journal_entry_id) {
+        const { error } = await sb.rpc('hrms_reverse_journal_entry', {
+          p_original_entry_id: current.direct_payment_journal_entry_id,
+          p_reference: `hrms:reversal:advance-emi:undo:${installmentId}:${current.direct_payment_journal_entry_id}`,
+          p_description: 'Reversal of direct advance EMI receipt',
+        });
+        if (error) throw error;
+      }
+      await sb.from('advance_installments').update({ status: 'pending', payroll_id: null, paid_amount: 0, direct_payment_journal_entry_id: null, direct_payment_ledger_id: null }).eq('id', installmentId);
       const { data: allInst } = await sb.from('advance_installments').select('*').eq('advance_id', advanceId);
       const arr = (allInst ?? []) as AdvanceInstallment[];
       const { data: advRow } = await sb.from('advances').select('*').eq('id', advanceId).single();
@@ -1156,21 +1208,30 @@ export function useMarkAdvanceInstallmentPayroll() {
 export function useSkipAdvanceInstallment() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async ({ installmentId, advanceId, paidAmount, payrollAmount = 0 }: {
+    mutationFn: async ({ installmentId, advanceId, paidAmount, payrollAmount = 0, paymentLedgerId }: {
       installmentId: string;
       advanceId: string;
       paidAmount: number;    // 0 = full skip; >0 = partial cash collected + rest deferred
       payrollAmount?: number; // >0 = partial deducted from payroll + rest deferred
+      paymentLedgerId?: string;
     }) => {
       const isPayrollPartial = payrollAmount > 0;
       const isPartial = !isPayrollPartial && paidAmount > 0;
       const status     = isPayrollPartial ? 'payroll_partial_skipped' : (isPartial ? 'partial_skipped' : 'skipped');
       const storedPaid = isPayrollPartial ? payrollAmount : paidAmount;
-      await sb.from('advance_installments').update({
-        status,
-        paid_amount: storedPaid,
-        payroll_id:  null,
-      }).eq('id', installmentId);
+      if (isPartial) {
+        const { error } = await sb.rpc('hrms_record_direct_emi_payment', {
+          p_installment_kind: 'advance', p_installment_id: installmentId,
+          p_payment_ledger_id: paymentLedgerId, p_amount: paidAmount,
+          p_status: 'partial_skipped',
+        });
+        if (error) throw error;
+      } else {
+        const { error } = await sb.from('advance_installments').update({
+          status, paid_amount: storedPaid, payroll_id: null,
+        }).eq('id', installmentId);
+        if (error) throw error;
+      }
 
       const { data: allInst } = await sb.from('advance_installments').select('*').eq('advance_id', advanceId);
       const arr = (allInst ?? []) as AdvanceInstallment[];
@@ -1241,7 +1302,7 @@ export function useDeleteLossDeduction() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await sb.from('loss_deductions').delete().eq('id', id);
+      const { error } = await sb.rpc('hrms_delete_with_reversal', { p_record_kind: 'loss_deduction', p_record_id: id });
       if (error) throw error;
     },
     onSuccess: () => {
