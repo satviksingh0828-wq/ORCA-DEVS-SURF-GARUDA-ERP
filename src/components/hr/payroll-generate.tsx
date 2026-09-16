@@ -1150,7 +1150,6 @@ export function PayrollGenerate() {
                     label="Basic"
                     v={
                       Number(existingPayroll.basic_salary) -
-                      Number(existingPayroll.extra_work_pay || 0) -
                       Number(existingPayroll.paid_leave_payout_amount || 0)
                     }
                   />
@@ -1189,7 +1188,6 @@ export function PayrollGenerate() {
                     label="Basic"
                     v={
                       Number(emp.basic_salary) * scale -
-                      preview.c.extraWorkPay -
                       preview.c.paidLeavePayout
                     }
                   />
