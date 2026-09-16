@@ -250,7 +250,9 @@ export function exportPayrollPdf(opts: {
   }
   if (paidLeavePayout > 0) earningsRows.push(['Paid leave payout', money(paidLeavePayout)]);
   if (paidLeaveFinalSettlement > 0) earningsRows.push(['Paid leave payout (final settlement)', money(paidLeaveFinalSettlement)]);
-  earningsRows.push(['Gross', money(Number(payroll.gross) + paidLeaveFinalSettlement)]);
+  const incentiveAmount = Number(payroll.incentive_amount) || 0;
+  if (incentiveAmount > 0) earningsRows.push(['One-time incentive', money(incentiveAmount)]);
+  earningsRows.push(['Gross', money(Number(payroll.gross) + paidLeaveFinalSettlement + incentiveAmount)]);
 
   autoTable(doc, {
     startY: bannerY,
