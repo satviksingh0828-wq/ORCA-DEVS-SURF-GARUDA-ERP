@@ -12,6 +12,8 @@ const FIELDS = [
   ["employee_loan_ledger_id", "Employee Loan", "asset"],
   ["incentive_ledger_id", "Incentive", "income-expenditure"],
   ["incentive_payable_ledger_id", "Incentive Payable", "liability"],
+  ["pf_ledger_id", "PF", "income-expenditure"],
+  ["tax_ledger_id", "Tax", "income-expenditure"],
   ["salary_deduction_ledger_id", "Salary Deduction", "income-expenditure"],
   ["loss_deduction_ledger_id", "Loss Deduction", "income-expenditure"],
   ["unpaid_leave_deduction_ledger_id", "Unpaid Leave Deduction", "income-expenditure"],
