@@ -53,7 +53,7 @@ const STATUS_LABEL: Record<string, { label: string; className: string }> = {
 
 /* ── Pay dialog ──────────────────────────────────────────────────────────── */
 function PayDialog({
-  payroll, employeeName, onConfirm, onClose,
+  payroll, employee, employeeName, onConfirm, onClose,
 }: {
   payroll: Payroll;
   employee: Employee | undefined;
