@@ -539,9 +539,8 @@ export function PayrollGenerate() {
     const pf = n(emp.pf_deduction) * halfF * c.joinLeaveFactor;
     const tax = n(emp.tax_deduction) * halfF * c.joinLeaveFactor;
     const totalDed = pf + tax + loanDed + advDed + lossDed + c.unpaidLeaveDeduction;
-    // c.gross already includes payable paid-leave and extra-work dates.
-    // Add only final settlement and incentive, which are outside c.gross.
-    const net = c.gross + c.paidLeaveFinalSettlement + incentiveAmount - totalDed;
+    // Extra-work payout is a separate earning and must be included in net pay.
+    const net = c.gross + c.extraWorkPay + c.paidLeaveFinalSettlement + incentiveAmount - totalDed;
 
     return { c, loanDed, advDed, lossDed, incentiveAmount, pf, tax, net };
   }, [
@@ -1150,7 +1149,6 @@ export function PayrollGenerate() {
                     label="Basic"
                     v={
                       Number(existingPayroll.basic_salary) -
-                      Number(existingPayroll.extra_work_pay || 0) -
                       Number(existingPayroll.paid_leave_payout_amount || 0)
                     }
                   />
@@ -1189,7 +1187,6 @@ export function PayrollGenerate() {
                     label="Basic"
                     v={
                       Number(emp.basic_salary) * scale -
-                      preview.c.extraWorkPay -
                       preview.c.paidLeavePayout
                     }
                   />
