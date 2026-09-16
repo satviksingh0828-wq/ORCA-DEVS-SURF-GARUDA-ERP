@@ -623,10 +623,6 @@ function LoanRow({
                                 )}
                                 {isPartial && (
                                   <>
-                                    <Button size="sm" variant="ghost" className="h-6 px-2 text-xs"
-                                      onClick={() => handleMarkInstallmentPaid(inst)}>
-                                      Mark fully paid
-                                    </Button>
                                     <Button size="sm" variant="ghost" className="h-6 px-2 text-xs text-amber-700"
                                       onClick={() => { setPartialInstId(inst.id); setPartialAmt(String(inst.paid_amount || '')); setSkipInstId(null); }}>
                                       Edit partial
@@ -689,8 +685,8 @@ function LoanForm({ mode, employees, onDone, onCreate }: {
 }) {
   const [employeeId, setEmployeeId] = useState('');
   const [principal, setPrincipal]   = useState('0');
-  const [rate, setRate]             = useState('0');
-  const [method, setMethod]         = useState<InterestMethod>('none');
+  const [rate]                      = useState('0');
+  const [method] = useState<InterestMethod>('none');
   const [months, setMonths]         = useState('1');
   const [start, setStart]           = useState(ymd(new Date()));
   const [notes, setNotes]           = useState('');
@@ -796,18 +792,6 @@ function LoanForm({ mode, employees, onDone, onCreate }: {
         <div className="grid gap-3 sm:grid-cols-2">
           <div className="space-y-1"><Label>Principal</Label><Input type="number" value={principal} onChange={e => setPrincipal(e.target.value)} /></div>
           <div className="space-y-1"><Label>Months</Label><Input type="number" value={months} onChange={e => setMonths(e.target.value)} /></div>
-          <div className="space-y-1"><Label>Interest rate (% p.a.)</Label><Input type="number" value={rate} onChange={e => setRate(e.target.value)} /></div>
-          <div className="space-y-1">
-            <Label>Interest method</Label>
-            <Select value={method} onValueChange={v => setMethod(v as InterestMethod)}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No interest</SelectItem>
-                <SelectItem value="simple">Simple</SelectItem>
-                <SelectItem value="compound">Compound (amortized)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
           <div className="space-y-1 sm:col-span-2">
             <Label>Start date (first EMI due this month)</Label>
             <Input type="date" min={minStart} value={start} onChange={e => setStart(e.target.value)} />
