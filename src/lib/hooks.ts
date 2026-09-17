@@ -673,16 +673,25 @@ export function useCreateLoan() {
           p_description: 'Loan given',
           p_disbursement_ledger_id: loan.disbursement_ledger_id,
         };
-        let { error: accountingError } = await sb.rpc('hrms_queue_event', accountingArgs);
+        let { data: queueId, error: accountingError } = await sb.rpc('hrms_queue_event', accountingArgs);
         // Older deployments expose the original six-argument RPC without the
         // explicit disbursement-ledger parameter; retain compatibility there.
         if (accountingError) {
           const legacyArgs = { ...accountingArgs };
           delete (legacyArgs as { p_disbursement_ledger_id?: string | null }).p_disbursement_ledger_id;
           const legacyResult = await sb.rpc('hrms_queue_event', legacyArgs);
+          queueId = legacyResult.data;
           accountingError = legacyResult.error;
         }
         if (accountingError) throw accountingError;
+        const { data: queue } = await sb.from('hrms_accounting_queue').select('id,status,journal_entry_id').eq('event_type', accountingArgs.p_event_type).eq('source_id', accountingArgs.p_source_id).maybeSingle();
+        const pendingQueueId = queue?.id ?? queueId;
+        if (pendingQueueId && queue?.status !== 'posted') {
+          const { error: postError } = await sb.rpc('post_hrms_accounting_queue_item', { p_queue_id: pendingQueueId });
+          if (postError) throw postError;
+        }
+        const { data: postedQueue } = await sb.from('hrms_accounting_queue').select('status,journal_entry_id').eq('event_type', accountingArgs.p_event_type).eq('source_id', accountingArgs.p_source_id).maybeSingle();
+        if (postedQueue?.status !== 'posted' || !postedQueue.journal_entry_id) throw new Error(`${accountingArgs.p_description} was created, but its journal entry was not posted. Check HRMS accounting rules and ledger mappings.`);
       }
       return loan;
     },
@@ -768,16 +777,25 @@ export function useCreateAdvance() {
           p_description: 'Advance given',
           p_disbursement_ledger_id: advance.disbursement_ledger_id,
         };
-        let { error: accountingError } = await sb.rpc('hrms_queue_event', accountingArgs);
+        let { data: queueId, error: accountingError } = await sb.rpc('hrms_queue_event', accountingArgs);
         // Older deployments expose the original six-argument RPC without the
         // explicit disbursement-ledger parameter; retain compatibility there.
         if (accountingError) {
           const legacyArgs = { ...accountingArgs };
           delete (legacyArgs as { p_disbursement_ledger_id?: string | null }).p_disbursement_ledger_id;
           const legacyResult = await sb.rpc('hrms_queue_event', legacyArgs);
+          queueId = legacyResult.data;
           accountingError = legacyResult.error;
         }
         if (accountingError) throw accountingError;
+        const { data: queue } = await sb.from('hrms_accounting_queue').select('id,status,journal_entry_id').eq('event_type', accountingArgs.p_event_type).eq('source_id', accountingArgs.p_source_id).maybeSingle();
+        const pendingQueueId = queue?.id ?? queueId;
+        if (pendingQueueId && queue?.status !== 'posted') {
+          const { error: postError } = await sb.rpc('post_hrms_accounting_queue_item', { p_queue_id: pendingQueueId });
+          if (postError) throw postError;
+        }
+        const { data: postedQueue } = await sb.from('hrms_accounting_queue').select('status,journal_entry_id').eq('event_type', accountingArgs.p_event_type).eq('source_id', accountingArgs.p_source_id).maybeSingle();
+        if (postedQueue?.status !== 'posted' || !postedQueue.journal_entry_id) throw new Error(`${accountingArgs.p_description} was created, but its journal entry was not posted. Check HRMS accounting rules and ledger mappings.`);
       }
       return advance;
     },
