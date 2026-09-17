@@ -112,9 +112,10 @@ export function FinalAccountsRoute() {
       if (!account || !["income", "expenditure"].includes(account.ledger_type)) continue;
       const firstCapitalEntryDate = firstCapitalEntryDateByBranch.get(account.branch_id);
       if (!firstCapitalEntryDate || posting.entry_date < firstCapitalEntryDate) continue;
-      const result = account.ledger_type === "income"
-        ? amount(posting.credit) - amount(posting.debit)
-        : amount(posting.debit) - amount(posting.credit);
+      // Normalize both account types to the P&L sign convention: income is
+      // positive and expenditure is negative, so the result is income minus
+      // expenditure (not the sum of their absolute balances).
+      const result = amount(posting.credit) - amount(posting.debit);
       profitLossByBranch.set(account.branch_id, (profitLossByBranch.get(account.branch_id) ?? 0) + result);
     }
     for (const account of accounts) {
