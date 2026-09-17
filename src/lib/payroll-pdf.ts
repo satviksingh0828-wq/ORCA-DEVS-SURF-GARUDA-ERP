@@ -12,6 +12,7 @@ function money(n: number) {
 
 function correctedPayrollNet(payroll: Payroll) {
   const earnings = Number(payroll.gross || 0)
+    + Number(payroll.extra_work_pay || 0)
     + Number(payroll.paid_leave_final_settlement_amount || 0)
     + Number(payroll.incentive_amount || 0);
   const deductions = Number(payroll.pf_deduction || 0)

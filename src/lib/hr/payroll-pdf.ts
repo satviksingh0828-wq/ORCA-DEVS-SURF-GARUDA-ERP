@@ -322,7 +322,7 @@ export function exportPayrollPdf(opts: {
   }
 
   // ── Net payable ────────────────────────────────────────────────────────────
-  const net = Number(payroll.net) + extraWorkPay;
+  const net = Number(payroll.net);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
@@ -464,7 +464,7 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
     y3 = (doc as any).lastAutoTable?.finalY ?? y2 + 40;
   }
 
-  const net = Number(payroll.net) + extraWorkPay;
+  const net = Number(payroll.net);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   if (net < 0) {
