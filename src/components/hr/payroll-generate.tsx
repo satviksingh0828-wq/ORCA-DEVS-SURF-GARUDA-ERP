@@ -356,10 +356,10 @@ export function PayrollGenerate() {
 
   const outsideEmployment = useMemo(() => {
     if (!emp) return null as null | string;
-    const j = new Date(emp.joining_date);
+    const j = parseYmd(emp.joining_date);
     if (period.to < j) return "Employee had not joined during this period";
     if (emp.date_of_leaving) {
-      const l = new Date(emp.date_of_leaving);
+      const l = parseYmd(emp.date_of_leaving);
       if (period.from > l) return "Employee had already left before this period";
     }
     return null;
@@ -367,13 +367,13 @@ export function PayrollGenerate() {
 
   const isJoiningPeriod = useMemo(() => {
     if (!emp) return false;
-    const j = new Date(emp.joining_date);
+    const j = parseYmd(emp.joining_date);
     return j >= period.from && j <= period.to;
   }, [emp, period]);
 
   const isLeavingPeriod = useMemo(() => {
     if (!emp || !emp.date_of_leaving) return false;
-    const l = new Date(emp.date_of_leaving);
+    const l = parseYmd(emp.date_of_leaving);
     return l >= period.from && l <= period.to;
   }, [emp, period]);
 
