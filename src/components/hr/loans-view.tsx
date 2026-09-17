@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Banknote, HandCoins, Plus, CheckCircle2, Trash2, Download, ChevronDown, ChevronRight, FileText, AlertCircle, SplitSquareHorizontal, SkipForward, MessageCircle } from 'lucide-react';
+import { Banknote, HandCoins, Plus, CheckCircle2, Trash2, Download, ChevronDown, ChevronRight, FileText, SplitSquareHorizontal, SkipForward, MessageCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -386,11 +386,6 @@ function LoanRow({
           </div>
         </button>
         <div className="text-right text-xs"><div className="font-semibold">{money(trulyRemaining)}</div><div className="text-muted-foreground">left</div></div>
-        {l.status === 'active' && (
-          <Button size="sm" variant="outline" onClick={onPayToggle}>
-            <CheckCircle2 className="mr-1 h-3 w-3" />Mark fully paid
-          </Button>
-        )}
         <Button size="sm" variant="ghost" onClick={onDelete}><Trash2 className="h-3 w-3" /></Button>
       </div>
 
@@ -634,15 +629,6 @@ function LoanRow({
                                     onClick={() => { const mode = isPayrollSkip ? 'payroll' : (isPartSkip ? 'cash' : 'skip'); setSkipInstId(inst.id); setSkipAmt(String(inst.paid_amount || '')); setSkipMode(mode); setPartialInstId(null); }}>
                                     Edit skip
                                   </Button>
-                                )}
-                                {!isPartial && !isSkipped && !isPartSkip && !isPayrollSkip && wasPayroll && (
-                                  <button
-                                    className="flex items-center gap-1 text-amber-600 dark:text-amber-400 hover:underline text-xs"
-                                    onClick={() => handleMarkInstallmentPaid(inst)}
-                                    title="Override: mark as paid directly (payroll deduction should be undone)"
-                                  >
-                                    <AlertCircle className="h-3 w-3" />Override
-                                  </button>
                                 )}
                                 {inst.status !== 'pending' && (
                                   <button
