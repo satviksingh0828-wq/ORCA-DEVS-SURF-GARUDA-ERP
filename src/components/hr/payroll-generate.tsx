@@ -1056,7 +1056,7 @@ export function PayrollGenerate() {
                   {Math.round(preview.c.joinLeaveFactor * 100)}%)
                 </div>
               )}
-              {isLeavingPeriod && !outsideEmployment && !alreadyGenerated && (
+              {isLeavingPeriod && !outsideEmployment && (
                 <div className="mt-2 max-w-sm rounded-md border border-amber-300 bg-amber-50/60 p-2 text-xs text-amber-900 dark:border-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
                   <Label htmlFor="final-settlement-rate" className="font-medium">
                     Final settlement rate per paid leave
