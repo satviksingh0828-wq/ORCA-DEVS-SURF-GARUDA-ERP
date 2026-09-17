@@ -97,9 +97,8 @@ export function FinalAccountsRoute() {
     const totals = new Map<string, ReportRow>();
     const profitLossByBranch = new Map<string, number>();
     for (const posting of postings) {
-      // Balance Sheet has only an end date, so use the same P&L period
-      // convention as the P&L tab: the current financial year through asOf.
-      if (posting.entry_date < firstDayOfYear || posting.entry_date > asOf) continue;
+      // Balance Sheet has only an end date: include all approved postings up to it.
+      if (posting.entry_date > asOf) continue;
       const account = accountById.get(posting.ledger_account_id);
       if (!account || !["income", "expenditure"].includes(account.ledger_type)) continue;
       const result = account.ledger_type === "income"
