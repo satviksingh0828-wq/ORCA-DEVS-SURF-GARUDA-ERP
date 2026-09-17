@@ -97,7 +97,9 @@ export function FinalAccountsRoute() {
     const totals = new Map<string, ReportRow>();
     const profitLossByBranch = new Map<string, number>();
     for (const posting of postings) {
-      if (posting.entry_date > asOf) continue;
+      // Balance Sheet has only an end date, so use the same P&L period
+      // convention as the P&L tab: the current financial year through asOf.
+      if (posting.entry_date < firstDayOfYear || posting.entry_date > asOf) continue;
       const account = accountById.get(posting.ledger_account_id);
       if (!account || !["income", "expenditure"].includes(account.ledger_type)) continue;
       const result = account.ledger_type === "income"
@@ -119,16 +121,17 @@ export function FinalAccountsRoute() {
       const displayAmount = Math.abs(net);
       if (displayAmount > 0.005) { current.amount = displayAmount; totals.set(account.id, { ...current, side }); }
     }
-    for (const [branchId, profitLoss] of profitLossByBranch) {
+    for (const [branchKey, profitLoss] of profitLossByBranch) {
+      if (branchId !== "all" && branchKey !== branchId) continue;
       if (Math.abs(profitLoss) <= 0.005) continue;
       // Keep the Capital ledger at its actual posted balance. Present the
       // period result separately so a loss is not incorrectly folded into
       // the Capital row's debit side.
       const resultDebit = profitLoss < 0 ? Math.abs(profitLoss) : 0;
       const resultCredit = profitLoss > 0 ? profitLoss : 0;
-      totals.set(`profit-loss-${branchId}`, {
-        branch_id: branchId,
-        account_id: `profit-loss-${branchId}`,
+      totals.set(`profit-loss-${branchKey}`, {
+        branch_id: branchKey,
+        account_id: `profit-loss-${branchKey}`,
         account_name: profitLoss < 0 ? "Net Loss" : "Net Profit",
         ledger_type: "capital",
         amount: Math.abs(profitLoss),
