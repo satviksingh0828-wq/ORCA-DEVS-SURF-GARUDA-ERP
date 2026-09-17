@@ -95,6 +95,28 @@ export function FinalAccountsRoute() {
   const inScope = (id: string) => branchId === "all" || accountById.get(id)?.branch_id === branchId;
   const balanceRows = useMemo(() => {
     const totals = new Map<string, ReportRow>();
+    const firstCapitalEntryDateByBranch = new Map<string, string>();
+    const profitLossByBranch = new Map<string, number>();
+    for (const posting of postings) {
+      if (posting.entry_date > asOf) continue;
+      const account = accountById.get(posting.ledger_account_id);
+      if (!account || account.ledger_type !== "capital") continue;
+      const firstDate = firstCapitalEntryDateByBranch.get(account.branch_id);
+      if (!firstDate || posting.entry_date < firstDate) {
+        firstCapitalEntryDateByBranch.set(account.branch_id, posting.entry_date);
+      }
+    }
+    for (const posting of postings) {
+      if (posting.entry_date > asOf) continue;
+      const account = accountById.get(posting.ledger_account_id);
+      if (!account || !["income", "expenditure"].includes(account.ledger_type)) continue;
+      const firstCapitalEntryDate = firstCapitalEntryDateByBranch.get(account.branch_id);
+      if (!firstCapitalEntryDate || posting.entry_date < firstCapitalEntryDate) continue;
+      const result = account.ledger_type === "income"
+        ? amount(posting.credit) - amount(posting.debit)
+        : amount(posting.debit) - amount(posting.credit);
+      profitLossByBranch.set(account.branch_id, (profitLossByBranch.get(account.branch_id) ?? 0) + result);
+    }
     for (const account of accounts) {
       if (branchId !== "all" && account.branch_id !== branchId) continue;
       const isBalanceType = ["asset", "bank", "cash", "liability", "capital"].includes(account.ledger_type);
@@ -108,6 +130,21 @@ export function FinalAccountsRoute() {
       const side = net >= 0 ? "Dr" : "Cr";
       const displayAmount = Math.abs(net);
       if (displayAmount > 0.005) { current.amount = displayAmount; totals.set(account.id, { ...current, side }); }
+    }
+    for (const [branchKey, profitLoss] of profitLossByBranch) {
+      if (branchId !== "all" && branchKey !== branchId) continue;
+      if (Math.abs(profitLoss) <= 0.005) continue;
+      const branchName = branchById.get(branchKey)?.branch_name ?? "Branch";
+      totals.set(`retained-earning-${branchKey}`, {
+        branch_id: branchKey,
+        account_id: `retained-earning-${branchKey}`,
+        account_name: `Retained Earning - ${branchName}`,
+        ledger_type: "capital",
+        amount: Math.abs(profitLoss),
+        debit: profitLoss < 0 ? Math.abs(profitLoss) : 0,
+        credit: profitLoss > 0 ? profitLoss : 0,
+        side: profitLoss < 0 ? "Dr" : "Cr",
+      });
     }
     return [...totals.values()].sort((a, b) => `${branchById.get(a.branch_id)?.branch_name}-${a.account_name}`.localeCompare(`${branchById.get(b.branch_id)?.branch_name}-${b.account_name}`));
   }, [accountById, accounts, asOf, branchId, branchById, postings]);
