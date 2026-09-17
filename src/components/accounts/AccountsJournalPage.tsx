@@ -447,9 +447,14 @@ function JournalPage() {
 
   async function exportPdf(entry: Entry) {
     const rows = (entry.lines ?? []).map((line) => [
+      entry.voucher_number,
+      entry.entry_date,
+      branchMap.get(entry.branch_id) ?? "—",
+      entry.description ?? "—",
+      entry.source_module,
       line.ledger_account?.account_name ?? "—",
       line.ledger_account?.ledger_type ?? "—",
-      line.line_description ?? entry.description,
+      line.line_description ?? "—",
       amount(line.debit) ? pdfAmount(line.debit) : "—",
       amount(line.credit) ? pdfAmount(line.credit) : "—",
     ]);
@@ -458,7 +463,18 @@ function JournalPage() {
       subtitle: `${branchMap.get(entry.branch_id) ?? "Branch"} · ${entry.entry_date} · ${entry.description}`,
       filename: `${entry.voucher_number}.pdf`,
       orientation: "landscape",
-      columns: ["Account", "Type", "Description", "Debit", "Credit"],
+      columns: [
+        "Voucher",
+        "Date",
+        "Branch",
+        "Description",
+        "Source",
+        "Account",
+        "Type",
+        "Line Description",
+        "Debit",
+        "Credit",
+      ],
       rows,
       summary: [
         ["Total debit", pdfAmount(totalFor(entry, "debit"))],
