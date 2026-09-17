@@ -10,20 +10,6 @@ function money(n: number) {
   return 'Rs. ' + v.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-function correctedPayrollNet(payroll: Payroll) {
-  const earnings = Number(payroll.gross || 0)
-    + Number(payroll.extra_work_pay || 0)
-    + Number(payroll.paid_leave_final_settlement_amount || 0)
-    + Number(payroll.incentive_amount || 0);
-  const deductions = Number(payroll.pf_deduction || 0)
-    + Number(payroll.tax_deduction || 0)
-    + Number(payroll.unpaid_leave_deduction || 0)
-    + Number(payroll.loan_deduction || 0)
-    + Number(payroll.advance_deduction || 0)
-    + Number(payroll.loss_deduction || 0);
-  return earnings - deductions;
-}
-
 function downloadPdf(doc: jsPDF, filename: string) {
   const blob = doc.output('blob');
   const url = URL.createObjectURL(blob);
@@ -342,7 +328,7 @@ export function exportPayrollPdf(opts: {
   }
 
   // ── Net payable ────────────────────────────────────────────────────────────
-  const net = correctedPayrollNet(payroll);
+  const net = Number(payroll.net || 0) + Number(payroll.extra_work_pay || 0);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
@@ -493,7 +479,7 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
     y3 = (doc as any).lastAutoTable?.finalY ?? y2 + 40;
   }
 
-  const net = correctedPayrollNet(payroll);
+  const net = Number(payroll.net || 0) + Number(payroll.extra_work_pay || 0);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
   if (net < 0) {
