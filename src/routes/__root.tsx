@@ -228,8 +228,8 @@ function OrcaAIPanelMount() {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
-  const [showEntrySplash, setShowEntrySplash] = useState(false);
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const [showEntrySplash, setShowEntrySplash] = useState(pathname === "/");
   useEffect(() => {
     setShowEntrySplash(pathname === "/");
   }, [pathname]);
