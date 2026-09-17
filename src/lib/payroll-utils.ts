@@ -9,6 +9,20 @@ import type {
 } from "./types.ts";
 import { countWorkingDays, isWorkingDay, parseYmd, ymd } from "./attendance-utils.ts";
 
+export function calculatePayrollNet(payroll: Pick<Payroll, "gross" | "extra_work_pay" | "paid_leave_final_settlement_amount" | "incentive_amount" | "pf_deduction" | "tax_deduction" | "unpaid_leave_deduction" | "loan_deduction" | "advance_deduction" | "loss_deduction">): number {
+  const earnings = Number(payroll.gross || 0)
+    + Number(payroll.extra_work_pay || 0)
+    + Number(payroll.paid_leave_final_settlement_amount || 0)
+    + Number(payroll.incentive_amount || 0);
+  const deductions = Number(payroll.pf_deduction || 0)
+    + Number(payroll.tax_deduction || 0)
+    + Number(payroll.unpaid_leave_deduction || 0)
+    + Number(payroll.loan_deduction || 0)
+    + Number(payroll.advance_deduction || 0)
+    + Number(payroll.loss_deduction || 0);
+  return earnings - deductions;
+}
+
 export function computeEMI(
   principal: number,
   ratePct: number,

@@ -44,7 +44,7 @@ import type {
   LoanInstallment,
   AdvanceInstallment,
 } from "@/lib/types";
-import { computePayroll, halfMonthPeriods, monthPeriod, loanRemaining } from "@/lib/payroll-utils";
+import { calculatePayrollNet, computePayroll, halfMonthPeriods, monthPeriod, loanRemaining } from "@/lib/payroll-utils";
 import { supabase } from "@/integrations/supabase/client";
 import { ymd, parseYmd } from "@/lib/attendance-utils";
 import { exportPayrollPdf, getPayrollPdfBase64 } from "@/lib/payroll-pdf";
@@ -57,22 +57,6 @@ function money(n: number) {
     "₹" +
     (Number(n) || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
   );
-}
-
-function correctedPayrollNet(payroll: Payroll) {
-  const earnings =
-    Number(payroll.gross || 0) +
-    Number(payroll.extra_work_pay || 0) +
-    Number(payroll.paid_leave_final_settlement_amount || 0) +
-    Number(payroll.incentive_amount || 0);
-  const deductions =
-    Number(payroll.pf_deduction || 0) +
-    Number(payroll.tax_deduction || 0) +
-    Number(payroll.unpaid_leave_deduction || 0) +
-    Number(payroll.loan_deduction || 0) +
-    Number(payroll.advance_deduction || 0) +
-    Number(payroll.loss_deduction || 0);
-  return earnings - deductions;
 }
 
 const PAYMENT_STATUS_LABEL: Record<string, { label: string; className: string }> = {
@@ -1239,7 +1223,7 @@ export function PayrollGenerate() {
                     className={`mt-2 flex justify-between border-t pt-2 text-sm font-semibold ${Number(existingPayroll.net) < 0 ? "text-destructive" : ""}`}
                   >
                     <span>Net</span>
-                    <span>{money(correctedPayrollNet(existingPayroll))}</span>
+                    <span>{money(calculatePayrollNet(existingPayroll))}</span>
                   </div>
                 </>
               ) : (

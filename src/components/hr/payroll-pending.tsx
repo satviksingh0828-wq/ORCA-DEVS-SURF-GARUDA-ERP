@@ -23,24 +23,11 @@ import { supabase } from '@/integrations/supabase/client';
 import { ymd } from '@/lib/attendance-utils';
 import { exportPendingPayrolls } from '@/lib/excel-io';
 import { exportPayrollPdf, getPayrollPdfBase64 } from '@/lib/payroll-pdf';
+import { calculatePayrollNet } from '@/lib/payroll-utils';
 import { isWaConnected, sendWaPdf, sendWaMessage, normalizeWaNumber } from '@/lib/whatsapp';
 
 function money(n: number) {
   return '₹' + (Number(n) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
-function correctedPayrollNet(payroll: Payroll) {
-  const earnings = Number(payroll.gross || 0)
-    + Number(payroll.extra_work_pay || 0)
-    + Number(payroll.paid_leave_final_settlement_amount || 0)
-    + Number(payroll.incentive_amount || 0);
-  const deductions = Number(payroll.pf_deduction || 0)
-    + Number(payroll.tax_deduction || 0)
-    + Number(payroll.unpaid_leave_deduction || 0)
-    + Number(payroll.loan_deduction || 0)
-    + Number(payroll.advance_deduction || 0)
-    + Number(payroll.loss_deduction || 0);
-  return earnings - deductions;
 }
 
 type SortField = 'date' | 'period' | 'net';
@@ -62,7 +49,7 @@ function PayDialog({
   onClose: () => void;
 }) {
   const ps       = effectivePaymentStatus(payroll);
-  const net      = correctedPayrollNet(payroll);
+  const net      = calculatePayrollNet(payroll);
   const alreadyPaid = ps === 'partial_paid' ? Number(payroll.payment_amount || 0) : 0;
   const remaining   = Math.max(0, net - alreadyPaid);
 
@@ -206,7 +193,7 @@ function CalculationDialog({ payroll, employee, onClose }: { payroll: Payroll; e
           </div>
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Earnings</div><Row label="Basic salary" value={n(payroll.basic_salary) - paidLeavePayout} /><Row label="HRA" value={n(payroll.hra)} /><Row label="Travel allowance" value={n(payroll.travel_allowance)} /><Row label="Special allowance" value={n(payroll.special_allowance)} /><Row label="Other allowance" value={n(payroll.other_allowance)} /><Row label="Extra Work Day Payout" value={extraWorkPayout} /><Row label="Paid Leave Payout" value={paidLeavePayoutTotal} /><Row label="Pending incentive" value={incentive} /><Row label="Total earnings" value={totalEarnings} className="font-semibold" /></div>
           <div className="rounded-lg border p-3"><div className="mb-1 font-semibold">Deductions</div><Row label="Unpaid Leave Deduction" value={n(payroll.unpaid_leave_deduction)} /><div className="mb-1 text-xs text-muted-foreground">{n(payroll.unpaid_leaves)} unpaid leave day(s) × calendar-day rate</div><Row label="PF" value={n(payroll.pf_deduction)} /><Row label="Tax" value={n(payroll.tax_deduction)} /><Row label="Loan EMI" value={n(payroll.loan_deduction)} /><Row label="Advance EMI" value={n(payroll.advance_deduction)} /><Row label="Loss deduction" value={n(payroll.loss_deduction)} /><Row label="Total deductions" value={totalDeductions} className="font-semibold text-destructive" /></div>
-          <div className="rounded-lg border bg-muted/30 p-3"><div className="mb-1 font-semibold">Final calculation</div><p className="text-sm">{money(totalEarnings)} earnings − {money(totalDeductions)} deductions</p><div className={`mt-3 flex justify-between border-t pt-3 text-lg font-bold ${correctedPayrollNet(payroll) < 0 ? 'text-destructive' : ''}`}><span>Net salary</span><span>{money(correctedPayrollNet(payroll))}</span></div></div>
+          <div className="rounded-lg border bg-muted/30 p-3"><div className="mb-1 font-semibold">Final calculation</div><p className="text-sm">{money(totalEarnings)} earnings − {money(totalDeductions)} deductions</p><div className={`mt-3 flex justify-between border-t pt-3 text-lg font-bold ${calculatePayrollNet(payroll) < 0 ? 'text-destructive' : ''}`}><span>Net salary</span><span>{money(calculatePayrollNet(payroll))}</span></div></div>
         </div>
       </div>
     </div>
@@ -240,7 +227,7 @@ function DetailPanel({
     : null;
 
   const ps         = effectivePaymentStatus(payroll);
-  const net        = correctedPayrollNet(payroll);
+  const net        = calculatePayrollNet(payroll);
   const paidAmt    = Number(payroll.payment_amount || 0);
   const outstanding = ps === 'partial_paid' ? Math.max(0, net - paidAmt) : net;
   const gross       = Number(payroll.gross) + Number(payroll.extra_work_pay || 0) + Number(payroll.paid_leave_final_settlement_amount || 0) + Number(payroll.incentive_amount || 0);
@@ -477,7 +464,7 @@ export function PayrollPending() {
 
   const totals = useMemo(() => ({
     count:   filtered.length,
-    total:   filtered.reduce((s, p) => s + correctedPayrollNet(p), 0),
+    total:   filtered.reduce((s, p) => s + calculatePayrollNet(p), 0),
     partial: filtered.filter(p => effectivePaymentStatus(p) === 'partial_paid').length,
   }), [filtered]);
 
@@ -645,7 +632,7 @@ export function PayrollPending() {
                       Number(p.loan_deduction) + Number(p.advance_deduction) +
                       Number(p.loss_deduction) + Number(p.unpaid_leave_deduction);
                     const partialPaid  = status === 'partial_paid' && p.payment_amount != null;
-                    const correctedNet = correctedPayrollNet(p);
+                    const correctedNet = calculatePayrollNet(p);
                     const outstanding  = partialPaid
                       ? Math.max(0, correctedNet - Number(p.payment_amount))
                       : correctedNet;
@@ -676,7 +663,7 @@ export function PayrollPending() {
                             {money(outstanding)}
                             {partialPaid && (
                               <div className="text-xs text-muted-foreground font-normal">
-                                of {money(correctedPayrollNet(p))} total
+                                of {money(calculatePayrollNet(p))} total
                               </div>
                             )}
                           </td>
