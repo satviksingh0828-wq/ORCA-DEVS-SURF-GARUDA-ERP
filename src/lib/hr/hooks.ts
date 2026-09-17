@@ -575,7 +575,12 @@ export function useDeletePayroll() {
       }
 
       // 4. Return one-time incentives consumed by this payroll to pending.
-      await sb.from('incentive_amounts').update({ status: 'pending', payroll_id: null, added_on: null }).eq('payroll_id', id).eq('status', 'added');
+      const { error: incentiveError } = await sb
+        .from('incentive_amounts')
+        .update({ status: 'pending', payroll_id: null, added_on: null })
+        .eq('payroll_id', id)
+        .eq('status', 'added');
+      if (incentiveError) throw incentiveError;
       // 5. Delete the payroll
       const { error } = await sb.from('payrolls').delete().eq('id', id);
       if (error) throw error;
@@ -587,6 +592,7 @@ export function useDeletePayroll() {
       qc.invalidateQueries({ queryKey: ['loans'] });
       qc.invalidateQueries({ queryKey: ['advances'] });
       qc.invalidateQueries({ queryKey: ['loss_deductions'] });
+      qc.invalidateQueries({ queryKey: ['incentive_amounts'] });
       qc.invalidateQueries({ queryKey: ['loan_installments'] });
       qc.invalidateQueries({ queryKey: ['advance_installments'] });
     },
