@@ -3,27 +3,9 @@ import { useEffect, useState } from "react";
 // Splash screen — fully self-contained, independent of app theme.
 // Shows for ~1.5 s then fades out before unmounting.
 export function SplashScreen({ onComplete }: { onComplete?: () => void } = {}) {
-  const [phase, setPhase] = useState<"visible" | "fading" | "gone">(() => {
-    if (typeof window === "undefined") return "visible";
-    try {
-      return window.sessionStorage.getItem("sparrow-orca-splash-shown") === "1"
-        ? "gone"
-        : "visible";
-    } catch {
-      return "visible";
-    }
-  });
+  const [phase, setPhase] = useState<"visible" | "fading" | "gone">("visible");
 
   useEffect(() => {
-    try {
-      if (window.sessionStorage.getItem("sparrow-orca-splash-shown") === "1") {
-        onComplete?.();
-        return;
-      }
-      window.sessionStorage.setItem("sparrow-orca-splash-shown", "1");
-    } catch {
-      // Storage may be unavailable; the splash still remains mount-scoped.
-    }
     // Animation fully completes ~2.25 s (caption: delay 1.55s + 0.7s duration).
     // Wait 0.2 s after that, then fade out over 0.4 s.
     const fadeTimer = setTimeout(() => setPhase("fading"), 2450);

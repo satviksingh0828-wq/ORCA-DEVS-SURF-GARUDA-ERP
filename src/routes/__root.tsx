@@ -5,6 +5,7 @@ import {
   Link,
   createRootRouteWithContext,
   useRouter,
+  useRouterState,
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
@@ -228,15 +229,10 @@ function OrcaAIPanelMount() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const [showEntrySplash, setShowEntrySplash] = useState(false);
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   useEffect(() => {
-    if (window.location.pathname !== "/") return;
-    try {
-      if (window.sessionStorage.getItem("sparrow-orca-splash-shown") === "1") return;
-    } catch {
-      // Storage may be unavailable; allow the root entry splash to mount.
-    }
-    setShowEntrySplash(true);
-  }, []);
+    setShowEntrySplash(pathname === "/");
+  }, [pathname]);
   const persister = useMemo(
     () => (typeof window === "undefined" ? null : createIdbPersister()),
     [],
