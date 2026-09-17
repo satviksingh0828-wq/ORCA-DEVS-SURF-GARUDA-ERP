@@ -18,7 +18,18 @@ export function AttendanceHistoryList() {
   const { data: departments } = useDepartments();
   const { data: holidays } = useHolidays();
   const [period, setPeriod] = useState<typeof PERIODS[number]['value']>('month');
-  const { from, to, label: periodLabel } = computeRange(period);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const monthRange = useMemo(() => {
+    if (!selectedMonth) return null;
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const from = new Date(year, month - 1, 1);
+    const to = new Date(year, month, 0);
+    return { from, to, label: from.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }) };
+  }, [selectedMonth]);
+  const { from, to, label: periodLabel } = monthRange ?? computeRange(period);
   const { data: att } = useAllAttendance(ymd(from), ymd(to));
   const [search, setSearch] = useState('');
 
@@ -36,7 +47,7 @@ export function AttendanceHistoryList() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold sm:text-2xl">Attendance history</h1>
-        <div className="ml-auto flex flex-wrap items-center gap-2"><div className="flex gap-1">{(['day', 'week', 'month'] as const).map((value) => <button key={value} type="button" onClick={() => setPeriod(value)} className={cn('rounded-md border px-3 py-1.5 text-xs font-medium capitalize', period === value ? 'bg-foreground text-background border-foreground' : 'hover:bg-muted')}>{value}</button>)}</div><span className="text-xs text-muted-foreground">{periodLabel}</span></div>
+        <div className="ml-auto flex flex-wrap items-center gap-2"><div className="flex gap-1">{(['day', 'week', 'month'] as const).map((value) => <button key={value} type="button" onClick={() => { setSelectedMonth(''); setPeriod(value); }} className={cn('rounded-md border px-3 py-1.5 text-xs font-medium capitalize', !selectedMonth && period === value ? 'bg-foreground text-background border-foreground' : 'hover:bg-muted')}>{value}</button>)}</div><Input type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} className="h-8 w-36 text-xs" /><span className="text-xs text-muted-foreground">{periodLabel}</span></div>
       </div>
       <div className="relative max-w-xs">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -105,7 +116,17 @@ function computeRange(kind: typeof PERIODS[number]['value']): { from: Date; to: 
 
 export function EmployeeAttendanceDetail({ id }: { id: string }) {
   const [period, setPeriod] = useState<typeof PERIODS[number]['value']>('month');
-  const range = computeRange(period);
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+  });
+  const range = useMemo(() => {
+    if (!selectedMonth) return computeRange(period);
+    const [year, month] = selectedMonth.split('-').map(Number);
+    const from = new Date(year, month - 1, 1);
+    const to = new Date(year, month, 0);
+    return { from, to, label: from.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' }) };
+  }, [period, selectedMonth]);
   const { data: employee, isLoading: le } = useEmployee(id);
   const { data: departments } = useDepartments();
   const { data: holidays } = useHolidays();
@@ -180,8 +201,9 @@ export function EmployeeAttendanceDetail({ id }: { id: string }) {
 
       <div className="flex flex-wrap gap-2">
         {PERIODS.map(p => (
-          <button key={p.value} onClick={() => setPeriod(p.value)} className={cn('rounded-md border px-3 py-1.5 text-xs font-medium', period === p.value ? 'bg-foreground text-background border-foreground' : 'hover:bg-muted')}>{p.label}</button>
+          <button key={p.value} onClick={() => { setSelectedMonth(''); setPeriod(p.value); }} className={cn('rounded-md border px-3 py-1.5 text-xs font-medium', !selectedMonth && period === p.value ? 'bg-foreground text-background border-foreground' : 'hover:bg-muted')}>{p.label}</button>
         ))}
+        <Input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="h-8 w-36 text-xs" />
         <span className="ml-auto text-xs text-muted-foreground self-center">{range.label}</span>
       </div>
 
