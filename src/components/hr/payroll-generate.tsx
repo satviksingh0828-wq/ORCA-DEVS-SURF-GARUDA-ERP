@@ -62,6 +62,7 @@ function money(n: number) {
 function correctedPayrollNet(payroll: Payroll) {
   const earnings =
     Number(payroll.gross || 0) +
+    Number(payroll.extra_work_pay || 0) +
     Number(payroll.paid_leave_final_settlement_amount || 0) +
     Number(payroll.incentive_amount || 0);
   const deductions =
@@ -161,7 +162,10 @@ function GenerateCalculationDialog({
     Number(emp.other_allowance);
   const paidLeavePayout = preview.c.paidLeavePayout + preview.c.paidLeaveFinalSettlement;
   const totalEarnings =
-    preview.c.gross + preview.c.paidLeaveFinalSettlement + preview.incentiveAmount;
+    preview.c.gross +
+    preview.c.extraWorkPay +
+    preview.c.paidLeaveFinalSettlement +
+    preview.incentiveAmount;
   const totalDeductions =
     preview.pf +
     preview.tax +
@@ -1175,6 +1179,7 @@ export function PayrollGenerate() {
                     <span>
                       {money(
                         Number(existingPayroll.gross) +
+                          Number(existingPayroll.extra_work_pay || 0) +
                           Number(existingPayroll.paid_leave_final_settlement_amount || 0) +
                           Number(existingPayroll.incentive_amount || 0),
                       )}
@@ -1208,6 +1213,7 @@ export function PayrollGenerate() {
                     <span>
                       {money(
                         preview.c.gross +
+                          preview.c.extraWorkPay +
                           preview.c.paidLeaveFinalSettlement +
                           preview.incentiveAmount,
                       )}

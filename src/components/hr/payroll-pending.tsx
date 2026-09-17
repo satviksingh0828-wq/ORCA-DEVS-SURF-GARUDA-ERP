@@ -186,7 +186,7 @@ function CalculationDialog({ payroll, employee, onClose }: { payroll: Payroll; e
   const extraWorkPayout = n(payroll.extra_work_pay);
   const finalSettlement = n(payroll.paid_leave_final_settlement_amount);
   const paidLeavePayoutTotal = paidLeavePayout + finalSettlement;
-  const totalEarnings = n(payroll.gross) + finalSettlement + incentive;
+  const totalEarnings = n(payroll.gross) + extraWorkPayout + finalSettlement + incentive;
   const totalDeductions = n(payroll.pf_deduction) + n(payroll.tax_deduction) + n(payroll.unpaid_leave_deduction) + n(payroll.loan_deduction) + n(payroll.advance_deduction) + n(payroll.loss_deduction);
   const Row = ({ label, value, className = '' }: { label: string; value: number; className?: string }) => (
     <div className={`flex items-start justify-between gap-4 border-b py-2 last:border-0 ${className}`}>
