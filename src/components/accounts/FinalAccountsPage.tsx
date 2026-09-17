@@ -52,6 +52,12 @@ function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab
     return () => { layout.style.removeProperty("grid-template-columns"); };
   }, [sidebarOpen]);
   useEffect(() => { setHeaderTarget(document.querySelector("[data-app-shell-header-actions]")); }, []);
+  useEffect(() => {
+    const layout = sidebarRef.current?.parentElement?.parentElement;
+    if (!layout) return;
+    layout.style.gridTemplateColumns = sidebarOpen ? "250px 1fr" : "1fr";
+    return () => { layout.style.removeProperty("grid-template-columns"); };
+  }, [sidebarOpen]);
   const items = [
     { key: "trial-balance" as const, label: "Trial Balance", desc: "Debit and credit totals", icon: Scale },
     { key: "balance-sheet" as const, label: "Balance Sheet", desc: "Assets, liabilities and capital", icon: Scale },

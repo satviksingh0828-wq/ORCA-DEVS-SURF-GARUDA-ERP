@@ -72,7 +72,9 @@ export function AccountsSectionNav({
     const layout = sidebarRef.current?.parentElement;
     if (!layout) return;
     layout.style.gridTemplateColumns = sidebarOpen ? "220px 1fr" : "1fr";
-    return () => { layout.style.removeProperty("grid-template-columns"); };
+    const content = layout.children[1] as HTMLElement | undefined;
+    if (content) content.style.gridColumnStart = sidebarOpen ? "2" : "1";
+    return () => { layout.style.removeProperty("grid-template-columns"); if (content) content.style.removeProperty("grid-column-start"); };
   }, [desktop, sidebarOpen]);
   useEffect(() => { if (desktop) setHeaderTarget(document.querySelector("[data-app-shell-header-actions]")); }, [desktop]);
 
