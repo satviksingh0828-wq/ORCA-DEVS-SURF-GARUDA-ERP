@@ -16,6 +16,7 @@ DECLARE
   v_map public.hrms_account_ledger_mappings%rowtype;
   v_cash uuid;
   v_amount numeric := round(coalesce(p_amount, 0), 2);
+  v_entry uuid;
   v_ref text := 'hrms:payroll-paid:' || p_payroll.id::text || ':'
     || coalesce(p_payroll.payment_date, p_payroll.period_end)::text || ':'
     || v_amount::text;
