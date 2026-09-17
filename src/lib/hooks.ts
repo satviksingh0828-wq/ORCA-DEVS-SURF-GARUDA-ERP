@@ -654,6 +654,36 @@ export function useCreateLoan() {
         const inst: LoanInstallmentInput = { loan_id: loan.id, ...s, status: 'pending', payroll_id: null, paid_amount: 0 };
         await sb.from('loan_installments').insert(inst);
       }
+      // Keep the accounting invariant even when an older database has no insert trigger.
+      // The queue RPC is idempotent on (event_type, source_id), so this is safe when the
+      // database trigger has already queued/posted the same loan disbursement.
+      const { data: employee, error: employeeError } = await sb
+        .from('employees')
+        .select('accounting_branch_id')
+        .eq('id', loan.employee_id)
+        .single();
+      if (employeeError) throw employeeError;
+      if (employee?.accounting_branch_id) {
+        const accountingArgs = {
+          p_event_type: 'loan_given',
+          p_source_id: loan.id,
+          p_branch_id: employee.accounting_branch_id,
+          p_event_date: loan.start_date,
+          p_amount: loan.principal,
+          p_description: 'Loan given',
+          p_disbursement_ledger_id: loan.disbursement_ledger_id,
+        };
+        let { error: accountingError } = await sb.rpc('hrms_queue_event', accountingArgs);
+        // Older deployments expose the original six-argument RPC without the
+        // explicit disbursement-ledger parameter; retain compatibility there.
+        if (accountingError) {
+          const legacyArgs = { ...accountingArgs };
+          delete (legacyArgs as { p_disbursement_ledger_id?: string | null }).p_disbursement_ledger_id;
+          const legacyResult = await sb.rpc('hrms_queue_event', legacyArgs);
+          accountingError = legacyResult.error;
+        }
+        if (accountingError) throw accountingError;
+      }
       return loan;
     },
     onSuccess: () => {
