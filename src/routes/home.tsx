@@ -11,6 +11,7 @@ import {
   Truck,
   Users,
   Wallet,
+  UserRound,
 } from "lucide-react";
 import { toast } from "sonner";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -87,6 +88,15 @@ const BASIC_MODULES = [
     active: true,
     to: "/payroll" as const,
     roles: ["admin", "semi_admin", "viewer"] as const,
+  },
+  {
+    key: "hr-data",
+    label: "HR Data",
+    desc: "Your profile, attendance & payroll",
+    icon: UserRound,
+    active: true,
+    to: "/hr-data" as const,
+    roles: ["basic"] as const,
   },
   {
     key: "dashboard",

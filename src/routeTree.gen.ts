@@ -17,6 +17,7 @@ import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as EmployeesRouteImport } from './routes/employees'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as HrDashboardRouteImport } from './routes/hr-dashboard'
+import { Route as HrDataRouteImport } from './routes/hr-data'
 import { Route as HrmsRouteImport } from './routes/hrms'
 import { Route as ImportTripsRouteImport } from './routes/import-trips'
 import { Route as MastersRouteImport } from './routes/masters'
@@ -127,6 +128,11 @@ const HomeRoute = HomeRouteImport.update({
 const HrDashboardRoute = HrDashboardRouteImport.update({
   id: '/hr-dashboard',
   path: '/hr-dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HrDataRoute = HrDataRouteImport.update({
+  id: '/hr-data',
+  path: '/hr-data',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HrmsRoute = HrmsRouteImport.update({
@@ -503,6 +509,7 @@ export interface FileRoutesByFullPath {
   '/employees': typeof EmployeesRouteWithChildren
   '/home': typeof HomeRoute
   '/hr-dashboard': typeof HrDashboardRoute
+  '/hr-data': typeof HrDataRoute
   '/hrms': typeof HrmsRoute
   '/import-trips': typeof ImportTripsRoute
   '/masters': typeof MastersRoute
@@ -580,6 +587,7 @@ export interface FileRoutesByTo {
   '/cash-reports': typeof CashReportsRoute
   '/home': typeof HomeRoute
   '/hr-dashboard': typeof HrDashboardRoute
+  '/hr-data': typeof HrDataRoute
   '/hrms': typeof HrmsRoute
   '/import-trips': typeof ImportTripsRoute
   '/masters': typeof MastersRoute
@@ -658,6 +666,7 @@ export interface FileRoutesById {
   '/employees': typeof EmployeesRouteWithChildren
   '/home': typeof HomeRoute
   '/hr-dashboard': typeof HrDashboardRoute
+  '/hr-data': typeof HrDataRoute
   '/hrms': typeof HrmsRoute
   '/import-trips': typeof ImportTripsRoute
   '/masters': typeof MastersRoute
@@ -741,6 +750,7 @@ export interface FileRouteTypes {
     | '/employees'
     | '/home'
     | '/hr-dashboard'
+    | '/hr-data'
     | '/hrms'
     | '/import-trips'
     | '/masters'
@@ -818,6 +828,7 @@ export interface FileRouteTypes {
     | '/cash-reports'
     | '/home'
     | '/hr-dashboard'
+    | '/hr-data'
     | '/hrms'
     | '/import-trips'
     | '/masters'
@@ -895,6 +906,7 @@ export interface FileRouteTypes {
     | '/employees'
     | '/home'
     | '/hr-dashboard'
+    | '/hr-data'
     | '/hrms'
     | '/import-trips'
     | '/masters'
@@ -977,6 +989,7 @@ export interface RootRouteChildren {
   EmployeesRoute: typeof EmployeesRouteWithChildren
   HomeRoute: typeof HomeRoute
   HrDashboardRoute: typeof HrDashboardRoute
+  HrDataRoute: typeof HrDataRoute
   HrmsRoute: typeof HrmsRoute
   ImportTripsRoute: typeof ImportTripsRoute
   MastersRoute: typeof MastersRoute
@@ -1063,6 +1076,13 @@ declare module '@tanstack/react-router' {
       path: '/hr-dashboard'
       fullPath: '/hr-dashboard'
       preLoaderRoute: typeof HrDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hr-data': {
+      id: '/hr-data'
+      path: '/hr-data'
+      fullPath: '/hr-data'
+      preLoaderRoute: typeof HrDataRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/hrms': {
@@ -1747,6 +1767,7 @@ const rootRouteChildren: RootRouteChildren = {
   EmployeesRoute: EmployeesRouteWithChildren,
   HomeRoute: HomeRoute,
   HrDashboardRoute: HrDashboardRoute,
+  HrDataRoute: HrDataRoute,
   HrmsRoute: HrmsRoute,
   ImportTripsRoute: ImportTripsRoute,
   MastersRoute: MastersRoute,

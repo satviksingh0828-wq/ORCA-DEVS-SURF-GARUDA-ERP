@@ -17,8 +17,8 @@ export function AttendanceHistoryList() {
   const { data: employees, isLoading: le } = useEmployees();
   const { data: departments } = useDepartments();
   const { data: holidays } = useHolidays();
-  // month range for quick summary
-  const { from, to } = periodRange('month');
+  const [period, setPeriod] = useState<typeof PERIODS[number]['value']>('month');
+  const { from, to, label: periodLabel } = computeRange(period);
   const { data: att } = useAllAttendance(ymd(from), ymd(to));
   const [search, setSearch] = useState('');
 
@@ -36,7 +36,7 @@ export function AttendanceHistoryList() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-xl font-bold sm:text-2xl">Attendance history</h1>
-        <div className="ml-auto text-xs text-muted-foreground">Current month: {periodRange('month').label}</div>
+        <div className="ml-auto flex flex-wrap items-center gap-2"><div className="flex gap-1">{(['day', 'week', 'month'] as const).map((value) => <button key={value} type="button" onClick={() => setPeriod(value)} className={cn('rounded-md border px-3 py-1.5 text-xs font-medium capitalize', period === value ? 'bg-foreground text-background border-foreground' : 'hover:bg-muted')}>{value}</button>)}</div><span className="text-xs text-muted-foreground">{periodLabel}</span></div>
       </div>
       <div className="relative max-w-xs">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />

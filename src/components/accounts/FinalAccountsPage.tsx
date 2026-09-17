@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { BarChart3, FileDown, FileSpreadsheet, Loader2, PanelLeftClose, PanelLeftOpen, Scale } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Link } from "@tanstack/react-router";
@@ -42,6 +43,7 @@ const labelType = (value: AccountType) => value === "bank" ? "Bank" : value === 
 
 function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab) => void }) {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
   const sidebarRef = useRef<HTMLElement>(null);
   useEffect(() => {
     const layout = sidebarRef.current?.parentElement;
@@ -49,6 +51,7 @@ function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab
     layout.style.gridTemplateColumns = sidebarOpen ? "250px 1fr" : "1fr";
     return () => { layout.style.removeProperty("grid-template-columns"); };
   }, [sidebarOpen]);
+  useEffect(() => { setHeaderTarget(document.querySelector("[data-app-shell-header-actions]")); }, []);
   const items = [
     { key: "trial-balance" as const, label: "Trial Balance", desc: "Debit and credit totals", icon: Scale },
     { key: "balance-sheet" as const, label: "Balance Sheet", desc: "Assets, liabilities and capital", icon: Scale },
@@ -56,15 +59,17 @@ function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab
     { key: "cash-flow" as const, label: "Cash Flow", desc: "Cash and bank movements", icon: BarChart3 },
   ];
   return (
+    <>
     <nav ref={sidebarRef} aria-label="Final Accounts tabs" className="space-y-1">
       <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Final Accounts</p>
-      <button type="button" onClick={() => setSidebarOpen((open) => !open)} title={sidebarOpen ? "Hide sidebar" : "Show sidebar"} className="mb-3 flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground">{sidebarOpen ? <><PanelLeftClose className="size-3.5" /><span>Hide sidebar</span></> : <><PanelLeftOpen className="size-3.5" /><span>Show sidebar</span></>}</button>
       {sidebarOpen && items.map(({ key, label, desc, icon: Icon }) => (
         <button key={key} type="button" onClick={() => onTab(key)} aria-current={tab === key ? "page" : undefined} className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${tab === key ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}>
           <Icon className={`size-4 ${tab === key ? "text-primary" : ""}`} /><span><span className="block text-sm font-semibold">{label}</span><span className="block text-[11px] opacity-70">{desc}</span></span>
         </button>
       ))}
     </nav>
+    {headerTarget && createPortal(<button type="button" onClick={() => setSidebarOpen((open) => !open)} title={sidebarOpen ? "Hide sidebar" : "Show sidebar"} className="hidden items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex">{sidebarOpen ? <><PanelLeftClose className="size-3.5" /><span>Hide sidebar</span></> : <><PanelLeftOpen className="size-3.5" /><span>Show sidebar</span></>}</button>, headerTarget)}
+    </>
   );
 }
 
