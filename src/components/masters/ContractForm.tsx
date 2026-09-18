@@ -201,7 +201,11 @@ export function ContractForm({
     if (isInactive) return; // safety guard — UI shouldn't submit on inactive
     setSaving(true);
     const { id, ...rest } = form;
-    const payload = rest as never;
+    const payload = {
+      ...rest,
+      start_date: rest.start_date?.trim() || null,
+      end_date: rest.end_date?.trim() || null,
+    } as never;
     const res = id
       ? await supabase.from("contracts").update(payload).eq("id", id)
       : await (supabase as any).from("contracts").insert(payload).select("id").single();
