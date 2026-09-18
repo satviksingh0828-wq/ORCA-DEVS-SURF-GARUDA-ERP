@@ -5,6 +5,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { useBranches } from "@/lib/use-branches";
 
+// Generated database types predate the expanded TMS mapping columns.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 type Ledger = { id: string; account_name: string; ledger_type: string; account_kind: string };
 type Mapping = {
   branch_id: string;
@@ -18,6 +22,8 @@ type Mapping = {
   vehicle_insurance_expense_ledger_id?: string | null;
   vehicle_road_tax_advance_ledger_id?: string | null;
   vehicle_road_tax_expense_ledger_id?: string | null;
+  other_expenditure_ledger_id?: string | null;
+  other_expenditure_payable_ledger_id?: string | null;
 };
 
 const FIELDS = [
@@ -31,6 +37,8 @@ const FIELDS = [
   ["vehicle_insurance_expense_ledger_id", "Vehicle Insurance Expense", "expenditure"],
   ["vehicle_road_tax_advance_ledger_id", "Vehicle Road Tax Advance", "asset"],
   ["vehicle_road_tax_expense_ledger_id", "Vehicle Road Tax Expense", "expenditure"],
+  ["other_expenditure_ledger_id", "Other Expenditure", "expenditure"],
+  ["other_expenditure_payable_ledger_id", "Other Expenditure Payable", "liability"],
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number][0];
@@ -53,13 +61,13 @@ export function TMSAccountsSettings() {
     setLoading(true);
     try {
       const [ledgerResult, mappingResult] = await Promise.all([
-        supabase
+        db
           .from("ledger_accounts")
           .select("id,account_name,ledger_type,account_kind")
           .eq("branch_id", nextBranchId)
           .eq("is_active", true)
           .order("account_name"),
-        supabase
+        db
           .from("tms_account_ledger_mappings")
           .select("*")
           .eq("branch_id", nextBranchId)
@@ -93,7 +101,7 @@ export function TMSAccountsSettings() {
     if (!mapping || !branchId) return;
     setSaving(true);
     try {
-      const { error } = await supabase
+      const { error } = await db
         .from("tms_account_ledger_mappings")
         .upsert({ ...mapping, branch_id: branchId }, { onConflict: "branch_id" });
       if (error) throw error;
@@ -139,7 +147,8 @@ export function TMSAccountsSettings() {
             Driver Salary, Vehicle Loan Interest, Insurance Expense, and Road Tax Expense use expenditure
             ledgers. Driver Salary Payable, Vehicle Loan, and Vehicle EMI Payable use liability ledgers.
             Driver Advance, Insurance Advance, and Road Tax Advance use asset ledgers. Cash and bank
-            payment accounts are selected at the time of payment.
+            payment accounts are selected at the time of payment. Other Expenditure and Other
+            Expenditure Payable are the defaults for general expenditure entries.
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map(([key, label, type]) => (

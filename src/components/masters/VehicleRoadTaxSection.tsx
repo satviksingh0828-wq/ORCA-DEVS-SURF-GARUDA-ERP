@@ -28,6 +28,10 @@ import {
   type RoadTaxEntry,
 } from "@/lib/vehicle-coverage";
 
+// Generated database types predate the finance ledger columns.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 type Props = {
   vehicleId: string;
   branchId: string | null;
@@ -85,7 +89,7 @@ export function VehicleRoadTaxSection({ vehicleId, branchId, registrationNumber 
         setPaymentLedgers([]);
         return;
       }
-      const { data } = await supabase
+      const { data } = await db
         .from("ledger_accounts")
         .select("id,account_name,ledger_type")
         .eq("branch_id", branchId)

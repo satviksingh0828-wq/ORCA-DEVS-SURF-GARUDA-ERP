@@ -36,8 +36,18 @@ import {
   type FinanceRow,
 } from "@/lib/finance";
 
+// Generated database types predate the expenditure accounting columns.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 type AnyRow = Record<string, unknown> & { id: string };
 type PaymentLedger = { id: string; account_name: string; ledger_type: "cash" | "bank"; branch_id: string };
+type BranchLedger = { id: string; account_name: string; ledger_type: string; branch_id: string };
+type TmsMapping = {
+  branch_id: string;
+  other_expenditure_ledger_id: string | null;
+  other_expenditure_payable_ledger_id: string | null;
+};
 
 const CSV_COLUMNS = [
   "entry_date",
@@ -76,6 +86,8 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
   const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
   const [paymentRow, setPaymentRow] = useState<FinanceRow | null>(null);
   const [paymentLedgerId, setPaymentLedgerId] = useState("");
+  const [branchLedgers, setBranchLedgers] = useState<BranchLedger[]>([]);
+  const [tmsMappings, setTmsMappings] = useState<TmsMapping[]>([]);
 
   const currentYear = new Date().getFullYear();
   const currentMonth = String(new Date().getMonth() + 1).padStart(2, "0");
@@ -151,6 +163,9 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
           payroll_id: (r.payroll_id as string) ?? null,
           is_emi: Boolean(r.is_emi),
           emi_installment_id: (r.emi_installment_id as string) ?? null,
+          expenditure_ledger_id: (r.expenditure_ledger_id as string) ?? null,
+          expenditure_payable_ledger_id: (r.expenditure_payable_ledger_id as string) ?? null,
+          payment_ledger_id: (r.payment_ledger_id as string) ?? null,
         })),
       );
     } catch {
@@ -161,7 +176,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
 
   async function loadMasters() {
     // Only fetch columns needed for dropdowns — id + display name
-    const [v, d, t, l] = await Promise.all([
+    const [v, d, t, l, bl, mappings] = await Promise.all([
       fetchAll<AnyRow>(() => {
         let q = supabase.from("vehicles").select("id,registration_number,nickname,branch_id").order("registration_number");
         if (allowedBranchIds !== null && allowedBranchIds.length > 0) {
@@ -184,15 +199,27 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
         return q;
       }),
       fetchAll<PaymentLedger>(() => {
-        let q = supabase.from("ledger_accounts").select("id,account_name,ledger_type,branch_id").eq("is_active", true).in("ledger_type", ["cash", "bank"]).order("account_name");
+        let q = db.from("ledger_accounts").select("id,account_name,ledger_type,branch_id").eq("is_active", true).in("ledger_type", ["cash", "bank"]).order("account_name");
+        if (allowedBranchIds !== null && allowedBranchIds.length > 0) q = q.in("branch_id", allowedBranchIds) as typeof q;
+        return q;
+      }),
+      fetchAll<BranchLedger>(() => {
+        let q = db.from("ledger_accounts").select("id,account_name,ledger_type,branch_id").eq("is_active", true).order("account_name");
+        if (allowedBranchIds !== null && allowedBranchIds.length > 0) q = q.in("branch_id", allowedBranchIds) as typeof q;
+        return q;
+      }),
+      fetchAll<TmsMapping>(() => {
+        let q = db.from("tms_account_ledger_mappings").select("branch_id,other_expenditure_ledger_id,other_expenditure_payable_ledger_id");
         if (allowedBranchIds !== null && allowedBranchIds.length > 0) q = q.in("branch_id", allowedBranchIds) as typeof q;
         return q;
       }),
     ]);
     setVehicles(v);
-    setDrivers(d.filter(isDriverActive));
+    setDrivers((d as AnyRow[]).filter((driver) => isDriverActive(driver as never)));
     setTransporters(t);
     setPaymentLedgers(l);
+    setBranchLedgers(bl);
+    setTmsMappings(mappings);
   }
 
   useEffect(() => {
@@ -255,6 +282,9 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
     if (!editing) return;
     if (!editing.name.trim()) return toast.error(`${cfg.nameLabel} is required`);
     if (!editing.branch_id) return toast.error("Branch is required");
+    if (kind === "expenditure" && !editing.expenditure_ledger_id) return toast.error("Expenditure Account is required");
+    if (kind === "expenditure" && !editing.expenditure_payable_ledger_id) return toast.error("Expenditure Payable Account is required");
+    if (kind === "expenditure" && editing.settled && !editing.payment_ledger_id) return toast.error("Select the cash or bank account used for payment");
     setSaving(true);
     const payload: Record<string, unknown> = {
       [cfg.nameCol]: editing.name,
@@ -268,6 +298,11 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
       [cfg.statusCol]: editing.settled,
       [cfg.statusDateCol]: editing.settled_date,
     };
+    if (kind === "expenditure") {
+      payload.expenditure_ledger_id = editing.expenditure_ledger_id;
+      payload.expenditure_payable_ledger_id = editing.expenditure_payable_ledger_id;
+      payload.payment_ledger_id = editing.payment_ledger_id;
+    }
     const isNew = !editing.id;
     const res = editing.id
       ? await supabase.from(cfg.table).update(payload as never).eq("id", editing.id)
@@ -287,7 +322,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
   async function settle(row: FinanceRow) {
     if (row.is_emi && row.emi_installment_id) {
       if (!paymentLedgerId) return toast.error("Select the cash or bank account used for EMI payment");
-      const { error } = await supabase.rpc("tms_mark_vehicle_emi_paid", {
+      const { error } = await db.rpc("tms_mark_vehicle_emi_paid", {
         p_installment_id: row.emi_installment_id,
         p_payment_ledger_id: paymentLedgerId,
       });
@@ -301,7 +336,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
     }
     if (row.is_payroll && row.payroll_id) {
       if (!paymentLedgerId) return toast.error("Select the cash or bank account used for salary payment");
-      const { error } = await supabase.rpc("tms_record_driver_salary_payment", {
+      const { error } = await db.rpc("tms_record_driver_salary_payment", {
         p_payroll_id: row.payroll_id,
         p_payment_ledger_id: paymentLedgerId,
       });
@@ -314,11 +349,13 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
       return;
     }
     const paidDate = new Date().toISOString().slice(0, 10);
+    if (kind === "expenditure" && !paymentLedgerId) return toast.error("Select the cash or bank account used for payment");
     const { error } = await supabase
       .from(cfg.table)
       .update({
         [cfg.statusCol]: true,
         [cfg.statusDateCol]: paidDate,
+        ...(kind === "expenditure" ? { payment_ledger_id: paymentLedgerId } : {}),
       } as never)
       .eq("id", row.id!);
     if (error) return toast.error(error.message);
@@ -400,6 +437,11 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
           const row = emptyFinanceRow();
           // Auto-fill branch when user has exactly one allowed branch
           if (allowedBranchIds?.length === 1) row.branch_id = allowedBranchIds[0];
+          if (kind === "expenditure" && row.branch_id) {
+            const mapping = tmsMappings.find((item) => item.branch_id === row.branch_id);
+            row.expenditure_ledger_id = mapping?.other_expenditure_ledger_id ?? null;
+            row.expenditure_payable_ledger_id = mapping?.other_expenditure_payable_ledger_id ?? null;
+          }
           setEditing(row);
         }}>
           <Plus className="size-4" />
@@ -513,8 +555,38 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                 label="Branch (required)"
                 value={editing.branch_id}
                 options={branchOpts}
-                onChange={(id) => setEditing({ ...editing, branch_id: id })}
+                onChange={(id) => {
+                  const mapping = tmsMappings.find((item) => item.branch_id === id);
+                  setEditing({
+                    ...editing,
+                    branch_id: id,
+                    ...(kind === "expenditure"
+                      ? {
+                          expenditure_ledger_id: mapping?.other_expenditure_ledger_id ?? null,
+                          expenditure_payable_ledger_id: mapping?.other_expenditure_payable_ledger_id ?? null,
+                        }
+                      : {}),
+                  });
+                }}
               />
+              {kind === "expenditure" && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">Expenditure Account</Label>
+                    <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={editing.expenditure_ledger_id ?? ""} onChange={(e) => setEditing({ ...editing, expenditure_ledger_id: e.target.value || null })}>
+                      <option value="">Select expenditure account</option>
+                      {branchLedgers.filter((ledger) => ledger.branch_id === editing.branch_id && ledger.ledger_type === "expenditure").map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">Expenditure Payable Account</Label>
+                    <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={editing.expenditure_payable_ledger_id ?? ""} onChange={(e) => setEditing({ ...editing, expenditure_payable_ledger_id: e.target.value || null })}>
+                      <option value="">Select payable account</option>
+                      {branchLedgers.filter((ledger) => ledger.branch_id === editing.branch_id && ledger.ledger_type === "liability").map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
               <div className="text-xs text-muted-foreground sm:col-span-2">
                 Optionally link this {cfg.single} to one vehicle, driver or transporter.
               </div>
@@ -585,6 +657,15 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                   onChange={(e) => setEditing({ ...editing, settled_date: e.target.value })}
                 />
               </div>
+              {kind === "expenditure" && editing.settled && (
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-medium text-muted-foreground">Paid From</Label>
+                  <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={editing.payment_ledger_id ?? ""} onChange={(e) => setEditing({ ...editing, payment_ledger_id: e.target.value || null })}>
+                    <option value="">Select cash or bank account</option>
+                    {paymentLedgers.filter((ledger) => ledger.branch_id === editing.branch_id).map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</option>)}
+                  </select>
+                </div>
+              )}
               <div className="flex items-center gap-2 pt-2 sm:col-span-2">
                 <Button type="submit" disabled={saving}>
                   {saving ? <Loader2 className="size-4 animate-spin" /> : null}
@@ -680,7 +761,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                         <Download className="size-4" /> PDF
                       </Button>
                       {!r.settled ? (
-                        <Button variant="outline" size="sm" onClick={() => (r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
+                        <Button variant="outline" size="sm" onClick={() => (kind === "expenditure" || r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
                           <Check className="size-4" />
                           {cfg.actionLabel}
                         </Button>

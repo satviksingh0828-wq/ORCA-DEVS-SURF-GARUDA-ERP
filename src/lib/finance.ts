@@ -22,6 +22,9 @@ export type FinanceRow = {
   is_emi?: boolean;
   /** Links back to emi_installments.id for journal-backed EMI payment */
   emi_installment_id?: string | null;
+  expenditure_ledger_id?: string | null;
+  expenditure_payable_ledger_id?: string | null;
+  payment_ledger_id?: string | null;
 };
 
 export const FINANCE_CONFIG: Record<
@@ -95,6 +98,9 @@ export function emptyFinanceRow(): FinanceRow {
     transporter_id: null,
     settled: false,
     settled_date: "",
+    expenditure_ledger_id: null,
+    expenditure_payable_ledger_id: null,
+    payment_ledger_id: null,
   };
 }
 

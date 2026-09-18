@@ -244,7 +244,7 @@ export const serverSaveInsurance = createServerFn({ method: "POST" })
         total_amount: data.totalAmount,
         insurance_number: data.insuranceNumber,
         paid_by_ledger_id: data.paymentLedgerId,
-      })
+      } as never)
       .select("id")
       .single();
 
@@ -368,7 +368,7 @@ export const serverSaveRoadTax = createServerFn({ method: "POST" })
         total_amount: data.totalAmount,
         state: data.state,
         paid_by_ledger_id: data.paymentLedgerId,
-      })
+      } as never)
       .select("id")
       .single();
 
