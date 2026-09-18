@@ -40,6 +40,7 @@ import {
 } from "@/components/ui/select";
 import { fetchAll } from "@/lib/fetch-all";
 import { inr, num } from "@/lib/trip-calc";
+import { addMonthsMonthEndSafe } from "@/lib/emi-schedule";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -104,10 +105,7 @@ type NormalInterest = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function addMonths(dateStr: string, months: number): string {
-  if (!dateStr) return "";
-  const d = new Date(dateStr + "T00:00:00");
-  d.setMonth(d.getMonth() + months);
-  return d.toISOString().slice(0, 10);
+  return addMonthsMonthEndSafe(dateStr, months);
 }
 
 function calcEmi(principal: number, annualRate: number, months: number): number {
