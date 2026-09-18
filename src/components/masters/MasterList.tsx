@@ -38,7 +38,7 @@ export type FieldDef = {
   key: string;
   label: string;
   required?: boolean;
-  type?: "text" | "email" | "date" | "number" | "file";
+  type?: "text" | "email" | "date" | "number" | "file" | "ledger";
   options?: string[]; // if present → Select
   full?: boolean;
 };
@@ -57,6 +57,12 @@ export type MasterConfig = {
 };
 
 type Row = Record<string, unknown> & { id?: string; branch_id?: string | null };
+type PaymentLedger = {
+  id: string;
+  branch_id: string;
+  account_name: string;
+  ledger_type: "bank" | "cash";
+};
 
 function DriverPhotoField({
   field,
@@ -152,6 +158,7 @@ export function MasterList({
   const [saving, setSaving] = useState(false);
   const [pinLooking, setPinLooking] = useState(false);
   const [uploadingField, setUploadingField] = useState<string | null>(null);
+  const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
   const pinDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isLocations = config.table === "locations";
@@ -255,6 +262,23 @@ export function MasterList({
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [config.table, user?.id, locationSearch, locationSearchBy]);
+
+  useEffect(() => {
+    if (config.table !== "vehicles") return;
+    void supabase
+      .from("ledger_accounts")
+      .select("id,branch_id,account_name,ledger_type")
+      .in("ledger_type", ["bank", "cash"])
+      .eq("is_active", true)
+      .order("account_name")
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error("Could not load vehicle payment accounts");
+          return;
+        }
+        setPaymentLedgers((data ?? []) as PaymentLedger[]);
+      });
+  }, [config.table]);
 
   const set = (k: string) => (v: string) => setEditing((f) => (f ? { ...f, [k]: v } : f));
 
@@ -427,6 +451,31 @@ export function MasterList({
                     />
                   );
                 }
+                if (f.type === "ledger") {
+                  const branchId = editing.branch_id as string | null | undefined;
+                  const choices = paymentLedgers.filter((ledger) => ledger.branch_id === branchId);
+                  return (
+                    <div key={f.key} className={`space-y-1.5 ${f.full ? "sm:col-span-2" : ""}`}>
+                      <Label className="text-xs font-medium text-muted-foreground">
+                        {f.label}
+                        {f.required ? <span className="text-destructive"> *</span> : null}
+                      </Label>
+                      <select
+                        value={val}
+                        required={f.required}
+                        onChange={(e) => set(f.key)(e.target.value)}
+                        className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                      >
+                        <option value="">Select cash or bank account</option>
+                        {choices.map((ledger) => (
+                          <option key={ledger.id} value={ledger.id}>
+                            {ledger.account_name} ({ledger.ledger_type})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  );
+                }
                 // PIN code field on locations table — auto-fill city/district/state/country
                 if (f.key === "pin_code" && config.table === "locations") {
                   return (
@@ -519,7 +568,17 @@ export function MasterList({
               <BranchSelect
                 value={(editing.branch_id as string | null | undefined) ?? null}
                 onChange={(id: string | null) =>
-                  setEditing((f) => (f ? { ...f, branch_id: id } : f))
+                  setEditing((f) =>
+                    f
+                      ? {
+                          ...f,
+                          branch_id: id,
+                          ...(config.table === "vehicles"
+                            ? { purchase_paid_by_ledger_id: null }
+                            : {}),
+                        }
+                      : f,
+                  )
                 }
               />
             </div>

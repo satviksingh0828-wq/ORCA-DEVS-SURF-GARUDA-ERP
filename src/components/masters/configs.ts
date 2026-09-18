@@ -42,7 +42,13 @@ export const VEHICLE_CONFIG: MasterConfig = {
       title: "Purchase",
       fields: [
         { key: "purchase_date", label: "Purchase Date", type: "date", required: true },
-        { key: "purchase_cost", label: "Purchase Cost", type: "number" },
+        { key: "purchase_cost", label: "Purchase Cost", type: "number", required: true },
+        {
+          key: "purchase_paid_by_ledger_id",
+          label: "Paid By",
+          type: "ledger",
+          required: true,
+        },
       ],
     },
     {
