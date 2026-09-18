@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { inr } from "@/lib/trip-calc";
 import { useSession } from "@/lib/session";
+import { supabase } from "@/integrations/supabase/client";
 import {
   MONTH_NAMES,
   serverLoadInsurance,
@@ -33,11 +34,14 @@ type Props = {
   registrationNumber: string;
 };
 
+type PaymentLedger = { id: string; account_name: string; ledger_type: "cash" | "bank" };
+
 const EMPTY_FORM = {
   startDate: "",
   endDate: "",
   totalAmount: "",
   insuranceNumber: "",
+  paymentLedgerId: "",
 };
 
 /**
@@ -60,6 +64,7 @@ export function VehicleInsuranceSection({ vehicleId, branchId, registrationNumbe
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
 
   async function load() {
     setLoading(true);
@@ -75,6 +80,21 @@ export function VehicleInsuranceSection({ vehicleId, branchId, registrationNumbe
 
   useEffect(() => {
     load();
+    async function loadPaymentLedgers() {
+      if (!branchId) {
+        setPaymentLedgers([]);
+        return;
+      }
+      const { data } = await supabase
+        .from("ledger_accounts")
+        .select("id,account_name,ledger_type")
+        .eq("branch_id", branchId)
+        .eq("is_active", true)
+        .in("ledger_type", ["cash", "bank"])
+        .order("account_name");
+      setPaymentLedgers((data ?? []) as PaymentLedger[]);
+    }
+    void loadPaymentLedgers();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vehicleId]);
 
@@ -93,6 +113,7 @@ export function VehicleInsuranceSection({ vehicleId, branchId, registrationNumbe
     if (totalDaysBetween(form.startDate, form.endDate) < 1) return toast.error("End date must not be before start date.");
     if (!form.totalAmount || Number(form.totalAmount) <= 0) return toast.error("Enter a valid total amount.");
     if (!form.insuranceNumber.trim()) return toast.error("Insurance number is required.");
+    if (!form.paymentLedgerId) return toast.error("Select the cash or bank account used for payment.");
 
     setSaving(true);
     try {
@@ -106,6 +127,7 @@ export function VehicleInsuranceSection({ vehicleId, branchId, registrationNumbe
           endDate: form.endDate,
           totalAmount: Number(form.totalAmount),
           insuranceNumber: form.insuranceNumber.trim(),
+          paymentLedgerId: form.paymentLedgerId,
         },
       });
       toast.success(
@@ -225,6 +247,24 @@ export function VehicleInsuranceSection({ vehicleId, branchId, registrationNumbe
                 placeholder="e.g. HDFC/2024/00123"
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">
+              Paid From <span className="text-destructive">*</span>
+            </Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={form.paymentLedgerId}
+              onChange={e => set("paymentLedgerId")(e.target.value)}
+            >
+              <option value="">Select cash or bank account</option>
+              {paymentLedgers.map(ledger => (
+                <option key={ledger.id} value={ledger.id}>
+                  {ledger.account_name} ({ledger.ledger_type})
+                </option>
+              ))}
+            </select>
           </div>
 
           {/* Live preview */}

@@ -14,6 +14,10 @@ type Mapping = {
   vehicle_loan_ledger_id?: string | null;
   vehicle_emi_payable_ledger_id?: string | null;
   vehicle_loan_interest_ledger_id?: string | null;
+  vehicle_insurance_advance_ledger_id?: string | null;
+  vehicle_insurance_expense_ledger_id?: string | null;
+  vehicle_road_tax_advance_ledger_id?: string | null;
+  vehicle_road_tax_expense_ledger_id?: string | null;
 };
 
 const FIELDS = [
@@ -23,6 +27,10 @@ const FIELDS = [
   ["vehicle_loan_ledger_id", "Vehicle Loan", "liability"],
   ["vehicle_emi_payable_ledger_id", "Vehicle EMI Payable", "liability"],
   ["vehicle_loan_interest_ledger_id", "Vehicle Loan Interest", "expenditure"],
+  ["vehicle_insurance_advance_ledger_id", "Vehicle Insurance Advance", "asset"],
+  ["vehicle_insurance_expense_ledger_id", "Vehicle Insurance Expense", "expenditure"],
+  ["vehicle_road_tax_advance_ledger_id", "Vehicle Road Tax Advance", "asset"],
+  ["vehicle_road_tax_expense_ledger_id", "Vehicle Road Tax Expense", "expenditure"],
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number][0];
@@ -128,9 +136,10 @@ export function TMSAccountsSettings() {
       ) : mapping ? (
         <section className="surface-card p-6">
           <div className="mb-4 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            Driver Salary and Vehicle Loan Interest use expenditure ledgers. Driver Salary Payable,
-            Vehicle Loan, and Vehicle EMI Payable use liability ledgers. Driver Advance uses an asset
-            ledger. Cash and bank payment accounts are selected at the time of payment.
+            Driver Salary, Vehicle Loan Interest, Insurance Expense, and Road Tax Expense use expenditure
+            ledgers. Driver Salary Payable, Vehicle Loan, and Vehicle EMI Payable use liability ledgers.
+            Driver Advance, Insurance Advance, and Road Tax Advance use asset ledgers. Cash and bank
+            payment accounts are selected at the time of payment.
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map(([key, label, type]) => (

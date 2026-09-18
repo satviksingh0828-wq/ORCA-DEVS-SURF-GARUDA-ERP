@@ -187,6 +187,7 @@ export const serverSaveInsurance = createServerFn({ method: "POST" })
     endDate: string;     // YYYY-MM-DD
     totalAmount: number;
     insuranceNumber: string;
+    paymentLedgerId: string;
   }) => data)
   .handler(async ({ data }) => {
     await requireAdmin(data.userId);
@@ -242,6 +243,7 @@ export const serverSaveInsurance = createServerFn({ method: "POST" })
         end_year: endYear,
         total_amount: data.totalAmount,
         insurance_number: data.insuranceNumber,
+        paid_by_ledger_id: data.paymentLedgerId,
       })
       .select("id")
       .single();
@@ -259,8 +261,10 @@ export const serverSaveInsurance = createServerFn({ method: "POST" })
     const monthSlices = splitByMonth(data.startDate, data.endDate, data.totalAmount);
     const totalDays   = totalDaysBetween(data.startDate, data.endDate);
 
-    const expenditureRows = monthSlices.map(({ month, year, days, amount }) => {
-      const entryDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const expenditureRows = monthSlices.map(({ month, year, days, amount }, index) => {
+      const entryDate = index === 0
+        ? data.startDate
+        : `${year}-${String(month).padStart(2, "0")}-01`;
       return {
         expenditure_name: `Insurance Premium — ${data.registrationNumber} (${monthShort(month)} ${year})`,
         amount: String(amount),
@@ -331,6 +335,7 @@ export const serverSaveRoadTax = createServerFn({ method: "POST" })
     endDate: string;     // YYYY-MM-DD
     totalAmount: number;
     state: string;
+    paymentLedgerId: string;
   }) => data)
   .handler(async ({ data }) => {
     await requireAdmin(data.userId);
@@ -362,6 +367,7 @@ export const serverSaveRoadTax = createServerFn({ method: "POST" })
         end_year: endYear,
         total_amount: data.totalAmount,
         state: data.state,
+        paid_by_ledger_id: data.paymentLedgerId,
       })
       .select("id")
       .single();
@@ -373,8 +379,10 @@ export const serverSaveRoadTax = createServerFn({ method: "POST" })
     const monthSlices = splitByMonth(data.startDate, data.endDate, data.totalAmount);
     const totalDays   = totalDaysBetween(data.startDate, data.endDate);
 
-    const expenditureRows = monthSlices.map(({ month, year, days, amount }) => {
-      const entryDate = `${year}-${String(month).padStart(2, "0")}-01`;
+    const expenditureRows = monthSlices.map(({ month, year, days, amount }, index) => {
+      const entryDate = index === 0
+        ? data.startDate
+        : `${year}-${String(month).padStart(2, "0")}-01`;
       return {
         expenditure_name: `Road Tax — ${data.registrationNumber} (${monthShort(month)} ${year})`,
         amount: String(amount),
