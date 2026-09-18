@@ -11,12 +11,18 @@ type Mapping = {
   driver_salary_ledger_id?: string | null;
   driver_salary_payable_ledger_id?: string | null;
   driver_advance_ledger_id?: string | null;
+  vehicle_loan_ledger_id?: string | null;
+  vehicle_emi_payable_ledger_id?: string | null;
+  vehicle_loan_interest_ledger_id?: string | null;
 };
 
 const FIELDS = [
   ["driver_salary_ledger_id", "Driver Salary", "expenditure"],
   ["driver_salary_payable_ledger_id", "Driver Salary Payable", "liability"],
   ["driver_advance_ledger_id", "Driver Advance", "asset"],
+  ["vehicle_loan_ledger_id", "Vehicle Loan", "liability"],
+  ["vehicle_emi_payable_ledger_id", "Vehicle EMI Payable", "liability"],
+  ["vehicle_loan_interest_ledger_id", "Vehicle Loan Interest", "expenditure"],
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number][0];
@@ -94,10 +100,10 @@ export function TMSAccountsSettings() {
   return (
     <div className="animate-fade-up space-y-5">
       <section className="surface-card p-6">
-        <h3 className="text-sm font-semibold">TMS Accounts</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Map the ledgers used for driver salary expense, driver salary payable, and driver
-          advances. Each mapping is branch-specific.
+          <h3 className="text-sm font-semibold">TMS Accounts</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+          Map the ledgers used for driver payroll, vehicle loans, and vehicle EMI accounting.
+          Each mapping is branch-specific.
         </p>
         <div className="mt-5 space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">Branch</label>
@@ -122,9 +128,9 @@ export function TMSAccountsSettings() {
       ) : mapping ? (
         <section className="surface-card p-6">
           <div className="mb-4 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            Driver Salary must use an expenditure ledger. Driver Salary Payable must use a liability
-            ledger. Driver Advance must use an asset ledger. Cash and bank payment accounts are
-            selected at the time of advance or salary payment.
+            Driver Salary and Vehicle Loan Interest use expenditure ledgers. Driver Salary Payable,
+            Vehicle Loan, and Vehicle EMI Payable use liability ledgers. Driver Advance uses an asset
+            ledger. Cash and bank payment accounts are selected at the time of payment.
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map(([key, label, type]) => (

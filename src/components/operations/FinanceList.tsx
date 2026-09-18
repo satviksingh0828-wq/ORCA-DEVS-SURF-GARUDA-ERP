@@ -149,6 +149,8 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
           settled_date: String(r[cfg.statusDateCol] ?? ""),
           is_payroll: Boolean(r.is_payroll),
           payroll_id: (r.payroll_id as string) ?? null,
+          is_emi: Boolean(r.is_emi),
+          emi_installment_id: (r.emi_installment_id as string) ?? null,
         })),
       );
     } catch {
@@ -283,6 +285,20 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
   }
 
   async function settle(row: FinanceRow) {
+    if (row.is_emi && row.emi_installment_id) {
+      if (!paymentLedgerId) return toast.error("Select the cash or bank account used for EMI payment");
+      const { error } = await supabase.rpc("tms_mark_vehicle_emi_paid", {
+        p_installment_id: row.emi_installment_id,
+        p_payment_ledger_id: paymentLedgerId,
+      });
+      if (error) return toast.error(error.message);
+      logAction("settled", kind, { entityId: row.id ?? "", entityLabel: row.name });
+      toast.success(cfg.doneLabel);
+      setPaymentRow(null);
+      setPaymentLedgerId("");
+      load();
+      return;
+    }
     if (row.is_payroll && row.payroll_id) {
       if (!paymentLedgerId) return toast.error("Select the cash or bank account used for salary payment");
       const { error } = await supabase.rpc("tms_record_driver_salary_payment", {
@@ -664,7 +680,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                         <Download className="size-4" /> PDF
                       </Button>
                       {!r.settled ? (
-                        <Button variant="outline" size="sm" onClick={() => r.is_payroll ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
+                        <Button variant="outline" size="sm" onClick={() => (r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
                           <Check className="size-4" />
                           {cfg.actionLabel}
                         </Button>
@@ -698,9 +714,13 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
 
       <Dialog open={!!paymentRow} onOpenChange={(open) => { if (!open) setPaymentRow(null); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Pay Driver Salary</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{paymentRow?.is_emi ? "Pay Vehicle EMI" : "Pay Driver Salary"}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">Select the cash or bank account from the payroll branch. The payment journal will debit Driver Salary Payable and credit this account.</p>
+            <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              {paymentRow?.is_emi
+                ? "Select the cash or bank account from the vehicle branch. The payment journal will debit Vehicle EMI Payable and credit this account."
+                : "Select the cash or bank account from the payroll branch. The payment journal will debit Driver Salary Payable and credit this account."}
+            </p>
             <Select value={paymentLedgerId} onValueChange={setPaymentLedgerId}>
               <SelectTrigger><SelectValue placeholder="Select cash or bank account" /></SelectTrigger>
               <SelectContent>{paymentLedgers.filter((ledger) => ledger.branch_id === paymentRow?.branch_id).map((ledger) => <SelectItem key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</SelectItem>)}</SelectContent>

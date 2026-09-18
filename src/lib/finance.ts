@@ -18,6 +18,10 @@ export type FinanceRow = {
   is_payroll?: boolean;
   /** Links back to driver_payrolls.id so we can sync status */
   payroll_id?: string | null;
+  /** True when this expenditure belongs to a vehicle EMI installment */
+  is_emi?: boolean;
+  /** Links back to emi_installments.id for journal-backed EMI payment */
+  emi_installment_id?: string | null;
 };
 
 export const FINANCE_CONFIG: Record<

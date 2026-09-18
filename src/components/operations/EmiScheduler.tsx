@@ -49,12 +49,21 @@ type Vehicle = {
   nickname: string | null;
   internal_code: string | null;
   purchase_cost: string | null;
+  purchase_date: string | null;
   branch_id: string | null;
+};
+
+type PaymentLedger = {
+  id: string;
+  account_name: string;
+  ledger_type: "cash" | "bank";
+  branch_id: string;
 };
 
 type EmiScheduleRow = {
   id: string;
   vehicle_id: string;
+  branch_id: string | null;
   vehicle_label: string;
   loan_amount: number;
   purchase_amount: number | null;
@@ -165,6 +174,7 @@ function genCustom(rows: CustomRow[]): Installment[] {
 
 export function EmiScheduler() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
   const [schedules, setSchedules] = useState<EmiScheduleRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -172,6 +182,7 @@ export function EmiScheduler() {
   // Form state
   const [showForm, setShowForm] = useState(false);
   const [vehicleId, setVehicleId] = useState<string>("");
+  const [loanDisbursementLedgerId, setLoanDisbursementLedgerId] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
   const [lenderName, setLenderName] = useState("");
   const [emiType, setEmiType] = useState<"normal" | "custom">("normal");
@@ -192,6 +203,7 @@ export function EmiScheduler() {
 
   // Marking paid
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
+  const [paymentLedgerId, setPaymentLedgerId] = useState("");
   const [deleting, setDeleting] = useState<string | null>(null);
 
   // ── Load ─────────────────────────────────────────────────────────────────────
@@ -199,11 +211,11 @@ export function EmiScheduler() {
   async function load() {
     setLoading(true);
     try {
-      const [vData, schData] = await Promise.all([
+      const [vData, schData, ledgerData] = await Promise.all([
         fetchAll<Vehicle>(() =>
           supabase
             .from("vehicles")
-            .select("id,registration_number,nickname,internal_code,purchase_cost,branch_id")
+            .select("id,registration_number,nickname,internal_code,purchase_cost,purchase_date,branch_id")
             .order("registration_number"),
         ),
         fetchAll<Record<string, unknown>>(() =>
@@ -212,8 +224,17 @@ export function EmiScheduler() {
             .select("*")
             .order("created_at", { ascending: false }),
         ),
+        fetchAll<PaymentLedger>(() =>
+          supabase
+            .from("ledger_accounts")
+            .select("id,account_name,ledger_type,branch_id")
+            .in("ledger_type", ["cash", "bank"])
+            .eq("is_active", true)
+            .order("account_name"),
+        ),
       ]);
       setVehicles(vData);
+      setPaymentLedgers(ledgerData);
 
       // Load installments for all schedules
       const scheduleIds = schData.map((s) => s.id as string);
@@ -239,6 +260,7 @@ export function EmiScheduler() {
           return {
             id: s.id as string,
             vehicle_id: s.vehicle_id as string,
+            branch_id: (s.branch_id as string) ?? null,
             vehicle_label: label,
             loan_amount: Number(s.loan_amount),
             purchase_amount: s.purchase_amount != null ? Number(s.purchase_amount) : null,
@@ -290,9 +312,29 @@ export function EmiScheduler() {
 
   const previewInstallments = useMemo<Installment[]>(() => {
     if (!loanAmt) return [];
-    if (emiType === "custom") return genCustom(customRows);
-    if (normalMode === "auto") return genNormalAuto(normalAuto, loanAmt);
-    return genNormalInterest(normalInterest, loanAmt);
+    const generated =
+      emiType === "custom"
+        ? genCustom(customRows)
+        : normalMode === "auto"
+          ? genNormalAuto(normalAuto, loanAmt)
+          : genNormalInterest(normalInterest, loanAmt);
+    if (generated.length === 0 || generated.some((item) => item.principal != null)) return generated;
+
+    const totalInterestForFlatSchedule = Math.max(
+      0,
+      generated.reduce((sum, item) => sum + item.amount, 0) - loanAmt,
+    );
+    const regularInterest = Number((totalInterestForFlatSchedule / generated.length).toFixed(2));
+    let principalAllocated = 0;
+    return generated.map((item, index) => {
+      const principal =
+        index === generated.length - 1
+          ? Number((loanAmt - principalAllocated).toFixed(2))
+          : Number((item.amount - regularInterest).toFixed(2));
+      const interest = Number((item.amount - principal).toFixed(2));
+      principalAllocated += principal;
+      return { ...item, principal, interest };
+    });
   }, [emiType, normalMode, normalAuto, normalInterest, customRows, loanAmt]);
 
   const totalEmi = previewInstallments.reduce((s, i) => s + i.amount, 0);
@@ -307,10 +349,13 @@ export function EmiScheduler() {
   async function handleSave() {
     if (!vehicleId) { toast.error("Select a vehicle"); return; }
     if (!loanAmt) { toast.error("Enter loan amount"); return; }
+    if (!loanDisbursementLedgerId) { toast.error("Select the cash or bank account used for loan disbursement"); return; }
+    if (!selectedVehicle?.purchase_date) { toast.error("Vehicle purchase date is required before creating a loan schedule"); return; }
     if (previewInstallments.length === 0) {
       toast.error("No installments to save — fill in EMI details");
       return;
     }
+    if (totalInterest < -0.01) { toast.error("Total EMI amount cannot be less than the loan amount"); return; }
 
     setSaving(true);
     try {
@@ -337,6 +382,7 @@ export function EmiScheduler() {
         .insert({
           vehicle_id: vehicleId,
           branch_id: selectedVehicle?.branch_id ?? null,
+          loan_disbursement_ledger_id: loanDisbursementLedgerId,
           loan_amount: loanAmt,
           purchase_amount: purchaseCost ?? null,
           down_payment: downPayment ?? null,
@@ -405,6 +451,7 @@ export function EmiScheduler() {
       // Reset form
       setShowForm(false);
       setVehicleId("");
+      setLoanDisbursementLedgerId("");
       setLoanAmount("");
       setLenderName("");
       setEmiType("normal");
@@ -423,23 +470,20 @@ export function EmiScheduler() {
   // ── Mark Paid ─────────────────────────────────────────────────────────────────
 
   async function handleMarkPaid(scheduleId: string, inst: EmiInstallmentRow) {
+    if (!paymentLedgerId) {
+      toast.error("Select the cash or bank account used for this EMI payment");
+      return;
+    }
     setMarkingPaid(inst.id);
     try {
-      const today = new Date().toISOString().slice(0, 10);
-
-      await supabase
-        .from("emi_installments")
-        .update({ is_paid: true, paid_date: today })
-        .eq("id", inst.id);
-
-      if (inst.expenditure_id) {
-        await supabase
-          .from("expenditures")
-          .update({ is_paid: true, paid_date: today })
-          .eq("id", inst.expenditure_id);
-      }
+      const { error } = await supabase.rpc("tms_mark_vehicle_emi_paid", {
+        p_installment_id: inst.id,
+        p_payment_ledger_id: paymentLedgerId,
+      });
+      if (error) throw error;
 
       toast.success(`EMI #${inst.installment_number} marked as paid`);
+      setPaymentLedgerId("");
       await load();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not mark as paid");
@@ -562,6 +606,30 @@ export function EmiScheduler() {
               />
             </div>
           </div>
+
+          {selectedVehicle && (
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Loan Disbursed To *</Label>
+              <select
+                value={loanDisbursementLedgerId}
+                required
+                onChange={(e) => setLoanDisbursementLedgerId(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="">Select cash or bank account</option>
+                {paymentLedgers
+                  .filter((ledger) => ledger.branch_id === selectedVehicle.branch_id)
+                  .map((ledger) => (
+                    <option key={ledger.id} value={ledger.id}>
+                      {ledger.account_name} ({ledger.ledger_type})
+                    </option>
+                  ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                The selected account is debited on the vehicle purchase date and Vehicle Loan is credited.
+              </p>
+            </div>
+          )}
 
           {/* Purchase cost (read-only) */}
           {selectedVehicle && (
@@ -1024,20 +1092,36 @@ export function EmiScheduler() {
                             </td>
                             <td className="px-4 py-2.5 text-center">
                               {!inst.is_paid && (
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="h-7 text-xs"
-                                  disabled={markingPaid === inst.id}
-                                  onClick={() => handleMarkPaid(sched.id, inst)}
-                                >
-                                  {markingPaid === inst.id ? (
-                                    <Loader2 className="size-3 animate-spin" />
-                                  ) : (
-                                    <CheckCircle2 className="size-3 text-emerald-600" />
-                                  )}
-                                  Mark Paid
-                                </Button>
+                                <div className="flex min-w-56 items-center justify-end gap-2">
+                                  <select
+                                    value={paymentLedgerId}
+                                    onChange={(e) => setPaymentLedgerId(e.target.value)}
+                                    className="h-7 max-w-40 rounded-md border border-input bg-background px-2 text-[11px]"
+                                  >
+                                    <option value="">Paid from...</option>
+                                    {paymentLedgers
+                                      .filter((ledger) => ledger.branch_id === sched.branch_id)
+                                      .map((ledger) => (
+                                        <option key={ledger.id} value={ledger.id}>
+                                          {ledger.account_name} ({ledger.ledger_type})
+                                        </option>
+                                      ))}
+                                  </select>
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-7 text-xs"
+                                    disabled={markingPaid === inst.id || !paymentLedgerId}
+                                    onClick={() => handleMarkPaid(sched.id, inst)}
+                                  >
+                                    {markingPaid === inst.id ? (
+                                      <Loader2 className="size-3 animate-spin" />
+                                    ) : (
+                                      <CheckCircle2 className="size-3 text-emerald-600" />
+                                    )}
+                                    Mark Paid
+                                  </Button>
+                                </div>
                               )}
                             </td>
                           </tr>
