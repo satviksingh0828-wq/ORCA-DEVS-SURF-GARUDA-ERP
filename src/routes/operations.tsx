@@ -6,7 +6,6 @@ import {
   CalendarRange,
   ClipboardList,
   ChevronRight,
-  DollarSign,
   CreditCard,
   FileText,
   PanelLeftClose,
@@ -22,13 +21,8 @@ import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { TabErrorBoundary } from "@/components/TabErrorBoundary";
 import { Trips } from "@/components/operations/Trips";
-import { FinanceList } from "@/components/operations/FinanceList";
-import { FixedIncomeList } from "@/components/operations/FixedIncomeList";
 import { TripAveragesPanel } from "@/components/operations/TripAveragesPanel";
 import { TripDetailsPanel } from "@/components/operations/TripDetailsPanel";
-import { EmiScheduler } from "@/components/operations/EmiScheduler";
-import { YearlyExpenseScheduler } from "@/components/operations/YearlyExpenseScheduler";
-import { DriverPayroll } from "@/components/operations/DriverPayroll";
 import { TripImport } from "@/components/import/TripImport";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
@@ -79,38 +73,6 @@ const ALL_TABS = [
     dividerBefore: false,
   },
   {
-    id: "income",
-    label: "Income",
-    desc: "Other income, branch-wise",
-    icon: TrendingUp,
-    adminOnly: false,
-    dividerBefore: false,
-  },
-  {
-    id: "expenditure",
-    label: "Expenditure",
-    desc: "Other spend, branch-wise",
-    icon: TrendingDown,
-    adminOnly: false,
-    dividerBefore: false,
-  },
-  {
-    id: "driver-payroll",
-    label: "Driver Payroll",
-    desc: "Salary, advances & deductions",
-    icon: Users,
-    adminOnly: false,
-    dividerBefore: false,
-  },
-  {
-    id: "fixed-income",
-    label: "Fixed Income",
-    desc: "Contract recurring charges",
-    icon: DollarSign,
-    adminOnly: true,
-    dividerBefore: false,
-  },
-  {
     id: "trip-averages",
     label: "Trip Averages",
     desc: "Monthly distribution analysis",
@@ -134,22 +96,6 @@ const ALL_TABS = [
     icon: CreditCard,
     adminOnly: false,
     basicOnly: true,
-    dividerBefore: false,
-  },
-  {
-    id: "emi-scheduler",
-    label: "EMI Scheduler",
-    desc: "Vehicle loan & EMI tracker",
-    icon: CalendarCheck,
-    adminOnly: true,
-    dividerBefore: false,
-  },
-  {
-    id: "yearly-expenses",
-    label: "Yearly Expenses",
-    desc: "Fixed yearly cost tracker",
-    icon: CalendarRange,
-    adminOnly: true,
     dividerBefore: false,
   },
   {
@@ -262,29 +208,9 @@ function OperationsPage() {
               <Trips />
             </TabErrorBoundary>
           )}
-          {safeTab === "income" && (
-            <TabErrorBoundary label="Income">
-              <FinanceList kind="income" />
-            </TabErrorBoundary>
-          )}
-          {safeTab === "expenditure" && (
-            <TabErrorBoundary label="Expenditure">
-              <FinanceList kind="expenditure" />
-            </TabErrorBoundary>
-          )}
-          {safeTab === "driver-payroll" && (
-            <TabErrorBoundary label="Driver Payroll">
-              <DriverPayroll />
-            </TabErrorBoundary>
-          )}
           {safeTab === "monthly-mis" && !isViewer && (
             <TabErrorBoundary label="Monthly MIS">
               <MonthlyMIS />
-            </TabErrorBoundary>
-          )}
-          {safeTab === "fixed-income" && (isAdmin || isViewer) && (
-            <TabErrorBoundary label="Fixed Income">
-              <FixedIncomeList />
             </TabErrorBoundary>
           )}
           {safeTab === "trip-averages" && (isAdmin || isViewer) && (
@@ -302,16 +228,6 @@ function OperationsPage() {
               <ReportFiltersContext.Provider value={{ branchId: "all", financialYear: "none" }}>
                 <FastagLedger />
               </ReportFiltersContext.Provider>
-            </TabErrorBoundary>
-          )}
-          {safeTab === "emi-scheduler" && (isAdmin || isViewer) && (
-            <TabErrorBoundary label="EMI Scheduler">
-              <EmiScheduler />
-            </TabErrorBoundary>
-          )}
-          {safeTab === "yearly-expenses" && (isAdmin || isViewer) && (
-            <TabErrorBoundary label="Yearly Expenses">
-              <YearlyExpenseScheduler />
             </TabErrorBoundary>
           )}
           {safeTab === "import-trips" && isAdmin && (
