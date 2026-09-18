@@ -206,10 +206,10 @@ export function ContractForm({
       start_date: rest.start_date?.trim() || null,
       end_date: rest.end_date?.trim() || null,
       fixed_monthly_charge: rest.fixed_monthly_charge === "" || rest.fixed_monthly_charge == null
-        ? null
+        ? 0
         : Number(rest.fixed_monthly_charge),
       fixed_yearly_charge: rest.fixed_yearly_charge === "" || rest.fixed_yearly_charge == null
-        ? null
+        ? 0
         : Number(rest.fixed_yearly_charge),
     } as never;
     const res = id
