@@ -25,6 +25,9 @@ export type FinanceRow = {
   expenditure_ledger_id?: string | null;
   expenditure_payable_ledger_id?: string | null;
   payment_ledger_id?: string | null;
+  is_fixed_income?: boolean;
+  fixed_income_line_id?: string | null;
+  fixed_income_period?: string | null;
 };
 
 export const FINANCE_CONFIG: Record<

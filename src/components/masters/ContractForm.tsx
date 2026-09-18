@@ -52,6 +52,15 @@ export type ContractRow = {
   website?: string;
 };
 
+type FixedIncomeLine = {
+  id?: string;
+  frequency: "monthly" | "yearly";
+  income_name: string;
+  amount: string;
+  income_ledger_id: string;
+  note: string;
+};
+
 export const EMPTY_CONTRACT: ContractRow = {
   contract_name: "",
   branch_id: null,
@@ -142,6 +151,8 @@ export function ContractForm({
   const [saving, setSaving] = useState(false);
   const [showCompany, setShowCompany] = useState(!!initial.company_name);
   const [assetLedgers, setAssetLedgers] = useState<Array<{ id: string; account_name: string }>>([]);
+  const [incomeLedgers, setIncomeLedgers] = useState<Array<{ id: string; account_name: string }>>([]);
+  const [incomeLines, setIncomeLines] = useState<FixedIncomeLine[]>([]);
 
   useEffect(() => {
     async function loadAssetLedgers() {
@@ -158,9 +169,30 @@ export function ContractForm({
         .eq("is_active", true)
         .order("account_name");
       setAssetLedgers((data ?? []) as Array<{ id: string; account_name: string }>);
+      const { data: incomeData } = await db
+        .from("ledger_accounts")
+        .select("id,account_name")
+        .eq("branch_id", form.branch_id)
+        .eq("ledger_type", "income")
+        .eq("is_active", true)
+        .order("account_name");
+      setIncomeLedgers((incomeData ?? []) as Array<{ id: string; account_name: string }>);
     }
     void loadAssetLedgers();
   }, [form.branch_id]);
+
+  useEffect(() => {
+    async function loadLines() {
+      if (!initial.id) {
+        setIncomeLines([]);
+        return;
+      }
+      const db = supabase as any;
+      const { data } = await db.from("fixed_income_lines").select("id,frequency,income_name,amount,income_ledger_id,note").eq("contract_id", initial.id).eq("is_active", true).order("created_at");
+      setIncomeLines((data ?? []).map((line: FixedIncomeLine) => ({ ...line, amount: String(line.amount ?? "") })));
+    }
+    void loadLines();
+  }, [initial.id]);
 
   const isInactive = form.status === "inactive";
 
@@ -172,9 +204,21 @@ export function ContractForm({
     const payload = rest as never;
     const res = id
       ? await supabase.from("contracts").update(payload).eq("id", id)
-      : await supabase.from("contracts").insert(payload);
+      : await (supabase as any).from("contracts").insert(payload).select("id").single();
     setSaving(false);
     if (res.error) return toast.error(res.error.message);
+    const contractId = id ?? (res.data as { id: string } | null)?.id;
+    if (!contractId) return toast.error("Could not identify the saved source");
+    const db = supabase as any;
+    const { error: deleteLinesError } = await db.from("fixed_income_lines").delete().eq("contract_id", contractId);
+    if (deleteLinesError) return toast.error(deleteLinesError.message);
+    const linePayload = incomeLines
+      .filter((line) => line.income_name.trim() && Number(line.amount) > 0 && line.income_ledger_id)
+      .map((line) => ({ contract_id: contractId, frequency: line.frequency, income_name: line.income_name.trim(), amount: Number(line.amount), income_ledger_id: line.income_ledger_id, note: line.note.trim() }));
+    if (linePayload.length > 0) {
+      const { error: insertLinesError } = await db.from("fixed_income_lines").insert(linePayload);
+      if (insertLinesError) return toast.error(insertLinesError.message);
+    }
     const isNew = !id;
     logAction(isNew ? "created" : "updated", "contract", {
       entityId: id ?? "",
@@ -311,57 +355,23 @@ export function ContractForm({
           Optional fixed charges billed on this contract. Yearly charges are automatically
           divided by 12 to calculate monthly cost in Fixed Incomes reports.
         </p>
-        <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">
-              Fixed Monthly Charge (₹)
-            </Label>
-            <Input
-              className="h-10"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={String(form.fixed_monthly_charge ?? "")}
-              onChange={(e) => patch({ fixed_monthly_charge: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">
-              Monthly Charge Note
-            </Label>
-            <Input
-              className="h-10"
-              placeholder="e.g. Software license fee"
-              value={form.fixed_monthly_charge_note ?? ""}
-              onChange={(e) => patch({ fixed_monthly_charge_note: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">
-              Fixed Yearly Charge (₹)
-            </Label>
-            <Input
-              className="h-10"
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="0.00"
-              value={String(form.fixed_yearly_charge ?? "")}
-              onChange={(e) => patch({ fixed_yearly_charge: e.target.value })}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">
-              Yearly Charge Note
-            </Label>
-            <Input
-              className="h-10"
-              placeholder="e.g. Annual maintenance contract"
-              value={form.fixed_yearly_charge_note ?? ""}
-              onChange={(e) => patch({ fixed_yearly_charge_note: e.target.value })}
-            />
-          </div>
+        <div className="mb-5 space-y-3">
+          {incomeLines.map((line, index) => (
+            <div key={line.id ?? index} className="grid grid-cols-1 gap-2 rounded-lg border border-border p-3 sm:grid-cols-6">
+              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={line.frequency} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, frequency: e.target.value as "monthly" | "yearly" } : row))}>
+                <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+              </select>
+              <Input className="h-10" placeholder="Income name" value={line.income_name} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, income_name: e.target.value } : row))} />
+              <Input className="h-10" type="number" min="0" step="0.01" placeholder="Amount" value={line.amount} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, amount: e.target.value } : row))} />
+              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={line.income_ledger_id} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, income_ledger_id: e.target.value } : row))}>
+                <option value="">Select income account</option>
+                {incomeLedgers.map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name}</option>)}
+              </select>
+              <Input className="h-10" placeholder="Optional note" value={line.note} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, note: e.target.value } : row))} />
+              <Button type="button" variant="outline" onClick={() => setIncomeLines((rows) => rows.filter((_, i) => i !== index))}>Remove</Button>
+            </div>
+          ))}
+          <Button type="button" variant="outline" onClick={() => setIncomeLines((rows) => [...rows, { frequency: "monthly", income_name: "", amount: "", income_ledger_id: "", note: "" }])}>Add fixed income</Button>
         </div>
       </Section>
 

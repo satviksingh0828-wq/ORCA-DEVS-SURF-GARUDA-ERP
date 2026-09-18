@@ -416,6 +416,7 @@ export const serverFetchPnLYear = createServerFn({ method: "POST" })
         db
           .from("incomes")
           .select("id,branch_id,vehicle_id,driver_id,transporter_id,amount,entry_date")
+          .eq("is_fixed_income", false)
           .gte("entry_date", start)
           .lt("entry_date", end),
       ),
@@ -522,6 +523,7 @@ export const serverFetchPnLPeriod = createServerFn({ method: "POST" })
         db
           .from("incomes")
           .select("id,branch_id,vehicle_id,driver_id,transporter_id,amount,entry_date")
+          .eq("is_fixed_income", false)
           .gte("entry_date", start)
           .lt("entry_date", end),
       ),
@@ -620,6 +622,7 @@ async function fetchTripAveragesData(
       db
         .from("incomes")
         .select("branch_id,amount,entry_date")
+        .eq("is_fixed_income", false)
         .gte("entry_date", start)
         .lt("entry_date", end),
     ),

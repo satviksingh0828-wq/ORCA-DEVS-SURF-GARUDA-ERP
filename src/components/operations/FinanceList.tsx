@@ -166,6 +166,9 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
           expenditure_ledger_id: (r.expenditure_ledger_id as string) ?? null,
           expenditure_payable_ledger_id: (r.expenditure_payable_ledger_id as string) ?? null,
           payment_ledger_id: (r.payment_ledger_id as string) ?? null,
+          is_fixed_income: Boolean(r.is_fixed_income),
+          fixed_income_line_id: (r.fixed_income_line_id as string) ?? null,
+          fixed_income_period: (r.fixed_income_period as string) ?? null,
         })),
       );
     } catch {
@@ -272,9 +275,10 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
     return true;
   });
 
-  const total = filtered.reduce((s, r) => s + num(r.amount), 0);
+  const ordinaryIncomeRows = kind === "income" ? filtered.filter((r) => !r.is_fixed_income) : filtered;
+  const total = ordinaryIncomeRows.reduce((s, r) => s + num(r.amount), 0);
   const pendingTotal = filtered
-    .filter((r) => !r.settled)
+    .filter((r) => !r.settled && !r.is_fixed_income)
     .reduce((s, r) => s + num(r.amount), 0);
 
   async function save(e: React.FormEvent) {
@@ -349,13 +353,13 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
       return;
     }
     const paidDate = new Date().toISOString().slice(0, 10);
-    if (kind === "expenditure" && !paymentLedgerId) return toast.error("Select the cash or bank account used for payment");
+    if ((kind === "expenditure" || row.is_fixed_income) && !paymentLedgerId) return toast.error("Select the cash or bank account used for this settlement");
     const { error } = await supabase
       .from(cfg.table)
       .update({
         [cfg.statusCol]: true,
         [cfg.statusDateCol]: paidDate,
-        ...(kind === "expenditure" ? { payment_ledger_id: paymentLedgerId } : {}),
+        ...((kind === "expenditure" || row.is_fixed_income) ? { payment_ledger_id: paymentLedgerId } : {}),
       } as never)
       .eq("id", row.id!);
     if (error) return toast.error(error.message);
@@ -761,7 +765,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                         <Download className="size-4" /> PDF
                       </Button>
                       {!r.settled ? (
-                        <Button variant="outline" size="sm" onClick={() => (kind === "expenditure" || r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
+                        <Button variant="outline" size="sm" onClick={() => (kind === "expenditure" || r.is_fixed_income || r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
                           <Check className="size-4" />
                           {cfg.actionLabel}
                         </Button>
@@ -795,10 +799,12 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
 
       <Dialog open={!!paymentRow} onOpenChange={(open) => { if (!open) setPaymentRow(null); }}>
         <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>{paymentRow?.is_emi ? "Pay Vehicle EMI" : "Pay Driver Salary"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{paymentRow?.is_fixed_income ? "Receive Fixed Income" : paymentRow?.is_emi ? "Pay Vehicle EMI" : "Pay Driver Salary"}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
             <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
-              {paymentRow?.is_emi
+              {paymentRow?.is_fixed_income
+                ? "Select the cash or bank account that received this fixed income. The receipt journal will debit that account and credit the source account."
+                : paymentRow?.is_emi
                 ? "Select the cash or bank account from the vehicle branch. The payment journal will debit Vehicle EMI Payable and credit this account."
                 : "Select the cash or bank account from the payroll branch. The payment journal will debit Driver Salary Payable and credit this account."}
             </p>
