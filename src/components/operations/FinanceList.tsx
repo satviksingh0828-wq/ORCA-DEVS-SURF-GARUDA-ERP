@@ -47,6 +47,8 @@ type TmsMapping = {
   branch_id: string;
   other_expenditure_ledger_id: string | null;
   other_expenditure_payable_ledger_id: string | null;
+  other_income_ledger_id: string | null;
+  other_income_receivable_ledger_id: string | null;
 };
 
 const CSV_COLUMNS = [
@@ -169,6 +171,8 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
           is_fixed_income: Boolean(r.is_fixed_income),
           fixed_income_line_id: (r.fixed_income_line_id as string) ?? null,
           fixed_income_period: (r.fixed_income_period as string) ?? null,
+          income_ledger_id: (r.income_ledger_id as string) ?? null,
+          income_receivable_ledger_id: (r.income_receivable_ledger_id as string) ?? null,
         })),
       );
     } catch {
@@ -212,7 +216,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
         return q;
       }),
       fetchAll<TmsMapping>(() => {
-        let q = db.from("tms_account_ledger_mappings").select("branch_id,other_expenditure_ledger_id,other_expenditure_payable_ledger_id");
+        let q = db.from("tms_account_ledger_mappings").select("branch_id,other_expenditure_ledger_id,other_expenditure_payable_ledger_id,other_income_ledger_id,other_income_receivable_ledger_id");
         if (allowedBranchIds !== null && allowedBranchIds.length > 0) q = q.in("branch_id", allowedBranchIds) as typeof q;
         return q;
       }),
@@ -289,6 +293,9 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
     if (kind === "expenditure" && !editing.expenditure_ledger_id) return toast.error("Expenditure Account is required");
     if (kind === "expenditure" && !editing.expenditure_payable_ledger_id) return toast.error("Expenditure Payable Account is required");
     if (kind === "expenditure" && editing.settled && !editing.payment_ledger_id) return toast.error("Select the cash or bank account used for payment");
+    if (kind === "income" && !editing.income_ledger_id) return toast.error("Income Account is required");
+    if (kind === "income" && !editing.income_receivable_ledger_id) return toast.error("Income Receivable Account is required");
+    if (kind === "income" && editing.settled && !editing.payment_ledger_id) return toast.error("Select the cash or bank account used for receipt");
     setSaving(true);
     const payload: Record<string, unknown> = {
       [cfg.nameCol]: editing.name,
@@ -305,6 +312,11 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
     if (kind === "expenditure") {
       payload.expenditure_ledger_id = editing.expenditure_ledger_id;
       payload.expenditure_payable_ledger_id = editing.expenditure_payable_ledger_id;
+      payload.payment_ledger_id = editing.payment_ledger_id;
+    }
+    if (kind === "income") {
+      payload.income_ledger_id = editing.income_ledger_id;
+      payload.income_receivable_ledger_id = editing.income_receivable_ledger_id;
       payload.payment_ledger_id = editing.payment_ledger_id;
     }
     const isNew = !editing.id;
@@ -353,13 +365,13 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
       return;
     }
     const paidDate = new Date().toISOString().slice(0, 10);
-    if ((kind === "expenditure" || row.is_fixed_income) && !paymentLedgerId) return toast.error("Select the cash or bank account used for this settlement");
+    if ((kind === "expenditure" || kind === "income" || row.is_fixed_income) && !paymentLedgerId) return toast.error("Select the cash or bank account used for this settlement");
     const { error } = await supabase
       .from(cfg.table)
       .update({
         [cfg.statusCol]: true,
         [cfg.statusDateCol]: paidDate,
-        ...((kind === "expenditure" || row.is_fixed_income) ? { payment_ledger_id: paymentLedgerId } : {}),
+        ...((kind === "expenditure" || kind === "income" || row.is_fixed_income) ? { payment_ledger_id: paymentLedgerId } : {}),
       } as never)
       .eq("id", row.id!);
     if (error) return toast.error(error.message);
@@ -445,6 +457,10 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
             const mapping = tmsMappings.find((item) => item.branch_id === row.branch_id);
             row.expenditure_ledger_id = mapping?.other_expenditure_ledger_id ?? null;
             row.expenditure_payable_ledger_id = mapping?.other_expenditure_payable_ledger_id ?? null;
+          } else if (kind === "income" && row.branch_id) {
+            const mapping = tmsMappings.find((item) => item.branch_id === row.branch_id);
+            row.income_ledger_id = mapping?.other_income_ledger_id ?? null;
+            row.income_receivable_ledger_id = mapping?.other_income_receivable_ledger_id ?? null;
           }
           setEditing(row);
         }}>
@@ -569,7 +585,12 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                           expenditure_ledger_id: mapping?.other_expenditure_ledger_id ?? null,
                           expenditure_payable_ledger_id: mapping?.other_expenditure_payable_ledger_id ?? null,
                         }
-                      : {}),
+                      : kind === "income"
+                        ? {
+                            income_ledger_id: mapping?.other_income_ledger_id ?? null,
+                            income_receivable_ledger_id: mapping?.other_income_receivable_ledger_id ?? null,
+                          }
+                        : {}),
                   });
                 }}
               />
@@ -587,6 +608,24 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                     <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={editing.expenditure_payable_ledger_id ?? ""} onChange={(e) => setEditing({ ...editing, expenditure_payable_ledger_id: e.target.value || null })}>
                       <option value="">Select payable account</option>
                       {branchLedgers.filter((ledger) => ledger.branch_id === editing.branch_id && ledger.ledger_type === "liability").map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name}</option>)}
+                    </select>
+                  </div>
+                </>
+              )}
+              {kind === "income" && (
+                <>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">Income Account</Label>
+                    <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={editing.income_ledger_id ?? ""} onChange={(e) => setEditing({ ...editing, income_ledger_id: e.target.value || null })}>
+                      <option value="">Select income account</option>
+                      {branchLedgers.filter((ledger) => ledger.branch_id === editing.branch_id && ledger.ledger_type === "income").map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium text-muted-foreground">Income Receivable Account</Label>
+                    <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={editing.income_receivable_ledger_id ?? ""} onChange={(e) => setEditing({ ...editing, income_receivable_ledger_id: e.target.value || null })}>
+                      <option value="">Select receivable account</option>
+                      {branchLedgers.filter((ledger) => ledger.branch_id === editing.branch_id && ledger.ledger_type === "asset").map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name}</option>)}
                     </select>
                   </div>
                 </>
@@ -661,9 +700,9 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                   onChange={(e) => setEditing({ ...editing, settled_date: e.target.value })}
                 />
               </div>
-              {kind === "expenditure" && editing.settled && (
+              {(kind === "expenditure" || kind === "income") && editing.settled && (
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-medium text-muted-foreground">Paid From</Label>
+                  <Label className="text-xs font-medium text-muted-foreground">{kind === "income" ? "Received In" : "Paid From"}</Label>
                   <select className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm" value={editing.payment_ledger_id ?? ""} onChange={(e) => setEditing({ ...editing, payment_ledger_id: e.target.value || null })}>
                     <option value="">Select cash or bank account</option>
                     {paymentLedgers.filter((ledger) => ledger.branch_id === editing.branch_id).map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</option>)}
@@ -765,7 +804,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                         <Download className="size-4" /> PDF
                       </Button>
                       {!r.settled ? (
-                        <Button variant="outline" size="sm" onClick={() => (kind === "expenditure" || r.is_fixed_income || r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
+                        <Button variant="outline" size="sm" onClick={() => (kind === "expenditure" || kind === "income" || r.is_fixed_income || r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
                           <Check className="size-4" />
                           {cfg.actionLabel}
                         </Button>

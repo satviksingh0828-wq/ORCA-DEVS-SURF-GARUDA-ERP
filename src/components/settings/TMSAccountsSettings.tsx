@@ -24,6 +24,8 @@ type Mapping = {
   vehicle_road_tax_expense_ledger_id?: string | null;
   other_expenditure_ledger_id?: string | null;
   other_expenditure_payable_ledger_id?: string | null;
+  other_income_ledger_id?: string | null;
+  other_income_receivable_ledger_id?: string | null;
 };
 
 const FIELDS = [
@@ -39,6 +41,8 @@ const FIELDS = [
   ["vehicle_road_tax_expense_ledger_id", "Vehicle Road Tax Expense", "expenditure"],
   ["other_expenditure_ledger_id", "Other Expenditure", "expenditure"],
   ["other_expenditure_payable_ledger_id", "Other Expenditure Payable", "liability"],
+  ["other_income_ledger_id", "Other Income", "income"],
+  ["other_income_receivable_ledger_id", "Other Income Receivable", "asset"],
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number][0];
@@ -93,6 +97,7 @@ export function TMSAccountsSettings() {
       expenditure: ledgers.filter((ledger) => ledger.ledger_type === "expenditure"),
       liability: ledgers.filter((ledger) => ledger.ledger_type === "liability"),
       asset: ledgers.filter((ledger) => ledger.ledger_type === "asset"),
+      income: ledgers.filter((ledger) => ledger.ledger_type === "income"),
     }),
     [ledgers],
   );
@@ -148,7 +153,8 @@ export function TMSAccountsSettings() {
             ledgers. Driver Salary Payable, Vehicle Loan, and Vehicle EMI Payable use liability ledgers.
             Driver Advance, Insurance Advance, and Road Tax Advance use asset ledgers. Cash and bank
             payment accounts are selected at the time of payment. Other Expenditure and Other
-            Expenditure Payable are the defaults for general expenditure entries.
+            Expenditure Payable are the defaults for general expenditure entries. Other Income and
+            Other Income Receivable are the defaults for general income entries.
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map(([key, label, type]) => (

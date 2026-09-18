@@ -28,6 +28,8 @@ export type FinanceRow = {
   is_fixed_income?: boolean;
   fixed_income_line_id?: string | null;
   fixed_income_period?: string | null;
+  income_ledger_id?: string | null;
+  income_receivable_ledger_id?: string | null;
 };
 
 export const FINANCE_CONFIG: Record<
@@ -104,6 +106,8 @@ export function emptyFinanceRow(): FinanceRow {
     expenditure_ledger_id: null,
     expenditure_payable_ledger_id: null,
     payment_ledger_id: null,
+    income_ledger_id: null,
+    income_receivable_ledger_id: null,
   };
 }
 
