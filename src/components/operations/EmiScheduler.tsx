@@ -102,6 +102,18 @@ type NormalInterest = {
   tenure_months: string;
 };
 
+function errorMessage(err: unknown, fallback: string): string {
+  if (err instanceof Error && err.message) return err.message;
+  if (typeof err === "object" && err !== null) {
+    const value = err as { message?: unknown; details?: unknown; hint?: unknown };
+    const message = typeof value.message === "string" ? value.message : "";
+    const details = typeof value.details === "string" ? value.details : "";
+    const hint = typeof value.hint === "string" ? value.hint : "";
+    return [message, details, hint].filter(Boolean).join(" — ") || fallback;
+  }
+  return fallback;
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function addMonths(dateStr: string, months: number): string {
@@ -460,7 +472,7 @@ export function EmiScheduler() {
 
       await load();
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not save EMI schedule");
+      toast.error(errorMessage(err, "Could not save EMI schedule"));
     }
     setSaving(false);
   }
