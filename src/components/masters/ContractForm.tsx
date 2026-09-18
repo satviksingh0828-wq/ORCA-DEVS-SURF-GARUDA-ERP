@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowLeft, Loader2, Lock, Save } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,7 @@ export type ContractRow = {
   id?: string;
   contract_name: string;
   branch_id?: string | null;
+  source_asset_ledger_id?: string | null;
   // Contract period & status
   start_date?: string;
   end_date?: string;
@@ -54,6 +55,7 @@ export type ContractRow = {
 export const EMPTY_CONTRACT: ContractRow = {
   contract_name: "",
   branch_id: null,
+  source_asset_ledger_id: null,
   start_date: "",
   end_date: "",
   status: "active",
@@ -139,6 +141,26 @@ export function ContractForm({
   const [form, setForm] = useState<ContractRow>({ ...initial });
   const [saving, setSaving] = useState(false);
   const [showCompany, setShowCompany] = useState(!!initial.company_name);
+  const [assetLedgers, setAssetLedgers] = useState<Array<{ id: string; account_name: string }>>([]);
+
+  useEffect(() => {
+    async function loadAssetLedgers() {
+      if (!form.branch_id) {
+        setAssetLedgers([]);
+        return;
+      }
+      const db = supabase as any;
+      const { data } = await db
+        .from("ledger_accounts")
+        .select("id,account_name")
+        .eq("branch_id", form.branch_id)
+        .eq("ledger_type", "asset")
+        .eq("is_active", true)
+        .order("account_name");
+      setAssetLedgers((data ?? []) as Array<{ id: string; account_name: string }>);
+    }
+    void loadAssetLedgers();
+  }, [form.branch_id]);
 
   const isInactive = form.status === "inactive";
 
@@ -210,6 +232,23 @@ export function ContractForm({
             onChange={(v) => patch({ contract_name: v })}
             disabled={isInactive}
           />
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label className="text-xs font-medium text-muted-foreground">
+              Source Account <span className="text-destructive">*</span>
+            </Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={form.source_asset_ledger_id ?? ""}
+              onChange={(e) => patch({ source_asset_ledger_id: e.target.value || null })}
+              disabled={isInactive || !form.branch_id}
+              required
+            >
+              <option value="">Select asset account</option>
+              {assetLedgers.map((ledger) => (
+                <option key={ledger.id} value={ledger.id}>{ledger.account_name}</option>
+              ))}
+            </select>
+          </div>
           <BranchSelect
             value={form.branch_id}
             onChange={(branch_id) => patch({ branch_id })}
