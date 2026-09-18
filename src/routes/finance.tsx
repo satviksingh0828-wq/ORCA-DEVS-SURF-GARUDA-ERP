@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarCheck, CalendarRange, ChevronRight, DollarSign, PanelLeftClose, PanelLeftOpen, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { CalendarCheck, CalendarRange, ChevronRight, DollarSign, FileText, PanelLeftClose, PanelLeftOpen, Shield, TrendingDown, TrendingUp, Users } from "lucide-react";
 import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -12,6 +12,7 @@ import { YearlyExpenseScheduler } from "@/components/operations/YearlyExpenseSch
 import { DriverPayroll } from "@/components/operations/DriverPayroll";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
+import { VehicleCoveragePage } from "@/components/finance/VehicleCoveragePage";
 
 export const Route = createFileRoute("/finance")({
   head: () => ({ meta: [{ title: "Finance — Garuda Logistics Solutions | ORCA DEVS SURF" }, { name: "description", content: "Income, expenditure, driver payroll, fixed income, yearly expenses and EMI schedules." }] }),
@@ -25,6 +26,8 @@ const ALL_TABS = [
   { id: "fixed-income", label: "Fixed Income", desc: "Contract recurring charges", icon: DollarSign, adminOnly: true },
   { id: "yearly-expenses", label: "Yearly Expenses", desc: "Fixed yearly cost tracker", icon: CalendarRange, adminOnly: true },
   { id: "emi-scheduler", label: "EMI Scheduler", desc: "Vehicle loan & EMI tracker", icon: CalendarCheck, adminOnly: true },
+  { id: "insurance", label: "Insurance", desc: "Vehicle insurance management", icon: Shield, adminOnly: true },
+  { id: "road-tax", label: "Road Tax", desc: "Vehicle road tax management", icon: FileText, adminOnly: true },
 ] as const;
 type TabId = (typeof ALL_TABS)[number]["id"];
 
@@ -49,6 +52,8 @@ function FinancePage() {
         {safeTab === "fixed-income" && (isAdmin || isViewer) && <TabErrorBoundary label="Fixed Income"><FixedIncomeList /></TabErrorBoundary>}
         {safeTab === "yearly-expenses" && (isAdmin || isViewer) && <TabErrorBoundary label="Yearly Expenses"><YearlyExpenseScheduler /></TabErrorBoundary>}
         {safeTab === "emi-scheduler" && (isAdmin || isViewer) && <TabErrorBoundary label="EMI Scheduler"><EmiScheduler /></TabErrorBoundary>}
+        {safeTab === "insurance" && isAdmin && <TabErrorBoundary label="Insurance"><VehicleCoveragePage kind="insurance" /></TabErrorBoundary>}
+        {safeTab === "road-tax" && isAdmin && <TabErrorBoundary label="Road Tax"><VehicleCoveragePage kind="road-tax" /></TabErrorBoundary>}
       </div>
     </div>
   </AppShell>;
