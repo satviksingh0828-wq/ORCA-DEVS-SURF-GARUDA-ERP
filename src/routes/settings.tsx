@@ -28,6 +28,7 @@ import { useSession } from "@/lib/session";
 import { WhatsAppSettings } from "@/components/settings/WhatsAppSettings";
 import { MailSettings } from "@/components/settings/MailSettings";
 import { HRMSAccountsSettings } from "@/components/settings/HRMSAccountsSettings";
+import { TMSAccountsSettings } from "@/components/settings/TMSAccountsSettings";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -66,6 +67,7 @@ const TABS = [
   { id: "whatsapp", label: "WhatsApp", desc: "HR PDF sending & connection", icon: MessageCircle },
   { id: "mail", label: "Mail", desc: "All email notifications", icon: Mail },
   { id: "hrms-accounts", label: "HRMS Accounts", desc: "Payroll and HR ledger mappings", icon: Building2 },
+  { id: "tms-accounts", label: "TMS Accounts", desc: "Driver payroll ledger mappings", icon: Building2 },
   {
     id: "passkey",
     label: "Passkey Security",
@@ -172,6 +174,7 @@ function SettingsPage() {
           {tab === "whatsapp" ? <WhatsAppSettings /> : null}
           {tab === "mail" ? <MailSettings /> : null}
           {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
+          {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
           {tab === "passkey" ? <PasskeySecurityPanel /> : null}
         </div>
       </div>

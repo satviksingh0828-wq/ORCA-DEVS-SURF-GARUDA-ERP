@@ -98,6 +98,8 @@ type Deduction = {
   is_applied: boolean;
 };
 
+type PaymentLedger = { id: string; account_name: string; ledger_type: "cash" | "bank" };
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function monthLabel(ym: string): string {
@@ -167,6 +169,7 @@ export function DriverPayroll() {
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [deductions, setDeductions] = useState<Deduction[]>([]);
+  const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
   const [subTab, setSubTab] = useState<"payrolls" | "advances">("payrolls");
@@ -179,6 +182,8 @@ export function DriverPayroll() {
   // Dialogs
   const [showPayrollDialog, setShowPayrollDialog] = useState(false);
   const [showAdvanceDialog, setShowAdvanceDialog] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [paymentPayroll, setPaymentPayroll] = useState<Payroll | null>(null);
   const [expandedAdvances, setExpandedAdvances] = useState<Set<string>>(new Set());
 
   // Payroll form
@@ -194,6 +199,8 @@ export function DriverPayroll() {
   const [aMonthly, setAMonthly] = useState("");
   const [aNote, setANote] = useState("");
   const [aSaving, setASaving] = useState(false);
+  const [aDisbursementLedgerId, setADisbursementLedgerId] = useState("");
+  const [paymentLedgerId, setPaymentLedgerId] = useState("");
 
   // Paying
   const [payingId, setPayingId] = useState<string | null>(null);
@@ -316,6 +323,18 @@ export function DriverPayroll() {
       setPayrolls(payrollData);
       setAdvances(advanceData);
       setDeductions(deductionData);
+      const branchId = drivers.find((driver) => driver.id === driverId)?.branch_id;
+      if (branchId) {
+        const { data: ledgerData, error: ledgerError } = await supabase
+          .from("ledger_accounts")
+          .select("id,account_name,ledger_type")
+          .eq("branch_id", branchId)
+          .eq("is_active", true)
+          .in("ledger_type", ["cash", "bank"])
+          .order("account_name");
+        if (ledgerError) throw ledgerError;
+        setPaymentLedgers((ledgerData ?? []) as PaymentLedger[]);
+      } else setPaymentLedgers([]);
     } catch {
       toast.error("Could not load payroll data");
     }
@@ -525,6 +544,10 @@ export function DriverPayroll() {
       toast.error("Enter payment date");
       return;
     }
+    if (!aDisbursementLedgerId) {
+      toast.error("Select the cash or bank account used for the advance");
+      return;
+    }
 
     setASaving(true);
     try {
@@ -537,6 +560,7 @@ export function DriverPayroll() {
           remaining_balance: amount,
           payment_date: aDate,
           monthly_deduction: monthly,
+          disbursement_ledger_id: aDisbursementLedgerId,
           note: aNote || null,
         })
         .select("id")
@@ -566,6 +590,7 @@ export function DriverPayroll() {
       setADate(today());
       setAMonthly("");
       setANote("");
+      setADisbursementLedgerId("");
       await loadPayrollData(selectedDriverId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not record advance");
@@ -575,22 +600,22 @@ export function DriverPayroll() {
 
   // ── mark payroll paid ──────────────────────────────────────────────────────
   async function markPaid(p: Payroll) {
+    if (!paymentLedgerId) {
+      toast.error("Select the cash or bank account used for salary payment");
+      return;
+    }
     setPayingId(p.id);
     try {
-      const todayStr = today();
-      await supabase
-        .from("driver_payrolls")
-        .update({ is_paid: true, paid_date: todayStr })
-        .eq("id", p.id);
-
-      if (p.expenditure_id) {
-        await supabase
-          .from("expenditures")
-          .update({ is_paid: true, paid_date: todayStr })
-          .eq("id", p.expenditure_id);
-      }
+      const { error } = await supabase.rpc("tms_record_driver_salary_payment", {
+        p_payroll_id: p.id,
+        p_payment_ledger_id: paymentLedgerId,
+      });
+      if (error) throw error;
 
       toast.success(`${monthLabel(p.month)} payroll marked as paid`);
+      setShowPaymentDialog(false);
+      setPaymentPayroll(null);
+      setPaymentLedgerId("");
       await loadPayrollData(selectedDriverId);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Could not mark as paid");
@@ -900,7 +925,11 @@ export function DriverPayroll() {
                                 variant="outline"
                                 className="h-7 gap-1.5 text-xs"
                                 disabled={payingId === p.id}
-                                onClick={() => markPaid(p)}
+                                onClick={() => {
+                                  setPaymentPayroll(p);
+                                  setPaymentLedgerId("");
+                                  setShowPaymentDialog(true);
+                                }}
                               >
                                 {payingId === p.id ? (
                                   <Loader2 className="size-3 animate-spin" />
@@ -969,7 +998,8 @@ export function DriverPayroll() {
                             onClick={() =>
                               setExpandedAdvances((prev) => {
                                 const next = new Set(prev);
-                                next.has(adv.id) ? next.delete(adv.id) : next.add(adv.id);
+                                if (next.has(adv.id)) next.delete(adv.id);
+                                else next.add(adv.id);
                                 return next;
                               })
                             }
@@ -1161,6 +1191,31 @@ export function DriverPayroll() {
         </DialogContent>
       </Dialog>
 
+      {/* ══ Salary Payment Dialog ══ */}
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Pay Driver Salary</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">
+              {paymentPayroll && <><span className="font-medium text-foreground">{monthLabel(paymentPayroll.month)}</span> · Payable {inr(paymentPayroll.net_amount)}</>}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Pay From Cash/Bank Account</Label>
+              <Select value={paymentLedgerId} onValueChange={setPaymentLedgerId}>
+                <SelectTrigger><SelectValue placeholder="Select cash or bank account" /></SelectTrigger>
+                <SelectContent>{paymentLedgers.map((ledger) => <SelectItem key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPaymentDialog(false)}>Cancel</Button>
+            <Button onClick={() => paymentPayroll && void markPaid(paymentPayroll)} disabled={!paymentPayroll || !!payingId}>
+              {payingId && <Loader2 className="mr-1.5 size-3.5 animate-spin" />} Confirm Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ══ Give Advance Dialog ══ */}
       <Dialog open={showAdvanceDialog} onOpenChange={setShowAdvanceDialog}>
         <DialogContent className="max-w-md">
@@ -1187,6 +1242,14 @@ export function DriverPayroll() {
             <div className="space-y-1.5">
               <Label>Payment Date</Label>
               <Input type="date" value={aDate} onChange={(e) => setADate(e.target.value)} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Pay From Cash/Bank Account</Label>
+              <Select value={aDisbursementLedgerId} onValueChange={setADisbursementLedgerId}>
+                <SelectTrigger><SelectValue placeholder="Select cash or bank account" /></SelectTrigger>
+                <SelectContent>{paymentLedgers.map((ledger) => <SelectItem key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</SelectItem>)}</SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-1.5">

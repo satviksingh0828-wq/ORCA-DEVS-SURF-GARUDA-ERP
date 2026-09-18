@@ -25,6 +25,7 @@ import { financialYearOptions, financialYearRange, dateInFinancialYear } from "@
 import { ItemLogsButton } from "@/components/shared/ItemLogsDrawer";
 import { isDriverActive } from "@/lib/drivers";
 import { openBrandedTablePdf } from "@/lib/branded-pdf";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   emptyFinanceRow,
   FINANCE_CONFIG,
@@ -36,6 +37,7 @@ import {
 } from "@/lib/finance";
 
 type AnyRow = Record<string, unknown> & { id: string };
+type PaymentLedger = { id: string; account_name: string; ledger_type: "cash" | "bank"; branch_id: string };
 
 const CSV_COLUMNS = [
   "entry_date",
@@ -71,6 +73,9 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
   const [vehicles, setVehicles] = useState<AnyRow[]>([]);
   const [drivers, setDrivers] = useState<AnyRow[]>([]);
   const [transporters, setTransporters] = useState<AnyRow[]>([]);
+  const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
+  const [paymentRow, setPaymentRow] = useState<FinanceRow | null>(null);
+  const [paymentLedgerId, setPaymentLedgerId] = useState("");
 
   const currentYear = new Date().getFullYear();
   const currentMonth = String(new Date().getMonth() + 1).padStart(2, "0");
@@ -154,7 +159,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
 
   async function loadMasters() {
     // Only fetch columns needed for dropdowns — id + display name
-    const [v, d, t] = await Promise.all([
+    const [v, d, t, l] = await Promise.all([
       fetchAll<AnyRow>(() => {
         let q = supabase.from("vehicles").select("id,registration_number,nickname,branch_id").order("registration_number");
         if (allowedBranchIds !== null && allowedBranchIds.length > 0) {
@@ -176,10 +181,16 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
         }
         return q;
       }),
+      fetchAll<PaymentLedger>(() => {
+        let q = supabase.from("ledger_accounts").select("id,account_name,ledger_type,branch_id").eq("is_active", true).in("ledger_type", ["cash", "bank"]).order("account_name");
+        if (allowedBranchIds !== null && allowedBranchIds.length > 0) q = q.in("branch_id", allowedBranchIds) as typeof q;
+        return q;
+      }),
     ]);
     setVehicles(v);
     setDrivers(d.filter(isDriverActive));
     setTransporters(t);
+    setPaymentLedgers(l);
   }
 
   useEffect(() => {
@@ -272,6 +283,20 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
   }
 
   async function settle(row: FinanceRow) {
+    if (row.is_payroll && row.payroll_id) {
+      if (!paymentLedgerId) return toast.error("Select the cash or bank account used for salary payment");
+      const { error } = await supabase.rpc("tms_record_driver_salary_payment", {
+        p_payroll_id: row.payroll_id,
+        p_payment_ledger_id: paymentLedgerId,
+      });
+      if (error) return toast.error(error.message);
+      logAction("settled", kind, { entityId: row.id ?? "", entityLabel: row.name });
+      toast.success(cfg.doneLabel);
+      setPaymentRow(null);
+      setPaymentLedgerId("");
+      load();
+      return;
+    }
     const paidDate = new Date().toISOString().slice(0, 10);
     const { error } = await supabase
       .from(cfg.table)
@@ -639,7 +664,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                         <Download className="size-4" /> PDF
                       </Button>
                       {!r.settled ? (
-                        <Button variant="outline" size="sm" onClick={() => settle(r)}>
+                        <Button variant="outline" size="sm" onClick={() => r.is_payroll ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
                           <Check className="size-4" />
                           {cfg.actionLabel}
                         </Button>
@@ -670,6 +695,23 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
           </table>
         </div>
       )}
+
+      <Dialog open={!!paymentRow} onOpenChange={(open) => { if (!open) setPaymentRow(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Pay Driver Salary</DialogTitle></DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="rounded-lg bg-muted/50 px-3 py-2 text-sm text-muted-foreground">Select the cash or bank account from the payroll branch. The payment journal will debit Driver Salary Payable and credit this account.</p>
+            <Select value={paymentLedgerId} onValueChange={setPaymentLedgerId}>
+              <SelectTrigger><SelectValue placeholder="Select cash or bank account" /></SelectTrigger>
+              <SelectContent>{paymentLedgers.filter((ledger) => ledger.branch_id === paymentRow?.branch_id).map((ledger) => <SelectItem key={ledger.id} value={ledger.id}>{ledger.account_name} ({ledger.ledger_type})</SelectItem>)}</SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPaymentRow(null)}>Cancel</Button>
+            <Button onClick={() => paymentRow && void settle(paymentRow)} disabled={!paymentLedgerId}>Confirm Payment</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
     </div>
   );
