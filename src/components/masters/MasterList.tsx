@@ -171,6 +171,11 @@ export function MasterList({
   const allowedBranchIds = user?.role === "basic" ? (user?.branchIds ?? []) : null;
 
   const allFieldKeys = config.sections.flatMap((s) => s.fields.map((f) => f.key));
+  const dateFieldKeys = new Set(
+    config.sections.flatMap((section) =>
+      section.fields.filter((field) => field.type === "date").map((field) => field.key),
+    ),
+  );
   const emptyRow: Row = Object.fromEntries(allFieldKeys.map((k) => [k, ""])) as Row;
   // Auto-fill branch when user has exactly one allowed branch
   if (config.hasBranch) {
@@ -294,7 +299,12 @@ export function MasterList({
       updated_at?: unknown;
       branch_name?: unknown;
     };
-    const payload = rest as never;
+    const payload = Object.fromEntries(
+      Object.entries(rest).map(([key, value]) => [
+        key,
+        dateFieldKeys.has(key) && value === "" ? null : value,
+      ]),
+    ) as never;
     const res = id
       ? await supabase.from(config.table).update(payload).eq("id", id)
       : await supabase.from(config.table).insert(payload);
@@ -329,7 +339,10 @@ export function MasterList({
       .filter((r) => (r[config.titleKey] || "").trim() !== "")
       .map((r) => {
         const o: Record<string, unknown> = {};
-        for (const k of allFieldKeys) o[k] = r[k] ?? "";
+        for (const k of allFieldKeys) {
+          const value = r[k] ?? "";
+          o[k] = dateFieldKeys.has(k) && value === "" ? null : value;
+        }
         if (config.hasBranch) {
           const n = (r.branch_name || "").trim().toLowerCase();
           o.branch_id = n ? (nameToId.get(n) ?? null) : null;
