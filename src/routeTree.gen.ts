@@ -15,6 +15,7 @@ import { Route as AttendanceRouteImport } from './routes/attendance'
 import { Route as CashReportsRouteImport } from './routes/cash-reports'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as EmployeesRouteImport } from './routes/employees'
+import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as HomeRouteImport } from './routes/home'
 import { Route as HrDashboardRouteImport } from './routes/hr-dashboard'
 import { Route as HrDataRouteImport } from './routes/hr-data'
@@ -118,6 +119,11 @@ const DashboardRoute = DashboardRouteImport.update({
 const EmployeesRoute = EmployeesRouteImport.update({
   id: '/employees',
   path: '/employees',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const FinanceRoute = FinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HomeRoute = HomeRouteImport.update({
@@ -507,6 +513,7 @@ export interface FileRoutesByFullPath {
   '/cash-reports': typeof CashReportsRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/employees': typeof EmployeesRouteWithChildren
+  '/finance': typeof FinanceRoute
   '/home': typeof HomeRoute
   '/hr-dashboard': typeof HrDashboardRoute
   '/hr-data': typeof HrDataRoute
@@ -585,6 +592,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/cash-reports': typeof CashReportsRoute
+  '/finance': typeof FinanceRoute
   '/home': typeof HomeRoute
   '/hr-dashboard': typeof HrDashboardRoute
   '/hr-data': typeof HrDataRoute
@@ -664,6 +672,7 @@ export interface FileRoutesById {
   '/cash-reports': typeof CashReportsRoute
   '/dashboard': typeof DashboardRouteWithChildren
   '/employees': typeof EmployeesRouteWithChildren
+  '/finance': typeof FinanceRoute
   '/home': typeof HomeRoute
   '/hr-dashboard': typeof HrDashboardRoute
   '/hr-data': typeof HrDataRoute
@@ -748,6 +757,7 @@ export interface FileRouteTypes {
     | '/cash-reports'
     | '/dashboard'
     | '/employees'
+    | '/finance'
     | '/home'
     | '/hr-dashboard'
     | '/hr-data'
@@ -826,6 +836,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/cash-reports'
+    | '/finance'
     | '/home'
     | '/hr-dashboard'
     | '/hr-data'
@@ -904,6 +915,7 @@ export interface FileRouteTypes {
     | '/cash-reports'
     | '/dashboard'
     | '/employees'
+    | '/finance'
     | '/home'
     | '/hr-dashboard'
     | '/hr-data'
@@ -987,6 +999,7 @@ export interface RootRouteChildren {
   CashReportsRoute: typeof CashReportsRoute
   DashboardRoute: typeof DashboardRouteWithChildren
   EmployeesRoute: typeof EmployeesRouteWithChildren
+  FinanceRoute: typeof FinanceRoute
   HomeRoute: typeof HomeRoute
   HrDashboardRoute: typeof HrDashboardRoute
   HrDataRoute: typeof HrDataRoute
@@ -1062,6 +1075,13 @@ declare module '@tanstack/react-router' {
       path: '/employees'
       fullPath: '/employees'
       preLoaderRoute: typeof EmployeesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/finance': {
+      id: '/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof FinanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/home': {
@@ -1765,6 +1785,7 @@ const rootRouteChildren: RootRouteChildren = {
   CashReportsRoute: CashReportsRoute,
   DashboardRoute: DashboardRouteWithChildren,
   EmployeesRoute: EmployeesRouteWithChildren,
+  FinanceRoute: FinanceRoute,
   HomeRoute: HomeRoute,
   HrDashboardRoute: HrDashboardRoute,
   HrDataRoute: HrDataRoute,
