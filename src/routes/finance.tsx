@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarCheck, CalendarRange, ChevronRight, DollarSign, FileText, PanelLeftClose, PanelLeftOpen, Shield, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { CalendarCheck, ChevronRight, DollarSign, FileText, PanelLeftClose, PanelLeftOpen, Shield, TrendingDown, TrendingUp, Users } from "lucide-react";
 import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -8,7 +8,6 @@ import { TabErrorBoundary } from "@/components/TabErrorBoundary";
 import { FinanceList } from "@/components/operations/FinanceList";
 import { FixedIncomeList } from "@/components/operations/FixedIncomeList";
 import { EmiScheduler } from "@/components/operations/EmiScheduler";
-import { YearlyExpenseScheduler } from "@/components/operations/YearlyExpenseScheduler";
 import { DriverPayroll } from "@/components/operations/DriverPayroll";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
@@ -24,7 +23,6 @@ const ALL_TABS = [
   { id: "expenditure", label: "Expenditure", desc: "Other spend, branch-wise", icon: TrendingDown, adminOnly: false },
   { id: "driver-payroll", label: "Driver Payroll", desc: "Salary, advances & deductions", icon: Users, adminOnly: false },
   { id: "fixed-income", label: "Fixed Income", desc: "Contract recurring charges", icon: DollarSign, adminOnly: true },
-  { id: "yearly-expenses", label: "Yearly Expenses", desc: "Fixed yearly cost tracker", icon: CalendarRange, adminOnly: true },
   { id: "emi-scheduler", label: "EMI Scheduler", desc: "Vehicle loan & EMI tracker", icon: CalendarCheck, adminOnly: true },
   { id: "insurance", label: "Insurance", desc: "Vehicle insurance management", icon: Shield, adminOnly: true },
   { id: "road-tax", label: "Road Tax", desc: "Vehicle road tax management", icon: FileText, adminOnly: true },
@@ -50,7 +48,6 @@ function FinancePage() {
         {safeTab === "expenditure" && <TabErrorBoundary label="Expenditure"><FinanceList kind="expenditure" /></TabErrorBoundary>}
         {safeTab === "driver-payroll" && <TabErrorBoundary label="Driver Payroll"><DriverPayroll /></TabErrorBoundary>}
         {safeTab === "fixed-income" && (isAdmin || isViewer) && <TabErrorBoundary label="Fixed Income"><FixedIncomeList /></TabErrorBoundary>}
-        {safeTab === "yearly-expenses" && (isAdmin || isViewer) && <TabErrorBoundary label="Yearly Expenses"><YearlyExpenseScheduler /></TabErrorBoundary>}
         {safeTab === "emi-scheduler" && (isAdmin || isViewer) && <TabErrorBoundary label="EMI Scheduler"><EmiScheduler /></TabErrorBoundary>}
         {safeTab === "insurance" && isAdmin && <TabErrorBoundary label="Insurance"><VehicleCoveragePage kind="insurance" /></TabErrorBoundary>}
         {safeTab === "road-tax" && isAdmin && <TabErrorBoundary label="Road Tax"><VehicleCoveragePage kind="road-tax" /></TabErrorBoundary>}
