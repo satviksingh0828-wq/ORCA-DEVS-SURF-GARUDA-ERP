@@ -318,7 +318,7 @@ export function EmiScheduler() {
         : normalMode === "auto"
           ? genNormalAuto(normalAuto, loanAmt)
           : genNormalInterest(normalInterest, loanAmt);
-    if (generated.length === 0 || generated.some((item) => item.principal != null)) return generated;
+    if (generated.length === 0) return generated;
 
     const totalInterestForFlatSchedule = Math.max(
       0,
