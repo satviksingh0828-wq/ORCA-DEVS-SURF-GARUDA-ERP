@@ -279,11 +279,8 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
     return true;
   });
 
-  const ordinaryIncomeRows = kind === "income" ? filtered.filter((r) => !r.is_fixed_income) : filtered;
-  const total = ordinaryIncomeRows.reduce((s, r) => s + num(r.amount), 0);
-  const pendingTotal = filtered
-    .filter((r) => !r.settled && !r.is_fixed_income)
-    .reduce((s, r) => s + num(r.amount), 0);
+  const total = filtered.reduce((s, r) => s + num(r.amount), 0);
+  const pendingTotal = filtered.filter((r) => !r.settled).reduce((s, r) => s + num(r.amount), 0);
 
   async function save(e: React.FormEvent) {
     e.preventDefault();

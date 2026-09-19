@@ -109,15 +109,6 @@ export type PnLExpenditureRow = {
   entry_date: string;
 };
 
-export type PnLContractRow = {
-  id: string;
-  contract_name: string;
-  fixed_monthly_charge: number;
-  fixed_yearly_charge: number;
-  fixed_monthly_charge_note: string;
-  fixed_yearly_charge_note: string;
-};
-
 export type PnLBranch = {
   id: string;
   branch_name: string;
@@ -144,7 +135,6 @@ export type PnLRawData = {
   closedTrips: PnLClosedTrip[];
   incomes: PnLIncomeRow[];
   expenditures: PnLExpenditureRow[];
-  contracts: PnLContractRow[];
   branches: PnLBranch[];
   vehicles: PnLVehicle[];
   drivers: PnLDriver[];
@@ -230,17 +220,6 @@ function mapExpenditure(r: Record<string, unknown>): PnLExpenditureRow {
     transporter_id: (r.transporter_id as string) ?? null,
     amount: String(r.amount ?? "0"),
     entry_date: String(r.entry_date ?? ""),
-  };
-}
-
-function mapContract(c: Record<string, unknown>): PnLContractRow {
-  return {
-    id: c.id as string,
-    contract_name: String(c.contract_name ?? ""),
-    fixed_monthly_charge: Number(c.fixed_monthly_charge ?? 0),
-    fixed_yearly_charge: Number(c.fixed_yearly_charge ?? 0),
-    fixed_monthly_charge_note: String(c.fixed_monthly_charge_note ?? ""),
-    fixed_yearly_charge_note: String(c.fixed_yearly_charge_note ?? ""),
   };
 }
 
@@ -395,7 +374,6 @@ export const serverFetchPnLYear = createServerFn({ method: "POST" })
       activeTrips,
       incomesRows,
       expendituresRows,
-      contractsRes,
       branchesRes,
       vehiclesRes,
       driversRes,
@@ -416,7 +394,6 @@ export const serverFetchPnLYear = createServerFn({ method: "POST" })
         db
           .from("incomes")
           .select("id,branch_id,vehicle_id,driver_id,transporter_id,amount,entry_date")
-          .eq("is_fixed_income", false)
           .gte("entry_date", start)
           .lt("entry_date", end),
       ),
@@ -427,12 +404,6 @@ export const serverFetchPnLYear = createServerFn({ method: "POST" })
           .gte("entry_date", start)
           .lt("entry_date", end),
       ),
-      db
-        .from("contracts")
-        .select(
-          "id,contract_name,fixed_monthly_charge,fixed_yearly_charge,fixed_monthly_charge_note,fixed_yearly_charge_note",
-        )
-        .eq("status", "active"),
       db.from("branches").select("id,branch_name"),
       db.from("vehicles").select("id,registration_number,nickname").order("registration_number"),
       db.from("drivers").select("id,full_name,driver_code,ending_date").order("full_name"),
@@ -443,7 +414,6 @@ export const serverFetchPnLYear = createServerFn({ method: "POST" })
       closedTrips: [...closedTripsRows.map(mapTrip), ...activeTrips],
       incomes: incomesRows.map(mapIncome),
       expenditures: expendituresRows.map(mapExpenditure),
-      contracts: (contractsRes.data ?? []).map(mapContract),
       branches: (branchesRes.data ?? []).map((b: Record<string, unknown>) => ({
         id: b.id as string,
         branch_name: String(b.branch_name ?? ""),
@@ -503,7 +473,6 @@ export const serverFetchPnLPeriod = createServerFn({ method: "POST" })
       activeTrips,
       incomesRows,
       expendituresRows,
-      contractsRes,
       branchesRes,
       vehiclesRes,
       driversRes,
@@ -523,7 +492,6 @@ export const serverFetchPnLPeriod = createServerFn({ method: "POST" })
         db
           .from("incomes")
           .select("id,branch_id,vehicle_id,driver_id,transporter_id,amount,entry_date")
-          .eq("is_fixed_income", false)
           .gte("entry_date", start)
           .lt("entry_date", end),
       ),
@@ -534,12 +502,6 @@ export const serverFetchPnLPeriod = createServerFn({ method: "POST" })
           .gte("entry_date", start)
           .lt("entry_date", end),
       ),
-      db
-        .from("contracts")
-        .select(
-          "id,contract_name,fixed_monthly_charge,fixed_yearly_charge,fixed_monthly_charge_note,fixed_yearly_charge_note",
-        )
-        .eq("status", "active"),
       db.from("branches").select("id,branch_name"),
       db.from("vehicles").select("id,registration_number,nickname").order("registration_number"),
       db.from("drivers").select("id,full_name,driver_code,ending_date").order("full_name"),
@@ -550,7 +512,6 @@ export const serverFetchPnLPeriod = createServerFn({ method: "POST" })
       closedTrips: [...closedTripsRows.map(mapTrip), ...activeTrips],
       incomes: incomesRows.map(mapIncome),
       expenditures: expendituresRows.map(mapExpenditure),
-      contracts: (contractsRes.data ?? []).map(mapContract),
       branches: (branchesRes.data ?? []).map((b: Record<string, unknown>) => ({
         id: b.id as string,
         branch_name: String(b.branch_name ?? ""),
@@ -591,7 +552,6 @@ async function fetchTripAveragesData(
   const month = data.month ?? 1;
   let start: string;
   let end: string;
-  const months = financialYearStart !== undefined ? 12 : 1;
   if (financialYearStart !== undefined) {
     ({ start, end } = financialYearRange(financialYearStart));
   } else {
@@ -605,7 +565,6 @@ async function fetchTripAveragesData(
     incomesRows,
     rawExpenditureRows,
     emiInstallmentRows,
-    contractsRes,
     locationsRes,
   ] = await Promise.all([
     fetchAllAdmin<Record<string, unknown>>(() =>
@@ -622,7 +581,6 @@ async function fetchTripAveragesData(
       db
         .from("incomes")
         .select("branch_id,amount,entry_date")
-        .eq("is_fixed_income", false)
         .gte("entry_date", start)
         .lt("entry_date", end),
     ),
@@ -640,7 +598,6 @@ async function fetchTripAveragesData(
         .gte("due_date", start)
         .lt("due_date", end),
     ),
-    db.from("contracts").select("fixed_monthly_charge,fixed_yearly_charge").eq("status", "active"),
     db.from("locations").select("id,location_name,pin_code"),
   ]);
 
@@ -845,16 +802,8 @@ async function fetchTripAveragesData(
     (s: number, r: Record<string, unknown>) => s + Number(r.amount ?? 0),
     0,
   );
-  const fixedIncome =
-    allowedBranchIds === undefined
-      ? (contractsRes.data ?? []).reduce((s: number, c: Record<string, unknown>) => {
-          return (
-            s +
-            (Number(c.fixed_monthly_charge ?? 0) + Number(c.fixed_yearly_charge ?? 0) / 12) * months
-          );
-        }, 0)
-      : 0;
-  const otherNetPnL = otherIncome + fixedIncome - totalExpenditure;
+  const fixedIncome = 0;
+  const otherNetPnL = otherIncome - totalExpenditure;
 
   const incomeRows = scopedIncomeRows.map((r: Record<string, unknown>) => ({
     branch_id: (r.branch_id as string) ?? null,
@@ -953,16 +902,8 @@ export function computePnL(data: PnLRawData, branchId: string | null): PnLStats 
   const otherIncome = incomes.reduce((s, r) => s + num(r.amount), 0);
   const totalExpenditure = expenditures.reduce((s, r) => s + num(r.amount), 0);
 
-  const numBranches = Math.max(data.branches.length, 1);
-  const fixedIncome = data.contracts.reduce((s, c) => {
-    const monthly = c.fixed_monthly_charge;
-    const yearlyMonthly = c.fixed_yearly_charge / 12;
-    const total = monthly + yearlyMonthly;
-    const periodTotal = total * data.periodMonths;
-    return s + (branchId ? periodTotal / numBranches : periodTotal);
-  }, 0);
-
-  const totalIncome = tripIncome + otherIncome + fixedIncome;
+  const fixedIncome = 0;
+  const totalIncome = tripIncome + otherIncome;
   const totalExpense = tripExpense + totalExpenditure;
   const netPnL = totalIncome - totalExpense;
 
@@ -1068,12 +1009,6 @@ export function computeMonthlyPnL(
   expenditures: number;
   netPnL: number;
 }> {
-  const numBranches = Math.max(data.branches.length, 1);
-  const perMonthFixed = data.contracts.reduce((s, c) => {
-    const total = c.fixed_monthly_charge + c.fixed_yearly_charge / 12;
-    return s + (branchId ? total / numBranches : total);
-  }, 0);
-
   return accountingMonths(data).map(({ label, prefix: monthStr }) => {
     const trips = data.closedTrips.filter(
       (t) => (!branchId || t.branch_id === branchId) && t.closed_at.startsWith(monthStr),
@@ -1089,8 +1024,8 @@ export function computeMonthlyPnL(
     const tripExpense = trips.reduce((s, t) => s + t.total_expense, 0);
     const otherIncome = incomes.reduce((s, r) => s + num(r.amount), 0);
     const totalExpenditure = expenditures.reduce((s, r) => s + num(r.amount), 0);
-    const fixedIncome = perMonthFixed;
-    const netPnL = tripIncome + otherIncome + fixedIncome - tripExpense - totalExpenditure;
+    const fixedIncome = 0;
+    const netPnL = tripIncome + otherIncome - tripExpense - totalExpenditure;
 
     return {
       month: label,
