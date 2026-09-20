@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { Loader2, Plus, Shield, Trash2 } from "lucide-react";
+import { Loader2, Plus, Shield } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,6 @@ import {
   MONTH_NAMES,
   serverLoadInsurance,
   serverSaveInsurance,
-  serverDeleteInsurance,
   splitByMonth,
   totalDaysBetween,
   type InsuranceEntry,
@@ -66,7 +65,6 @@ export function VehicleInsuranceSection({ vehicleId, branchId, registrationNumbe
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
 
@@ -144,20 +142,6 @@ export function VehicleInsuranceSection({ vehicleId, branchId, registrationNumbe
       toast.error((err as Error).message);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleDelete(entry: InsuranceEntry) {
-    if (!window.confirm(`Delete insurance "${entry.insurance_number}"? This will also remove the linked expenditure entries.`)) return;
-    setDeletingId(entry.id);
-    try {
-      await serverDeleteInsurance({ data: { userId, insuranceId: entry.id } });
-      toast.success("Insurance entry deleted.");
-      await load();
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setDeletingId(null);
     }
   }
 
@@ -335,20 +319,6 @@ export function VehicleInsuranceSection({ vehicleId, branchId, registrationNumbe
                       <td className="py-2 pr-3 text-xs">{days}</td>
                       <td className="py-2 pr-3 text-right">{inr(e.total_amount)}</td>
                       <td className="py-2 pr-3 text-right text-xs">{inr(e.total_amount / days)}/day</td>
-                      <td className="py-2 text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          disabled={deletingId === e.id}
-                          onClick={() => handleDelete(e)}
-                        >
-                          {deletingId === e.id
-                            ? <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                            : <Trash2 className="size-4 text-destructive" />
-                          }
-                        </Button>
-                      </td>
                     </tr>
                   );
                 })}

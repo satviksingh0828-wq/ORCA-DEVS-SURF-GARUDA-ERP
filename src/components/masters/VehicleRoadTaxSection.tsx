@@ -10,7 +10,7 @@
  */
 
 import { useEffect, useState } from "react";
-import { FileText, Loader2, Plus, Trash2 } from "lucide-react";
+import { FileText, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,7 +22,6 @@ import {
   MONTH_NAMES,
   serverLoadRoadTax,
   serverSaveRoadTax,
-  serverDeleteRoadTax,
   splitByMonth,
   totalDaysBetween,
   type RoadTaxEntry,
@@ -66,7 +65,6 @@ export function VehicleRoadTaxSection({ vehicleId, branchId, registrationNumber 
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
   const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
 
@@ -144,23 +142,6 @@ export function VehicleRoadTaxSection({ vehicleId, branchId, registrationNumber 
       toast.error((err as Error).message);
     } finally {
       setSaving(false);
-    }
-  }
-
-  async function handleDelete(entry: RoadTaxEntry) {
-    const period = entry.start_date && entry.end_date
-      ? `${formatDate(entry.start_date)} – ${formatDate(entry.end_date)}`
-      : `${MONTH_NAMES[entry.start_month - 1]} ${entry.start_year} – ${MONTH_NAMES[entry.end_month - 1]} ${entry.end_year}`;
-    if (!window.confirm(`Delete road tax entry for ${period}? This will also remove the linked expenditure entries.`)) return;
-    setDeletingId(entry.id);
-    try {
-      await serverDeleteRoadTax({ data: { userId, roadTaxId: entry.id } });
-      toast.success("Road tax entry deleted.");
-      await load();
-    } catch (err) {
-      toast.error((err as Error).message);
-    } finally {
-      setDeletingId(null);
     }
   }
 
@@ -338,20 +319,6 @@ export function VehicleRoadTaxSection({ vehicleId, branchId, registrationNumber 
                       <td className="py-2 pr-3 text-xs">{days}</td>
                       <td className="py-2 pr-3 text-right">{inr(e.total_amount)}</td>
                       <td className="py-2 pr-3 text-right text-xs">{inr(e.total_amount / days)}/day</td>
-                      <td className="py-2 text-right">
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          disabled={deletingId === e.id}
-                          onClick={() => handleDelete(e)}
-                        >
-                          {deletingId === e.id
-                            ? <Loader2 className="size-4 animate-spin text-muted-foreground" />
-                            : <Trash2 className="size-4 text-destructive" />
-                          }
-                        </Button>
-                      </td>
                     </tr>
                   );
                 })}

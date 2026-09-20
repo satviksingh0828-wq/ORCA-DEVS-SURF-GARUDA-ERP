@@ -19,7 +19,6 @@ import {
   IndianRupee,
   Loader2,
   Plus,
-  Trash2,
   CheckCircle2,
   Clock,
   Car,
@@ -214,7 +213,6 @@ export function EmiScheduler() {
   // Marking paid
   const [markingPaid, setMarkingPaid] = useState<string | null>(null);
   const [paymentLedgerId, setPaymentLedgerId] = useState("");
-  const [deleting, setDeleting] = useState<string | null>(null);
 
   // ── Load ─────────────────────────────────────────────────────────────────────
 
@@ -507,55 +505,6 @@ export function EmiScheduler() {
     );
   }
 
-  async function handleDeleteSchedule(scheduleId: string) {
-    if (
-      !window.confirm(
-        "Are you sure you want to delete this EMI schedule? This will also delete all associated expenditure records. This action cannot be undone.",
-      )
-    ) {
-      return;
-    }
-
-    setDeleting(scheduleId);
-    try {
-      // 1. Get all expenditure IDs linked to this schedule's installments
-      const { data: installments, error: fetchErr } = await supabase
-        .from("emi_installments")
-        .select("expenditure_id")
-        .eq("schedule_id", scheduleId);
-
-      if (fetchErr) throw fetchErr;
-
-      const expenditureIds = installments
-        ?.map((i) => i.expenditure_id)
-        .filter((id): id is string => !!id);
-
-      // 2. Delete expenditures
-      if (expenditureIds && expenditureIds.length > 0) {
-        const { error: expDelErr } = await supabase
-          .from("expenditures")
-          .delete()
-          .in("id", expenditureIds);
-
-        if (expDelErr) throw expDelErr;
-      }
-
-      // 3. Delete the schedule (cascades to installments)
-      const { error: schedDelErr } = await supabase
-        .from("emi_schedules")
-        .delete()
-        .eq("id", scheduleId);
-
-      if (schedDelErr) throw schedDelErr;
-
-      toast.success("EMI schedule and associated expenditures deleted");
-      await load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not delete EMI schedule");
-    }
-    setDeleting(null);
-  }
-
   // ── Render ────────────────────────────────────────────────────────────────────
 
   if (loading) {
@@ -833,7 +782,6 @@ export function EmiScheduler() {
                       <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground w-10">#</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Due Date</th>
                       <th className="px-3 py-2 text-left text-xs font-medium text-muted-foreground">Amount (₹)</th>
-                      <th className="px-3 py-2 w-10" />
                     </tr>
                   </thead>
                   <tbody>
@@ -865,19 +813,6 @@ export function EmiScheduler() {
                               )
                             }
                           />
-                        </td>
-                        <td className="px-3 py-2">
-                          {customRows.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCustomRows((p) => p.filter((_, j) => j !== i))
-                              }
-                              className="text-muted-foreground hover:text-destructive transition-colors"
-                            >
-                              <Trash2 className="size-3.5" />
-                            </button>
-                          )}
                         </td>
                       </tr>
                     ))}
@@ -1023,24 +958,6 @@ export function EmiScheduler() {
                       <ChevronRight className="size-4 text-muted-foreground shrink-0" />
                     )}
                   </button>
-                  <div className="pr-5">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
-                      disabled={deleting === sched.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDeleteSchedule(sched.id);
-                      }}
-                    >
-                      {deleting === sched.id ? (
-                        <Loader2 className="size-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="size-4" />
-                      )}
-                    </Button>
-                  </div>
                 </div>
 
                 {/* Progress bar */}

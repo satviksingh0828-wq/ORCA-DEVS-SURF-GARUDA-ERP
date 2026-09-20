@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Check, Download, Loader2, Plus, Trash2 } from "lucide-react";
+import { Check, Download, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -389,14 +389,6 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
     load();
   }
 
-  async function remove(row: FinanceRow) {
-    if (!window.confirm(`Delete "${row.name}"? This cannot be undone.`)) return;
-    const { error } = await supabase.from(cfg.table).delete().eq("id", row.id!);
-    if (error) return toast.error(error.message);
-    logAction("deleted", kind, { entityId: row.id ?? "", entityLabel: row.name });
-    load();
-  }
-
   const csvRows = filtered.map((r) => ({
     entry_date: r.entry_date,
     name: r.name,
@@ -750,10 +742,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                   nameOf(driverOpts, r.driver_id) ||
                   nameOf(transporterOpts, r.transporter_id) ||
                   "—";
-                // Payroll rows are read-only for basic users — only pay action allowed
-                // Basic users cannot edit or delete any finance entry
                 const isPayrollRow = r.is_payroll === true;
-                const canEditDelete = !isBasic && (isAdmin || !isPayrollRow);
                 return (
                   <tr key={r.id} className={`border-b border-border/60 ${isPayrollRow ? "bg-blue-50/40 dark:bg-blue-950/20" : ""}`}>
                     <td className="py-2 pr-3">{r.entry_date || "—"}</td>
@@ -806,11 +795,6 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                           {cfg.actionLabel}
                         </Button>
                       ) : null}
-                      {canEditDelete && (
-                        <Button variant="ghost" size="sm" onClick={() => setEditing(r)}>
-                          Edit
-                        </Button>
-                      )}
                       {/* Admin-only: per-row logs */}
                       {isAdmin && r.id ? (
                         <ItemLogsButton
@@ -819,11 +803,6 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                           entityLabel={r.name}
                         />
                       ) : null}
-                      {canEditDelete && (
-                        <Button variant="ghost" size="sm" onClick={() => remove(r)}>
-                          <Trash2 className="size-4 text-destructive" />
-                        </Button>
-                      )}
                     </td>
                   </tr>
                 );
