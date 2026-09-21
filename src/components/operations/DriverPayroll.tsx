@@ -48,6 +48,13 @@ import { fetchAll } from "@/lib/fetch-all";
 import { isDriverActive } from "@/lib/drivers";
 import { inr, num } from "@/lib/trip-calc";
 import { downloadDriverPaymentReceipt } from "@/lib/driver-payment-pdf";
+import {
+  serverApprovePendingDriverFinance,
+  serverListPendingDriverFinance,
+  serverSubmitPendingDriverFinance,
+  type DriverPendingEntry,
+  type DriverPendingPayload,
+} from "@/lib/driver-payroll-verification";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -169,6 +176,8 @@ export function DriverPayroll() {
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [advances, setAdvances] = useState<Advance[]>([]);
   const [deductions, setDeductions] = useState<Deduction[]>([]);
+  const [pendingPayrolls, setPendingPayrolls] = useState<DriverPendingEntry[]>([]);
+  const [pendingAdvances, setPendingAdvances] = useState<DriverPendingEntry[]>([]);
   const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
   const [loadingData, setLoadingData] = useState(false);
 
@@ -323,6 +332,14 @@ export function DriverPayroll() {
       setPayrolls(payrollData);
       setAdvances(advanceData);
       setDeductions(deductionData);
+      if (user?.sessionToken) {
+        const [pendingPayrollData, pendingAdvanceData] = await Promise.all([
+          serverListPendingDriverFinance({ data: { sessionToken: user.sessionToken, kind: "payroll" } }),
+          serverListPendingDriverFinance({ data: { sessionToken: user.sessionToken, kind: "advance" } }),
+        ]);
+        setPendingPayrolls(pendingPayrollData.filter((entry) => entry.driver_id === driverId));
+        setPendingAdvances(pendingAdvanceData.filter((entry) => entry.driver_id === driverId));
+      }
       const branchId = drivers.find((driver) => driver.id === driverId)?.branch_id;
       if (branchId) {
         const { data: ledgerData, error: ledgerError } = await supabase
@@ -352,6 +369,8 @@ export function DriverPayroll() {
       setPayrolls([]);
       setAdvances([]);
       setDeductions([]);
+      setPendingPayrolls([]);
+      setPendingAdvances([]);
     }
   }, [selectedDriverId]);
 
@@ -395,6 +414,26 @@ export function DriverPayroll() {
     setPSaving(true);
     try {
       const driver = selectedDriver;
+
+      if (isBasic) {
+        if (!user?.sessionToken) throw new Error("Your session has expired. Please sign in again.");
+        const payload: DriverPendingPayload = {
+          driver_id: selectedDriverId,
+          driver_name: driver.full_name,
+          branch_id: driver.branch_id ?? null,
+          month: pMonth,
+          salary_amount: String(salary),
+          advance_deduction: String(deduction),
+          net_amount: String(net),
+          note: pNote || null,
+        };
+        await serverSubmitPendingDriverFinance({ data: { sessionToken: user.sessionToken, kind: "payroll", payload } });
+        toast.success(`Payroll for ${monthLabel(pMonth)} submitted for approval`);
+        setShowPayrollDialog(false);
+        setPNote("");
+        await loadPayrollData(selectedDriverId);
+        return;
+      }
 
       // 1. Insert payroll (expenditure_id filled after)
       const { data: pr, error: prErr } = await supabase
@@ -551,6 +590,35 @@ export function DriverPayroll() {
 
     setASaving(true);
     try {
+      if (isBasic) {
+        if (!user?.sessionToken || !selectedDriver) throw new Error("Your session has expired. Please sign in again.");
+        const numMonths = Math.ceil(amount / monthly);
+        let rem = amount;
+        const schedule: Array<{ month: string; amount: number }> = [];
+        for (const m of futureMonths(currentMonth(), numMonths)) {
+          const d = Math.min(monthly, rem);
+          schedule.push({ month: m, amount: d });
+          rem -= d;
+          if (rem <= 0) break;
+        }
+        const payload: DriverPendingPayload = {
+          driver_id: selectedDriverId,
+          branch_id: selectedDriver.branch_id ?? null,
+          amount: String(amount),
+          payment_date: aDate,
+          monthly_deduction: String(monthly),
+          disbursement_ledger_id: aDisbursementLedgerId,
+          schedule: JSON.stringify(schedule),
+          note: aNote || null,
+        };
+        await serverSubmitPendingDriverFinance({ data: { sessionToken: user.sessionToken, kind: "advance", payload } });
+        toast.success(`Advance of ${inr(amount)} submitted for approval`);
+        setShowAdvanceDialog(false);
+        setAAmount(""); setADate(today()); setAMonthly(""); setANote(""); setADisbursementLedgerId("");
+        await loadPayrollData(selectedDriverId);
+        return;
+      }
+
       const { data: adv, error: advErr } = await supabase
         .from("driver_advances")
         .insert({
@@ -621,6 +689,19 @@ export function DriverPayroll() {
       toast.error(err instanceof Error ? err.message : "Could not mark as paid");
     }
     setPayingId(null);
+  }
+
+  async function approvePendingDriver(entry: DriverPendingEntry) {
+    if (!user?.sessionToken) return;
+    try {
+      await serverApprovePendingDriverFinance({
+        data: { sessionToken: user.sessionToken, kind: entry.kind, pendingId: entry.id },
+      });
+      toast.success(`${entry.kind === "payroll" ? "Payroll" : "Advance"} approved and posted`);
+      await loadPayrollData(selectedDriverId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not approve driver finance entry");
+    }
   }
 
   // ── edit schedule entry ────────────────────────────────────────────────────
@@ -821,6 +902,18 @@ export function DriverPayroll() {
                 </Select>
               </div>
 
+              {pendingPayrolls.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Pending verification</p>
+                  {pendingPayrolls.map((entry) => (
+                    <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background px-3 py-2 text-sm">
+                      <span>{monthLabel(String(entry.payload.month ?? ""))} · {inr(Number(entry.payload.salary_amount ?? 0))}</span>
+                      {(!isBasic) && <Button size="sm" variant="outline" onClick={() => void approvePendingDriver(entry)}>Approve</Button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {filteredPayrolls.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
                   No payrolls
@@ -972,6 +1065,18 @@ export function DriverPayroll() {
           {/* ══ Advances sub-tab ══ */}
           {subTab === "advances" && (
             <div className="space-y-4">
+              {pendingAdvances.length > 0 && (
+                <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900/50 dark:bg-amber-950/20">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-300">Pending verification</p>
+                  {pendingAdvances.map((entry) => (
+                    <div key={entry.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg bg-background px-3 py-2 text-sm">
+                      <span>{inr(Number(entry.payload.amount ?? 0))} · requested {String(entry.payload.payment_date ?? "")}</span>
+                      {(!isBasic) && <Button size="sm" variant="outline" onClick={() => void approvePendingDriver(entry)}>Approve</Button>}
+                    </div>
+                  ))}
+                </div>
+              )}
+
               {advances.length === 0 ? (
                 <div className="rounded-xl border border-dashed border-border py-10 text-center text-sm text-muted-foreground">
                   No advances recorded for this driver.
