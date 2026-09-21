@@ -1,0 +1,758 @@
+import { useEffect, useMemo, useState } from "react";
+import { Plus, Search, Trash2, Truck, X } from "lucide-react";
+import { toast } from "sonner";
+import { supabase } from "@/integrations/supabase/client";
+import { useBranches, type BranchOption } from "@/lib/use-branches";
+import { useSession } from "@/lib/session";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+
+type Item = {
+  description: string;
+  hsn_code: string;
+  quantity: string;
+  unit: string;
+  taxable_value: string;
+  gst_rate: string;
+  cgst: string;
+  sgst_utgst: string;
+  igst: string;
+  cess: string;
+  other_tax_charges: string;
+  total_invoice_value: string;
+};
+
+type Form = {
+  branch_id: string;
+  eway_bill_number: string;
+  eway_bill_date: string;
+  eway_bill_status: string;
+  valid_from: string;
+  valid_until: string;
+  supply_type: string;
+  sub_type: string;
+  document_type: string;
+  document_number: string;
+  document_date: string;
+  supplier_gstin: string;
+  supplier_trade_name: string;
+  supplier_legal_name: string;
+  supplier_address: string;
+  supplier_place: string;
+  supplier_state: string;
+  supplier_pin_code: string;
+  recipient_gstin: string;
+  recipient_trade_name: string;
+  recipient_legal_name: string;
+  recipient_address: string;
+  recipient_place: string;
+  recipient_state: string;
+  recipient_pin_code: string;
+  dispatch_from_address: string;
+  dispatch_from_place: string;
+  dispatch_from_state: string;
+  dispatch_from_pin_code: string;
+  ship_to_address: string;
+  ship_to_place: string;
+  ship_to_state: string;
+  ship_to_pin_code: string;
+  transporter_id: string;
+  approximate_distance_km: string;
+};
+
+type Shipment = Form & {
+  id: string;
+  total_taxable_value: number;
+  total_invoice_value: number;
+  item_count: number;
+  created_at: string;
+};
+
+const blankItem = (): Item => ({
+  description: "",
+  hsn_code: "",
+  quantity: "",
+  unit: "NOS",
+  taxable_value: "",
+  gst_rate: "",
+  cgst: "",
+  sgst_utgst: "",
+  igst: "",
+  cess: "",
+  other_tax_charges: "",
+  total_invoice_value: "",
+});
+const blankForm = (): Form => ({
+  branch_id: "",
+  eway_bill_number: "",
+  eway_bill_date: new Date().toISOString().slice(0, 10),
+  eway_bill_status: "Active",
+  valid_from: "",
+  valid_until: "",
+  supply_type: "Outward",
+  sub_type: "Supply",
+  document_type: "Tax Invoice",
+  document_number: "",
+  document_date: new Date().toISOString().slice(0, 10),
+  supplier_gstin: "URP",
+  supplier_trade_name: "",
+  supplier_legal_name: "",
+  supplier_address: "",
+  supplier_place: "",
+  supplier_state: "",
+  supplier_pin_code: "",
+  recipient_gstin: "URP",
+  recipient_trade_name: "",
+  recipient_legal_name: "",
+  recipient_address: "",
+  recipient_place: "",
+  recipient_state: "",
+  recipient_pin_code: "",
+  dispatch_from_address: "",
+  dispatch_from_place: "",
+  dispatch_from_state: "",
+  dispatch_from_pin_code: "",
+  ship_to_address: "",
+  ship_to_place: "",
+  ship_to_state: "",
+  ship_to_pin_code: "",
+  transporter_id: "",
+  approximate_distance_km: "",
+});
+const n = (v: string) => Number(v || 0) || 0;
+const money = (v: number) =>
+  `₹${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function Field({
+  label,
+  value,
+  onChange,
+  required = false,
+  type = "text",
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  required?: boolean;
+  type?: string;
+  placeholder?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label>
+        {label}
+        {required && " *"}
+      </Label>
+      <Input
+        type={type}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function PartySection({
+  title,
+  prefix,
+  form,
+  setForm,
+}: {
+  title: string;
+  prefix: "supplier" | "recipient" | "dispatch_from" | "ship_to";
+  form: Form;
+  setForm: (f: Form) => void;
+}) {
+  const get = (key: string) => form[`${prefix}_${key}` as keyof Form] as string;
+  const set = (key: string, value: string) => setForm({ ...form, [`${prefix}_${key}`]: value });
+  return (
+    <section className="space-y-3 rounded-xl border border-border p-4">
+      <h3 className="font-semibold">{title}</h3>
+      <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+        {(prefix === "supplier" || prefix === "recipient") && (
+          <Field
+            label="GSTIN"
+            value={get("gstin")}
+            onChange={(v) => set("gstin", v.toUpperCase())}
+            placeholder="GSTIN or URP"
+          />
+        )}
+        {(prefix === "supplier" || prefix === "recipient") && (
+          <Field
+            label="Trade Name"
+            value={get("trade_name")}
+            onChange={(v) => set("trade_name", v)}
+          />
+        )}
+        {(prefix === "supplier" || prefix === "recipient") && (
+          <Field
+            label="Legal Name"
+            value={get("legal_name")}
+            onChange={(v) => set("legal_name", v)}
+          />
+        )}
+        <div className="md:col-span-2">
+          <Field label="Address" value={get("address")} onChange={(v) => set("address", v)} />
+        </div>
+        <Field label="Place" value={get("place")} onChange={(v) => set("place", v)} />
+        <Field label="State" value={get("state")} onChange={(v) => set("state", v)} />
+        <Field label="PIN Code" value={get("pin_code")} onChange={(v) => set("pin_code", v)} />
+      </div>
+    </section>
+  );
+}
+
+export function ShipmentList() {
+  const { user } = useSession();
+  const branches = useBranches();
+  const isBasic = user?.role === "basic";
+  const allowed = useMemo(
+    () => (isBasic ? (user?.branchIds ?? []) : null),
+    [isBasic, user?.branchIds],
+  );
+  // The generated Supabase types do not yet include the new shipment tables.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any;
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showCreate, setShowCreate] = useState(false);
+  const [form, setForm] = useState<Form>(blankForm());
+  const [items, setItems] = useState<Item[]>([blankItem()]);
+  const [saving, setSaving] = useState(false);
+  const [branchFilter, setBranchFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState("all");
+  const [search, setSearch] = useState("");
+
+  const visibleBranches = useMemo(
+    () => (allowed === null ? branches : branches.filter((b) => allowed.includes(b.id))),
+    [allowed, branches],
+  );
+  const branchName = (id: string) => branches.find((b) => b.id === id)?.branch_name ?? "—";
+
+  async function load() {
+    setLoading(true);
+    try {
+      let q = db
+        .from("shipments")
+        .select("*, shipment_items(count)")
+        .order("eway_bill_date", { ascending: false });
+      if (allowed !== null)
+        q = q.in("branch_id", allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"]);
+      const { data, error } = await q;
+      if (error) throw error;
+      setShipments(
+        ((data ?? []) as Array<Record<string, unknown>>).map(
+          (row) =>
+            ({
+              ...row,
+              item_count: Number(
+                (row.shipment_items as Array<{ count?: number }> | undefined)?.[0]?.count ?? 0,
+              ),
+            }) as Shipment,
+        ),
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load shipments");
+    }
+    setLoading(false);
+  }
+  useEffect(() => {
+    void load();
+    // The loader intentionally captures the current branch scope and database client.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, branches.length]);
+
+  const filtered = shipments.filter((s) => {
+    if (branchFilter !== "all" && s.branch_id !== branchFilter) return false;
+    if (monthFilter !== "all" && !s.eway_bill_date.startsWith(monthFilter)) return false;
+    return !search.trim() || s.eway_bill_number.includes(search.trim());
+  });
+
+  function openCreate() {
+    const f = blankForm();
+    f.branch_id = visibleBranches.length === 1 ? visibleBranches[0].id : "";
+    setForm(f);
+    setItems([blankItem()]);
+    setShowCreate(true);
+  }
+  const setItem = (index: number, key: keyof Item, value: string) =>
+    setItems(items.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
+  const totalTaxable = items.reduce((sum, item) => sum + n(item.taxable_value), 0);
+  const totalInvoice = items.reduce((sum, item) => sum + n(item.total_invoice_value), 0);
+
+  async function save() {
+    if (!/^[0-9]{12}$/.test(form.eway_bill_number))
+      return toast.error("E-Way Bill Number must contain exactly 12 digits");
+    if (!form.branch_id || !form.eway_bill_date || !form.document_number || !form.document_date)
+      return toast.error("Branch, E-Way Bill date, document number and document date are required");
+    if (items.some((item) => !item.description.trim() || !item.hsn_code.trim()))
+      return toast.error("Each item needs a description and HSN code");
+    if (!visibleBranches.some((b) => b.id === form.branch_id))
+      return toast.error("Select a permitted branch");
+    setSaving(true);
+    try {
+      const payload = {
+        ...form,
+        approximate_distance_km: n(form.approximate_distance_km),
+        valid_from: form.valid_from || null,
+        valid_until: form.valid_until || null,
+        total_taxable_value: totalTaxable,
+        total_invoice_value: totalInvoice,
+        created_by: user?.id ?? null,
+      };
+      const { data: shipment, error } = await db
+        .from("shipments")
+        .insert(payload)
+        .select("id")
+        .single();
+      if (error || !shipment) throw error ?? new Error("Could not create shipment");
+      const { error: itemError } = await db.from("shipment_items").insert(
+        items.map((item, index) => ({
+          ...item,
+          shipment_id: shipment.id,
+          item_no: index + 1,
+          quantity: n(item.quantity),
+          taxable_value: n(item.taxable_value),
+          gst_rate: n(item.gst_rate),
+          cgst: n(item.cgst),
+          sgst_utgst: n(item.sgst_utgst),
+          igst: n(item.igst),
+          cess: n(item.cess),
+          other_tax_charges: n(item.other_tax_charges),
+          total_invoice_value: n(item.total_invoice_value),
+        })),
+      );
+      if (itemError) {
+        await db.from("shipments").delete().eq("id", shipment.id);
+        throw itemError;
+      }
+      toast.success("Shipment created from E-Way Bill");
+      setShowCreate(false);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create shipment");
+    }
+    setSaving(false);
+  }
+
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold">Shipments</h2>
+          <p className="text-sm text-muted-foreground">
+            One shipment is one E-Way Bill. Part A details are stored with nested goods items.
+          </p>
+        </div>
+        <Button onClick={openCreate} className="gap-1.5">
+          <Plus className="size-4" /> Create Shipment
+        </Button>
+      </div>
+      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-muted/20 p-3">
+        <div className="min-w-[190px] space-y-1.5">
+          <Label>Branch</Label>
+          <Select value={branchFilter} onValueChange={setBranchFilter}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All branches</SelectItem>
+              {visibleBranches.map((b) => (
+                <SelectItem key={b.id} value={b.id}>
+                  {b.branch_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1.5">
+          <Label>E-Way Bill month</Label>
+          <Input
+            type="month"
+            value={monthFilter === "all" ? "" : monthFilter}
+            onChange={(e) => setMonthFilter(e.target.value || "all")}
+          />
+        </div>
+        <div className="min-w-[230px] flex-1 space-y-1.5">
+          <Label>Search E-Way Bill / Shipment Number</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              value={search}
+              onChange={(e) => setSearch(e.target.value.replace(/\D/g, ""))}
+              placeholder="12-digit number"
+            />
+          </div>
+        </div>
+      </div>
+      {loading ? (
+        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+          Loading shipments…
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+          <Truck className="mx-auto mb-2 size-8 opacity-40" />
+          No shipments found.
+        </div>
+      ) : (
+        <div className="overflow-x-auto rounded-xl border border-border">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3">Shipment / E-Way Bill No.</th>
+                <th className="px-4 py-3">Branch</th>
+                <th className="px-4 py-3">E-Way Bill Date</th>
+                <th className="px-4 py-3">Supply</th>
+                <th className="px-4 py-3">Document</th>
+                <th className="px-4 py-3 text-right">Items</th>
+                <th className="px-4 py-3 text-right">Invoice Value</th>
+                <th className="px-4 py-3">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((s) => (
+                <tr key={s.id} className="border-t border-border hover:bg-muted/20">
+                  <td className="px-4 py-3 font-medium">{s.eway_bill_number}</td>
+                  <td className="px-4 py-3">{branchName(s.branch_id)}</td>
+                  <td className="px-4 py-3">{s.eway_bill_date}</td>
+                  <td className="px-4 py-3">
+                    {s.supply_type} · {s.sub_type}
+                  </td>
+                  <td className="px-4 py-3">
+                    {s.document_type} · {s.document_number}
+                  </td>
+                  <td className="px-4 py-3 text-right">{s.item_count}</td>
+                  <td className="px-4 py-3 text-right">{money(Number(s.total_invoice_value))}</td>
+                  <td className="px-4 py-3">
+                    <Badge variant="outline">{s.eway_bill_status}</Badge>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <Dialog open={showCreate} onOpenChange={setShowCreate}>
+        <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Shipment from E-Way Bill — Part A</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-5 py-2">
+            <section className="space-y-3 rounded-xl border border-border p-4">
+              <h3 className="font-semibold">E-Way Bill Basic Details</h3>
+              <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                <div className="space-y-1.5">
+                  <Label>Branch *</Label>
+                  <Select
+                    value={form.branch_id}
+                    onValueChange={(v) => setForm({ ...form, branch_id: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select branch" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {visibleBranches.map((b) => (
+                        <SelectItem key={b.id} value={b.id}>
+                          {b.branch_name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Field
+                  label="E-Way Bill Number *"
+                  value={form.eway_bill_number}
+                  onChange={(v) =>
+                    setForm({ ...form, eway_bill_number: v.replace(/\D/g, "").slice(0, 12) })
+                  }
+                  placeholder="12 digits"
+                />
+                <Field
+                  label="E-Way Bill Date *"
+                  type="date"
+                  value={form.eway_bill_date}
+                  onChange={(v) => setForm({ ...form, eway_bill_date: v })}
+                />
+                <div className="space-y-1.5">
+                  <Label>E-Way Bill Status</Label>
+                  <Select
+                    value={form.eway_bill_status}
+                    onValueChange={(v) => setForm({ ...form, eway_bill_status: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {["Active", "Cancelled", "Expired", "Part-B Pending"].map((v) => (
+                        <SelectItem key={v} value={v}>
+                          {v}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Field
+                  label="Valid From"
+                  type="datetime-local"
+                  value={form.valid_from}
+                  onChange={(v) => setForm({ ...form, valid_from: v })}
+                />
+                <Field
+                  label="Valid Until"
+                  type="datetime-local"
+                  value={form.valid_until}
+                  onChange={(v) => setForm({ ...form, valid_until: v })}
+                />
+                <div className="space-y-1.5">
+                  <Label>Supply Type</Label>
+                  <Select
+                    value={form.supply_type}
+                    onValueChange={(v) => setForm({ ...form, supply_type: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Outward">Outward</SelectItem>
+                      <SelectItem value="Inward">Inward</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Field
+                  label="Sub-type"
+                  value={form.sub_type}
+                  onChange={(v) => setForm({ ...form, sub_type: v })}
+                />
+              </div>
+            </section>
+            <section className="space-y-3 rounded-xl border border-border p-4">
+              <h3 className="font-semibold">Document Details</h3>
+              <div className="grid gap-3 md:grid-cols-3">
+                <div className="space-y-1.5">
+                  <Label>Document Type *</Label>
+                  <Select
+                    value={form.document_type}
+                    onValueChange={(v) => setForm({ ...form, document_type: v })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[
+                        "Tax Invoice",
+                        "Bill of Supply",
+                        "Bill of Entry",
+                        "Delivery Challan",
+                        "Others",
+                      ].map((v) => (
+                        <SelectItem key={v} value={v}>
+                          {v}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Field
+                  label="Document Number *"
+                  value={form.document_number}
+                  onChange={(v) => setForm({ ...form, document_number: v })}
+                />
+                <Field
+                  label="Document Date *"
+                  type="date"
+                  value={form.document_date}
+                  onChange={(v) => setForm({ ...form, document_date: v })}
+                />
+              </div>
+            </section>
+            <PartySection
+              title="Supplier / Consignor (Bill From)"
+              prefix="supplier"
+              form={form}
+              setForm={setForm}
+            />
+            <PartySection
+              title="Recipient / Consignee (Bill To)"
+              prefix="recipient"
+              form={form}
+              setForm={setForm}
+            />
+            <PartySection
+              title="Dispatch From"
+              prefix="dispatch_from"
+              form={form}
+              setForm={setForm}
+            />
+            <PartySection title="Ship To" prefix="ship_to" form={form} setForm={setForm} />
+            <section className="space-y-3 rounded-xl border border-border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold">Goods / Invoice Details</h3>
+                  <p className="text-xs text-muted-foreground">
+                    At least one item is required. HSN is required for every item.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setItems([...items, blankItem()])}
+                >
+                  <Plus className="mr-1 size-3.5" /> Add Item
+                </Button>
+              </div>
+              <div className="space-y-3">
+                {items.map((item, index) => (
+                  <div
+                    key={index}
+                    className="relative rounded-lg border border-border bg-muted/10 p-3"
+                  >
+                    <button
+                      type="button"
+                      className="absolute right-2 top-2 text-muted-foreground hover:text-destructive"
+                      onClick={() =>
+                        items.length > 1 && setItems(items.filter((_, i) => i !== index))
+                      }
+                      title="Remove item"
+                    >
+                      <X className="size-4" />
+                    </button>
+                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Item {index + 1}
+                    </p>
+                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
+                      <div className="md:col-span-2">
+                        <Field
+                          label="Product / Item Description *"
+                          value={item.description}
+                          onChange={(v) => setItem(index, "description", v)}
+                        />
+                      </div>
+                      <Field
+                        label="HSN Code *"
+                        value={item.hsn_code}
+                        onChange={(v) => setItem(index, "hsn_code", v)}
+                      />
+                      <Field
+                        label="Quantity"
+                        type="number"
+                        value={item.quantity}
+                        onChange={(v) => setItem(index, "quantity", v)}
+                      />
+                      <Field
+                        label="Unit"
+                        value={item.unit}
+                        onChange={(v) => setItem(index, "unit", v)}
+                      />
+                      <Field
+                        label="Taxable Value"
+                        type="number"
+                        value={item.taxable_value}
+                        onChange={(v) => setItem(index, "taxable_value", v)}
+                      />
+                      <Field
+                        label="GST Rate %"
+                        type="number"
+                        value={item.gst_rate}
+                        onChange={(v) => setItem(index, "gst_rate", v)}
+                      />
+                      <Field
+                        label="CGST"
+                        type="number"
+                        value={item.cgst}
+                        onChange={(v) => setItem(index, "cgst", v)}
+                      />
+                      <Field
+                        label="SGST / UTGST"
+                        type="number"
+                        value={item.sgst_utgst}
+                        onChange={(v) => setItem(index, "sgst_utgst", v)}
+                      />
+                      <Field
+                        label="IGST"
+                        type="number"
+                        value={item.igst}
+                        onChange={(v) => setItem(index, "igst", v)}
+                      />
+                      <Field
+                        label="Cess"
+                        type="number"
+                        value={item.cess}
+                        onChange={(v) => setItem(index, "cess", v)}
+                      />
+                      <Field
+                        label="Other Tax / Charges"
+                        type="number"
+                        value={item.other_tax_charges}
+                        onChange={(v) => setItem(index, "other_tax_charges", v)}
+                      />
+                      <Field
+                        label="Total Invoice Value"
+                        type="number"
+                        value={item.total_invoice_value}
+                        onChange={(v) => setItem(index, "total_invoice_value", v)}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex flex-wrap justify-end gap-5 border-t border-border pt-3 text-sm">
+                <span>
+                  Taxable total: <strong>{money(totalTaxable)}</strong>
+                </span>
+                <span>
+                  Invoice total: <strong>{money(totalInvoice)}</strong>
+                </span>
+              </div>
+            </section>
+            <section className="space-y-3 rounded-xl border border-border p-4">
+              <h3 className="font-semibold">Transport Details</h3>
+              <div className="grid gap-3 md:grid-cols-2">
+                <Field
+                  label="Transporter ID / GSTIN"
+                  value={form.transporter_id}
+                  onChange={(v) => setForm({ ...form, transporter_id: v.toUpperCase() })}
+                />
+                <Field
+                  label="Approximate Distance (KM)"
+                  type="number"
+                  value={form.approximate_distance_km}
+                  onChange={(v) => setForm({ ...form, approximate_distance_km: v })}
+                />
+              </div>
+            </section>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowCreate(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void save()} disabled={saving}>
+              {saving ? "Saving…" : "Create Shipment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

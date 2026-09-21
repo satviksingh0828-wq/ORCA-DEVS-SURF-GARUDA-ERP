@@ -29,6 +29,7 @@ import { isAdminLike } from "@/lib/roles";
 import { MonthlyMIS } from "@/components/operations/MonthlyMIS";
 import { FastagLedger } from "@/components/reports/FastagLedger";
 import { ReportFiltersContext } from "@/lib/report-filters";
+import { ShipmentList } from "@/components/operations/ShipmentList";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -69,6 +70,14 @@ const ALL_TABS = [
     label: "Trip",
     desc: "Manifests, income & expenses",
     icon: RouteIcon,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
+    id: "shipments",
+    label: "Shipments",
+    desc: "E-Way Bills and Part A goods",
+    icon: FileText,
     adminOnly: false,
     dividerBefore: false,
   },
@@ -133,7 +142,9 @@ function OperationsPage() {
             Workspace
           </Link>
           <ChevronRight className="size-3.5" />
-          <Link to="/tms" className="hover:text-foreground">TMS</Link>
+          <Link to="/tms" className="hover:text-foreground">
+            TMS
+          </Link>
           <ChevronRight className="size-3.5" />
           <span className="text-foreground">Operations</span>
         </span>
@@ -159,7 +170,9 @@ function OperationsPage() {
         </button>
       }
     >
-      <div className={`grid items-start gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}>
+      <div
+        className={`grid items-start gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}
+      >
         {/* Desktop left nav */}
         {navOpen && (
           <nav className="app-sidebar-scroll hidden lg:block lg:fixed lg:left-[max(1.5rem,calc((100vw-1280px)/2+1.5rem))] lg:top-20 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
@@ -206,6 +219,11 @@ function OperationsPage() {
           {safeTab === "trip" && (
             <TabErrorBoundary label="Trip">
               <Trips />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "shipments" && (
+            <TabErrorBoundary label="Shipments">
+              <ShipmentList />
             </TabErrorBoundary>
           )}
           {safeTab === "monthly-mis" && !isViewer && (
