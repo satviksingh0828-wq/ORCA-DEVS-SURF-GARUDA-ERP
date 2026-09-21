@@ -30,6 +30,9 @@ export type FinanceRow = {
   fixed_income_period?: string | null;
   income_ledger_id?: string | null;
   income_receivable_ledger_id?: string | null;
+  verification_id?: string | null;
+  verification_status?: "pending" | "approved" | "rejected" | null;
+  verification_submitter_id?: string | null;
 };
 
 export const FINANCE_CONFIG: Record<

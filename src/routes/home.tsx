@@ -45,6 +45,15 @@ export const Route = createFileRoute("/home")({
 
 const BASIC_MODULES = [
   {
+    key: "finance",
+    label: "Finance",
+    desc: "Submit income and expenditure for approval",
+    icon: Landmark,
+    active: true,
+    to: "/finance" as const,
+    roles: ["basic"] as const,
+  },
+  {
     key: "operation",
     label: "Operation",
     desc: "Trips, consignments & dispatch",

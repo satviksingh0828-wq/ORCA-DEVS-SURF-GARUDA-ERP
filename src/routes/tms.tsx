@@ -10,6 +10,7 @@ export const Route = createFileRoute("/tms")({
         eyebrow="Workspace / TMS"
         title="TMS"
         description="Operations, masters, dashboards and reports for transport management."
+        allowedRoles={["admin", "semi_admin", "basic", "viewer"]}
         tiles={[
           {
             key: "operation",
@@ -17,6 +18,7 @@ export const Route = createFileRoute("/tms")({
             desc: "Trips, consignments & dispatch",
             icon: Truck,
             to: "/operations",
+            roles: ["admin", "semi_admin", "viewer"],
           },
           {
             key: "finance",
@@ -31,6 +33,7 @@ export const Route = createFileRoute("/tms")({
             desc: "Vehicles, drivers, transporters & locations",
             icon: Database,
             to: "/masters",
+            roles: ["admin", "semi_admin", "viewer"],
           },
           {
             key: "dashboard",
@@ -46,6 +49,7 @@ export const Route = createFileRoute("/tms")({
             desc: "P&L comparison & period reports",
             icon: FileText,
             to: "/reports",
+            roles: ["admin", "semi_admin", "viewer"],
           },
           {
             key: "cash-reports",

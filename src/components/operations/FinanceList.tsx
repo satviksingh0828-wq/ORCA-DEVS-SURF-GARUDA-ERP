@@ -21,6 +21,13 @@ import { isAdminLike } from "@/lib/roles";
 import { inr, num } from "@/lib/trip-calc";
 import { fetchAll } from "@/lib/fetch-all";
 import { logAction } from "@/lib/log-actions";
+import {
+  serverApprovePendingFinance,
+  serverListPendingFinance,
+  serverSubmitPendingFinance,
+  type PendingFinanceEntry,
+  type PendingFinancePayload,
+} from "@/lib/finance-verification";
 import { financialYearOptions, financialYearRange, dateInFinancialYear } from "@/lib/financial-year";
 import { ItemLogsButton } from "@/components/shared/ItemLogsDrawer";
 import { isDriverActive } from "@/lib/drivers";
@@ -148,8 +155,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
         }
         return q;
       });
-      setRows(
-        data.map((r) => ({
+      const liveRows = data.map((r) => ({
           id: r.id as string,
           name: String(r[cfg.nameCol] ?? ""),
           amount: String(r.amount ?? ""),
@@ -173,8 +179,30 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
           fixed_income_period: (r.fixed_income_period as string) ?? null,
           income_ledger_id: (r.income_ledger_id as string) ?? null,
           income_receivable_ledger_id: (r.income_receivable_ledger_id as string) ?? null,
-        })),
-      );
+        }));
+      const pendingEntries = user?.sessionToken
+        ? await serverListPendingFinance({ data: { sessionToken: user.sessionToken, kind } })
+        : [];
+      const pendingRows = pendingEntries.map((entry: PendingFinanceEntry) => {
+        const payload = entry.payload;
+        return {
+          id: entry.id,
+          name: String(payload[cfg.nameCol] ?? ""),
+          amount: String(payload.amount ?? ""),
+          note: String(payload.note ?? ""),
+          entry_date: String(payload.entry_date ?? ""),
+          branch_id: (payload.branch_id as string) ?? null,
+          vehicle_id: (payload.vehicle_id as string) ?? null,
+          driver_id: (payload.driver_id as string) ?? null,
+          transporter_id: (payload.transporter_id as string) ?? null,
+          settled: Boolean(payload[cfg.statusCol]),
+          settled_date: String(payload[cfg.statusDateCol] ?? ""),
+          verification_id: entry.id,
+          verification_status: entry.status,
+          verification_submitter_id: entry.submitted_by,
+        } satisfies FinanceRow;
+      });
+      setRows([...liveRows, ...pendingRows]);
     } catch {
       toast.error(`Could not load ${cfg.title.toLowerCase()}`);
     }
@@ -279,8 +307,22 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
     return true;
   });
 
-  const total = filtered.reduce((s, r) => s + num(r.amount), 0);
-  const pendingTotal = filtered.filter((r) => !r.settled).reduce((s, r) => s + num(r.amount), 0);
+  const postedRows = filtered.filter((r) => !r.verification_id);
+  const total = postedRows.reduce((s, r) => s + num(r.amount), 0);
+  const pendingTotal = postedRows.filter((r) => !r.settled).reduce((s, r) => s + num(r.amount), 0);
+
+  async function approvePending(row: FinanceRow) {
+    if (!row.verification_id || !user?.sessionToken) return;
+    try {
+      await serverApprovePendingFinance({
+        data: { sessionToken: user.sessionToken, kind, pendingId: row.verification_id },
+      });
+      toast.success(`${cfg.single} approved and posted`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : `Could not approve ${cfg.single}`);
+    }
+  }
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -315,6 +357,26 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
       payload.income_ledger_id = editing.income_ledger_id;
       payload.income_receivable_ledger_id = editing.income_receivable_ledger_id;
       payload.payment_ledger_id = editing.payment_ledger_id;
+    }
+    if (isBasic) {
+      if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+      try {
+        await serverSubmitPendingFinance({
+          data: {
+            sessionToken: user.sessionToken,
+            kind,
+            payload: payload as PendingFinancePayload,
+          },
+        });
+        toast.success(`${cfg.single} submitted for approval`);
+        setEditing(null);
+        await load();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : `Could not submit ${cfg.single}`);
+      } finally {
+        setSaving(false);
+      }
+      return;
     }
     const isNew = !editing.id;
     const res = editing.id
@@ -765,7 +827,7 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                             : "rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                         }
                       >
-                        {r.settled ? cfg.doneLabel : cfg.pendingLabel}
+                        {r.verification_id ? "Awaiting approval" : r.settled ? cfg.doneLabel : cfg.pendingLabel}
                       </span>
                     </td>
                     <td className="py-2 text-right whitespace-nowrap">
@@ -789,7 +851,12 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                       >
                         <Download className="size-4" /> PDF
                       </Button>
-                      {!r.settled ? (
+                      {r.verification_id && (user?.role === "admin" || user?.role === "semi_admin" || user?.role === "viewer") ? (
+                        <Button variant="outline" size="sm" onClick={() => void approvePending(r)}>
+                          Approve
+                        </Button>
+                      ) : null}
+                      {!r.verification_id && !r.settled ? (
                         <Button variant="outline" size="sm" onClick={() => (kind === "expenditure" || kind === "income" || r.is_fixed_income || r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
                           <Check className="size-4" />
                           {cfg.actionLabel}

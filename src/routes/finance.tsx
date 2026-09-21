@@ -33,7 +33,12 @@ function FinancePage() {
   const { user } = useSession();
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
-  const tabs = ALL_TABS.filter((tab) => isAdmin || !tab.adminOnly);
+  const isBasic = user?.role === "basic";
+  const tabs = isAdmin
+    ? ALL_TABS
+    : isViewer
+      ? ALL_TABS.filter((tab) => tab.id !== "insurance" && tab.id !== "road-tax")
+      : ALL_TABS.filter((tab) => isBasic && ["income", "expenditure", "driver-payroll", "insurance", "road-tax"].includes(tab.id));
   const [tab, setTab] = useState<TabId>("income");
   const [navOpen, setNavOpen] = useState(true);
   const safeTab = (tabs.find((item) => item.id === tab) ? tab : "income") as TabId;
@@ -49,8 +54,8 @@ function FinancePage() {
         {safeTab === "driver-payroll" && <TabErrorBoundary label="Driver Payroll"><DriverPayroll /></TabErrorBoundary>}
         {safeTab === "fixed-income" && (isAdmin || isViewer) && <TabErrorBoundary label="Fixed Income"><FixedIncomeList /></TabErrorBoundary>}
         {safeTab === "emi-scheduler" && (isAdmin || isViewer) && <TabErrorBoundary label="EMI Scheduler"><EmiScheduler /></TabErrorBoundary>}
-        {safeTab === "insurance" && isAdmin && <TabErrorBoundary label="Insurance"><VehicleCoveragePage kind="insurance" /></TabErrorBoundary>}
-        {safeTab === "road-tax" && isAdmin && <TabErrorBoundary label="Road Tax"><VehicleCoveragePage kind="road-tax" /></TabErrorBoundary>}
+        {safeTab === "insurance" && (isAdmin || isBasic) && <TabErrorBoundary label="Insurance"><VehicleCoveragePage kind="insurance" readOnly={isBasic} /></TabErrorBoundary>}
+        {safeTab === "road-tax" && (isAdmin || isBasic) && <TabErrorBoundary label="Road Tax"><VehicleCoveragePage kind="road-tax" readOnly={isBasic} /></TabErrorBoundary>}
       </div>
     </div>
   </AppShell>;

@@ -35,6 +35,7 @@ type Props = {
   vehicleId: string;
   branchId: string | null;
   registrationNumber: string;
+  readOnly?: boolean;
 };
 
 type PaymentLedger = { id: string; account_name: string; ledger_type: "cash" | "bank" };
@@ -57,7 +58,7 @@ function formatDate(iso: string) {
   return new Date(y, m - 1, d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 }
 
-export function VehicleRoadTaxSection({ vehicleId, branchId, registrationNumber }: Props) {
+export function VehicleRoadTaxSection({ vehicleId, branchId, registrationNumber, readOnly = false }: Props) {
   const { user } = useSession();
   const userId = user?.id ?? "";
 
@@ -165,7 +166,7 @@ export function VehicleRoadTaxSection({ vehicleId, branchId, registrationNumber 
           <FileText className="size-4 text-primary shrink-0" />
           <h3 className="text-sm font-semibold tracking-tight">Road Tax</h3>
         </div>
-        {!showForm && (
+        {!readOnly && !showForm && (
           <Button type="button" size="sm" variant="outline" onClick={() => setShowForm(true)}>
             <Plus className="size-3.5" />
             Add Road Tax

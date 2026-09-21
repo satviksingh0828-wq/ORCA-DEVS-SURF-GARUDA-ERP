@@ -34,6 +34,20 @@ async function requireAdmin(userId: string): Promise<void> {
   if ((data as { role: string }).role !== "admin" && (data as { role: string }).role !== "semi_admin") throw new Error("Forbidden: admin access required.");
 }
 
+async function requireCoverageRead(userId: string): Promise<void> {
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const { data, error } = await supabaseAdmin
+    .from("app_users")
+    .select("role, is_active")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error) throw new Error(`Auth check failed: ${error.message}`);
+  if (!data || !(data as { is_active: boolean }).is_active) throw new Error("Forbidden: account is inactive.");
+  if (!["admin", "semi_admin", "viewer", "basic"].includes((data as { role: string }).role)) {
+    throw new Error("Forbidden: coverage read access required.");
+  }
+}
+
 // ── Shared month helpers ───────────────────────────────────────────────────────
 
 export const MONTH_NAMES = [
@@ -165,7 +179,7 @@ export type RoadTaxEntry = {
 export const serverLoadInsurance = createServerFn({ method: "POST" })
   .validator((data: { userId: string; vehicleId: string }) => data)
   .handler(async ({ data }): Promise<InsuranceEntry[]> => {
-    await requireAdmin(data.userId);
+    await requireCoverageRead(data.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows, error } = await supabaseAdmin
       .from("vehicle_insurance")
@@ -313,7 +327,7 @@ export const serverDeleteInsurance = createServerFn({ method: "POST" })
 export const serverLoadRoadTax = createServerFn({ method: "POST" })
   .validator((data: { userId: string; vehicleId: string }) => data)
   .handler(async ({ data }): Promise<RoadTaxEntry[]> => {
-    await requireAdmin(data.userId);
+    await requireCoverageRead(data.userId);
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     const { data: rows, error } = await supabaseAdmin
       .from("vehicle_road_tax")
