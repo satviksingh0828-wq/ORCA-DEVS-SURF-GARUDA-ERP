@@ -90,7 +90,7 @@ const blankShipment: Shipment = {
   approximate_distance_km: 0,
 };
 
-type NewShipmentItem = { description: string; hsn_code: string; quantity: string; unit: string; taxable_value: string; total_invoice_value: string };
+type NewShipmentItem = { description: string; hsn_code: string; quantity: string; weight_kg: string; unit: string; taxable_value: string; total_invoice_value: string };
 type NewShipmentForm = Omit<Shipment, "id" | "branch_id" | "approximate_distance_km"> & { branch_id: string; approximate_distance_km: string; document_type: string; document_number: string; document_date: string; eway_bill_status: string; valid_from: string; valid_until: string; supply_type: string; sub_type: string };
 const blankNewShipment = (branchId: string): NewShipmentForm => ({
   branch_id: branchId, eway_bill_number: "", eway_bill_date: new Date().toISOString().slice(0, 10), eway_bill_status: "Active", valid_from: "", valid_until: "", supply_type: "Outward", sub_type: "Supply", document_type: "Tax Invoice", document_number: "", document_date: new Date().toISOString().slice(0, 10), supplier_gstin: "URP", supplier_trade_name: "", supplier_legal_name: "", supplier_address: "", supplier_place: "", supplier_state: "", supplier_pin_code: "", recipient_gstin: "URP", recipient_trade_name: "", recipient_legal_name: "", recipient_address: "", recipient_place: "", recipient_state: "", recipient_pin_code: "", dispatch_from_address: "", dispatch_from_place: "", dispatch_from_state: "", dispatch_from_pin_code: "", ship_to_address: "", ship_to_place: "", ship_to_state: "", ship_to_pin_code: "", transporter_id: "", approximate_distance_km: "", total_taxable_value: 0, total_invoice_value: 0, item_count: 0, created_at: "", lr_number: null,
@@ -113,6 +113,24 @@ function Field({ label, value }: { label: string; value: unknown }) {
       <div className="min-h-9 rounded-md border border-border bg-muted/20 px-3 py-2 text-sm">
         {String(value || "—")}
       </div>
+    </div>
+  );
+}
+function EntryField({
+  label,
+  value,
+  onChange,
+  type = "text",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <Input type={type} value={value} onChange={(event) => onChange(event.target.value)} />
     </div>
   );
 }
@@ -465,7 +483,7 @@ function CreateAndAddShipment({
   onClose: () => void;
 }) {
   const [form, setForm] = useState<NewShipmentForm>(() => blankNewShipment(branchId));
-  const [item, setItem] = useState<NewShipmentItem>({ description: "", hsn_code: "", quantity: "1", unit: "NOS", taxable_value: "", total_invoice_value: "" });
+  const [item, setItem] = useState<NewShipmentItem>({ description: "", hsn_code: "", quantity: "1", weight_kg: "", unit: "NOS", taxable_value: "", total_invoice_value: "" });
   const [saving, setSaving] = useState(false);
   const set = (key: keyof NewShipmentForm, value: string) => setForm((old) => ({ ...old, [key]: value }));
   async function save() {
@@ -476,7 +494,7 @@ function CreateAndAddShipment({
       const payload = { ...shipmentFields, approximate_distance_km: Number(form.approximate_distance_km || 0), total_taxable_value: Number(item.taxable_value || 0), total_invoice_value: Number(item.total_invoice_value || 0), created_by: null };
       const { data: created, error } = await db.from("shipments").insert(payload).select("*").single();
       if (error || !created) throw error ?? new Error("Could not create shipment");
-      const { error: itemError } = await db.from("shipment_items").insert({ shipment_id: created.id, item_no: 1, ...item, quantity: Number(item.quantity || 0), taxable_value: Number(item.taxable_value || 0), total_invoice_value: Number(item.total_invoice_value || 0), gst_rate: 0, cgst: 0, sgst_utgst: 0, igst: 0, cess: 0, other_tax_charges: 0 });
+      const { error: itemError } = await db.from("shipment_items").insert({ shipment_id: created.id, item_no: 1, ...item, quantity: Number(item.quantity || 0), weight_kg: Number(item.weight_kg || 0), taxable_value: Number(item.taxable_value || 0), total_invoice_value: Number(item.total_invoice_value || 0), gst_rate: 0, cgst: 0, sgst_utgst: 0, igst: 0, cess: 0, other_tax_charges: 0 });
       if (itemError) { await db.from("shipments").delete().eq("id", created.id); throw itemError; }
       toast.success("Shipment created and added to LR");
       onCreated({ ...created, item_count: 1, lr_number: null } as Shipment);
@@ -490,20 +508,20 @@ function CreateAndAddShipment({
         <div className="space-y-4 py-2">
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1.5"><Label>Branch</Label><Input value={branches.find((b) => b.id === branchId)?.branch_name ?? "—"} readOnly /></div>
-            <Field label="E-Way Bill Number *" value={form.eway_bill_number} onChange={(v) => set("eway_bill_number", v.replace(/\D/g, "").slice(0, 12))} />
-            <Field label="E-Way Bill Date *" type="date" value={form.eway_bill_date} onChange={(v) => set("eway_bill_date", v)} />
-            <Field label="Document Number *" value={form.document_number} onChange={(v) => set("document_number", v)} />
-            <Field label="Document Date *" type="date" value={form.document_date} onChange={(v) => set("document_date", v)} />
-            <Field label="Supplier GSTIN" value={form.supplier_gstin} onChange={(v) => set("supplier_gstin", v.toUpperCase())} />
-            <Field label="Recipient GSTIN" value={form.recipient_gstin} onChange={(v) => set("recipient_gstin", v.toUpperCase())} />
-            <Field label="Dispatch From PIN" value={form.dispatch_from_pin_code} onChange={(v) => set("dispatch_from_pin_code", v)} />
-            <Field label="Ship To PIN" value={form.ship_to_pin_code} onChange={(v) => set("ship_to_pin_code", v)} />
-            <Field label="Transporter ID / GSTIN" value={form.transporter_id} onChange={(v) => set("transporter_id", v.toUpperCase())} />
-            <Field label="Approximate Distance (KM)" type="number" value={form.approximate_distance_km} onChange={(v) => set("approximate_distance_km", v)} />
+            <EntryField label="E-Way Bill Number *" value={form.eway_bill_number} onChange={(v) => set("eway_bill_number", v.replace(/\D/g, "").slice(0, 12))} />
+            <EntryField label="E-Way Bill Date *" type="date" value={form.eway_bill_date} onChange={(v) => set("eway_bill_date", v)} />
+            <EntryField label="Document Number *" value={form.document_number} onChange={(v) => set("document_number", v)} />
+            <EntryField label="Document Date *" type="date" value={form.document_date} onChange={(v) => set("document_date", v)} />
+            <EntryField label="Supplier GSTIN" value={form.supplier_gstin} onChange={(v) => set("supplier_gstin", v.toUpperCase())} />
+            <EntryField label="Recipient GSTIN" value={form.recipient_gstin} onChange={(v) => set("recipient_gstin", v.toUpperCase())} />
+            <EntryField label="Dispatch From PIN" value={form.dispatch_from_pin_code} onChange={(v) => set("dispatch_from_pin_code", v)} />
+            <EntryField label="Ship To PIN" value={form.ship_to_pin_code} onChange={(v) => set("ship_to_pin_code", v)} />
+            <EntryField label="Transporter ID / GSTIN" value={form.transporter_id} onChange={(v) => set("transporter_id", v.toUpperCase())} />
+            <EntryField label="Approximate Distance (KM)" type="number" value={form.approximate_distance_km} onChange={(v) => set("approximate_distance_km", v)} />
           </div>
-          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Supplier / Consignor</h3><div className="grid gap-3 md:grid-cols-3"><Field label="Trade Name" value={form.supplier_trade_name} onChange={(v) => set("supplier_trade_name", v)} /><Field label="Legal Name" value={form.supplier_legal_name} onChange={(v) => set("supplier_legal_name", v)} /><Field label="Address" value={form.supplier_address} onChange={(v) => set("supplier_address", v)} /><Field label="Place" value={form.supplier_place} onChange={(v) => set("supplier_place", v)} /><Field label="State" value={form.supplier_state} onChange={(v) => set("supplier_state", v)} /></div></section>
-          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Recipient / Consignee</h3><div className="grid gap-3 md:grid-cols-3"><Field label="Trade Name" value={form.recipient_trade_name} onChange={(v) => set("recipient_trade_name", v)} /><Field label="Legal Name" value={form.recipient_legal_name} onChange={(v) => set("recipient_legal_name", v)} /><Field label="Address" value={form.recipient_address} onChange={(v) => set("recipient_address", v)} /><Field label="Place" value={form.recipient_place} onChange={(v) => set("recipient_place", v)} /><Field label="State" value={form.recipient_state} onChange={(v) => set("recipient_state", v)} /></div></section>
-          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Goods / Invoice Details</h3><div className="grid gap-3 md:grid-cols-2"><Field label="Product / Item Description *" value={item.description} onChange={(v) => setItem((old) => ({ ...old, description: v }))} /><Field label="HSN Code *" value={item.hsn_code} onChange={(v) => setItem((old) => ({ ...old, hsn_code: v }))} /><Field label="Quantity" type="number" value={item.quantity} onChange={(v) => setItem((old) => ({ ...old, quantity: v }))} /><Field label="Unit" value={item.unit} onChange={(v) => setItem((old) => ({ ...old, unit: v }))} /><Field label="Taxable Value" type="number" value={item.taxable_value} onChange={(v) => setItem((old) => ({ ...old, taxable_value: v }))} /><Field label="Total Invoice Value" type="number" value={item.total_invoice_value} onChange={(v) => setItem((old) => ({ ...old, total_invoice_value: v }))} /></div></section>
+          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Supplier / Consignor</h3><div className="grid gap-3 md:grid-cols-3"><EntryField label="Trade Name" value={form.supplier_trade_name} onChange={(v) => set("supplier_trade_name", v)} /><EntryField label="Legal Name" value={form.supplier_legal_name} onChange={(v) => set("supplier_legal_name", v)} /><EntryField label="Address" value={form.supplier_address} onChange={(v) => set("supplier_address", v)} /><EntryField label="Place" value={form.supplier_place} onChange={(v) => set("supplier_place", v)} /><EntryField label="State" value={form.supplier_state} onChange={(v) => set("supplier_state", v)} /></div></section>
+          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Recipient / Consignee</h3><div className="grid gap-3 md:grid-cols-3"><EntryField label="Trade Name" value={form.recipient_trade_name} onChange={(v) => set("recipient_trade_name", v)} /><EntryField label="Legal Name" value={form.recipient_legal_name} onChange={(v) => set("recipient_legal_name", v)} /><EntryField label="Address" value={form.recipient_address} onChange={(v) => set("recipient_address", v)} /><EntryField label="Place" value={form.recipient_place} onChange={(v) => set("recipient_place", v)} /><EntryField label="State" value={form.recipient_state} onChange={(v) => set("recipient_state", v)} /></div></section>
+          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Goods / Invoice Details</h3><div className="grid gap-3 md:grid-cols-2"><EntryField label="Product / Item Description *" value={item.description} onChange={(v) => setItem((old) => ({ ...old, description: v }))} /><EntryField label="HSN Code *" value={item.hsn_code} onChange={(v) => setItem((old) => ({ ...old, hsn_code: v }))} /><EntryField label="Quantity" type="number" value={item.quantity} onChange={(v) => setItem((old) => ({ ...old, quantity: v }))} /><EntryField label="Weight (KG)" type="number" value={item.weight_kg} onChange={(v) => setItem((old) => ({ ...old, weight_kg: v }))} /><EntryField label="Unit" value={item.unit} onChange={(v) => setItem((old) => ({ ...old, unit: v }))} /><EntryField label="Taxable Value" type="number" value={item.taxable_value} onChange={(v) => setItem((old) => ({ ...old, taxable_value: v }))} /><EntryField label="Total Invoice Value" type="number" value={item.total_invoice_value} onChange={(v) => setItem((old) => ({ ...old, total_invoice_value: v }))} /></div><div className="mt-3 flex flex-wrap justify-end gap-5 border-t border-border pt-3 text-sm"><span>Total quantity: <strong>{Number(item.quantity || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</strong></span><span>Total Weight (in kg): <strong>{Number(item.weight_kg || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg</strong></span><span>Taxable total: <strong>₹{Number(item.taxable_value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span><span>Invoice total: <strong>₹{Number(item.total_invoice_value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span></div></section>
         </div>
         <DialogFooter><Button variant="outline" onClick={onClose}>Cancel</Button><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Create and Add"}</Button></DialogFooter>
       </DialogContent>

@@ -28,6 +28,7 @@ type Item = {
   description: string;
   hsn_code: string;
   quantity: string;
+  weight_kg: string;
   unit: string;
   taxable_value: string;
   gst_rate: string;
@@ -90,6 +91,7 @@ const blankItem = (): Item => ({
   description: "",
   hsn_code: "",
   quantity: "",
+  weight_kg: "",
   unit: "NOS",
   taxable_value: "",
   gst_rate: "",
@@ -265,7 +267,13 @@ function ShipmentView({
       <PartySection title="Ship To" prefix="ship_to" form={shipment} setForm={() => {}} readOnly />
       <div className="rounded-xl border border-border p-4">
         <h3 className="mb-3 font-semibold">Goods / Invoice Details</h3>
-        <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Item</th><th className="px-2 py-2">HSN</th><th className="px-2 py-2">Quantity</th><th className="px-2 py-2 text-right">Value</th></tr></thead><tbody>{items.map((item, index) => <tr key={`${item.description}-${index}`} className="border-t border-border"><td className="px-2 py-2">{item.description}</td><td className="px-2 py-2">{item.hsn_code}</td><td className="px-2 py-2">{item.quantity} {item.unit}</td><td className="px-2 py-2 text-right">{money(n(item.total_invoice_value))}</td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Item</th><th className="px-2 py-2">HSN</th><th className="px-2 py-2">Quantity</th><th className="px-2 py-2">Weight (KG)</th><th className="px-2 py-2 text-right">Value</th></tr></thead><tbody>{items.map((item, index) => <tr key={`${item.description}-${index}`} className="border-t border-border"><td className="px-2 py-2">{item.description}</td><td className="px-2 py-2">{item.hsn_code}</td><td className="px-2 py-2">{item.quantity} {item.unit}</td><td className="px-2 py-2">{n(item.weight_kg).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg</td><td className="px-2 py-2 text-right">{money(n(item.total_invoice_value))}</td></tr>)}</tbody></table></div>
+        <div className="flex flex-wrap justify-end gap-5 border-t border-border pt-3 text-sm">
+          <span>Taxable total: <strong>{money(items.reduce((sum, item) => sum + n(item.taxable_value), 0))}</strong></span>
+          <span>Invoice total: <strong>{money(items.reduce((sum, item) => sum + n(item.total_invoice_value), 0))}</strong></span>
+          <span>Total quantity: <strong>{items.reduce((sum, item) => sum + n(item.quantity), 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</strong></span>
+          <span>Total Weight (in kg): <strong>{items.reduce((sum, item) => sum + n(item.weight_kg), 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg</strong></span>
+        </div>
       </div>
     </div>
   );
@@ -380,6 +388,7 @@ export function ShipmentList() {
         description: String(item.description ?? ""),
         hsn_code: String(item.hsn_code ?? ""),
         quantity: String(item.quantity ?? ""),
+        weight_kg: String(item.weight_kg ?? ""),
         unit: String(item.unit ?? "NOS"),
         taxable_value: String(item.taxable_value ?? ""),
         gst_rate: String(item.gst_rate ?? ""),
@@ -406,6 +415,7 @@ export function ShipmentList() {
         description: String(item.description ?? ""),
         hsn_code: String(item.hsn_code ?? ""),
         quantity: String(item.quantity ?? ""),
+        weight_kg: String(item.weight_kg ?? ""),
         unit: String(item.unit ?? "NOS"),
         taxable_value: String(item.taxable_value ?? ""),
         gst_rate: String(item.gst_rate ?? ""),
@@ -426,6 +436,8 @@ export function ShipmentList() {
     setItems(items.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   const totalTaxable = items.reduce((sum, item) => sum + n(item.taxable_value), 0);
   const totalInvoice = items.reduce((sum, item) => sum + n(item.total_invoice_value), 0);
+  const totalQuantity = items.reduce((sum, item) => sum + n(item.quantity), 0);
+  const totalWeight = items.reduce((sum, item) => sum + n(item.weight_kg), 0);
   const selectedItem = selectedItemIndex === null ? null : (items[selectedItemIndex] ?? null);
 
   async function save() {
@@ -462,6 +474,7 @@ export function ShipmentList() {
           shipment_id: shipment.id,
           item_no: index + 1,
           quantity: n(item.quantity),
+          weight_kg: n(item.weight_kg),
           taxable_value: n(item.taxable_value),
           gst_rate: n(item.gst_rate),
           cgst: n(item.cgst),
@@ -816,6 +829,8 @@ export function ShipmentList() {
                     <tr>
                       <th className="px-3 py-2">Item Name</th>
                       <th className="px-3 py-2">HSN Code</th>
+                      <th className="px-3 py-2 text-right">Quantity</th>
+                      <th className="px-3 py-2 text-right">Weight (KG)</th>
                       <th className="px-3 py-2 text-right">Total Value</th>
                       <th className="px-3 py-2 text-right">Action</th>
                     </tr>
@@ -827,6 +842,8 @@ export function ShipmentList() {
                           {item.description || `Item ${index + 1}`}
                         </td>
                         <td className="px-3 py-2">{item.hsn_code || "—"}</td>
+                        <td className="px-3 py-2 text-right">{n(item.quantity)} {item.unit}</td>
+                        <td className="px-3 py-2 text-right">{n(item.weight_kg).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td>
                         <td className="px-3 py-2 text-right">
                           {money(n(item.total_invoice_value))}
                         </td>
@@ -851,6 +868,12 @@ export function ShipmentList() {
                 </span>
                 <span>
                   Invoice total: <strong>{money(totalInvoice)}</strong>
+                </span>
+                <span>
+                  Total quantity: <strong>{totalQuantity.toLocaleString("en-IN", { maximumFractionDigits: 3 })}</strong>
+                </span>
+                <span>
+                  Total Weight (in kg): <strong>{totalWeight.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg</strong>
                 </span>
               </div>
             </section>
@@ -900,6 +923,12 @@ export function ShipmentList() {
                 type="number"
                 value={selectedItem.quantity}
                 onChange={(v) => setItem(selectedItemIndex, "quantity", v)}
+              />
+              <Field
+                label="Weight (KG)"
+                type="number"
+                value={selectedItem.weight_kg}
+                onChange={(v) => setItem(selectedItemIndex, "weight_kg", v)}
               />
               <Field
                 label="Unit"
