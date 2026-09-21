@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Link2, Plus, Search, Truck, X } from "lucide-react";
+import { ArrowLeft, Eye, Link2, Pencil, Plus, Search, Truck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
 import { useBranches } from "@/lib/use-branches";
@@ -125,6 +132,8 @@ export function LorryReceiptList() {
   const { user } = useSession();
   const branches = useBranches();
   const [view, setView] = useState<View>({ kind: "list" });
+  const [viewingRow, setViewingRow] = useState<Record<string, any> | null>(null);
+  const [editingRow, setEditingRow] = useState<Record<string, any> | null>(null);
   const [rows, setRows] = useState<Array<Record<string, any>>>([]);
   const [loading, setLoading] = useState(true);
   const [branchFilter, setBranchFilter] = useState("all");
@@ -178,6 +187,18 @@ export function LorryReceiptList() {
         onCancel={() => setView({ kind: "list" })}
         onSaved={() => {
           setView({ kind: "list" });
+          void load();
+        }}
+      />
+    );
+  if (editingRow)
+    return (
+      <LorryReceiptEditForm
+        row={editingRow}
+        branches={visibleBranches}
+        onCancel={() => setEditingRow(null)}
+        onSaved={() => {
+          setEditingRow(null);
           void load();
         }}
       />
@@ -246,18 +267,19 @@ export function LorryReceiptList() {
               <th className="px-4 py-3">Shipments</th>
               <th className="px-4 py-3">Route</th>
               <th className="px-4 py-3">Created</th>
+              <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                <td colSpan={7} className="p-8 text-center text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={6} className="p-8 text-center text-muted-foreground">
+                <td colSpan={7} className="p-8 text-center text-muted-foreground">
                   No LR records found.
                 </td>
               </tr>
@@ -283,6 +305,16 @@ export function LorryReceiptList() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3">{String(row.created_at ?? "").slice(0, 10)}</td>
+                    <td className="px-4 py-3 text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button variant="ghost" size="sm" onClick={() => setViewingRow(row)}>
+                          <Eye className="mr-1 size-4" /> View
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => setEditingRow(row)}>
+                          <Pencil className="mr-1 size-4" /> Edit
+                        </Button>
+                      </div>
+                    </td>
                   </tr>
                 );
               })
@@ -290,6 +322,72 @@ export function LorryReceiptList() {
           </tbody>
         </table>
       </div>
+      <Dialog open={viewingRow !== null} onOpenChange={(open) => !open && setViewingRow(null)}>
+        <DialogContent className="max-h-[88vh] max-w-4xl overflow-y-auto">
+          <DialogHeader><DialogTitle>Lorry Receipt Details — {viewingRow?.lr_number}</DialogTitle></DialogHeader>
+          {viewingRow && (
+            <div className="space-y-4 py-2">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Field label="LR Number" value={viewingRow.lr_number} />
+                <Field label="Branch" value={branchName(viewingRow.branch_id)} />
+                <Field label="Source / Contract" value={viewingRow.source?.contract_name || "—"} />
+                <Field label="Created" value={String(viewingRow.created_at ?? "").slice(0, 10)} />
+                <Field label="Shipment Count" value={(viewingRow.lorry_receipt_shipments ?? []).length} />
+              </div>
+              <section className="rounded-xl border border-border p-4">
+                <h3 className="mb-3 font-semibold">Attached Shipments</h3>
+                <div className="space-y-2 text-sm">
+                  {(viewingRow.lorry_receipt_shipments ?? []).map((link: any) => (
+                    <div key={link.shipment?.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2">
+                      <strong>{link.shipment?.eway_bill_number}</strong>
+                      <span>{link.shipment?.dispatch_from_pin_code || "—"} → {link.shipment?.ship_to_pin_code || "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function LorryReceiptEditForm({
+  row,
+  branches,
+  onCancel,
+  onSaved,
+}: {
+  row: Record<string, any>;
+  branches: Array<{ id: string; branch_name: string }>;
+  onCancel: () => void;
+  onSaved: () => void;
+}) {
+  const [sourceId, setSourceId] = useState(String(row.source_id ?? ""));
+  const [sources, setSources] = useState<Source[]>([]);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    void db.from("contracts").select("id,contract_name,branch_id,status").eq("branch_id", row.branch_id).order("contract_name")
+      .then(({ data }: { data: Source[] | null }) => setSources(data ?? []));
+  }, [row.branch_id]);
+  async function save() {
+    setSaving(true);
+    const { error } = await db.from("lorry_receipts").update({ source_id: sourceId || null }).eq("id", row.id);
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    toast.success("LR updated");
+    onSaved();
+  }
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 border-b border-border pb-4"><Button variant="ghost" size="icon" onClick={onCancel}><ArrowLeft className="size-5" /></Button><div><h2 className="text-xl font-semibold">Edit Lorry Receipt</h2><p className="text-sm text-muted-foreground">Update LR metadata. Attached shipments remain linked and read-only.</p></div></div>
+      <div className="grid gap-4 rounded-xl border border-border p-4 md:grid-cols-3">
+        <Field label="LR Number" value={row.lr_number} />
+        <Field label="Branch" value={branches.find((b) => b.id === row.branch_id)?.branch_name ?? "—"} />
+        <div className="space-y-1.5"><Label>Source / Contract</Label><Select value={sourceId} onValueChange={setSourceId}><SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger><SelectContent>{sources.filter((s) => s.status !== "inactive").map((s) => <SelectItem key={s.id} value={s.id}>{s.contract_name}</SelectItem>)}</SelectContent></Select></div>
+      </div>
+      <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" onClick={onCancel}>Cancel</Button><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Button></div>
     </div>
   );
 }

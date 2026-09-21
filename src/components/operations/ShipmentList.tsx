@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Search, Trash2, Truck, X } from "lucide-react";
+import { Eye, Pencil, Plus, Search, Trash2, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
@@ -148,6 +148,7 @@ function Field({
   required = false,
   type = "text",
   placeholder,
+  readOnly = false,
 }: {
   label: string;
   value: string;
@@ -155,6 +156,7 @@ function Field({
   required?: boolean;
   type?: string;
   placeholder?: string;
+  readOnly?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
@@ -166,6 +168,8 @@ function Field({
         type={type}
         value={value}
         placeholder={placeholder}
+        readOnly={readOnly}
+        disabled={readOnly}
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
@@ -177,11 +181,13 @@ function PartySection({
   prefix,
   form,
   setForm,
+  readOnly = false,
 }: {
   title: string;
   prefix: "supplier" | "recipient" | "dispatch_from" | "ship_to";
   form: Form;
   setForm: (f: Form) => void;
+  readOnly?: boolean;
 }) {
   const get = (key: string) => form[`${prefix}_${key}` as keyof Form] as string;
   const set = (key: string, value: string) => setForm({ ...form, [`${prefix}_${key}`]: value });
@@ -194,6 +200,7 @@ function PartySection({
             label="GSTIN"
             value={get("gstin")}
             onChange={(v) => set("gstin", v.toUpperCase())}
+            readOnly={readOnly}
             placeholder="GSTIN or URP"
           />
         )}
@@ -202,6 +209,7 @@ function PartySection({
             label="Trade Name"
             value={get("trade_name")}
             onChange={(v) => set("trade_name", v)}
+            readOnly={readOnly}
           />
         )}
         {(prefix === "supplier" || prefix === "recipient") && (
@@ -209,14 +217,15 @@ function PartySection({
             label="Legal Name"
             value={get("legal_name")}
             onChange={(v) => set("legal_name", v)}
+            readOnly={readOnly}
           />
         )}
         <div className="md:col-span-2">
-          <Field label="Address" value={get("address")} onChange={(v) => set("address", v)} />
+          <Field label="Address" value={get("address")} onChange={(v) => set("address", v)} readOnly={readOnly} />
         </div>
-        <Field label="Place" value={get("place")} onChange={(v) => set("place", v)} />
-        <Field label="State" value={get("state")} onChange={(v) => set("state", v)} />
-        <Field label="PIN Code" value={get("pin_code")} onChange={(v) => set("pin_code", v)} />
+        <Field label="Place" value={get("place")} onChange={(v) => set("place", v)} readOnly={readOnly} />
+        <Field label="State" value={get("state")} onChange={(v) => set("state", v)} readOnly={readOnly} />
+        <Field label="PIN Code" value={get("pin_code")} onChange={(v) => set("pin_code", v)} readOnly={readOnly} />
       </div>
     </section>
   );
@@ -236,6 +245,9 @@ export function ShipmentList() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [editingShipmentId, setEditingShipmentId] = useState<string | null>(null);
+  const [viewingShipment, setViewingShipment] = useState<Shipment | null>(null);
+  const [viewingItems, setViewingItems] = useState<Item[]>([]);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
   const [form, setForm] = useState<Form>(blankForm());
   const [items, setItems] = useState<Item[]>([blankItem()]);
@@ -305,6 +317,67 @@ export function ShipmentList() {
     setForm(f);
     setItems([blankItem()]);
     setShowCreate(true);
+    setEditingShipmentId(null);
+  }
+  async function openEdit(shipment: Shipment) {
+    if (shipment.lr_number) {
+      toast.error("This shipment is already assigned to an LR and is read-only");
+      return;
+    }
+    const { data, error } = await db
+      .from("shipment_items")
+      .select("*")
+      .eq("shipment_id", shipment.id)
+      .order("item_no");
+    if (error) return toast.error(error.message);
+    setForm(
+      Object.fromEntries(
+        Object.keys(blankForm()).map((key) => [key, String((shipment as Record<string, unknown>)[key] ?? "")]),
+      ) as Form,
+    );
+    setItems(
+      ((data ?? []) as Array<Record<string, unknown>>).map((item) => ({
+        description: String(item.description ?? ""),
+        hsn_code: String(item.hsn_code ?? ""),
+        quantity: String(item.quantity ?? ""),
+        unit: String(item.unit ?? "NOS"),
+        taxable_value: String(item.taxable_value ?? ""),
+        gst_rate: String(item.gst_rate ?? ""),
+        cgst: String(item.cgst ?? ""),
+        sgst_utgst: String(item.sgst_utgst ?? ""),
+        igst: String(item.igst ?? ""),
+        cess: String(item.cess ?? ""),
+        other_tax_charges: String(item.other_tax_charges ?? ""),
+        total_invoice_value: String(item.total_invoice_value ?? ""),
+      })),
+    );
+    setSelectedItemIndex(null);
+    setEditingShipmentId(shipment.id);
+    setShowCreate(true);
+  }
+  async function openView(shipment: Shipment) {
+    const { data } = await db
+      .from("shipment_items")
+      .select("*")
+      .eq("shipment_id", shipment.id)
+      .order("item_no");
+    setViewingItems(
+      ((data ?? []) as Array<Record<string, unknown>>).map((item) => ({
+        description: String(item.description ?? ""),
+        hsn_code: String(item.hsn_code ?? ""),
+        quantity: String(item.quantity ?? ""),
+        unit: String(item.unit ?? "NOS"),
+        taxable_value: String(item.taxable_value ?? ""),
+        gst_rate: String(item.gst_rate ?? ""),
+        cgst: String(item.cgst ?? ""),
+        sgst_utgst: String(item.sgst_utgst ?? ""),
+        igst: String(item.igst ?? ""),
+        cess: String(item.cess ?? ""),
+        other_tax_charges: String(item.other_tax_charges ?? ""),
+        total_invoice_value: String(item.total_invoice_value ?? ""),
+      })),
+    );
+    setViewingShipment(shipment);
   }
   const setItem = (index: number, key: keyof Item, value: string) =>
     setItems(items.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
@@ -332,12 +405,14 @@ export function ShipmentList() {
         total_invoice_value: totalInvoice,
         created_by: user?.id ?? null,
       };
-      const { data: shipment, error } = await db
-        .from("shipments")
-        .insert(payload)
-        .select("id")
-        .single();
+      const { data: shipment, error } = editingShipmentId
+        ? await db.from("shipments").update(payload).eq("id", editingShipmentId).select("id").single()
+        : await db.from("shipments").insert(payload).select("id").single();
       if (error || !shipment) throw error ?? new Error("Could not create shipment");
+      if (editingShipmentId) {
+        const { error: deleteError } = await db.from("shipment_items").delete().eq("shipment_id", editingShipmentId);
+        if (deleteError) throw deleteError;
+      }
       const { error: itemError } = await db.from("shipment_items").insert(
         items.map((item, index) => ({
           ...item,
@@ -358,8 +433,9 @@ export function ShipmentList() {
         await db.from("shipments").delete().eq("id", shipment.id);
         throw itemError;
       }
-      toast.success("Shipment created from E-Way Bill");
+      toast.success(editingShipmentId ? "Shipment updated" : "Shipment created from E-Way Bill");
       setShowCreate(false);
+      setEditingShipmentId(null);
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not create shipment");
@@ -373,7 +449,7 @@ export function ShipmentList() {
         <>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">Shipments</h2>
+        <h2 className="text-lg font-semibold">Shipments</h2>
               <p className="text-sm text-muted-foreground">
                 One shipment is one E-Way Bill. Part A details are stored with nested goods items.
               </p>
@@ -443,6 +519,7 @@ export function ShipmentList() {
                     <th className="px-4 py-3 text-right">Invoice Value</th>
                     <th className="px-4 py-3">LR Number</th>
                     <th className="px-4 py-3">Status</th>
+                    <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -465,6 +542,18 @@ export function ShipmentList() {
                       <td className="px-4 py-3">
                         <Badge variant="outline">{s.eway_bill_status}</Badge>
                       </td>
+                      <td className="px-4 py-3 text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => void openView(s)}>
+                            <Eye className="mr-1 size-4" /> View
+                          </Button>
+                          {!s.lr_number && (
+                            <Button variant="outline" size="sm" onClick={() => void openEdit(s)}>
+                              <Pencil className="mr-1 size-4" /> Edit
+                            </Button>
+                          )}
+                        </div>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -480,11 +569,16 @@ export function ShipmentList() {
               <button
                 type="button"
                 className="mb-2 text-sm text-muted-foreground hover:text-foreground"
-                onClick={() => setShowCreate(false)}
+                onClick={() => {
+                  setShowCreate(false);
+                  setEditingShipmentId(null);
+                }}
               >
                 ← Back to Shipments
               </button>
-              <h2 className="text-xl font-semibold">Create Shipment from E-Way Bill — Part A</h2>
+              <h2 className="text-xl font-semibold">
+                {editingShipmentId ? "Edit Shipment — Part A" : "Create Shipment from E-Way Bill — Part A"}
+              </h2>
               <p className="text-sm text-muted-foreground">
                 Create one shipment for one E-Way Bill.
               </p>
@@ -719,11 +813,17 @@ export function ShipmentList() {
             </section>
           </div>
           <div className="flex justify-end gap-2 border-t border-border pt-4">
-            <Button variant="outline" onClick={() => setShowCreate(false)}>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setShowCreate(false);
+                setEditingShipmentId(null);
+              }}
+            >
               Cancel
             </Button>
             <Button onClick={() => void save()} disabled={saving}>
-              {saving ? "Saving…" : "Create Shipment"}
+              {saving ? "Saving…" : editingShipmentId ? "Save Changes" : "Create Shipment"}
             </Button>
           </div>
         </div>
@@ -830,6 +930,41 @@ export function ShipmentList() {
               Done
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={viewingShipment !== null} onOpenChange={(open) => !open && setViewingShipment(null)}>
+        <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              Shipment Details — {viewingShipment?.eway_bill_number}
+              {viewingShipment?.lr_number ? ` (LR ${viewingShipment.lr_number})` : ""}
+            </DialogTitle>
+          </DialogHeader>
+          {viewingShipment && (
+            <div className="space-y-4 py-2">
+              <div className="grid gap-3 md:grid-cols-3">
+                <Field label="E-Way Bill Number" value={viewingShipment.eway_bill_number} onChange={() => {}} />
+                <Field label="E-Way Bill Date" value={viewingShipment.eway_bill_date} onChange={() => {}} />
+                <Field label="Status" value={viewingShipment.eway_bill_status} onChange={() => {}} />
+                <Field label="Document" value={`${viewingShipment.document_type} · ${viewingShipment.document_number}`} onChange={() => {}} />
+                <Field label="Branch" value={branchName(viewingShipment.branch_id)} onChange={() => {}} />
+                <Field label="LR Number" value={viewingShipment.lr_number || "Not assigned"} onChange={() => {}} />
+              </div>
+              <PartySection title="Supplier / Consignor" prefix="supplier" form={viewingShipment} setForm={() => {}} readOnly />
+              <PartySection title="Recipient / Consignee" prefix="recipient" form={viewingShipment} setForm={() => {}} readOnly />
+              <PartySection title="Dispatch From" prefix="dispatch_from" form={viewingShipment} setForm={() => {}} readOnly />
+              <PartySection title="Ship To" prefix="ship_to" form={viewingShipment} setForm={() => {}} readOnly />
+              <div className="rounded-xl border border-border p-4">
+                <h3 className="mb-3 font-semibold">Goods / Invoice Details</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Item</th><th className="px-2 py-2">HSN</th><th className="px-2 py-2">Quantity</th><th className="px-2 py-2 text-right">Value</th></tr></thead>
+                    <tbody>{viewingItems.map((item, index) => <tr key={`${item.description}-${index}`} className="border-t border-border"><td className="px-2 py-2">{item.description}</td><td className="px-2 py-2">{item.hsn_code}</td><td className="px-2 py-2">{item.quantity} {item.unit}</td><td className="px-2 py-2 text-right">{money(n(item.total_invoice_value))}</td></tr>)}</tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
