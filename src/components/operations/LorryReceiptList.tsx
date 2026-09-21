@@ -182,6 +182,27 @@ function ShipmentDetails({ shipment }: { shipment: Shipment }) {
     </div>
   );
 }
+function LrTotals({ shipments }: { shipments: Array<Record<string, any>> }) {
+  const items = shipments.flatMap((shipment) => (shipment.shipment_items ?? []) as Array<Record<string, any>>);
+  const totalTaxable = items.reduce((sum, item) => sum + Number(item.taxable_value ?? 0), 0);
+  const totalInvoice = items.reduce((sum, item) => sum + Number(item.total_invoice_value ?? 0), 0);
+  const totalQuantity = items.reduce((sum, item) => sum + Number(item.quantity ?? 0), 0);
+  const totalWeight = items.reduce((sum, item) => sum + Number(item.weight_kg ?? 0), 0);
+  const money = (value: number) => `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const number = (value: number) => value.toLocaleString("en-IN", { maximumFractionDigits: 3 });
+
+  return (
+    <section className="rounded-xl border border-border p-4">
+      <h3 className="mb-3 font-semibold">LR Totals — All Connected Shipments</h3>
+      <div className="flex flex-wrap justify-end gap-5 border-t border-border pt-3 text-sm">
+        <span>Taxable total: <strong>{money(totalTaxable)}</strong></span>
+        <span>Invoice total: <strong>{money(totalInvoice)}</strong></span>
+        <span>Total quantity: <strong>{number(totalQuantity)}</strong></span>
+        <span>Total Weight (in kg): <strong>{number(totalWeight)} kg</strong></span>
+      </div>
+    </section>
+  );
+}
 
 export function LorryReceiptList() {
   const { user } = useSession();
@@ -211,7 +232,7 @@ export function LorryReceiptList() {
       let query = db
         .from("lorry_receipts")
         .select(
-          "*, source:contracts(contract_name), lorry_receipt_shipments:lr_shipments(shipment:shipments(*))",
+          "*, source:contracts(contract_name), lorry_receipt_shipments:lr_shipments(shipment:shipments(*, shipment_items(*)))",
         )
         .order("created_at", { ascending: false });
       if (allowed !== null)
@@ -427,6 +448,9 @@ export function LorryReceiptList() {
                   ((viewingRow.lorry_receipt_shipments ?? []).map((x: any) => x.shipment).filter(Boolean)[0] as Shipment | undefined) ?? blankShipment
                 }
               />
+              <LrTotals
+                shipments={(viewingRow.lorry_receipt_shipments ?? []).map((x: any) => x.shipment).filter(Boolean)}
+              />
             </div>
           )}
         </DialogContent>
@@ -467,6 +491,7 @@ function LorryReceiptView({
         {shipments.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">No shipments attached yet.</p> : <div className="space-y-2 text-sm">{shipments.map((s) => <div key={s.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2"><strong>{s.eway_bill_number}</strong><span>{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></div>)}</div>}
       </section>
       <ShipmentDetails shipment={shipments[0] ?? blankShipment} />
+      <LrTotals shipments={shipments} />
     </div>
   );
 }
