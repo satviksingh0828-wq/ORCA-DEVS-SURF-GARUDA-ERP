@@ -90,6 +90,12 @@ const blankShipment: Shipment = {
   approximate_distance_km: 0,
 };
 
+type NewShipmentItem = { description: string; hsn_code: string; quantity: string; unit: string; taxable_value: string; total_invoice_value: string };
+type NewShipmentForm = Omit<Shipment, "id" | "branch_id" | "approximate_distance_km"> & { branch_id: string; approximate_distance_km: string; document_type: string; document_number: string; document_date: string; eway_bill_status: string; valid_from: string; valid_until: string; supply_type: string; sub_type: string };
+const blankNewShipment = (branchId: string): NewShipmentForm => ({
+  branch_id: branchId, eway_bill_number: "", eway_bill_date: new Date().toISOString().slice(0, 10), eway_bill_status: "Active", valid_from: "", valid_until: "", supply_type: "Outward", sub_type: "Supply", document_type: "Tax Invoice", document_number: "", document_date: new Date().toISOString().slice(0, 10), supplier_gstin: "URP", supplier_trade_name: "", supplier_legal_name: "", supplier_address: "", supplier_place: "", supplier_state: "", supplier_pin_code: "", recipient_gstin: "URP", recipient_trade_name: "", recipient_legal_name: "", recipient_address: "", recipient_place: "", recipient_state: "", recipient_pin_code: "", dispatch_from_address: "", dispatch_from_place: "", dispatch_from_state: "", dispatch_from_pin_code: "", ship_to_address: "", ship_to_place: "", ship_to_state: "", ship_to_pin_code: "", transporter_id: "", approximate_distance_km: "", total_taxable_value: 0, total_invoice_value: 0, item_count: 0, created_at: "", lr_number: null,
+});
+
 const db = supabase as any;
 const same = (a: unknown, b: unknown) =>
   String(a ?? "")
@@ -447,6 +453,64 @@ function LorryReceiptView({
   );
 }
 
+function CreateAndAddShipment({
+  branchId,
+  branches,
+  onCreated,
+  onClose,
+}: {
+  branchId: string;
+  branches: Array<{ id: string; branch_name: string }>;
+  onCreated: (shipment: Shipment) => void;
+  onClose: () => void;
+}) {
+  const [form, setForm] = useState<NewShipmentForm>(() => blankNewShipment(branchId));
+  const [item, setItem] = useState<NewShipmentItem>({ description: "", hsn_code: "", quantity: "1", unit: "NOS", taxable_value: "", total_invoice_value: "" });
+  const [saving, setSaving] = useState(false);
+  const set = (key: keyof NewShipmentForm, value: string) => setForm((old) => ({ ...old, [key]: value }));
+  async function save() {
+    if (!/^[0-9]{12}$/.test(form.eway_bill_number) || !form.branch_id || !form.document_number || !form.document_date || !item.description.trim() || !item.hsn_code.trim()) return toast.error("Enter a valid 12-digit E-Way Bill, document details and one item");
+    setSaving(true);
+    try {
+      const { item_count: _itemCount, created_at: _createdAt, lr_number: _lrNumber, total_taxable_value: _oldTaxable, total_invoice_value: _oldInvoice, ...shipmentFields } = form;
+      const payload = { ...shipmentFields, approximate_distance_km: Number(form.approximate_distance_km || 0), total_taxable_value: Number(item.taxable_value || 0), total_invoice_value: Number(item.total_invoice_value || 0), created_by: null };
+      const { data: created, error } = await db.from("shipments").insert(payload).select("*").single();
+      if (error || !created) throw error ?? new Error("Could not create shipment");
+      const { error: itemError } = await db.from("shipment_items").insert({ shipment_id: created.id, item_no: 1, ...item, quantity: Number(item.quantity || 0), taxable_value: Number(item.taxable_value || 0), total_invoice_value: Number(item.total_invoice_value || 0), gst_rate: 0, cgst: 0, sgst_utgst: 0, igst: 0, cess: 0, other_tax_charges: 0 });
+      if (itemError) { await db.from("shipments").delete().eq("id", created.id); throw itemError; }
+      toast.success("Shipment created and added to LR");
+      onCreated({ ...created, item_count: 1, lr_number: null } as Shipment);
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create shipment"); }
+    setSaving(false);
+  }
+  return (
+    <Dialog open onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+        <DialogHeader><DialogTitle>Create and Add Shipment</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="space-y-1.5"><Label>Branch</Label><Input value={branches.find((b) => b.id === branchId)?.branch_name ?? "—"} readOnly /></div>
+            <Field label="E-Way Bill Number *" value={form.eway_bill_number} onChange={(v) => set("eway_bill_number", v.replace(/\D/g, "").slice(0, 12))} />
+            <Field label="E-Way Bill Date *" type="date" value={form.eway_bill_date} onChange={(v) => set("eway_bill_date", v)} />
+            <Field label="Document Number *" value={form.document_number} onChange={(v) => set("document_number", v)} />
+            <Field label="Document Date *" type="date" value={form.document_date} onChange={(v) => set("document_date", v)} />
+            <Field label="Supplier GSTIN" value={form.supplier_gstin} onChange={(v) => set("supplier_gstin", v.toUpperCase())} />
+            <Field label="Recipient GSTIN" value={form.recipient_gstin} onChange={(v) => set("recipient_gstin", v.toUpperCase())} />
+            <Field label="Dispatch From PIN" value={form.dispatch_from_pin_code} onChange={(v) => set("dispatch_from_pin_code", v)} />
+            <Field label="Ship To PIN" value={form.ship_to_pin_code} onChange={(v) => set("ship_to_pin_code", v)} />
+            <Field label="Transporter ID / GSTIN" value={form.transporter_id} onChange={(v) => set("transporter_id", v.toUpperCase())} />
+            <Field label="Approximate Distance (KM)" type="number" value={form.approximate_distance_km} onChange={(v) => set("approximate_distance_km", v)} />
+          </div>
+          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Supplier / Consignor</h3><div className="grid gap-3 md:grid-cols-3"><Field label="Trade Name" value={form.supplier_trade_name} onChange={(v) => set("supplier_trade_name", v)} /><Field label="Legal Name" value={form.supplier_legal_name} onChange={(v) => set("supplier_legal_name", v)} /><Field label="Address" value={form.supplier_address} onChange={(v) => set("supplier_address", v)} /><Field label="Place" value={form.supplier_place} onChange={(v) => set("supplier_place", v)} /><Field label="State" value={form.supplier_state} onChange={(v) => set("supplier_state", v)} /></div></section>
+          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Recipient / Consignee</h3><div className="grid gap-3 md:grid-cols-3"><Field label="Trade Name" value={form.recipient_trade_name} onChange={(v) => set("recipient_trade_name", v)} /><Field label="Legal Name" value={form.recipient_legal_name} onChange={(v) => set("recipient_legal_name", v)} /><Field label="Address" value={form.recipient_address} onChange={(v) => set("recipient_address", v)} /><Field label="Place" value={form.recipient_place} onChange={(v) => set("recipient_place", v)} /><Field label="State" value={form.recipient_state} onChange={(v) => set("recipient_state", v)} /></div></section>
+          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Goods / Invoice Details</h3><div className="grid gap-3 md:grid-cols-2"><Field label="Product / Item Description *" value={item.description} onChange={(v) => setItem((old) => ({ ...old, description: v }))} /><Field label="HSN Code *" value={item.hsn_code} onChange={(v) => setItem((old) => ({ ...old, hsn_code: v }))} /><Field label="Quantity" type="number" value={item.quantity} onChange={(v) => setItem((old) => ({ ...old, quantity: v }))} /><Field label="Unit" value={item.unit} onChange={(v) => setItem((old) => ({ ...old, unit: v }))} /><Field label="Taxable Value" type="number" value={item.taxable_value} onChange={(v) => setItem((old) => ({ ...old, taxable_value: v }))} /><Field label="Total Invoice Value" type="number" value={item.total_invoice_value} onChange={(v) => setItem((old) => ({ ...old, total_invoice_value: v }))} /></div></section>
+        </div>
+        <DialogFooter><Button variant="outline" onClick={onClose}>Cancel</Button><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Create and Add"}</Button></DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function LorryReceiptEditForm({
   row,
   branches,
@@ -465,6 +529,7 @@ function LorryReceiptEditForm({
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [baseId, setBaseId] = useState(String(row.base_shipment_id ?? initialSelected[0]?.id ?? ""));
   const [showPicker, setShowPicker] = useState(false);
+  const [showCreateShipment, setShowCreateShipment] = useState(false);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     void (async () => {
@@ -520,11 +585,12 @@ function LorryReceiptEditForm({
       <div className="flex flex-col">
       <div className="order-last"><ShipmentDetails shipment={base ?? blankShipment} /></div>
       <section className="order-first space-y-3 rounded-xl border border-border p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)}><Plus className="mr-1 size-4" /> Add Shipment</Button></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div><div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)}><Plus className="mr-1 size-4" /> Add Shipment</Button><Button type="button" onClick={() => setShowCreateShipment(true)} disabled={!row.branch_id}><Plus className="mr-1 size-4" /> Create and Add</Button></div></div>
         {selected.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">No shipments attached yet.</p> : <div className="space-y-2 text-sm">{selected.map((s) => <div key={s.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Button variant="ghost" size="icon" onClick={() => removeShipment(s.id)}><X className="size-4" /></Button></div>)}</div>}
         {showPicker && <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3"><p className="text-sm font-medium">Select compatible shipment</p>{available.length === 0 ? <p className="text-sm text-muted-foreground">No unlinked shipments available for this branch.</p> : available.slice(0, 50).map((s) => <button type="button" key={s.id} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Link2 className="size-4 text-primary" /></button>)}</div>}
       </section>
       </div>
+      {showCreateShipment && <CreateAndAddShipment branchId={row.branch_id} branches={branches} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
       <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" onClick={onCancel}>Cancel</Button><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Button></div>
     </div>
   );
@@ -549,6 +615,7 @@ function LorryReceiptForm({
   const [selected, setSelected] = useState<Shipment[]>([]);
   const [baseId, setBaseId] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+  const [showCreateShipment, setShowCreateShipment] = useState(false);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
     if (!branchId) {
@@ -711,15 +778,7 @@ function LorryReceiptForm({
               Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setShowPicker((v) => !v)}
-            disabled={!branchId}
-          >
-            <Plus className="mr-1 size-4" />
-            Add Shipment
-          </Button>
+          <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)} disabled={!branchId}><Plus className="mr-1 size-4" /> Add Shipment</Button><Button type="button" onClick={() => setShowCreateShipment(true)} disabled={!branchId}><Plus className="mr-1 size-4" /> Create and Add</Button></div>
         </div>
         {selected.length === 0 ? (
           <p className="py-5 text-center text-sm text-muted-foreground">
@@ -791,6 +850,7 @@ function LorryReceiptForm({
         )}
       </section>
       </div>
+      {showCreateShipment && <CreateAndAddShipment branchId={branchId} branches={branches} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
       <div className="flex justify-end gap-2 border-t border-border pt-4">
         <Button variant="outline" onClick={onCancel}>
           Cancel
