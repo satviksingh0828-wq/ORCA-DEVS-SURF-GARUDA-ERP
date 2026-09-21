@@ -231,6 +231,46 @@ function PartySection({
   );
 }
 
+function ShipmentView({
+  shipment,
+  items,
+  branchName,
+  onBack,
+}: {
+  shipment: Shipment;
+  items: Item[];
+  branchName: (id: string) => string;
+  onBack: () => void;
+}) {
+  return (
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+        <div>
+          <button type="button" className="mb-2 text-sm text-muted-foreground hover:text-foreground" onClick={onBack}>← Back to Shipments</button>
+          <h2 className="text-xl font-semibold">Shipment Details — {shipment.eway_bill_number}</h2>
+          <p className="text-sm text-muted-foreground">{shipment.lr_number ? `Assigned to LR ${shipment.lr_number}` : "Not assigned to an LR"}</p>
+        </div>
+      </div>
+      <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-3">
+        <Field label="E-Way Bill Number" value={shipment.eway_bill_number} onChange={() => {}} readOnly />
+        <Field label="E-Way Bill Date" value={shipment.eway_bill_date} onChange={() => {}} readOnly />
+        <Field label="Status" value={shipment.eway_bill_status} onChange={() => {}} readOnly />
+        <Field label="Document" value={`${shipment.document_type} · ${shipment.document_number}`} onChange={() => {}} readOnly />
+        <Field label="Branch" value={branchName(shipment.branch_id)} onChange={() => {}} readOnly />
+        <Field label="LR Number" value={shipment.lr_number || "Not assigned"} onChange={() => {}} readOnly />
+      </div>
+      <PartySection title="Supplier / Consignor" prefix="supplier" form={shipment} setForm={() => {}} readOnly />
+      <PartySection title="Recipient / Consignee" prefix="recipient" form={shipment} setForm={() => {}} readOnly />
+      <PartySection title="Dispatch From" prefix="dispatch_from" form={shipment} setForm={() => {}} readOnly />
+      <PartySection title="Ship To" prefix="ship_to" form={shipment} setForm={() => {}} readOnly />
+      <div className="rounded-xl border border-border p-4">
+        <h3 className="mb-3 font-semibold">Goods / Invoice Details</h3>
+        <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Item</th><th className="px-2 py-2">HSN</th><th className="px-2 py-2">Quantity</th><th className="px-2 py-2 text-right">Value</th></tr></thead><tbody>{items.map((item, index) => <tr key={`${item.description}-${index}`} className="border-t border-border"><td className="px-2 py-2">{item.description}</td><td className="px-2 py-2">{item.hsn_code}</td><td className="px-2 py-2">{item.quantity} {item.unit}</td><td className="px-2 py-2 text-right">{money(n(item.total_invoice_value))}</td></tr>)}</tbody></table></div>
+      </div>
+    </div>
+  );
+}
+
 export function ShipmentList() {
   const { user } = useSession();
   const branches = useBranches();
@@ -379,6 +419,9 @@ export function ShipmentList() {
     );
     setViewingShipment(shipment);
   }
+
+  if (viewingShipment)
+    return <ShipmentView shipment={viewingShipment} items={viewingItems} branchName={branchName} onBack={() => setViewingShipment(null)} />;
   const setItem = (index: number, key: keyof Item, value: string) =>
     setItems(items.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   const totalTaxable = items.reduce((sum, item) => sum + n(item.taxable_value), 0);

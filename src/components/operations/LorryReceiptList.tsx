@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Eye, Link2, Pencil, Plus, Search, Truck, X } from "lucide-react";
+import { ArrowLeft, Eye, Link2, Pencil, Plus, Search, Trash2, Truck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -209,6 +209,16 @@ export function LorryReceiptList() {
     // load intentionally captures the current database client and branch scope.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowedKey]);
+  async function deleteLr(row: Record<string, any>) {
+    if (!window.confirm(`Delete LR ${row.lr_number}? Its shipments will be disconnected but not deleted.`)) return;
+    const { error: unlinkError } = await db.from("lr_shipments").delete().eq("lr_id", row.id);
+    if (unlinkError) return toast.error(unlinkError.message);
+    const { error } = await db.from("lorry_receipts").delete().eq("id", row.id);
+    if (error) return toast.error(error.message);
+    toast.success(`LR ${row.lr_number} deleted; shipments were disconnected`);
+    setViewingRow(null);
+    await load();
+  }
 
   if (view.kind === "create")
     return (
@@ -240,6 +250,7 @@ export function LorryReceiptList() {
         row={viewingRow}
         branchName={branchName}
         onBack={() => setViewingRow(null)}
+        onDelete={() => void deleteLr(viewingRow)}
       />
     );
 
@@ -352,6 +363,9 @@ export function LorryReceiptList() {
                         <Button variant="outline" size="sm" onClick={() => setEditingRow(row)}>
                           <Pencil className="mr-1 size-4" /> Edit
                         </Button>
+                        <Button variant="destructive" size="sm" onClick={() => void deleteLr(row)}>
+                          <Trash2 className="mr-1 size-4" /> Delete
+                        </Button>
                       </div>
                     </td>
                   </tr>
@@ -401,10 +415,12 @@ function LorryReceiptView({
   row,
   branchName,
   onBack,
+  onDelete,
 }: {
   row: Record<string, any>;
   branchName: (id: string) => string;
   onBack: () => void;
+  onDelete: () => void;
 }) {
   const shipments = (row.lorry_receipt_shipments ?? [])
     .map((x: any) => x.shipment)
@@ -414,6 +430,7 @@ function LorryReceiptView({
       <div className="flex items-center gap-3 border-b border-border pb-4">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="size-5" /></Button>
         <div><h2 className="text-xl font-semibold">Lorry Receipt Details — {row.lr_number}</h2><p className="text-sm text-muted-foreground">View all LR and attached shipment details.</p></div>
+        <Button variant="destructive" onClick={onDelete}><Trash2 className="mr-2 size-4" /> Delete LR</Button>
       </div>
       <div className="grid gap-4 rounded-xl border border-border p-4 md:grid-cols-4">
         <Field label="LR Number" value={row.lr_number} />
