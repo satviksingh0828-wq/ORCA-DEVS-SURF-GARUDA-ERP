@@ -59,6 +59,37 @@ type Shipment = {
 type Source = { id: string; contract_name: string; branch_id: string; status?: string };
 type View = { kind: "list" } | { kind: "create" };
 
+const blankShipment: Shipment = {
+  id: "",
+  branch_id: "",
+  eway_bill_number: "",
+  eway_bill_date: "",
+  supplier_gstin: "",
+  supplier_trade_name: "",
+  supplier_legal_name: "",
+  supplier_address: "",
+  supplier_place: "",
+  supplier_state: "",
+  supplier_pin_code: "",
+  recipient_gstin: "",
+  recipient_trade_name: "",
+  recipient_legal_name: "",
+  recipient_address: "",
+  recipient_place: "",
+  recipient_state: "",
+  recipient_pin_code: "",
+  dispatch_from_address: "",
+  dispatch_from_place: "",
+  dispatch_from_state: "",
+  dispatch_from_pin_code: "",
+  ship_to_address: "",
+  ship_to_place: "",
+  ship_to_state: "",
+  ship_to_pin_code: "",
+  transporter_id: "",
+  approximate_distance_km: 0,
+};
+
 const db = supabase as any;
 const same = (a: unknown, b: unknown) =>
   String(a ?? "")
@@ -345,6 +376,11 @@ export function LorryReceiptList() {
                   ))}
                 </div>
               </section>
+              <ShipmentDetails
+                shipment={
+                  ((viewingRow.lorry_receipt_shipments ?? []).map((x: any) => x.shipment).filter(Boolean)[0] as Shipment | undefined) ?? blankShipment
+                }
+              />
             </div>
           )}
         </DialogContent>
@@ -366,27 +402,69 @@ function LorryReceiptEditForm({
 }) {
   const [sourceId, setSourceId] = useState(String(row.source_id ?? ""));
   const [sources, setSources] = useState<Source[]>([]);
+  const initialSelected = ((row.lorry_receipt_shipments ?? []).map((x: any) => x.shipment).filter(Boolean) as Shipment[]);
+  const [selected, setSelected] = useState<Shipment[]>(initialSelected);
+  const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [baseId, setBaseId] = useState(String(row.base_shipment_id ?? initialSelected[0]?.id ?? ""));
+  const [showPicker, setShowPicker] = useState(false);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
-    void db.from("contracts").select("id,contract_name,branch_id,status").eq("branch_id", row.branch_id).order("contract_name")
-      .then(({ data }: { data: Source[] | null }) => setSources(data ?? []));
+    void (async () => {
+      const [s, sh] = await Promise.all([
+        db.from("contracts").select("id,contract_name,branch_id,status").eq("branch_id", row.branch_id).order("contract_name"),
+        db.from("shipments").select("*").eq("branch_id", row.branch_id).order("eway_bill_date", { ascending: false }),
+      ]);
+      const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number)");
+      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.lr_number ?? null]));
+      setSources((s.data ?? []) as Source[]);
+      setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
+    })();
   }, [row.branch_id]);
+  const base = selected.find((s) => s.id === baseId) ?? selected[0];
+  const available = shipments.filter((s) => !selected.some((x) => x.id === s.id) && !s.lr_number);
+  function addShipment(shipment: Shipment) {
+    if (base && (!same(base.supplier_gstin, shipment.supplier_gstin) || !same(base.recipient_gstin, shipment.recipient_gstin) || !same(base.dispatch_from_pin_code, shipment.dispatch_from_pin_code) || !same(base.ship_to_pin_code, shipment.ship_to_pin_code)))
+      return toast.error("This shipment does not match the LR base shipment");
+    setSelected((old) => [...old, shipment]);
+    setBaseId((old) => old || shipment.id);
+    setShowPicker(false);
+  }
+  function removeShipment(id: string) {
+    const next = selected.filter((s) => s.id !== id);
+    setSelected(next);
+    if (baseId === id) setBaseId(next[0]?.id ?? "");
+  }
   async function save() {
+    if (!base || selected.length === 0) return toast.error("At least one shipment is required");
     setSaving(true);
-    const { error } = await db.from("lorry_receipts").update({ source_id: sourceId || null }).eq("id", row.id);
+    try {
+      const { error } = await db.from("lorry_receipts").update({ source_id: sourceId || null, base_shipment_id: base.id }).eq("id", row.id);
+      if (error) throw error;
+      const { error: deleteError } = await db.from("lr_shipments").delete().eq("lr_id", row.id);
+      if (deleteError) throw deleteError;
+      const { error: linkError } = await db.from("lr_shipments").insert(selected.map((s) => ({ lr_id: row.id, shipment_id: s.id })));
+      if (linkError) throw linkError;
+      toast.success("LR updated");
+      onSaved();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update LR");
+    }
     setSaving(false);
-    if (error) return toast.error(error.message);
-    toast.success("LR updated");
-    onSaved();
   }
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3 border-b border-border pb-4"><Button variant="ghost" size="icon" onClick={onCancel}><ArrowLeft className="size-5" /></Button><div><h2 className="text-xl font-semibold">Edit Lorry Receipt</h2><p className="text-sm text-muted-foreground">Update LR metadata. Attached shipments remain linked and read-only.</p></div></div>
+      <div className="flex items-center gap-3 border-b border-border pb-4"><Button variant="ghost" size="icon" onClick={onCancel}><ArrowLeft className="size-5" /></Button><div><h2 className="text-xl font-semibold">Edit Lorry Receipt</h2><p className="text-sm text-muted-foreground">Update LR metadata and assign or unassign shipments.</p></div></div>
       <div className="grid gap-4 rounded-xl border border-border p-4 md:grid-cols-3">
         <Field label="LR Number" value={row.lr_number} />
         <Field label="Branch" value={branches.find((b) => b.id === row.branch_id)?.branch_name ?? "—"} />
         <div className="space-y-1.5"><Label>Source / Contract</Label><Select value={sourceId} onValueChange={setSourceId}><SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger><SelectContent>{sources.filter((s) => s.status !== "inactive").map((s) => <SelectItem key={s.id} value={s.id}>{s.contract_name}</SelectItem>)}</SelectContent></Select></div>
       </div>
+      <ShipmentDetails shipment={base ?? blankShipment} />
+      <section className="space-y-3 rounded-xl border border-border p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)}><Plus className="mr-1 size-4" /> Add Shipment</Button></div>
+        {selected.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">No shipments attached yet.</p> : <div className="space-y-2 text-sm">{selected.map((s) => <div key={s.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Button variant="ghost" size="icon" onClick={() => removeShipment(s.id)}><X className="size-4" /></Button></div>)}</div>}
+        {showPicker && <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3"><p className="text-sm font-medium">Select compatible shipment</p>{available.length === 0 ? <p className="text-sm text-muted-foreground">No unlinked shipments available for this branch.</p> : available.slice(0, 50).map((s) => <button type="button" key={s.id} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Link2 className="size-4 text-primary" /></button>)}</div>}
+      </section>
       <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" onClick={onCancel}>Cancel</Button><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Button></div>
     </div>
   );
@@ -433,8 +511,10 @@ function LorryReceiptForm({
       ]);
       if (s.error || sh.error)
         toast.error(s.error?.message ?? sh.error?.message ?? "Could not load LR options");
+      const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number)");
+      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.lr_number ?? null]));
       setSources((s.data ?? []) as Source[]);
-      setShipments((sh.data ?? []) as Shipment[]);
+      setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
     })();
   }, [branchId]);
   const base = selected.find((s) => s.id === baseId) ?? selected[0];
@@ -550,8 +630,8 @@ function LorryReceiptForm({
           </Select>
         </div>
       </div>
-      {base ? (
-        <div className="space-y-4">
+      <div className="space-y-4">
+        {base && (
           <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-3 text-sm">
             <Truck className="size-4 text-primary" />
             <span>
@@ -559,13 +639,9 @@ function LorryReceiptForm({
               its party GSTINs and route PIN codes.
             </span>
           </div>
-          <ShipmentDetails shipment={base} />
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
-          Select a shipment to auto-fill LR details.
-        </div>
-      )}
+        )}
+        <ShipmentDetails shipment={base ?? blankShipment} />
+      </div>
       <section className="space-y-3 rounded-xl border border-border p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
@@ -646,6 +722,11 @@ function LorryReceiptForm({
               ))
             )}
           </div>
+        )}
+        {!base && (
+          <p className="rounded-lg border border-dashed border-border p-3 text-center text-sm text-muted-foreground">
+            Select a shipment to auto-fill LR details.
+          </p>
         )}
       </section>
       <div className="flex justify-end gap-2 border-t border-border pt-4">
