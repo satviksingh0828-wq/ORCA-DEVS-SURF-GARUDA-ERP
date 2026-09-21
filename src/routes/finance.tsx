@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { CalendarCheck, ChevronRight, DollarSign, FileText, PanelLeftClose, PanelLeftOpen, Shield, TrendingDown, TrendingUp, Users } from "lucide-react";
+import { CalendarCheck, ChevronRight, DollarSign, FileText, PanelLeftClose, PanelLeftOpen, TrendingDown, TrendingUp, Users } from "lucide-react";
 import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -11,7 +11,7 @@ import { EmiScheduler } from "@/components/operations/EmiScheduler";
 import { DriverPayroll } from "@/components/operations/DriverPayroll";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
-import { VehicleCoveragePage } from "@/components/finance/VehicleCoveragePage";
+import { CoverageLedger } from "@/components/reports/CoverageLedger";
 
 export const Route = createFileRoute("/finance")({
   head: () => ({ meta: [{ title: "Finance — Garuda Logistics Solutions | ORCA DEVS SURF" }, { name: "description", content: "Income, expenditure, driver payroll, fixed income, yearly expenses and EMI schedules." }] }),
@@ -24,8 +24,8 @@ const ALL_TABS = [
   { id: "driver-payroll", label: "Driver Payroll", desc: "Salary, advances & deductions", icon: Users, adminOnly: false },
   { id: "fixed-income", label: "Fixed Income", desc: "Contract recurring charges", icon: DollarSign, adminOnly: true },
   { id: "emi-scheduler", label: "EMI Scheduler", desc: "Vehicle loan & EMI tracker", icon: CalendarCheck, adminOnly: true },
-  { id: "insurance", label: "Insurance", desc: "Vehicle insurance management", icon: Shield, adminOnly: true },
-  { id: "road-tax", label: "Road Tax", desc: "Vehicle road tax management", icon: FileText, adminOnly: true },
+  { id: "insurance-expenses", label: "Insurance Premium", desc: "Vehicle insurance expenses", icon: FileText, adminOnly: true },
+  { id: "road-tax-expenses", label: "Road Tax", desc: "Vehicle road tax expenses", icon: FileText, adminOnly: true },
 ] as const;
 type TabId = (typeof ALL_TABS)[number]["id"];
 
@@ -37,8 +37,8 @@ function FinancePage() {
   const tabs = isAdmin
     ? ALL_TABS
     : isViewer
-      ? ALL_TABS.filter((tab) => tab.id !== "insurance" && tab.id !== "road-tax")
-      : ALL_TABS.filter((tab) => isBasic && ["income", "expenditure", "driver-payroll", "insurance", "road-tax"].includes(tab.id));
+      ? ALL_TABS
+      : ALL_TABS.filter((tab) => isBasic && ["income", "expenditure", "driver-payroll"].includes(tab.id));
   const [tab, setTab] = useState<TabId>("income");
   const [navOpen, setNavOpen] = useState(true);
   const safeTab = (tabs.find((item) => item.id === tab) ? tab : "income") as TabId;
@@ -54,8 +54,8 @@ function FinancePage() {
         {safeTab === "driver-payroll" && <TabErrorBoundary label="Driver Payroll"><DriverPayroll /></TabErrorBoundary>}
         {safeTab === "fixed-income" && (isAdmin || isViewer) && <TabErrorBoundary label="Fixed Income"><FixedIncomeList /></TabErrorBoundary>}
         {safeTab === "emi-scheduler" && (isAdmin || isViewer) && <TabErrorBoundary label="EMI Scheduler"><EmiScheduler /></TabErrorBoundary>}
-        {safeTab === "insurance" && (isAdmin || isBasic) && <TabErrorBoundary label="Insurance"><VehicleCoveragePage kind="insurance" readOnly={isBasic} /></TabErrorBoundary>}
-        {safeTab === "road-tax" && (isAdmin || isBasic) && <TabErrorBoundary label="Road Tax"><VehicleCoveragePage kind="road-tax" readOnly={isBasic} /></TabErrorBoundary>}
+        {safeTab === "insurance-expenses" && (isAdmin || isViewer) && <TabErrorBoundary label="Insurance Premium"><CoverageLedger type="insurance" /></TabErrorBoundary>}
+        {safeTab === "road-tax-expenses" && (isAdmin || isViewer) && <TabErrorBoundary label="Road Tax"><CoverageLedger type="road_tax" /></TabErrorBoundary>}
       </div>
     </div>
   </AppShell>;

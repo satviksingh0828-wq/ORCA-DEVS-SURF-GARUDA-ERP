@@ -7,10 +7,8 @@ import {
   ChevronRight,
   CreditCard,
   FileBarChart,
-  FileText,
   PanelLeftClose,
   PanelLeftOpen,
-  Shield,
   Truck,
   Users,
   CalendarRange,
@@ -19,7 +17,6 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { ProfitLossComparison } from "@/components/reports/ProfitLossComparison";
-import { CoverageLedger } from "@/components/reports/CoverageLedger";
 import { FastagLedger } from "@/components/reports/FastagLedger";
 import { VehicleExpenseReport } from "@/components/reports/VehicleExpenseReport";
 import { DriverExpenseReport } from "@/components/reports/DriverExpenseReport";
@@ -77,13 +74,6 @@ const TABS = [
     desc: "Compare two periods side-by-side",
     icon: FileBarChart,
   },
-  {
-    id: "insurance",
-    label: "Insurance Premium Ledger",
-    desc: "Vehicle insurance expenses",
-    icon: Shield,
-  },
-  { id: "road-tax", label: "Road Tax Ledger", desc: "Vehicle road tax expenses", icon: FileText },
   {
     id: "fastag",
     label: "Fastag Balance",
@@ -252,8 +242,6 @@ function ReportsPage() {
             {tab === "pnl-compare" && <ProfitLossComparison />}
             {tab === "monthly-mis" && <MonthlyMISReport />}
             {tab === "booking-report" && <TripDetailsPanel />}
-            {tab === "insurance" && <CoverageLedger type="insurance" />}
-            {tab === "road-tax" && <CoverageLedger type="road_tax" />}
             {tab === "fastag" && <FastagLedger />}
             {tab === "vehicle-expenses" && <VehicleExpenseReport />}
             {tab === "driver-expenses" && <DriverExpenseReport />}
