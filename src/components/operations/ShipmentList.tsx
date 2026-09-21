@@ -83,6 +83,7 @@ type Shipment = Form & {
   total_invoice_value: number;
   item_count: number;
   created_at: string;
+  lr_number?: string | null;
 };
 
 const blankItem = (): Item => ({
@@ -260,11 +261,21 @@ export function ShipmentList() {
         q = q.in("branch_id", allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"]);
       const { data, error } = await q;
       if (error) throw error;
+      const { data: linkedRows } = await db
+        .from("lr_shipments")
+        .select("shipment_id, lorry_receipt:lorry_receipts(lr_number)");
+      const lrByShipment = new Map(
+        ((linkedRows ?? []) as Array<Record<string, unknown>>).map((row) => [
+          String(row.shipment_id),
+          (row.lorry_receipt as { lr_number?: string } | null)?.lr_number ?? null,
+        ]),
+      );
       setShipments(
         ((data ?? []) as Array<Record<string, unknown>>).map(
           (row) =>
             ({
               ...row,
+              lr_number: lrByShipment.get(String(row.id)) ?? null,
               item_count: Number(
                 (row.shipment_items as Array<{ count?: number }> | undefined)?.[0]?.count ?? 0,
               ),
@@ -430,6 +441,7 @@ export function ShipmentList() {
                     <th className="px-4 py-3">Document</th>
                     <th className="px-4 py-3 text-right">Items</th>
                     <th className="px-4 py-3 text-right">Invoice Value</th>
+                    <th className="px-4 py-3">LR Number</th>
                     <th className="px-4 py-3">Status</th>
                   </tr>
                 </thead>
@@ -449,6 +461,7 @@ export function ShipmentList() {
                       <td className="px-4 py-3 text-right">
                         {money(Number(s.total_invoice_value))}
                       </td>
+                      <td className="px-4 py-3">{s.lr_number || "—"}</td>
                       <td className="px-4 py-3">
                         <Badge variant="outline">{s.eway_bill_status}</Badge>
                       </td>

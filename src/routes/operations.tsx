@@ -13,6 +13,7 @@ import {
   Route as RouteIcon,
   TrendingDown,
   TrendingUp,
+  Truck,
   Upload,
   Users,
 } from "lucide-react";
@@ -30,6 +31,7 @@ import { MonthlyMIS } from "@/components/operations/MonthlyMIS";
 import { FastagLedger } from "@/components/reports/FastagLedger";
 import { ReportFiltersContext } from "@/lib/report-filters";
 import { ShipmentList } from "@/components/operations/ShipmentList";
+import { LorryReceiptList } from "@/components/operations/LorryReceiptList";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -78,6 +80,14 @@ const ALL_TABS = [
     label: "Shipments",
     desc: "E-Way Bills and Part A goods",
     icon: FileText,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
+    id: "lr",
+    label: "LR",
+    desc: "Combine shipments into Lorry Receipts",
+    icon: Truck,
     adminOnly: false,
     dividerBefore: false,
   },
@@ -224,6 +234,11 @@ function OperationsPage() {
           {safeTab === "shipments" && (
             <TabErrorBoundary label="Shipments">
               <ShipmentList />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "lr" && (
+            <TabErrorBoundary label="LR">
+              <LorryReceiptList />
             </TabErrorBoundary>
           )}
           {safeTab === "monthly-mis" && !isViewer && (
