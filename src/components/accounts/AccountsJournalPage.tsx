@@ -77,7 +77,7 @@ function JournalPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [filterBranch, setFilterBranch] = useState("all");
-  const [filterMonth, setFilterMonth] = useState("");
+  const [filterMonth, setFilterMonth] = useState(new Date().toISOString().slice(0, 7));
   const [search, setSearch] = useState("");
   const [transferSourceBranch, setTransferSourceBranch] = useState("");
   const [transferDestinationBranch, setTransferDestinationBranch] = useState("");
@@ -948,16 +948,22 @@ function JournalPage() {
                                   </button>
                                 </td>
                                 <td className="px-4 py-3">{entry.entry_date}</td>
-                                <td className="px-4 py-3">{branchMap.get(entry.branch_id) ?? "—"}</td>
+                                <td className="px-4 py-3">
+                                  {branchMap.get(entry.branch_id) ?? "—"}
+                                </td>
                                 <td className="px-4 py-3">
                                   <p>{entry.description || "—"}</p>
                                   {entry.reference && (
-                                    <p className="text-xs text-muted-foreground">Ref: {entry.reference}</p>
+                                    <p className="text-xs text-muted-foreground">
+                                      Ref: {entry.reference}
+                                    </p>
                                   )}
                                 </td>
                                 <td className="px-4 py-3">
                                   <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-semibold">
-                                    {entry.source_module === "auto" ? "Automatic opening" : "Manual"}
+                                    {entry.source_module === "auto"
+                                      ? "Automatic opening"
+                                      : "Manual"}
                                   </span>
                                 </td>
                                 <td className="flex gap-2 px-4 py-3">
@@ -1009,12 +1015,30 @@ function JournalPage() {
                                         <div>
                                           <h3 className="font-semibold">Journal lines</h3>
                                           <p className="text-xs text-muted-foreground">
-                                            {entry.lines?.length ?? 0} line{entry.lines?.length === 1 ? "" : "s"} · Status: {entry.status}
+                                            {entry.lines?.length ?? 0} line
+                                            {entry.lines?.length === 1 ? "" : "s"} · Status:{" "}
+                                            {entry.status}
                                           </p>
                                         </div>
                                         <div className="flex gap-4 text-sm">
-                                          <span>Debit: <strong>₹{totalFor(entry, "debit").toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></span>
-                                          <span>Credit: <strong>₹{totalFor(entry, "credit").toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong></span>
+                                          <span>
+                                            Debit:{" "}
+                                            <strong>
+                                              ₹
+                                              {totalFor(entry, "debit").toLocaleString("en-IN", {
+                                                minimumFractionDigits: 2,
+                                              })}
+                                            </strong>
+                                          </span>
+                                          <span>
+                                            Credit:{" "}
+                                            <strong>
+                                              ₹
+                                              {totalFor(entry, "credit").toLocaleString("en-IN", {
+                                                minimumFractionDigits: 2,
+                                              })}
+                                            </strong>
+                                          </span>
                                         </div>
                                       </div>
                                       <div className="overflow-x-auto">
@@ -1031,14 +1055,29 @@ function JournalPage() {
                                           <tbody className="divide-y divide-border">
                                             {(entry.lines ?? []).map((line) => (
                                               <tr key={`${entry.id}-${line.line_no}`}>
-                                                <td className="px-3 py-2 text-muted-foreground">{line.line_no}</td>
-                                                <td className="px-3 py-2 font-medium">
-                                                  {line.ledger_account?.account_name ?? "Unknown account"}
-                                                  <span className="ml-2 text-xs text-muted-foreground">{line.ledger_account?.ledger_type ?? ""}</span>
+                                                <td className="px-3 py-2 text-muted-foreground">
+                                                  {line.line_no}
                                                 </td>
-                                                <td className="px-3 py-2 text-muted-foreground">{line.line_description || "—"}</td>
-                                                <td className="px-3 py-2 text-right tabular-nums">{amount(line.debit) ? `₹${amount(line.debit).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}</td>
-                                                <td className="px-3 py-2 text-right tabular-nums">{amount(line.credit) ? `₹${amount(line.credit).toLocaleString("en-IN", { minimumFractionDigits: 2 })}` : "—"}</td>
+                                                <td className="px-3 py-2 font-medium">
+                                                  {line.ledger_account?.account_name ??
+                                                    "Unknown account"}
+                                                  <span className="ml-2 text-xs text-muted-foreground">
+                                                    {line.ledger_account?.ledger_type ?? ""}
+                                                  </span>
+                                                </td>
+                                                <td className="px-3 py-2 text-muted-foreground">
+                                                  {line.line_description || "—"}
+                                                </td>
+                                                <td className="px-3 py-2 text-right tabular-nums">
+                                                  {amount(line.debit)
+                                                    ? `₹${amount(line.debit).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                                                    : "—"}
+                                                </td>
+                                                <td className="px-3 py-2 text-right tabular-nums">
+                                                  {amount(line.credit)
+                                                    ? `₹${amount(line.credit).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`
+                                                    : "—"}
+                                                </td>
                                               </tr>
                                             ))}
                                           </tbody>

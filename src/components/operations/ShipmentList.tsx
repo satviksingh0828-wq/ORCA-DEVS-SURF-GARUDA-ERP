@@ -235,11 +235,12 @@ export function ShipmentList() {
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
   const [form, setForm] = useState<Form>(blankForm());
   const [items, setItems] = useState<Item[]>([blankItem()]);
   const [saving, setSaving] = useState(false);
   const [branchFilter, setBranchFilter] = useState("all");
-  const [monthFilter, setMonthFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [search, setSearch] = useState("");
 
   const visibleBranches = useMemo(
@@ -298,6 +299,7 @@ export function ShipmentList() {
     setItems(items.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   const totalTaxable = items.reduce((sum, item) => sum + n(item.taxable_value), 0);
   const totalInvoice = items.reduce((sum, item) => sum + n(item.total_invoice_value), 0);
+  const selectedItem = selectedItemIndex === null ? null : (items[selectedItemIndex] ?? null);
 
   async function save() {
     if (!/^[0-9]{12}$/.test(form.eway_bill_number))
@@ -356,108 +358,125 @@ export function ShipmentList() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Shipments</h2>
-          <p className="text-sm text-muted-foreground">
-            One shipment is one E-Way Bill. Part A details are stored with nested goods items.
-          </p>
-        </div>
-        <Button onClick={openCreate} className="gap-1.5">
-          <Plus className="size-4" /> Create Shipment
-        </Button>
-      </div>
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-muted/20 p-3">
-        <div className="min-w-[190px] space-y-1.5">
-          <Label>Branch</Label>
-          <Select value={branchFilter} onValueChange={setBranchFilter}>
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All branches</SelectItem>
-              {visibleBranches.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.branch_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>E-Way Bill month</Label>
-          <Input
-            type="month"
-            value={monthFilter === "all" ? "" : monthFilter}
-            onChange={(e) => setMonthFilter(e.target.value || "all")}
-          />
-        </div>
-        <div className="min-w-[230px] flex-1 space-y-1.5">
-          <Label>Search E-Way Bill / Shipment Number</Label>
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value.replace(/\D/g, ""))}
-              placeholder="12-digit number"
-            />
+      {!showCreate && (
+        <>
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Shipments</h2>
+              <p className="text-sm text-muted-foreground">
+                One shipment is one E-Way Bill. Part A details are stored with nested goods items.
+              </p>
+            </div>
+            <Button onClick={openCreate} className="gap-1.5">
+              <Plus className="size-4" /> Create Shipment
+            </Button>
           </div>
-        </div>
-      </div>
-      {loading ? (
-        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-          Loading shipments…
-        </div>
-      ) : filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
-          <Truck className="mx-auto mb-2 size-8 opacity-40" />
-          No shipments found.
-        </div>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3">Shipment / E-Way Bill No.</th>
-                <th className="px-4 py-3">Branch</th>
-                <th className="px-4 py-3">E-Way Bill Date</th>
-                <th className="px-4 py-3">Supply</th>
-                <th className="px-4 py-3">Document</th>
-                <th className="px-4 py-3 text-right">Items</th>
-                <th className="px-4 py-3 text-right">Invoice Value</th>
-                <th className="px-4 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((s) => (
-                <tr key={s.id} className="border-t border-border hover:bg-muted/20">
-                  <td className="px-4 py-3 font-medium">{s.eway_bill_number}</td>
-                  <td className="px-4 py-3">{branchName(s.branch_id)}</td>
-                  <td className="px-4 py-3">{s.eway_bill_date}</td>
-                  <td className="px-4 py-3">
-                    {s.supply_type} · {s.sub_type}
-                  </td>
-                  <td className="px-4 py-3">
-                    {s.document_type} · {s.document_number}
-                  </td>
-                  <td className="px-4 py-3 text-right">{s.item_count}</td>
-                  <td className="px-4 py-3 text-right">{money(Number(s.total_invoice_value))}</td>
-                  <td className="px-4 py-3">
-                    <Badge variant="outline">{s.eway_bill_status}</Badge>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+          <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-muted/20 p-3">
+            <div className="min-w-[190px] space-y-1.5">
+              <Label>Branch</Label>
+              <Select value={branchFilter} onValueChange={setBranchFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All branches</SelectItem>
+                  {visibleBranches.map((b) => (
+                    <SelectItem key={b.id} value={b.id}>
+                      {b.branch_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>E-Way Bill month</Label>
+              <Input
+                type="month"
+                value={monthFilter === "all" ? "" : monthFilter}
+                onChange={(e) => setMonthFilter(e.target.value || "all")}
+              />
+            </div>
+            <div className="min-w-[230px] flex-1 space-y-1.5">
+              <Label>Search E-Way Bill / Shipment Number</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value.replace(/\D/g, ""))}
+                  placeholder="12-digit number"
+                />
+              </div>
+            </div>
+          </div>
+          {loading ? (
+            <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+              Loading shipments…
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border py-12 text-center text-sm text-muted-foreground">
+              <Truck className="mx-auto mb-2 size-8 opacity-40" />
+              No shipments found.
+            </div>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-4 py-3">Shipment / E-Way Bill No.</th>
+                    <th className="px-4 py-3">Branch</th>
+                    <th className="px-4 py-3">E-Way Bill Date</th>
+                    <th className="px-4 py-3">Supply</th>
+                    <th className="px-4 py-3">Document</th>
+                    <th className="px-4 py-3 text-right">Items</th>
+                    <th className="px-4 py-3 text-right">Invoice Value</th>
+                    <th className="px-4 py-3">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((s) => (
+                    <tr key={s.id} className="border-t border-border hover:bg-muted/20">
+                      <td className="px-4 py-3 font-medium">{s.eway_bill_number}</td>
+                      <td className="px-4 py-3">{branchName(s.branch_id)}</td>
+                      <td className="px-4 py-3">{s.eway_bill_date}</td>
+                      <td className="px-4 py-3">
+                        {s.supply_type} · {s.sub_type}
+                      </td>
+                      <td className="px-4 py-3">
+                        {s.document_type} · {s.document_number}
+                      </td>
+                      <td className="px-4 py-3 text-right">{s.item_count}</td>
+                      <td className="px-4 py-3 text-right">
+                        {money(Number(s.total_invoice_value))}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Badge variant="outline">{s.eway_bill_status}</Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
-
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Create Shipment from E-Way Bill — Part A</DialogTitle>
-          </DialogHeader>
+      {showCreate ? (
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+            <div>
+              <button
+                type="button"
+                className="mb-2 text-sm text-muted-foreground hover:text-foreground"
+                onClick={() => setShowCreate(false)}
+              >
+                ← Back to Shipments
+              </button>
+              <h2 className="text-xl font-semibold">Create Shipment from E-Way Bill — Part A</h2>
+              <p className="text-sm text-muted-foreground">
+                Create one shipment for one E-Way Bill.
+              </p>
+            </div>
+          </div>
           <div className="space-y-5 py-2">
             <section className="space-y-3 rounded-xl border border-border p-4">
               <h3 className="font-semibold">E-Way Bill Basic Details</h3>
@@ -606,127 +625,6 @@ export function ShipmentList() {
             />
             <PartySection title="Ship To" prefix="ship_to" form={form} setForm={setForm} />
             <section className="space-y-3 rounded-xl border border-border p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h3 className="font-semibold">Goods / Invoice Details</h3>
-                  <p className="text-xs text-muted-foreground">
-                    At least one item is required. HSN is required for every item.
-                  </p>
-                </div>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setItems([...items, blankItem()])}
-                >
-                  <Plus className="mr-1 size-3.5" /> Add Item
-                </Button>
-              </div>
-              <div className="space-y-3">
-                {items.map((item, index) => (
-                  <div
-                    key={index}
-                    className="relative rounded-lg border border-border bg-muted/10 p-3"
-                  >
-                    <button
-                      type="button"
-                      className="absolute right-2 top-2 text-muted-foreground hover:text-destructive"
-                      onClick={() =>
-                        items.length > 1 && setItems(items.filter((_, i) => i !== index))
-                      }
-                      title="Remove item"
-                    >
-                      <X className="size-4" />
-                    </button>
-                    <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                      Item {index + 1}
-                    </p>
-                    <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-4">
-                      <div className="md:col-span-2">
-                        <Field
-                          label="Product / Item Description *"
-                          value={item.description}
-                          onChange={(v) => setItem(index, "description", v)}
-                        />
-                      </div>
-                      <Field
-                        label="HSN Code *"
-                        value={item.hsn_code}
-                        onChange={(v) => setItem(index, "hsn_code", v)}
-                      />
-                      <Field
-                        label="Quantity"
-                        type="number"
-                        value={item.quantity}
-                        onChange={(v) => setItem(index, "quantity", v)}
-                      />
-                      <Field
-                        label="Unit"
-                        value={item.unit}
-                        onChange={(v) => setItem(index, "unit", v)}
-                      />
-                      <Field
-                        label="Taxable Value"
-                        type="number"
-                        value={item.taxable_value}
-                        onChange={(v) => setItem(index, "taxable_value", v)}
-                      />
-                      <Field
-                        label="GST Rate %"
-                        type="number"
-                        value={item.gst_rate}
-                        onChange={(v) => setItem(index, "gst_rate", v)}
-                      />
-                      <Field
-                        label="CGST"
-                        type="number"
-                        value={item.cgst}
-                        onChange={(v) => setItem(index, "cgst", v)}
-                      />
-                      <Field
-                        label="SGST / UTGST"
-                        type="number"
-                        value={item.sgst_utgst}
-                        onChange={(v) => setItem(index, "sgst_utgst", v)}
-                      />
-                      <Field
-                        label="IGST"
-                        type="number"
-                        value={item.igst}
-                        onChange={(v) => setItem(index, "igst", v)}
-                      />
-                      <Field
-                        label="Cess"
-                        type="number"
-                        value={item.cess}
-                        onChange={(v) => setItem(index, "cess", v)}
-                      />
-                      <Field
-                        label="Other Tax / Charges"
-                        type="number"
-                        value={item.other_tax_charges}
-                        onChange={(v) => setItem(index, "other_tax_charges", v)}
-                      />
-                      <Field
-                        label="Total Invoice Value"
-                        type="number"
-                        value={item.total_invoice_value}
-                        onChange={(v) => setItem(index, "total_invoice_value", v)}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-              <div className="flex flex-wrap justify-end gap-5 border-t border-border pt-3 text-sm">
-                <span>
-                  Taxable total: <strong>{money(totalTaxable)}</strong>
-                </span>
-                <span>
-                  Invoice total: <strong>{money(totalInvoice)}</strong>
-                </span>
-              </div>
-            </section>
-            <section className="space-y-3 rounded-xl border border-border p-4">
               <h3 className="font-semibold">Transport Details</h3>
               <div className="grid gap-3 md:grid-cols-2">
                 <Field
@@ -742,13 +640,181 @@ export function ShipmentList() {
                 />
               </div>
             </section>
+            <section className="space-y-3 rounded-xl border border-border p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold">Goods / Invoice Details</h3>
+                  <p className="text-xs text-muted-foreground">
+                    At least one item is required. HSN is required for every item.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => {
+                    setItems([...items, blankItem()]);
+                    setSelectedItemIndex(items.length);
+                  }}
+                >
+                  <Plus className="mr-1 size-3.5" /> Add Item
+                </Button>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-border">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2">Item Name</th>
+                      <th className="px-3 py-2">HSN Code</th>
+                      <th className="px-3 py-2 text-right">Total Value</th>
+                      <th className="px-3 py-2 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {items.map((item, index) => (
+                      <tr key={index} className="border-t border-border">
+                        <td className="px-3 py-2 font-medium">
+                          {item.description || `Item ${index + 1}`}
+                        </td>
+                        <td className="px-3 py-2">{item.hsn_code || "—"}</td>
+                        <td className="px-3 py-2 text-right">
+                          {money(n(item.total_invoice_value))}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedItemIndex(index)}
+                          >
+                            Open
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-wrap justify-end gap-5 border-t border-border pt-3 text-sm">
+                <span>
+                  Taxable total: <strong>{money(totalTaxable)}</strong>
+                </span>
+                <span>
+                  Invoice total: <strong>{money(totalInvoice)}</strong>
+                </span>
+              </div>
+            </section>
           </div>
-          <DialogFooter>
+          <div className="flex justify-end gap-2 border-t border-border pt-4">
             <Button variant="outline" onClick={() => setShowCreate(false)}>
               Cancel
             </Button>
             <Button onClick={() => void save()} disabled={saving}>
               {saving ? "Saving…" : "Create Shipment"}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      <Dialog
+        open={selectedItemIndex !== null}
+        onOpenChange={(open) => !open && setSelectedItemIndex(null)}
+      >
+        <DialogContent className="max-h-[88vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              {selectedItemIndex === null ? "Item" : `Goods Item ${selectedItemIndex + 1}`}
+            </DialogTitle>
+          </DialogHeader>
+          {selectedItem && selectedItemIndex !== null && (
+            <div className="grid gap-3 py-2 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Field
+                  label="Product / Item Description *"
+                  value={selectedItem.description}
+                  onChange={(v) => setItem(selectedItemIndex, "description", v)}
+                />
+              </div>
+              <Field
+                label="HSN Code *"
+                value={selectedItem.hsn_code}
+                onChange={(v) => setItem(selectedItemIndex, "hsn_code", v)}
+              />
+              <Field
+                label="Quantity"
+                type="number"
+                value={selectedItem.quantity}
+                onChange={(v) => setItem(selectedItemIndex, "quantity", v)}
+              />
+              <Field
+                label="Unit"
+                value={selectedItem.unit}
+                onChange={(v) => setItem(selectedItemIndex, "unit", v)}
+              />
+              <Field
+                label="Taxable Value"
+                type="number"
+                value={selectedItem.taxable_value}
+                onChange={(v) => setItem(selectedItemIndex, "taxable_value", v)}
+              />
+              <Field
+                label="GST Rate %"
+                type="number"
+                value={selectedItem.gst_rate}
+                onChange={(v) => setItem(selectedItemIndex, "gst_rate", v)}
+              />
+              <Field
+                label="CGST"
+                type="number"
+                value={selectedItem.cgst}
+                onChange={(v) => setItem(selectedItemIndex, "cgst", v)}
+              />
+              <Field
+                label="SGST / UTGST"
+                type="number"
+                value={selectedItem.sgst_utgst}
+                onChange={(v) => setItem(selectedItemIndex, "sgst_utgst", v)}
+              />
+              <Field
+                label="IGST"
+                type="number"
+                value={selectedItem.igst}
+                onChange={(v) => setItem(selectedItemIndex, "igst", v)}
+              />
+              <Field
+                label="Cess"
+                type="number"
+                value={selectedItem.cess}
+                onChange={(v) => setItem(selectedItemIndex, "cess", v)}
+              />
+              <Field
+                label="Other Tax / Charges"
+                type="number"
+                value={selectedItem.other_tax_charges}
+                onChange={(v) => setItem(selectedItemIndex, "other_tax_charges", v)}
+              />
+              <Field
+                label="Total Invoice Value"
+                type="number"
+                value={selectedItem.total_invoice_value}
+                onChange={(v) => setItem(selectedItemIndex, "total_invoice_value", v)}
+              />
+            </div>
+          )}
+          <DialogFooter>
+            {items.length > 1 && selectedItemIndex !== null && (
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  setItems(items.filter((_, i) => i !== selectedItemIndex));
+                  setSelectedItemIndex(null);
+                }}
+              >
+                Remove Item
+              </Button>
+            )}
+            <Button type="button" onClick={() => setSelectedItemIndex(null)}>
+              Done
             </Button>
           </DialogFooter>
         </DialogContent>
