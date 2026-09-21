@@ -234,6 +234,14 @@ export function LorryReceiptList() {
         }}
       />
     );
+  if (viewingRow)
+    return (
+      <LorryReceiptView
+        row={viewingRow}
+        branchName={branchName}
+        onBack={() => setViewingRow(null)}
+      />
+    );
 
   const filtered = rows.filter((row) => {
     const text =
@@ -389,6 +397,39 @@ export function LorryReceiptList() {
   );
 }
 
+function LorryReceiptView({
+  row,
+  branchName,
+  onBack,
+}: {
+  row: Record<string, any>;
+  branchName: (id: string) => string;
+  onBack: () => void;
+}) {
+  const shipments = (row.lorry_receipt_shipments ?? [])
+    .map((x: any) => x.shipment)
+    .filter(Boolean) as Shipment[];
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-3 border-b border-border pb-4">
+        <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="size-5" /></Button>
+        <div><h2 className="text-xl font-semibold">Lorry Receipt Details — {row.lr_number}</h2><p className="text-sm text-muted-foreground">View all LR and attached shipment details.</p></div>
+      </div>
+      <div className="grid gap-4 rounded-xl border border-border p-4 md:grid-cols-4">
+        <Field label="LR Number" value={row.lr_number} />
+        <Field label="Branch" value={branchName(row.branch_id)} />
+        <Field label="Source / Contract" value={row.source?.contract_name || "—"} />
+        <Field label="Created" value={String(row.created_at ?? "").slice(0, 10)} />
+      </div>
+      <section className="order-first space-y-3 rounded-xl border border-border p-4">
+        <div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div>
+        {shipments.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">No shipments attached yet.</p> : <div className="space-y-2 text-sm">{shipments.map((s) => <div key={s.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2"><strong>{s.eway_bill_number}</strong><span>{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></div>)}</div>}
+      </section>
+      <ShipmentDetails shipment={shipments[0] ?? blankShipment} />
+    </div>
+  );
+}
+
 function LorryReceiptEditForm({
   row,
   branches,
@@ -459,12 +500,14 @@ function LorryReceiptEditForm({
         <Field label="Branch" value={branches.find((b) => b.id === row.branch_id)?.branch_name ?? "—"} />
         <div className="space-y-1.5"><Label>Source / Contract</Label><Select value={sourceId} onValueChange={setSourceId}><SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger><SelectContent>{sources.filter((s) => s.status !== "inactive").map((s) => <SelectItem key={s.id} value={s.id}>{s.contract_name}</SelectItem>)}</SelectContent></Select></div>
       </div>
-      <ShipmentDetails shipment={base ?? blankShipment} />
-      <section className="space-y-3 rounded-xl border border-border p-4">
+      <div className="flex flex-col">
+      <div className="order-last"><ShipmentDetails shipment={base ?? blankShipment} /></div>
+      <section className="order-first space-y-3 rounded-xl border border-border p-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)}><Plus className="mr-1 size-4" /> Add Shipment</Button></div>
         {selected.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">No shipments attached yet.</p> : <div className="space-y-2 text-sm">{selected.map((s) => <div key={s.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Button variant="ghost" size="icon" onClick={() => removeShipment(s.id)}><X className="size-4" /></Button></div>)}</div>}
         {showPicker && <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3"><p className="text-sm font-medium">Select compatible shipment</p>{available.length === 0 ? <p className="text-sm text-muted-foreground">No unlinked shipments available for this branch.</p> : available.slice(0, 50).map((s) => <button type="button" key={s.id} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Link2 className="size-4 text-primary" /></button>)}</div>}
       </section>
+      </div>
       <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" onClick={onCancel}>Cancel</Button><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Button></div>
     </div>
   );
@@ -630,7 +673,8 @@ function LorryReceiptForm({
           </Select>
         </div>
       </div>
-      <div className="space-y-4">
+      <div className="flex flex-col">
+      <div className="space-y-4 order-last">
         {base && (
           <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-3 text-sm">
             <Truck className="size-4 text-primary" />
@@ -642,7 +686,7 @@ function LorryReceiptForm({
         )}
         <ShipmentDetails shipment={base ?? blankShipment} />
       </div>
-      <section className="space-y-3 rounded-xl border border-border p-4">
+      <section className="space-y-3 rounded-xl border border-border p-4 order-first">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="font-semibold">Attached Shipments</h3>
@@ -729,6 +773,7 @@ function LorryReceiptForm({
           </p>
         )}
       </section>
+      </div>
       <div className="flex justify-end gap-2 border-t border-border pt-4">
         <Button variant="outline" onClick={onCancel}>
           Cancel
