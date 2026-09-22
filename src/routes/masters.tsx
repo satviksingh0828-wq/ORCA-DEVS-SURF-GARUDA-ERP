@@ -12,6 +12,7 @@ import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 import {
   DRIVER_CONFIG,
+  DELIVERY_PARTNER_CONFIG,
   LOCATION_CONFIG,
   TRANSPORTER_CONFIG,
   VEHICLE_CONFIG,
@@ -44,6 +45,7 @@ const ALL_TABS = [
   { id: "vehicle",     label: "Vehicle",    desc: "Fleet & specifications",  icon: Truck,     adminOnly: true  },
   { id: "driver",      label: "Driver",     desc: "Staff & licences",        icon: User,      adminOnly: false },
   { id: "transporter", label: "Transporter",desc: "Owners & brokers",        icon: Building2, adminOnly: false },
+  { id: "delivery-partner", label: "Delivery Partners", desc: "Delivery partners", icon: Building2, adminOnly: false },
   { id: "location",    label: "Locations",  desc: "Pickup & drop points",    icon: MapPin,    adminOnly: true  },
   { id: "contract",    label: "Sources",    desc: "Rates & slabs",           icon: FileText,  adminOnly: true  },
 ] as const;
@@ -162,6 +164,7 @@ function MastersPage() {
           ) : null}
           {safeTab === "driver"      ? <MasterList config={DRIVER_CONFIG} />      : null}
           {safeTab === "transporter" ? <MasterList config={TRANSPORTER_CONFIG} /> : null}
+          {safeTab === "delivery-partner" ? <MasterList config={DELIVERY_PARTNER_CONFIG} /> : null}
           {safeTab === "location"    ? <MasterList config={LOCATION_CONFIG} />    : null}
           {safeTab === "contract"    ? <Contracts />                               : null}
         </div>

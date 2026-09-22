@@ -309,6 +309,10 @@ export function LorryReceiptList() {
     setViewingRow(null);
     await load();
   }
+  function editLr(row: Record<string, any>) {
+    if (row.trip_number) return toast.error(`LR ${row.lr_number} cannot be edited while linked to ${row.trip_number}`);
+    setEditingRow(row);
+  }
 
   if (view.kind === "create")
     return (
@@ -453,10 +457,10 @@ export function LorryReceiptList() {
                         <Button variant="ghost" size="sm" onClick={() => setViewingRow(row)}>
                           <Eye className="mr-1 size-4" /> View
                         </Button>
-                        <Button variant="outline" size="sm" onClick={() => setEditingRow(row)}>
+                        <Button variant="outline" size="sm" disabled={Boolean(row.trip_number)} title={row.trip_number ? `Locked while linked to ${row.trip_number}` : "Edit LR"} onClick={() => editLr(row)}>
                           <Pencil className="mr-1 size-4" /> Edit
                         </Button>
-                        <Button variant="destructive" size="sm" onClick={() => void deleteLr(row)}>
+                        <Button variant="destructive" size="sm" disabled={Boolean(row.trip_number)} title={row.trip_number ? `Locked while linked to ${row.trip_number}` : "Delete LR"} onClick={() => void deleteLr(row)}>
                           <Trash2 className="mr-1 size-4" /> Delete
                         </Button>
                       </div>
@@ -526,13 +530,14 @@ function LorryReceiptView({
       <div className="flex items-center gap-3 border-b border-border pb-4">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="size-5" /></Button>
         <div><h2 className="text-xl font-semibold">Lorry Receipt Details — {row.lr_number}</h2><p className="text-sm text-muted-foreground">View all LR and attached shipment details.</p></div>
-        <Button variant="destructive" onClick={onDelete}><Trash2 className="mr-2 size-4" /> Delete LR</Button>
+        <Button variant="destructive" disabled={Boolean(row.trip_number)} title={row.trip_number ? `Locked while linked to ${row.trip_number}` : "Delete LR"} onClick={onDelete}><Trash2 className="mr-2 size-4" /> {row.trip_number ? "LR Locked" : "Delete LR"}</Button>
       </div>
       <div className="grid gap-4 rounded-xl border border-border p-4 md:grid-cols-4">
         <Field label="LR Number" value={row.lr_number} />
         <Field label="Branch" value={branchName(row.branch_id)} />
         <Field label="Source / Contract" value={row.source?.contract_name || "—"} />
         <Field label="Created" value={String(row.created_at ?? "").slice(0, 10)} />
+        <Field label="Trip" value={row.trip_number || "Not linked"} />
       </div>
       <section className="order-first space-y-3 rounded-xl border border-border p-4">
         <div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div>
@@ -659,6 +664,7 @@ function LorryReceiptEditForm({
     if (baseId === id) setBaseId(next[0]?.id ?? "");
   }
   async function save() {
+    if (row.trip_number) return toast.error(`LR ${row.lr_number} cannot be edited while linked to ${row.trip_number}`);
     if (!base || selected.length === 0) return toast.error("At least one shipment is required");
     setSaving(true);
     try {

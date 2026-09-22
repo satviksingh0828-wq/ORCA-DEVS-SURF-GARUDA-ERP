@@ -45,7 +45,7 @@ export type FieldDef = {
 export type SectionDef = { title: string; fields: FieldDef[] };
 
 export type MasterConfig = {
-  table: "vehicles" | "drivers" | "transporters" | "locations";
+  table: "vehicles" | "drivers" | "transporters" | "delivery_partners" | "locations";
   entityLabel: string; // "Vehicles"
   singular: string; // "vehicle"
   icon: LucideIcon;

@@ -274,3 +274,67 @@ export const LOCATION_CONFIG: MasterConfig = {
     },
   ],
 };
+
+export const DELIVERY_PARTNER_CONFIG: MasterConfig = {
+  table: "delivery_partners",
+  entityLabel: "Delivery Partners",
+  singular: "delivery partner",
+  icon: Building2,
+  hasBranch: true,
+  titleKey: "delivery_partner_name",
+  subtitleKeys: ["delivery_partner_type", "city", "branch_name"],
+  emptyMsg: "Delivery partners maintained separately from transporters.",
+  sections: [
+    {
+      title: "Business identity",
+      fields: [
+        { key: "delivery_partner_name", label: "Delivery Partner Name", required: true },
+        { key: "legal_business_name", label: "Legal Business Name" },
+        { key: "delivery_partner_type", label: "Delivery Partner Type", options: ["Fleet Owner", "Broker", "Transport Company", "Individual Owner"] },
+      ],
+    },
+    {
+      title: "Tax registration",
+      fields: [
+        { key: "gstin", label: "GSTIN", required: true },
+        { key: "pan", label: "PAN", required: true },
+        { key: "msme_udyam", label: "MSME / Udyam Number (Optional)" },
+        { key: "tan", label: "TAN (Optional)" },
+      ],
+    },
+    {
+      title: "Address",
+      fields: [
+        { key: "address_line1", label: "Address Line 1", full: true },
+        { key: "address_line2", label: "Address Line 2", full: true },
+        { key: "city", label: "City" },
+        { key: "state", label: "State" },
+        { key: "country", label: "Country" },
+        { key: "pin_code", label: "PIN Code" },
+      ],
+    },
+    {
+      title: "Contact",
+      fields: [
+        { key: "primary_contact_name", label: "Primary Contact Person" },
+        { key: "primary_contact_designation", label: "Designation" },
+        { key: "mobile_number", label: "Mobile Number" },
+        { key: "alternate_mobile", label: "Alternate Mobile" },
+        { key: "email", label: "Email", type: "email" },
+        { key: "telephone", label: "Telephone" },
+        { key: "website", label: "Website (Optional)" },
+      ],
+    },
+    {
+      title: "Bank details",
+      fields: [
+        { key: "bank_name", label: "Bank Name" },
+        { key: "bank_branch", label: "Branch" },
+        { key: "bank_account_holder", label: "Account Holder Name" },
+        { key: "bank_account_number", label: "Account Number" },
+        { key: "bank_ifsc", label: "IFSC Code" },
+        { key: "upi_id", label: "UPI ID" },
+      ],
+    },
+  ],
+};
