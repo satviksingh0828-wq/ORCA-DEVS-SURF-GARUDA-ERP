@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
+import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -142,6 +143,13 @@ const blankForm = (): Form => ({
 const n = (v: string) => Number(v || 0) || 0;
 const money = (v: number) =>
   `₹${v.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+
+function ewayDate(value: unknown): string {
+  const text = String(value ?? "");
+  const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
+  if (match) return `${match[3]}-${match[2]}-${match[1]}${match[4] ? `T${match[4]}:${match[5]}` : ""}`;
+  return text.slice(0, 10);
+}
 
 function Field({
   label,
@@ -304,6 +312,7 @@ export function ShipmentList() {
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [search, setSearch] = useState("");
   const [assignment, setAssignment] = useState("all");
+  const [fetchingEwb, setFetchingEwb] = useState(false);
 
   const visibleBranches = useMemo(
     () => (allowed === null ? branches : branches.filter((b) => allowed.includes(b.id))),
@@ -441,6 +450,79 @@ export function ShipmentList() {
     if (error) return toast.error(error.message);
     toast.success(`Shipment ${shipment.eway_bill_number} deleted`);
     await load();
+  }
+
+  async function fetchEwayBillDetails() {
+    if (!form.branch_id) return toast.error("Select a branch first");
+    if (!/^\d{12}$/.test(form.eway_bill_number)) return toast.error("Enter a valid 12-digit E-Way Bill number");
+    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+    setFetchingEwb(true);
+    try {
+      const raw = await serverFetchEwayBillDetails({
+        data: { token: user.sessionToken, branchId: form.branch_id, ewayBillNumber: form.eway_bill_number },
+      });
+      const source = ((raw as Record<string, unknown>)?.data ?? raw) as Record<string, unknown>;
+      const text = (key: string) => String(source[key] ?? "");
+      const fromAddress = [text("fromAddr1"), text("fromAddr2")].filter(Boolean).join(", ");
+      const toAddress = [text("toAddr1"), text("toAddr2")].filter(Boolean).join(", ");
+      const shipToAddress = [text("shipToAddr1"), text("shipToAddr2")].filter(Boolean).join(", ");
+      const itemList = Array.isArray(source.itemList) ? source.itemList as Array<Record<string, unknown>> : [];
+      setForm({
+        ...form,
+        eway_bill_number: text("ewayBillNo") || form.eway_bill_number,
+        eway_bill_date: ewayDate(source.ewayBillDate) || form.eway_bill_date,
+        valid_from: ewayDate(source.ewayBillDate),
+        valid_until: ewayDate(source.validUpto),
+        supply_type: text("supplyType") === "I" ? "Inward" : text("supplyType") === "O" ? "Outward" : form.supply_type,
+        sub_type: text("subSupplyType") || form.sub_type,
+        document_type: text("docType") === "INV" ? "Tax Invoice" : text("docType") || form.document_type,
+        document_number: text("docNo"),
+        document_date: ewayDate(source.docDate),
+        supplier_gstin: text("fromGstin") || form.supplier_gstin,
+        supplier_trade_name: text("fromTrdName"),
+        supplier_address: fromAddress,
+        supplier_place: text("fromPlace"),
+        supplier_state: text("fromStateCode"),
+        supplier_pin_code: text("fromPincode"),
+        recipient_gstin: text("toGstin") || form.recipient_gstin,
+        recipient_trade_name: text("toTrdName"),
+        recipient_address: toAddress,
+        recipient_place: text("toPlace"),
+        recipient_state: text("toStateCode"),
+        recipient_pin_code: text("toPincode"),
+        dispatch_from_address: fromAddress,
+        dispatch_from_place: text("fromPlace"),
+        dispatch_from_state: text("fromStateCode"),
+        dispatch_from_pin_code: text("fromPincode"),
+        ship_to_address: shipToAddress || toAddress,
+        ship_to_place: text("shipToPlace") || text("toPlace"),
+        ship_to_state: text("toStateCode"),
+        ship_to_pin_code: text("shipToPincode") || text("toPincode"),
+        transporter_id: text("transporterId"),
+        approximate_distance_km: text("transDistance"),
+      });
+      if (itemList.length) {
+        setItems(itemList.map((item) => ({
+          description: String(item.productName ?? item.productDesc ?? ""),
+          hsn_code: String(item.hsnCode ?? ""),
+          quantity: String(item.quantity ?? ""),
+          weight_kg: String(item.quantity ?? ""),
+          unit: String(item.qtyUnit ?? "NOS"),
+          taxable_value: String(item.taxableAmount ?? ""),
+          gst_rate: String(Number(item.cgstRate ?? 0) + Number(item.sgstRate ?? 0) + Number(item.igstRate ?? 0)),
+          cgst: String(item.cgstValue ?? ""),
+          sgst_utgst: String(item.sgstValue ?? ""),
+          igst: String(item.igstValue ?? ""),
+          cess: String(item.cessValue ?? ""),
+          other_tax_charges: String(item.cessNonadvol ?? ""),
+          total_invoice_value: String(item.taxableAmount ?? ""),
+        })));
+      }
+      toast.success("E-Way Bill details fetched and form filled");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not fetch E-Way Bill details");
+    }
+    setFetchingEwb(false);
   }
 
   if (viewingShipment)
@@ -680,14 +762,19 @@ export function ShipmentList() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Field
-                  label="E-Way Bill Number *"
-                  value={form.eway_bill_number}
-                  onChange={(v) =>
-                    setForm({ ...form, eway_bill_number: v.replace(/\D/g, "").slice(0, 12) })
-                  }
-                  placeholder="12 digits"
-                />
+                <div className="space-y-1.5">
+                  <Label>E-Way Bill Number *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={form.eway_bill_number}
+                      onChange={(e) => setForm({ ...form, eway_bill_number: e.target.value.replace(/\D/g, "").slice(0, 12) })}
+                      placeholder="12 digits"
+                    />
+                    <Button type="button" variant="outline" onClick={() => void fetchEwayBillDetails()} disabled={fetchingEwb} className="shrink-0">
+                      {fetchingEwb ? "Fetching…" : "Fetch details"}
+                    </Button>
+                  </div>
+                </div>
                 <Field
                   label="E-Way Bill Date *"
                   type="date"
