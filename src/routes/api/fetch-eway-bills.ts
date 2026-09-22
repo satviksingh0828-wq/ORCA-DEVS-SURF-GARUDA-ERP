@@ -56,9 +56,8 @@ export const Route = createFileRoute("/api/fetch-eway-bills")({
 
           await db.from("eway_bill_fetch_runs").upsert({ branch_id: branch.id, snapshot_date: snapshotDate, status: "running", error_message: null }, { onConflict: "branch_id,snapshot_date" });
           try {
-            const url = new URL(`${baseUrl}/v1/branches/${encodeURIComponent(branch.id)}/ewaybills/transporter/by-gstin`);
+            const url = new URL(`${baseUrl}/v1/branches/${encodeURIComponent(branch.id)}/ewaybills/transporter/report-by-date`);
             url.searchParams.set("date", apiDate(snapshotDate));
-            url.searchParams.set("gstin", branch.gstin);
             if (branch.state_code) url.searchParams.set("stateCode", branch.state_code);
             const response = await fetch(url, { headers: { Accept: "application/json", "X-API-Key": apiKey } });
             const body = await response.json().catch(() => null) as Record<string, unknown> | null;
