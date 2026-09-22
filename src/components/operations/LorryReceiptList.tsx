@@ -413,7 +413,7 @@ export function LorryReceiptList() {
               <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3">Shipments</th>
               <th className="px-4 py-3">Route</th>
-              <th className="px-4 py-3">Manifest Number</th>
+              <th className="px-4 py-3">Manifest / Trip Number</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -452,7 +452,7 @@ export function LorryReceiptList() {
                         ? `${base.dispatch_from_pin_code || "—"} → ${base.ship_to_pin_code || "—"}`
                         : "—"}
                     </td>
-                    <td className="px-4 py-3">{row.manifest_number ?? "Unsigned"}</td>
+                    <td className="px-4 py-3">{row.manifest_number ?? row.trip_number ?? "Unassigned"}</td>
                     <td className="px-4 py-3">{String(row.created_at ?? "").slice(0, 10)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
@@ -539,7 +539,7 @@ function LorryReceiptView({
         <Field label="Branch" value={branchName(row.branch_id)} />
         <Field label="Source / Contract" value={row.source?.contract_name || "—"} />
         <Field label="Created" value={String(row.created_at ?? "").slice(0, 10)} />
-        <Field label="Manifest" value={row.manifest_number || "Not linked"} />
+        <Field label="Manifest / Trip" value={row.manifest_number ?? row.trip_number ?? "Not linked"} />
       </div>
       <section className="order-first space-y-3 rounded-xl border border-border p-4">
         <div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div>
