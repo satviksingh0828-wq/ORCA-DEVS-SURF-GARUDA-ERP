@@ -7,6 +7,8 @@ import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Field } from "./CompanySettings";
 import { CsvIO } from "@/components/CsvIO";
+import { useSession } from "@/lib/session";
+import { serverGetBranchEwbCredentials, serverSaveBranchEwbCredentials } from "@/lib/branch-ewb-credentials";
 import {
   Select,
   SelectContent,
@@ -25,6 +27,12 @@ const BRANCH_TYPES = [
 ];
 
 type Branch = Record<string, string> & { id?: string };
+
+type EwbCredentialState = {
+  api_username: string;
+  api_password: string;
+  configured: boolean;
+};
 
 const EMPTY: Branch = {
   branch_name: "",
@@ -51,6 +59,9 @@ const EMPTY: Branch = {
   gstin: "",
   pan: "",
   state_code: "",
+  _eway_api_username: "",
+  _eway_api_password: "",
+  _eway_configured: "false",
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -67,6 +78,7 @@ export function BranchSettings() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Branch | null>(null);
   const [saving, setSaving] = useState(false);
+  const { user } = useSession();
 
   async function load() {
     setLoading(true);
@@ -85,6 +97,37 @@ export function BranchSettings() {
 
   const set = (k: string) => (v: string) => setEditing((f) => (f ? { ...f, [k]: v } : f));
 
+  async function beginEdit(branch: Branch) {
+    const next = { ...branch, _eway_api_username: "", _eway_api_password: "", _eway_configured: "false" };
+    setEditing(next);
+    if (!branch.id) return;
+    if (!user?.sessionToken) {
+      toast.error("Your session has expired. Please sign in again.");
+      return;
+    }
+    let credentials: EwbCredentialState;
+    try {
+      credentials = await serverGetBranchEwbCredentials({ data: { token: user.sessionToken, branchId: branch.id } });
+    } catch {
+      toast.error("Could not load E-Way Bill credentials");
+      return;
+    }
+    setEditing((current) =>
+      current ? { ...current, _eway_api_username: credentials.api_username ?? "", _eway_configured: credentials.configured ? "true" : "false" } : current,
+    );
+  }
+
+  async function saveEwbCredentials(branchId: string, username: string, password: string) {
+    if (!username.trim() && !password.trim()) return;
+    if (!username.trim() || !password.trim()) {
+      throw new Error("Enter both E-Way Bill API Username and Password");
+    }
+    if (!user?.sessionToken) throw new Error("Your session has expired. Please sign in again.");
+    await serverSaveBranchEwbCredentials({
+      data: { token: user.sessionToken, action: "save", branchId, apiUsername: username.trim(), apiPassword: password },
+    });
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
@@ -99,13 +142,24 @@ export function BranchSettings() {
       return;
     }
     setSaving(true);
-    const { id, created_at: _c, updated_at: _u, ...rest } = editing;
+    const { id, created_at: _c, updated_at: _u, _eway_api_username, _eway_api_password, _eway_configured, ...rest } = editing;
     const payload = { ...rest, trip_series_prefix: tripPrefix, lr_series_prefix: lrPrefix } as never;
     const res = id
-      ? await supabase.from("branches").update(payload).eq("id", id)
-      : await supabase.from("branches").insert(payload);
+      ? await supabase.from("branches").update(payload).eq("id", id).select("id").single()
+      : await supabase.from("branches").insert(payload).select("id").single();
+    if (res.error) {
+      setSaving(false);
+      return toast.error(res.error.message);
+    }
+    const branchId = id ?? (res.data as { id: string } | null)?.id;
+    try {
+      if (!branchId) throw new Error("Branch ID was not returned after save");
+      await saveEwbCredentials(branchId, _eway_api_username ?? "", _eway_api_password ?? "");
+    } catch (error) {
+      setSaving(false);
+      return toast.error(error instanceof Error ? error.message : "Could not save E-Way Bill credentials");
+    }
     setSaving(false);
-    if (res.error) return toast.error(res.error.message);
     toast.success(id ? "Branch updated" : "Branch created");
     setEditing(null);
     load();
@@ -260,6 +314,25 @@ export function BranchSettings() {
           <Field label="State Code" value={editing.state_code} onChange={set("state_code")} />
         </Section>
 
+        <Section title="E-Way Bill API">
+          <Field
+            label="API Username"
+            value={editing._eway_api_username ?? ""}
+            onChange={set("_eway_api_username")}
+          />
+          <Field
+            label="API Password"
+            type="password"
+            value={editing._eway_api_password ?? ""}
+            onChange={set("_eway_api_password")}
+            placeholder={editing._eway_configured === "true" ? "Leave blank to keep saved password" : "Enter API password"}
+          />
+          <p className="text-[11px] text-muted-foreground sm:col-span-2">
+            The password is encrypted by the secure Supabase function and is never displayed or stored in the branch record.
+            {editing._eway_configured === "true" ? " Credentials are currently configured." : " Credentials are not configured yet."}
+          </p>
+        </Section>
+
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => setEditing(null)}>
             Cancel
@@ -357,7 +430,7 @@ export function BranchSettings() {
                 </p>
               </div>
               <div className="flex shrink-0 gap-2">
-                <Button variant="outline" size="sm" onClick={() => setEditing(b)}>
+                <Button variant="outline" size="sm" onClick={() => beginEdit(b)}>
                   Edit
                 </Button>
                 <Button variant="ghost" size="sm" onClick={() => b.id && remove(b.id)}>
