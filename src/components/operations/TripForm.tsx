@@ -1106,7 +1106,8 @@ export function TripForm({
               tripId={trip.id ?? null}
               branchId={trip.branch_id}
               tripCode={trip.trip_code}
-              startPlace={locations.find((location) => location.id === trip.start_location_id)?.city ?? locations.find((location) => location.id === trip.start_location_id)?.location_name ?? ""}
+              startPlace={locations.find((location) => location.id === trip.start_location_id)?.city || locations.find((location) => location.id === trip.start_location_id)?.location_name || ""}
+              startLocationId={trip.start_location_id}
               startStateCode={allBranches.find((branch) => branch.id === trip.branch_id)?.state_code ?? ""}
               vehicleNumber={isOwn ? String(vehicle?.registration_number ?? "") : trip.third_party_vehicle_number}
               requireTripId={requireTripId}
@@ -1243,6 +1244,7 @@ function LrTab({
   branchId,
   tripCode,
   startPlace,
+  startLocationId,
   startStateCode,
   vehicleNumber,
   requireTripId,
@@ -1254,6 +1256,7 @@ function LrTab({
   branchId: string | null;
   tripCode: string;
   startPlace: string;
+  startLocationId: string | null;
   startStateCode: string;
   vehicleNumber: string;
   requireTripId: () => Promise<string | null>;
@@ -1317,12 +1320,18 @@ function LrTab({
   async function updatePartB(row: LrOption) {
     if (!branchId) return toast.error("Select a trip branch first");
     if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
-    if (!startPlace.trim()) return toast.error("Set the trip starting location before updating Part-B");
     if (!/^\d+$/.test(startStateCode) || Number(startStateCode) < 1) return toast.error("Set a valid branch state code before updating Part-B");
     if (!vehicleNumber.trim()) return toast.error("Set the trip vehicle number before updating Part-B");
     setPartBUpdating(row.id);
     try {
       const db = supabase as any;
+      let resolvedStartPlace = startPlace.trim();
+      if (!resolvedStartPlace && startLocationId) {
+        const { data: location, error: locationError } = await db.from("locations").select("location_name,city").eq("id", startLocationId).maybeSingle();
+        if (locationError) throw locationError;
+        resolvedStartPlace = String(location?.city || location?.location_name || "").trim();
+      }
+      if (!resolvedStartPlace) throw new Error("Set the trip starting location before updating Part-B");
       const { data: linked, error } = await db.from("lr_shipments").select("shipment:shipments(eway_bill_number)").eq("lr_id", row.id);
       if (error) throw error;
       const ewayBillNumbers = ((linked ?? []) as Array<{ shipment?: { eway_bill_number?: string } | null }>)
@@ -1337,7 +1346,7 @@ function LrTab({
           token: user.sessionToken,
           branchId,
           ewayBillNumbers,
-          fromPlace: startPlace.trim(),
+          fromPlace: resolvedStartPlace,
           fromState: Number(startStateCode),
           vehicleNo: vehicleNumber.trim().toUpperCase(),
           transMode: "1",
