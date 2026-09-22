@@ -59,7 +59,6 @@ type Shipment = {
 };
 type Source = { id: string; contract_name: string; branch_id: string; status?: string };
 type TransportMode = "ROAD" | "RAIL" | "AIR" | "SHIP";
-type Transporter = { id: string; transporter_name: string };
 type View = { kind: "list" } | { kind: "create" };
 
 const blankShipment: Shipment = {
@@ -594,7 +593,6 @@ function CreateAndAddShipment({
             <EntryField label="Recipient GSTIN" value={form.recipient_gstin} onChange={(v) => set("recipient_gstin", v.toUpperCase())} />
             <EntryField label="Dispatch From PIN" value={form.dispatch_from_pin_code} onChange={(v) => set("dispatch_from_pin_code", v)} />
             <EntryField label="Ship To PIN" value={form.ship_to_pin_code} onChange={(v) => set("ship_to_pin_code", v)} />
-            <EntryField label="Transporter ID / GSTIN" value={form.transporter_id} onChange={(v) => set("transporter_id", v.toUpperCase())} />
             <EntryField label="Approximate Distance (KM)" type="number" value={form.approximate_distance_km} onChange={(v) => set("approximate_distance_km", v)} />
           </div>
           <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Supplier / Consignor</h3><div className="grid gap-3 md:grid-cols-3"><EntryField label="Trade Name" value={form.supplier_trade_name} onChange={(v) => set("supplier_trade_name", v)} /><EntryField label="Legal Name" value={form.supplier_legal_name} onChange={(v) => set("supplier_legal_name", v)} /><EntryField label="Address" value={form.supplier_address} onChange={(v) => set("supplier_address", v)} /><EntryField label="Place" value={form.supplier_place} onChange={(v) => set("supplier_place", v)} /><EntryField label="State" value={form.supplier_state} onChange={(v) => set("supplier_state", v)} /></div></section>
@@ -620,9 +618,7 @@ function LorryReceiptEditForm({
 }) {
   const [sourceId, setSourceId] = useState(String(row.source_id ?? ""));
   const [mode, setMode] = useState<TransportMode>((row.mode ?? "ROAD") as TransportMode);
-  const [transporterId, setTransporterId] = useState(String(row.transporter_id ?? ""));
   const [sources, setSources] = useState<Source[]>([]);
-  const [transporters, setTransporters] = useState<Transporter[]>([]);
   const [entries, setEntries] = useState<EntryLite[]>([]);
   const initialSelected = ((row.lorry_receipt_shipments ?? []).map((x: any) => x.shipment).filter(Boolean) as Shipment[]);
   const [selected, setSelected] = useState<Shipment[]>(initialSelected);
@@ -638,13 +634,11 @@ function LorryReceiptEditForm({
       const [s, sh, t, e] = await Promise.all([
         db.from("contracts").select("id,contract_name,branch_id,status").eq("branch_id", row.branch_id).order("contract_name"),
         db.from("shipments").select("*, shipment_items(*)").eq("branch_id", row.branch_id).order("eway_bill_date", { ascending: false }),
-        db.from("transporters").select("id,transporter_name").order("transporter_name"),
         db.from("contract_entries").select("*").eq("contract_id", row.source_id),
       ]);
       const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number)");
       const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.lr_number ?? null]));
       setSources((s.data ?? []) as Source[]);
-      setTransporters((t.data ?? []) as Transporter[]);
       setEntries((e.data ?? []) as EntryLite[]);
       setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
     })();
@@ -669,7 +663,7 @@ function LorryReceiptEditForm({
     setSaving(true);
     try {
       const calculatedIncome = lrIncome(sourceId, mode, selected as any[], entries);
-      const { error } = await db.from("lorry_receipts").update({ source_id: sourceId || null, base_shipment_id: base.id, mode, transporter_id: transporterId || null, calculated_income: calculatedIncome }).eq("id", row.id);
+      const { error } = await db.from("lorry_receipts").update({ source_id: sourceId || null, base_shipment_id: base.id, mode, calculated_income: calculatedIncome }).eq("id", row.id);
       if (error) throw error;
       const { error: deleteError } = await db.from("lr_shipments").delete().eq("lr_id", row.id);
       if (deleteError) throw deleteError;
@@ -719,9 +713,7 @@ function LorryReceiptForm({
   const [branchId, setBranchId] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [mode, setMode] = useState<TransportMode>("ROAD");
-  const [transporterId, setTransporterId] = useState("");
   const [sources, setSources] = useState<Source[]>([]);
-  const [transporters, setTransporters] = useState<Transporter[]>([]);
   const [entries, setEntries] = useState<EntryLite[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [selected, setSelected] = useState<Shipment[]>([]);
@@ -751,7 +743,6 @@ function LorryReceiptForm({
           .select("*, shipment_items(*)")
           .eq("branch_id", branchId)
           .order("eway_bill_date", { ascending: false }),
-        db.from("transporters").select("id,transporter_name").order("transporter_name"),
         db.from("contract_entries").select("*").eq("contract_id", sourceId),
       ]);
       if (s.error || sh.error)
@@ -759,7 +750,6 @@ function LorryReceiptForm({
       const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number)");
       const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.lr_number ?? null]));
       setSources((s.data ?? []) as Source[]);
-      setTransporters((t.data ?? []) as Transporter[]);
       setEntries((e.data ?? []) as EntryLite[]);
       setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
     })();
@@ -813,7 +803,6 @@ function LorryReceiptForm({
           source_id: sourceId,
           base_shipment_id: base.id,
           mode,
-          transporter_id: transporterId || null,
           calculated_income: lrIncome(sourceId, mode, selected as any[], entries),
           created_by: user?.id ?? null,
         })
@@ -892,7 +881,6 @@ function LorryReceiptForm({
           </Select>
         </div>
         <div className="space-y-1.5"><Label>Transport Mode *</Label><Select value={mode} onValueChange={(value) => setMode(value as TransportMode)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ROAD">Road</SelectItem><SelectItem value="RAIL">Rail</SelectItem><SelectItem value="AIR">Air</SelectItem><SelectItem value="SHIP">Ship</SelectItem></SelectContent></Select></div>
-        <div className="space-y-1.5"><Label>Transporter</Label><Select value={transporterId || "none"} onValueChange={(value) => setTransporterId(value === "none" ? "" : value)}><SelectTrigger><SelectValue placeholder="Select transporter" /></SelectTrigger><SelectContent><SelectItem value="none">Not selected</SelectItem>{transporters.map((t) => <SelectItem key={t.id} value={t.id}>{t.transporter_name}</SelectItem>)}</SelectContent></Select></div>
         <Field label="Calculated Income" value={`₹${lrIncome(sourceId, mode, selected as any[], entries).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`} />
       </div>
       <div className="flex flex-col">
