@@ -13,6 +13,7 @@ import { useLocations } from "@/lib/use-locations";
 import { useSession } from "@/lib/session";
 
 const db = supabase as any;
+const firstRelation = (value: any) => Array.isArray(value) ? value[0] : value;
 type Mode = "pickup" | "drop";
 type Form = { branch_id: string; manifest_number: string; transport_mode: Mode; from_location_id: string; from_pin_code: string; to_location_id: string; to_pin_code: string; delivery_partner_id: string };
 const emptyForm = (branchId = ""): Form => ({ branch_id: branchId, manifest_number: "", transport_mode: "pickup", from_location_id: "", from_pin_code: "", to_location_id: "", to_pin_code: "", delivery_partner_id: "" });
@@ -49,7 +50,7 @@ export function ManifestList() {
   }, [allowed?.join(",") ?? "all"]);
   const filtered = rows.filter((row) => { const text = `${row.manifest_number} ${row.partner?.delivery_partner_name ?? ""} ${row.from_pin_code} ${row.to_pin_code}`.toLowerCase(); return (branchFilter === "all" || row.branch_id === branchFilter) && (!month || String(row.created_at ?? "").slice(0, 7) === month) && (!search.trim() || text.includes(search.trim().toLowerCase())); });
   const currentPartner = partners.find((partner) => partner.id === form.delivery_partner_id);
-  const eligibleLrs = lrs.filter((lr) => lr.branch_id === form.branch_id && ((!lr.trip_link?.length && !lr.manifest_link?.length) || selectedLrs.includes(lr.id)));
+  const eligibleLrs = lrs.filter((lr) => { const tripLink = firstRelation(lr.trip_link); const manifestLink = firstRelation(lr.manifest_link); return lr.branch_id === form.branch_id && ((!tripLink && !manifestLink) || selectedLrs.includes(lr.id)); });
 
   function openCreate() { const branchId = allowed?.length === 1 ? allowed[0] : ""; const branch = branches.find((item) => item.id === branchId); const branchLocation = locations.find((item) => item.pin_code === branch?.pin_code); setForm({ ...emptyForm(branchId), from_pin_code: branch?.pin_code ?? "", from_location_id: branchLocation?.id ?? "" }); setSelectedLrs([]); setCreating(true); }
   function chooseBranch(id: string) { const branch = branches.find((item) => item.id === id); const branchLocation = locations.find((item) => item.pin_code === branch?.pin_code); patch({ branch_id: id, from_pin_code: branch?.pin_code ?? "", from_location_id: branchLocation?.id ?? "" }); }

@@ -276,7 +276,8 @@ export function LorryReceiptList() {
         );
       const { data, error } = await query;
       if (error) throw error;
-      setRows(((data ?? []) as Array<Record<string, any>>).map((row) => ({ ...row, trip_number: row.trip_link?.trip?.trip_code ?? null, manifest_number: row.manifest_link?.manifest?.manifest_number ?? null })));
+      const firstRelation = (value: any) => Array.isArray(value) ? value[0] : value;
+      setRows(((data ?? []) as Array<Record<string, any>>).map((row) => { const tripLink = firstRelation(row.trip_link); const manifestLink = firstRelation(row.manifest_link); return { ...row, trip_number: firstRelation(tripLink?.trip)?.trip_code ?? null, manifest_number: firstRelation(manifestLink?.manifest)?.manifest_number ?? null }; }));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load LR records");
     }

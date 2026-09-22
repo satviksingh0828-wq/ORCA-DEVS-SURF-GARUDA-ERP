@@ -1296,7 +1296,8 @@ function LrTab({
           { tripId: link.trip_id, tripCode: link.trip?.trip_code ?? link.trip_id },
         ]),
       );
-      const manifestByLr = new Map((manifestLinks ?? []).map((link: any) => [link.lr_id, link.manifest?.manifest_number ?? null]));
+      const firstRelation = (value: any) => Array.isArray(value) ? value[0] : value;
+      const manifestByLr = new Map((manifestLinks ?? []).map((link: any) => [link.lr_id, firstRelation(link.manifest)?.manifest_number ?? null]));
       setRows(
         ((data ?? []) as LrOption[]).map((row) => ({
           ...row,
