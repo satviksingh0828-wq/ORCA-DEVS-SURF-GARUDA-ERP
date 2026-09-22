@@ -1349,9 +1349,12 @@ function LrTab({
           fromPlace: resolvedStartPlace,
           fromState: Number(startStateCode),
           vehicleNo: vehicleNumber.trim().toUpperCase(),
+          vehicleType: "R",
           transMode: "1",
           transDocNo: row.lr_number,
           transDocDate,
+          reasonCode: "1",
+          reasonRem: "Vehicle details updated",
         },
       });
       const { error: markError } = await db.from("lorry_receipts").update({ part_b_updated_at: new Date().toISOString() }).eq("id", row.id);

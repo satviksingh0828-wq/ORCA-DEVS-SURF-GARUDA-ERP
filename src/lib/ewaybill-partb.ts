@@ -9,9 +9,12 @@ const inputSchema = z.object({
   fromPlace: z.string().trim().min(1).max(100),
   fromState: z.coerce.number().int().min(1).max(99),
   vehicleNo: z.string().trim().min(1).max(20),
+  vehicleType: z.enum(["R", "O"]),
   transMode: z.enum(["1", "2", "3", "4"]),
   transDocNo: z.string().trim().min(1).max(50),
   transDocDate: z.string().regex(/^\d{2}\/\d{2}\/\d{4}$/),
+  reasonCode: z.string().regex(/^\d$/),
+  reasonRem: z.string().trim().min(1).max(50),
 });
 
 export const serverUpdateEwayBillPartB = createServerFn({ method: "POST" })
@@ -44,13 +47,19 @@ export const serverUpdateEwayBillPartB = createServerFn({ method: "POST" })
           fromPlace: data.fromPlace,
           fromState: data.fromState,
           vehicleNo: data.vehicleNo,
+          vehicleType: data.vehicleType,
           transMode: data.transMode,
           transDocNo: data.transDocNo,
           transDocDate: data.transDocDate,
+          reasonCode: data.reasonCode,
+          reasonRem: data.reasonRem,
         }),
       });
       const body = await response.json().catch(() => null) as Record<string, unknown> | null;
-      if (response.ok && body?.ok !== false && (body?.data as Record<string, unknown> | undefined)?.status_cd !== "0") {
+      const upstream = findStatusObject(body?.data ?? body);
+      if (response.ok && body?.ok !== false && upstream?.status_cd !== "0" && upstream?.status === "0") {
+        results.push({ ewayBillNumber, ok: false, error: String(upstream.error?.errorCodes ?? "PeriOne rejected the Part-B update") });
+      } else if (response.ok && body?.ok !== false && upstream?.status_cd !== "0") {
         results.push({ ewayBillNumber, ok: true, data: body?.data ?? body });
       } else {
         const error = body?.error as Record<string, unknown> | undefined;
@@ -64,4 +73,11 @@ export const serverUpdateEwayBillPartB = createServerFn({ method: "POST" })
 
 function assignmentErrorOrMissing(assignment: unknown, error: unknown): boolean {
   return Boolean(error) || !assignment;
+}
+
+function findStatusObject(value: unknown): { status_cd?: string; status?: string; error?: { errorCodes?: unknown } } {
+  if (!value || typeof value !== "object") return {};
+  const record = value as Record<string, unknown>;
+  if (typeof record.status_cd === "string" || typeof record.status === "string") return record as { status_cd?: string; status?: string; error?: { errorCodes?: unknown } };
+  return findStatusObject(record.data);
 }
