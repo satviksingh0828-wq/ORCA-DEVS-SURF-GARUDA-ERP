@@ -759,7 +759,12 @@ function LorryReceiptForm({
     })();
   }, [branchId]);
   const base = selected.find((s) => s.id === baseId) ?? selected[0];
-  const available = shipments.filter((s) => !selected.some((x) => x.id === s.id));
+  const available = shipments.filter((s) =>
+    !s.lr_number &&
+    !selected.some((x) => x.id === s.id) &&
+    (!shipmentSearch.trim() || s.eway_bill_number.includes(shipmentSearch.trim())) &&
+    (!shipmentDate || s.eway_bill_date === shipmentDate),
+  );
   function addShipment(shipment: Shipment) {
     if (
       selected.length &&

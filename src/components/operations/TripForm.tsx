@@ -1332,7 +1332,7 @@ function LrTab({
         resolvedStartPlace = String(location?.city || location?.location_name || "").trim();
       }
       if (!resolvedStartPlace) throw new Error("Set the trip starting location before updating Part-B");
-      const { data: linked, error } = await db.from("lr_shipments").select("shipment:shipments(eway_bill_number)").eq("lr_id", row.id);
+      const { data: linked, error } = await db.from("lr_shipments").select("shipment_id, shipment:shipments(eway_bill_number)").eq("lr_id", row.id);
       if (error) throw error;
       const ewayBillNumbers = ((linked ?? []) as Array<{ shipment?: { eway_bill_number?: string } | null }>)
         .map((item) => String(item.shipment?.eway_bill_number ?? ""))
@@ -1357,6 +1357,31 @@ function LrTab({
           reasonRem: "Vehicle details updated",
         },
       });
+      const [day, month, year] = transDocDate.split("/");
+      const responseByEwb = new Map(result.results.map((item) => [item.ewayBillNumber, item.data ?? null]));
+      const { error: historyError } = await db.from("shipment_part_b_history").insert(
+        ((linked ?? []) as Array<{ shipment_id: string; shipment?: { eway_bill_number?: string } | null }>)
+          .map((item) => String(item.shipment?.eway_bill_number ?? ""))
+          .filter((number) => responseByEwb.has(number))
+          .map((number) => ({
+            shipment_id: (linked as Array<{ shipment_id: string; shipment?: { eway_bill_number?: string } | null }>).find((item) => String(item.shipment?.eway_bill_number ?? "") === number)?.shipment_id,
+            lr_id: row.id,
+            trip_id: tripId,
+            eway_bill_number: number,
+            from_place: resolvedStartPlace,
+            from_state: Number(startStateCode),
+            vehicle_no: vehicleNumber.trim().toUpperCase(),
+            vehicle_type: "R",
+            trans_mode: "1",
+            trans_doc_no: row.lr_number,
+            trans_doc_date: `${year}-${month}-${day}`,
+            reason_code: "1",
+            reason_rem: "Vehicle details updated",
+            updated_by: user.id,
+            response_data: responseByEwb.get(number),
+          })),
+      );
+      if (historyError) throw historyError;
       const { error: markError } = await db.from("lorry_receipts").update({ part_b_updated_at: new Date().toISOString() }).eq("id", row.id);
       if (markError) throw markError;
       setRows((current) => current.map((item) => item.id === row.id ? { ...item, part_b_updated_at: new Date().toISOString() } : item));

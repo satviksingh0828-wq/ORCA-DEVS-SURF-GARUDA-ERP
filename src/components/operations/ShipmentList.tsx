@@ -87,6 +87,18 @@ type Shipment = Form & {
   created_at: string;
   lr_number?: string | null;
 };
+type PartBHistory = {
+  id: string;
+  from_place: string;
+  from_state: number;
+  vehicle_no: string;
+  vehicle_type: string;
+  trans_mode: string;
+  trans_doc_no: string | null;
+  trans_doc_date: string | null;
+  reason_rem: string | null;
+  updated_at: string;
+};
 
 const blankItem = (): Item => ({
   description: "",
@@ -244,11 +256,13 @@ function PartySection({
 function ShipmentView({
   shipment,
   items,
+  history,
   branchName,
   onBack,
 }: {
   shipment: Shipment;
   items: Item[];
+  history: PartBHistory[];
   branchName: (id: string) => string;
   onBack: () => void;
 }) {
@@ -283,6 +297,10 @@ function ShipmentView({
           <span>Total Weight (in kg): <strong>{items.reduce((sum, item) => sum + n(item.weight_kg), 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg</strong></span>
         </div>
       </div>
+      <div className="rounded-xl border border-border p-4">
+        <h3 className="mb-3 font-semibold">Part-B Update History</h3>
+        {history.length === 0 ? <p className="text-sm text-muted-foreground">No Part-B updates have been stored for this shipment.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Updated</th><th className="px-2 py-2">Vehicle</th><th className="px-2 py-2">From</th><th className="px-2 py-2">Mode</th><th className="px-2 py-2">Transport document</th><th className="px-2 py-2">Reason</th></tr></thead><tbody>{history.map((entry) => <tr key={entry.id} className="border-t border-border"><td className="px-2 py-2">{new Date(entry.updated_at).toLocaleString("en-IN")}</td><td className="px-2 py-2">{entry.vehicle_no} ({entry.vehicle_type})</td><td className="px-2 py-2">{entry.from_place} · {entry.from_state}</td><td className="px-2 py-2">{entry.trans_mode}</td><td className="px-2 py-2">{entry.trans_doc_no || "—"} {entry.trans_doc_date ? `· ${entry.trans_doc_date}` : ""}</td><td className="px-2 py-2">{entry.reason_rem || "—"}</td></tr>)}</tbody></table></div>}
+      </div>
     </div>
   );
 }
@@ -304,6 +322,7 @@ export function ShipmentList() {
   const [editingShipmentId, setEditingShipmentId] = useState<string | null>(null);
   const [viewingShipment, setViewingShipment] = useState<Shipment | null>(null);
   const [viewingItems, setViewingItems] = useState<Item[]>([]);
+  const [viewingHistory, setViewingHistory] = useState<PartBHistory[]>([]);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
   const [form, setForm] = useState<Form>(blankForm());
   const [items, setItems] = useState<Item[]>([blankItem()]);
@@ -416,11 +435,16 @@ export function ShipmentList() {
     setShowCreate(true);
   }
   async function openView(shipment: Shipment) {
-    const { data } = await db
+    const [{ data }, { data: history, error: historyError }] = await Promise.all([db
       .from("shipment_items")
       .select("*")
       .eq("shipment_id", shipment.id)
-      .order("item_no");
+      .order("item_no"), db
+      .from("shipment_part_b_history")
+      .select("id,from_place,from_state,vehicle_no,vehicle_type,trans_mode,trans_doc_no,trans_doc_date,reason_rem,updated_at")
+      .eq("shipment_id", shipment.id)
+      .order("updated_at", { ascending: false })]);
+    if (historyError) return toast.error(historyError.message);
     setViewingItems(
       ((data ?? []) as Array<Record<string, unknown>>).map((item) => ({
         description: String(item.description ?? ""),
@@ -438,6 +462,7 @@ export function ShipmentList() {
         total_invoice_value: String(item.total_invoice_value ?? ""),
       })),
     );
+    setViewingHistory((history ?? []) as PartBHistory[]);
     setViewingShipment(shipment);
   }
   async function deleteShipment(shipment: Shipment) {
@@ -526,7 +551,7 @@ export function ShipmentList() {
   }
 
   if (viewingShipment)
-    return <ShipmentView shipment={viewingShipment} items={viewingItems} branchName={branchName} onBack={() => setViewingShipment(null)} />;
+    return <ShipmentView shipment={viewingShipment} items={viewingItems} history={viewingHistory} branchName={branchName} onBack={() => setViewingShipment(null)} />;
   const setItem = (index: number, key: keyof Item, value: string) =>
     setItems(items.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   const totalTaxable = items.reduce((sum, item) => sum + n(item.taxable_value), 0);
