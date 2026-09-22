@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
+import { serverFetchEwayBills } from "@/lib/ewaybill-fetch";
 
 type Snapshot = {
   id: string;
@@ -38,6 +39,7 @@ export function EwayBillList() {
   const [shipmentNumbers, setShipmentNumbers] = useState<Set<string>>(new Set());
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [fetching, setFetching] = useState(false);
   const db = supabase as any;
   const visibleBranches = useMemo(() => allowed === null ? branches : branches.filter((branch) => allowed.includes(branch.id)), [allowed, branches]);
 
@@ -62,11 +64,29 @@ export function EwayBillList() {
   }
   useEffect(() => { void load(); }, [branchId, snapshotDate, visibleBranches.length]);
 
+  async function fetchForDate() {
+    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+    if (fetchedAt) return toast.error("E-Way Bills were already fetched for this date.");
+    setFetching(true);
+    try {
+      const result = await serverFetchEwayBills({ data: { sessionToken: user.sessionToken, snapshotDate, branchId: branchId === "all" ? null : branchId } });
+      const failed = result.branches.filter((branch) => branch.failed);
+      if (failed.length) toast.error(String(failed[0].error ?? "Could not fetch E-Way Bills"));
+      else toast.success(`E-Way Bills fetched for ${snapshotDate}`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not fetch E-Way Bills");
+    } finally {
+      setFetching(false);
+    }
+  }
+
   return <div className="space-y-5">
     <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-card p-4">
       <div className="space-y-1.5"><label className="text-xs font-medium text-muted-foreground">Saved date</label><Input type="date" value={snapshotDate} onChange={(event) => setSnapshotDate(event.target.value)} /></div>
       <div className="min-w-56 space-y-1.5"><label className="text-xs font-medium text-muted-foreground">Branch</label><Select value={branchId} onValueChange={setBranchId}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All permitted branches</SelectItem>{visibleBranches.map((branch) => <SelectItem key={branch.id} value={branch.id}>{branch.branch_name}</SelectItem>)}</SelectContent></Select></div>
-      <Button type="button" variant="outline" onClick={() => void load()} disabled={loading}><CalendarDays className="mr-2 size-4" />{loading ? "Loading…" : "Reload saved data"}</Button>
+      <Button type="button" variant="outline" onClick={() => void load()} disabled={loading || fetching}><CalendarDays className="mr-2 size-4" />{loading ? "Loading…" : "Reload saved data"}</Button>
+      <Button type="button" onClick={() => void fetchForDate()} disabled={loading || fetching || Boolean(fetchedAt)}>{fetching ? "Fetching…" : fetchedAt ? "Already fetched" : "Fetch for this date"}</Button>
       <p className="ml-auto text-xs text-muted-foreground">Saved snapshots only. No PeriOne API call is made here.{fetchedAt ? ` Last fetched ${new Date(fetchedAt).toLocaleString("en-IN")}.` : " No completed fetch found for this date."}</p>
     </div>
     <div className="overflow-x-auto rounded-xl border border-border">
