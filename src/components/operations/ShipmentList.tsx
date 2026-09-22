@@ -303,6 +303,7 @@ export function ShipmentList() {
   const [branchFilter, setBranchFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [search, setSearch] = useState("");
+  const [assignment, setAssignment] = useState("all");
 
   const visibleBranches = useMemo(
     () => (allowed === null ? branches : branches.filter((b) => allowed.includes(b.id))),
@@ -356,6 +357,7 @@ export function ShipmentList() {
   const filtered = shipments.filter((s) => {
     if (branchFilter !== "all" && s.branch_id !== branchFilter) return false;
     if (monthFilter !== "all" && !s.eway_bill_date.startsWith(monthFilter)) return false;
+    if (assignment !== "all" && (assignment === "assigned") !== Boolean(s.lr_number)) return false;
     return !search.trim() || s.eway_bill_number.includes(search.trim());
   });
 

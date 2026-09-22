@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Link2, Loader2, Lock, Plus, Printer, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Link2, Loader2, Lock, Plus, Printer, Save, Search, Trash2 } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -1103,6 +1103,7 @@ export function TripForm({
           {activeTab === "manifest" ? (
             <LrTab
               tripId={trip.id ?? null}
+              branchId={trip.branch_id}
               requireTripId={requireTripId}
               selectedIds={linkedLrIds}
               onSaved={(ids) => setLinkedLrIds(ids)}
@@ -1232,12 +1233,14 @@ type LrOption = {
 
 function LrTab({
   tripId,
+  branchId,
   requireTripId,
   selectedIds,
   onSaved,
   isViewer = false,
 }: {
   tripId: string | null;
+  branchId: string | null;
   requireTripId: () => Promise<string | null>;
   selectedIds: string[];
   onSaved: (ids: string[]) => void;
@@ -1246,6 +1249,9 @@ function LrTab({
   const [rows, setRows] = useState<LrOption[]>([]);
   const [selected, setSelected] = useState<string[]>(selectedIds);
   const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState("");
+  const [date, setDate] = useState("");
+  const [assignment, setAssignment] = useState("all");
   useEffect(() => setSelected(selectedIds), [selectedIds]);
   useEffect(() => {
     void (async () => {
@@ -1253,7 +1259,8 @@ function LrTab({
       const [{ data, error }, { data: links, error: linkError }] = await Promise.all([
         db
           .from("lorry_receipts")
-          .select("id,lr_number,mode,calculated_income,source:contracts(contract_name),transporter:transporters(transporter_name)")
+          .select("id,branch_id,lr_number,created_at,mode,calculated_income,source:contracts(contract_name),transporter:transporters(transporter_name)")
+          .eq("branch_id", branchId)
           .order("created_at", { ascending: false }),
         db.from("trip_lorry_receipts").select("lr_id,trip_id,trip:trips(trip_code)"),
       ]);
@@ -1275,7 +1282,7 @@ function LrTab({
         })),
       );
     })();
-  }, []);
+  }, [branchId]);
   async function save() {
     const id = await requireTripId();
     if (!id) return;
@@ -1293,7 +1300,12 @@ function LrTab({
   const total = rows.filter((row) => selected.includes(row.id)).reduce((sum, row) => sum + num(row.calculated_income), 0);
   return <div className="space-y-4">
     <div className="flex items-center gap-2"><div><h3 className="text-sm font-semibold tracking-tight">Linked LR</h3><p className="text-xs text-muted-foreground">Select an LR to link it to this trip. Source, transporter, mode and calculated income come from the LR.</p></div>{!isViewer && <Button type="button" size="sm" onClick={() => void save()} disabled={saving} className="ml-auto"><Link2 className="size-4" />{saving ? "Saving…" : "Save links"}</Button>}</div>
-    <div className="space-y-2">{rows.length === 0 ? <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No LR records found.</p> : rows.map((row) => {
+    <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-card p-3">
+      <div className="relative min-w-56 flex-1"><Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search LR number" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+      <Input className="w-44" type="date" value={date} onChange={(e) => setDate(e.target.value)} aria-label="LR date" />
+      <Select value={assignment} onValueChange={setAssignment}><SelectTrigger className="w-40"><SelectValue placeholder="Assignment" /></SelectTrigger><SelectContent><SelectItem value="all">All LR</SelectItem><SelectItem value="assigned">Assigned</SelectItem><SelectItem value="unsigned">Unsigned</SelectItem></SelectContent></Select>
+    </div>
+    <div className="space-y-2">{rows.length === 0 ? <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No LR records found for this branch.</p> : rows.filter((row) => (!search.trim() || row.lr_number.toLowerCase().includes(search.trim().toLowerCase())) && (!date || String((row as any).created_at ?? "").slice(0, 10) === date) && (assignment === "all" || (assignment === "assigned" ? Boolean(row.linked_trip_id) : !row.linked_trip_id))).map((row) => {
       const linkedToAnotherTrip = Boolean(row.linked_trip_id && !selected.includes(row.id));
       return <label key={row.id} className={`flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 ${linkedToAnotherTrip ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}><input type="checkbox" checked={selected.includes(row.id)} disabled={isViewer || linkedToAnotherTrip} onChange={(event) => setSelected((old) => event.target.checked ? [...old, row.id] : old.filter((id) => id !== row.id))} /><span className="grid flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-6"><strong>{row.lr_number}</strong><span>{row.source?.contract_name ?? "—"}</span><span>{row.transporter?.transporter_name ?? "—"}</span><span>{row.mode ?? "ROAD"}</span><span className="text-right font-medium">{inr(num(row.calculated_income))}</span><span className="text-right text-muted-foreground">Trip: {row.linked_trip_code ?? "Not linked"}</span></span></label>;
     })}</div>

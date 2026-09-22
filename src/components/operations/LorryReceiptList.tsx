@@ -249,6 +249,7 @@ export function LorryReceiptList() {
   const [branchFilter, setBranchFilter] = useState("all");
   const [search, setSearch] = useState("");
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [assignment, setAssignment] = useState("all");
   const [saving, setSaving] = useState(false);
   const allowed = useMemo(
     () => (user?.role === "basic" ? (user.branchIds ?? []) : null),
@@ -266,7 +267,7 @@ export function LorryReceiptList() {
       let query = db
         .from("lorry_receipts")
         .select(
-          "*, source:contracts(contract_name), lorry_receipt_shipments:lr_shipments(shipment:shipments(*, shipment_items(*)))",
+          "*, source:contracts(contract_name), trip_link:trip_lorry_receipts(trip:trips(trip_code)), lorry_receipt_shipments:lr_shipments(shipment:shipments(*, shipment_items(*)))",
         )
         .order("created_at", { ascending: false });
       if (allowed !== null)
@@ -276,7 +277,7 @@ export function LorryReceiptList() {
         );
       const { data, error } = await query;
       if (error) throw error;
-      setRows((data ?? []) as Array<Record<string, any>>);
+      setRows(((data ?? []) as Array<Record<string, any>>).map((row) => ({ ...row, trip_number: row.trip_link?.trip?.trip_code ?? null })));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load LR records");
     }
@@ -370,6 +371,7 @@ export function LorryReceiptList() {
             ))}
           </SelectContent>
         </Select>
+        <Select value={assignment} onValueChange={setAssignment}><SelectTrigger className="w-40"><SelectValue placeholder="Assignment" /></SelectTrigger><SelectContent><SelectItem value="all">All LR</SelectItem><SelectItem value="assigned">Assigned</SelectItem><SelectItem value="unsigned">Unsigned</SelectItem></SelectContent></Select>
         <Input
           className="w-44"
           type="month"
@@ -395,6 +397,7 @@ export function LorryReceiptList() {
               <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3">Shipments</th>
               <th className="px-4 py-3">Route</th>
+              <th className="px-4 py-3">Trip Number</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -402,13 +405,13 @@ export function LorryReceiptList() {
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
                   Loading…
                 </td>
               </tr>
             ) : filtered.length === 0 ? (
               <tr>
-                <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                <td colSpan={8} className="p-8 text-center text-muted-foreground">
                   No LR records found.
                 </td>
               </tr>
@@ -433,6 +436,7 @@ export function LorryReceiptList() {
                         ? `${base.dispatch_from_pin_code || "—"} → ${base.ship_to_pin_code || "—"}`
                         : "—"}
                     </td>
+                    <td className="px-4 py-3">{row.trip_number ?? "Unsigned"}</td>
                     <td className="px-4 py-3">{String(row.created_at ?? "").slice(0, 10)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
@@ -610,6 +614,8 @@ function LorryReceiptEditForm({
   const [shipments, setShipments] = useState<Shipment[]>([]);
   const [baseId, setBaseId] = useState(String(row.base_shipment_id ?? initialSelected[0]?.id ?? ""));
   const [showPicker, setShowPicker] = useState(false);
+  const [shipmentSearch, setShipmentSearch] = useState("");
+  const [shipmentDate, setShipmentDate] = useState("");
   const [showCreateShipment, setShowCreateShipment] = useState(false);
   const [saving, setSaving] = useState(false);
   useEffect(() => {
@@ -629,7 +635,7 @@ function LorryReceiptEditForm({
     })();
   }, [row.branch_id]);
   const base = selected.find((s) => s.id === baseId) ?? selected[0];
-  const available = shipments.filter((s) => !selected.some((x) => x.id === s.id) && !s.lr_number);
+  const available = shipments.filter((s) => !selected.some((x) => x.id === s.id) && !s.lr_number && (!shipmentSearch.trim() || s.eway_bill_number.includes(shipmentSearch.trim())) && (!shipmentDate || s.eway_bill_date === shipmentDate));
   function addShipment(shipment: Shipment) {
     if (base && (!same(base.supplier_gstin, shipment.supplier_gstin) || !same(base.recipient_gstin, shipment.recipient_gstin) || !same(base.dispatch_from_pin_code, shipment.dispatch_from_pin_code) || !same(base.ship_to_pin_code, shipment.ship_to_pin_code)))
       return toast.error("This shipment does not match the LR base shipment");
@@ -674,7 +680,7 @@ function LorryReceiptEditForm({
       <section className="order-first space-y-3 rounded-xl border border-border p-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div><div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)}><Plus className="mr-1 size-4" /> Add Shipment</Button><Button type="button" onClick={() => setShowCreateShipment(true)} disabled={!row.branch_id}><Plus className="mr-1 size-4" /> Create and Add</Button></div></div>
         {selected.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">No shipments attached yet.</p> : <div className="space-y-2 text-sm">{selected.map((s) => <div key={s.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Button variant="ghost" size="icon" onClick={() => removeShipment(s.id)}><X className="size-4" /></Button></div>)}</div>}
-        {showPicker && <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3"><p className="text-sm font-medium">Select compatible shipment</p>{available.length === 0 ? <p className="text-sm text-muted-foreground">No unlinked shipments available for this branch.</p> : available.slice(0, 50).map((s) => <button type="button" key={s.id} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Link2 className="size-4 text-primary" /></button>)}</div>}
+        {showPicker && <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3"><p className="text-sm font-medium">Select compatible shipment</p><div className="flex flex-wrap gap-2"><Input className="flex-1" placeholder="Search shipment number" value={shipmentSearch} onChange={(e) => setShipmentSearch(e.target.value)} /><Input className="w-40" type="date" value={shipmentDate} onChange={(e) => setShipmentDate(e.target.value)} /></div>{available.length === 0 ? <p className="text-sm text-muted-foreground">No unlinked shipments available for this branch.</p> : available.slice(0, 50).map((s) => <button type="button" key={s.id} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Link2 className="size-4 text-primary" /></button>)}</div>}
       </section>
       </div>
       {showCreateShipment && <CreateAndAddShipment branchId={row.branch_id} branches={branches} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
@@ -705,6 +711,8 @@ function LorryReceiptForm({
   const [selected, setSelected] = useState<Shipment[]>([]);
   const [baseId, setBaseId] = useState("");
   const [showPicker, setShowPicker] = useState(false);
+  const [shipmentSearch, setShipmentSearch] = useState("");
+  const [shipmentDate, setShipmentDate] = useState("");
   const [showCreateShipment, setShowCreateShipment] = useState(false);
   const [saving, setSaving] = useState(false);
   const previewPrefix = String(branches.find((branch) => branch.id === branchId)?.lr_series_prefix ?? "").trim().toUpperCase();
