@@ -21,6 +21,24 @@ function extractRows(body: Record<string, unknown> | null): Array<Record<string,
   return [];
 }
 
+export function perioneError(body: Record<string, unknown> | null, responseStatus: number): Error {
+  const upstream = body?.data && typeof body.data === "object" && !Array.isArray(body.data) ? body.data as Record<string, unknown> : body ?? {};
+  const nested = body?.error;
+  const errorObject = nested && typeof nested === "object" ? nested as Record<string, unknown> : {};
+  const detail = [
+    errorObject.message,
+    errorObject.error,
+    errorObject.errorMessage,
+    errorObject.errorCodes,
+    upstream.status_desc,
+    upstream.statusDesc,
+    upstream.message,
+    body?.message,
+  ].find((value) => value !== undefined && value !== null && String(value).trim() !== "");
+  const raw = body ? JSON.stringify(body).slice(0, 700) : "No response body";
+  return new Error(`PeriOne request failed (HTTP ${responseStatus}): ${detail ? String(detail) : raw}`);
+}
+
 export const serverFetchEwayBills = createServerFn({ method: "POST" })
   .validator(z.object({ sessionToken: z.string().min(1), snapshotDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/), branchId: z.string().uuid().nullable() }))
   .handler(async ({ data }) => {
@@ -50,7 +68,7 @@ export const serverFetchEwayBills = createServerFn({ method: "POST" })
         const response = await fetch(url, { headers: { Accept: "application/json", "X-API-Key": apiKey } });
         const body = await response.json().catch(() => null) as Record<string, unknown> | null;
         const upstream = body?.data && typeof body.data === "object" ? body.data as Record<string, unknown> : body;
-        if (!response.ok || body?.ok === false || upstream?.status_cd === "0" || upstream?.status === "0") throw new Error(String((body?.error as Record<string, unknown> | undefined)?.message ?? upstream?.status_desc ?? "PeriOne rejected the assigned-EWB request"));
+        if (!response.ok || body?.ok === false || upstream?.status_cd === "0" || upstream?.status === "0") throw perioneError(body, response.status);
         const snapshots = extractRows(body).map((row) => ({ branch_id: branch.id, snapshot_date: data.snapshotDate, ewb_number: String(row.ewbNo ?? row.ewayBillNo ?? ""), invoice_number: String(row.docNo ?? ""), generated_by: String(row.genGstin ?? row.generatedBy ?? ""), destination: String(row.delPlace ?? row.toPlace ?? row.destination ?? ""), valid_until: String(row.validUpto ?? row.validUntil ?? ""), status: String(row.status ?? ""), raw_data: row, fetched_at: new Date().toISOString() })).filter((row) => /^\d{12}$/.test(row.ewb_number));
         if (snapshots.length) {
           const { error: insertError } = await db.from("eway_bill_daily_snapshots").upsert(snapshots, { onConflict: "branch_id,snapshot_date,ewb_number" });

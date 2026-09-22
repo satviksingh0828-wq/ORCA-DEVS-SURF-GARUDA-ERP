@@ -1,4 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
+import { perioneError } from "@/lib/ewaybill-fetch";
 
 function indiaDateKey(date: Date): string {
   const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
@@ -62,7 +63,7 @@ export const Route = createFileRoute("/api/fetch-eway-bills")({
             const response = await fetch(url, { headers: { Accept: "application/json", "X-API-Key": apiKey } });
             const body = await response.json().catch(() => null) as Record<string, unknown> | null;
             const upstream = body?.data && typeof body.data === "object" ? body.data as Record<string, unknown> : body;
-            if (!response.ok || body?.ok === false || upstream?.status_cd === "0" || upstream?.status === "0") throw new Error(String((body?.error as Record<string, unknown> | undefined)?.message ?? upstream?.status_desc ?? "PeriOne rejected the assigned-EWB request"));
+            if (!response.ok || body?.ok === false || upstream?.status_cd === "0" || upstream?.status === "0") throw perioneError(body, response.status);
             const rows = extractRows(body);
             const snapshots = rows.map((row) => ({
               branch_id: branch.id,
