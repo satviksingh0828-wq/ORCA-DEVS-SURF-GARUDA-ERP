@@ -62,6 +62,7 @@ const EMPTY: Branch = {
   _eway_api_username: "",
   _eway_api_password: "",
   _eway_configured: "false",
+  eway_auto_fetch_enabled: "false",
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -98,7 +99,7 @@ export function BranchSettings() {
   const set = (k: string) => (v: string) => setEditing((f) => (f ? { ...f, [k]: v } : f));
 
   async function beginEdit(branch: Branch) {
-    const next = { ...branch, _eway_api_username: "", _eway_api_password: "", _eway_configured: "false" };
+    const next = { ...branch, _eway_api_username: "", _eway_api_password: "", _eway_configured: "false", eway_auto_fetch_enabled: String(branch.eway_auto_fetch_enabled === true || branch.eway_auto_fetch_enabled === "true") };
     setEditing(next);
     if (!branch.id) return;
     if (!user?.sessionToken) {
@@ -142,8 +143,8 @@ export function BranchSettings() {
       return;
     }
     setSaving(true);
-    const { id, created_at: _c, updated_at: _u, _eway_api_username, _eway_api_password, _eway_configured, ...rest } = editing;
-    const payload = { ...rest, trip_series_prefix: tripPrefix, lr_series_prefix: lrPrefix } as never;
+    const { id, created_at: _c, updated_at: _u, _eway_api_username, _eway_api_password, _eway_configured, eway_auto_fetch_enabled, ...rest } = editing;
+    const payload = { ...rest, eway_auto_fetch_enabled: eway_auto_fetch_enabled === "true", trip_series_prefix: tripPrefix, lr_series_prefix: lrPrefix } as never;
     const res = id
       ? await supabase.from("branches").update(payload).eq("id", id).select("id").single()
       : await supabase.from("branches").insert(payload).select("id").single();
@@ -331,6 +332,17 @@ export function BranchSettings() {
             The password is encrypted by the secure Supabase function and is never displayed or stored in the branch record.
             {editing._eway_configured === "true" ? " Credentials are currently configured." : " Credentials are not configured yet."}
           </p>
+          <label className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={editing.eway_auto_fetch_enabled === "true"}
+              onChange={(event) => setEditing((f) => f ? { ...f, eway_auto_fetch_enabled: event.target.checked ? "true" : "false" } : f)}
+            />
+            <span>
+              <span className="block text-sm font-medium">Enable automatic daily fetch</span>
+              <span className="block text-[11px] text-muted-foreground">At 12:00 AM India time, save assigned EWBs for the previous date. The Operations E-Way Bill tab never calls the API.</span>
+            </span>
+          </label>
         </Section>
 
         <div className="flex justify-end gap-2">

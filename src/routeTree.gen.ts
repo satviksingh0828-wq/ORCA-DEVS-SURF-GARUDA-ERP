@@ -39,6 +39,7 @@ import { Route as AccountsFinalRouteImport } from './routes/accounts.final'
 import { Route as AccountsJournalRouteImport } from './routes/accounts.journal'
 import { Route as AccountsLedgerRouteImport } from './routes/accounts.ledger'
 import { Route as AccountsMastersRouteImport } from './routes/accounts.masters'
+import { Route as ApiFetchEwayBillsRouteImport } from './routes/api/fetch-eway-bills'
 import { Route as ApiNotifyAdminRouteImport } from './routes/api/notify-admin'
 import { Route as ApiNotifyExpiryRouteImport } from './routes/api/notify-expiry'
 import { Route as ApiNotifyOpenTripsRouteImport } from './routes/api/notify-open-trips'
@@ -240,6 +241,11 @@ const AccountsMastersRoute = AccountsMastersRouteImport.update({
   id: '/masters',
   path: '/masters',
   getParentRoute: () => AccountsRoute,
+} as any)
+const ApiFetchEwayBillsRoute = ApiFetchEwayBillsRouteImport.update({
+  id: '/api/fetch-eway-bills',
+  path: '/api/fetch-eway-bills',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const ApiNotifyAdminRoute = ApiNotifyAdminRouteImport.update({
   id: '/api/notify-admin',
@@ -536,6 +542,7 @@ export interface FileRoutesByFullPath {
   '/accounts/journal': typeof AccountsJournalRoute
   '/accounts/ledger': typeof AccountsLedgerRoute
   '/accounts/masters': typeof AccountsMastersRouteWithChildren
+  '/api/fetch-eway-bills': typeof ApiFetchEwayBillsRoute
   '/api/notify-admin': typeof ApiNotifyAdminRoute
   '/api/notify-expiry': typeof ApiNotifyExpiryRoute
   '/api/notify-open-trips': typeof ApiNotifyOpenTripsRoute
@@ -613,6 +620,7 @@ export interface FileRoutesByTo {
   '/accounts/final': typeof AccountsFinalRoute
   '/accounts/journal': typeof AccountsJournalRoute
   '/accounts/ledger': typeof AccountsLedgerRoute
+  '/api/fetch-eway-bills': typeof ApiFetchEwayBillsRoute
   '/api/notify-admin': typeof ApiNotifyAdminRoute
   '/api/notify-expiry': typeof ApiNotifyExpiryRoute
   '/api/notify-open-trips': typeof ApiNotifyOpenTripsRoute
@@ -695,6 +703,7 @@ export interface FileRoutesById {
   '/accounts/journal': typeof AccountsJournalRoute
   '/accounts/ledger': typeof AccountsLedgerRoute
   '/accounts/masters': typeof AccountsMastersRouteWithChildren
+  '/api/fetch-eway-bills': typeof ApiFetchEwayBillsRoute
   '/api/notify-admin': typeof ApiNotifyAdminRoute
   '/api/notify-expiry': typeof ApiNotifyExpiryRoute
   '/api/notify-open-trips': typeof ApiNotifyOpenTripsRoute
@@ -780,6 +789,7 @@ export interface FileRouteTypes {
     | '/accounts/journal'
     | '/accounts/ledger'
     | '/accounts/masters'
+    | '/api/fetch-eway-bills'
     | '/api/notify-admin'
     | '/api/notify-expiry'
     | '/api/notify-open-trips'
@@ -857,6 +867,7 @@ export interface FileRouteTypes {
     | '/accounts/final'
     | '/accounts/journal'
     | '/accounts/ledger'
+    | '/api/fetch-eway-bills'
     | '/api/notify-admin'
     | '/api/notify-expiry'
     | '/api/notify-open-trips'
@@ -938,6 +949,7 @@ export interface FileRouteTypes {
     | '/accounts/journal'
     | '/accounts/ledger'
     | '/accounts/masters'
+    | '/api/fetch-eway-bills'
     | '/api/notify-admin'
     | '/api/notify-expiry'
     | '/api/notify-open-trips'
@@ -1015,6 +1027,7 @@ export interface RootRouteChildren {
   SystemRoute: typeof SystemRoute
   TmsRoute: typeof TmsRoute
   UsersRoute: typeof UsersRoute
+  ApiFetchEwayBillsRoute: typeof ApiFetchEwayBillsRoute
   ApiNotifyAdminRoute: typeof ApiNotifyAdminRoute
   ApiNotifyExpiryRoute: typeof ApiNotifyExpiryRoute
   ApiNotifyOpenTripsRoute: typeof ApiNotifyOpenTripsRoute
@@ -1244,6 +1257,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/accounts/masters'
       preLoaderRoute: typeof AccountsMastersRouteImport
       parentRoute: typeof AccountsRoute
+    }
+    '/api/fetch-eway-bills': {
+      id: '/api/fetch-eway-bills'
+      path: '/api/fetch-eway-bills'
+      fullPath: '/api/fetch-eway-bills'
+      preLoaderRoute: typeof ApiFetchEwayBillsRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/api/notify-admin': {
       id: '/api/notify-admin'
@@ -1801,6 +1821,7 @@ const rootRouteChildren: RootRouteChildren = {
   SystemRoute: SystemRoute,
   TmsRoute: TmsRoute,
   UsersRoute: UsersRoute,
+  ApiFetchEwayBillsRoute: ApiFetchEwayBillsRoute,
   ApiNotifyAdminRoute: ApiNotifyAdminRoute,
   ApiNotifyExpiryRoute: ApiNotifyExpiryRoute,
   ApiNotifyOpenTripsRoute: ApiNotifyOpenTripsRoute,

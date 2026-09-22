@@ -8,6 +8,7 @@ import {
   ChevronRight,
   CreditCard,
   FileText,
+  FileSearch,
   PanelLeftClose,
   PanelLeftOpen,
   Route as RouteIcon,
@@ -32,6 +33,7 @@ import { FastagLedger } from "@/components/reports/FastagLedger";
 import { ReportFiltersContext } from "@/lib/report-filters";
 import { ShipmentList } from "@/components/operations/ShipmentList";
 import { LorryReceiptList } from "@/components/operations/LorryReceiptList";
+import { EwayBillList } from "@/components/operations/EwayBillList";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -88,6 +90,14 @@ const ALL_TABS = [
     label: "LR",
     desc: "Combine shipments into Lorry Receipts",
     icon: Truck,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
+    id: "eway-bill",
+    label: "E-Way Bill",
+    desc: "Saved daily assigned-EWB snapshots",
+    icon: FileSearch,
     adminOnly: false,
     dividerBefore: false,
   },
@@ -239,6 +249,11 @@ function OperationsPage() {
           {safeTab === "lr" && (
             <TabErrorBoundary label="LR">
               <LorryReceiptList />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "eway-bill" && (
+            <TabErrorBoundary label="E-Way Bill">
+              <EwayBillList />
             </TabErrorBoundary>
           )}
           {safeTab === "monthly-mis" && !isViewer && (
