@@ -58,6 +58,7 @@ import {
 export type TripRow = {
   id?: string;
   trip_code: string;
+  mode: "ROAD" | "RAIL" | "AIR" | "SHIP";
   ownership: string;
   branch_id: string | null;
   vehicle_id: string | null;
@@ -136,6 +137,7 @@ export function emptyTrip(): TripRow {
   const pad = (n: number) => String(n).padStart(2, "0");
   return {
     trip_code: newTripCode(),
+    mode: "ROAD",
     ownership: "own",
     branch_id: null,
     vehicle_id: null,
@@ -198,7 +200,7 @@ export function TripForm({
   const TABS = isBasic ? TABS_BASIC : TABS_ALL;
   const basicStartDateBounds = getBasicStartDateBounds();
 
-  const [trip, setTrip] = useState<TripRow>(initial);
+  const [trip, setTrip] = useState<TripRow>({ mode: "ROAD", ...initial });
   const [saving, setSaving] = useState(false);
   const [closing, setClosing] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -928,6 +930,20 @@ export function TripForm({
               <SelectContent>
                 <SelectItem value="own">Own vehicle</SelectItem>
                 <SelectItem value="third_party">Rented (Third party)</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">
+              Transport Mode <span className="text-destructive">*</span>
+            </Label>
+            <Select value={trip.mode ?? "ROAD"} onValueChange={(mode) => patch({ mode: mode as TripRow["mode"] })}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ROAD">Road</SelectItem>
+                <SelectItem value="RAIL">Rail</SelectItem>
+                <SelectItem value="AIR">Air</SelectItem>
+                <SelectItem value="SHIP">Ship</SelectItem>
               </SelectContent>
             </Select>
           </div>

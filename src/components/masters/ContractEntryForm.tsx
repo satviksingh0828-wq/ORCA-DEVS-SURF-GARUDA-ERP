@@ -20,6 +20,7 @@ import type { ContractRow } from "./ContractForm";
 export type EntryRow = {
   id?: string;
   contract_id: string;
+  mode: "ROAD" | "RAIL" | "AIR" | "SHIP";
   from_location_id: string | null;
   to_location_id: string | null;
   from_pin_code: string;
@@ -39,6 +40,7 @@ export type EntryRow = {
 export function emptyEntry(contract_id: string): EntryRow {
   return {
     contract_id,
+    mode: "ROAD",
     from_location_id: null,
     to_location_id: null,
     from_pin_code: "",
@@ -203,7 +205,7 @@ export function ContractEntryForm({
   onCancel: () => void;
   onSaved: () => void;
 }) {
-  const [form, setForm] = useState<EntryRow>({ ...initial });
+  const [form, setForm] = useState<EntryRow>({ mode: "ROAD", ...initial });
   const [saving, setSaving] = useState(false);
 
   const patch = (p: Partial<EntryRow>) => setForm((f) => ({ ...f, ...p }));
@@ -240,6 +242,18 @@ export function ContractEntryForm({
       <section className="surface-card p-6">
         <h3 className="text-sm font-semibold tracking-tight">Route</h3>
         <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">Transport Mode *</Label>
+            <Select value={form.mode ?? "ROAD"} onValueChange={(mode) => patch({ mode: mode as EntryRow["mode"] })}>
+              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ROAD">Road</SelectItem>
+                <SelectItem value="RAIL">Rail</SelectItem>
+                <SelectItem value="AIR">Air</SelectItem>
+                <SelectItem value="SHIP">Ship</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <LocationPinPair
             label="From"
             locationId={form.from_location_id}

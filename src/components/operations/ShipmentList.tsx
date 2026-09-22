@@ -429,6 +429,17 @@ export function ShipmentList() {
     );
     setViewingShipment(shipment);
   }
+  async function deleteShipment(shipment: Shipment) {
+    if (shipment.lr_number) {
+      toast.error("A shipment assigned to an LR cannot be deleted");
+      return;
+    }
+    if (!window.confirm(`Delete shipment ${shipment.eway_bill_number}? This cannot be undone.`)) return;
+    const { error } = await db.from("shipments").delete().eq("id", shipment.id);
+    if (error) return toast.error(error.message);
+    toast.success(`Shipment ${shipment.eway_bill_number} deleted`);
+    await load();
+  }
 
   if (viewingShipment)
     return <ShipmentView shipment={viewingShipment} items={viewingItems} branchName={branchName} onBack={() => setViewingShipment(null)} />;
@@ -604,9 +615,14 @@ export function ShipmentList() {
                             <Eye className="mr-1 size-4" /> View
                           </Button>
                           {!s.lr_number && (
-                            <Button variant="outline" size="sm" onClick={() => void openEdit(s)}>
-                              <Pencil className="mr-1 size-4" /> Edit
-                            </Button>
+                            <>
+                              <Button variant="outline" size="sm" onClick={() => void openEdit(s)}>
+                                <Pencil className="mr-1 size-4" /> Edit
+                              </Button>
+                              <Button variant="ghost" size="sm" onClick={() => void deleteShipment(s)} title="Delete shipment">
+                                <Trash2 className="size-4 text-destructive" />
+                              </Button>
+                            </>
                           )}
                         </div>
                       </td>

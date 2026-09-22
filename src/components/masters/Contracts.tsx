@@ -362,7 +362,7 @@ function EntriesView({
   const entryColumns = useMemo(() => {
     const nF = Math.max(3, entries.length > 0 ? Math.max(...entries.map((e) => (e.freight_route_ranges ?? []).length)) : 0);
     const nL = Math.max(3, entries.length > 0 ? Math.max(...entries.map((e) => (e.loading_route_ranges ?? []).length)) : 0);
-    const cols: string[] = ["from_location", "from_pin_code", "to_location", "to_pin_code", "freight_range_type"];
+    const cols: string[] = ["mode", "from_location", "from_pin_code", "to_location", "to_pin_code", "freight_range_type"];
     for (let i = 1; i <= nF; i++) cols.push(`f_r${i}_start`, `f_r${i}_end`, `f_r${i}_working`, `f_r${i}_value`);
     cols.push("loading_range_type");
     for (let i = 1; i <= nL; i++) cols.push(`l_r${i}_start`, `l_r${i}_end`, `l_r${i}_working`, `l_r${i}_value`);
@@ -475,6 +475,7 @@ function EntriesView({
       const to = resolve(r.to_location ?? "", r.to_pin_code ?? "");
       return {
         contract_id: contract.id!,
+        mode: ["ROAD", "RAIL", "AIR", "SHIP"].includes((r.mode ?? "ROAD").trim().toUpperCase()) ? (r.mode ?? "ROAD").trim().toUpperCase() : "ROAD",
         from_location_id: from.id,
         to_location_id: to.id,
         from_pin_code: from.pin,
@@ -501,6 +502,7 @@ function EntriesView({
 
   const exportRows = entries.map((e) => {
     const row: Record<string, unknown> = {
+      mode: e.mode ?? "ROAD",
       from_location: e.from_location_id ? locNames[e.from_location_id] ?? "" : "",
       from_pin_code: e.from_pin_code,
       to_location: e.to_location_id ? locNames[e.to_location_id] ?? "" : "",
@@ -621,7 +623,7 @@ function EntriesView({
                     {(from || "—") + " → " + (to || "—")}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {[e.from_pin_code, e.to_pin_code].filter(Boolean).join(" → ")}
+                    {[e.mode ?? "ROAD", [e.from_pin_code, e.to_pin_code].filter(Boolean).join(" → ")].filter(Boolean).join(" · ")}
                     {preview ? " · " + preview : ""}
                   </p>
                 </div>
