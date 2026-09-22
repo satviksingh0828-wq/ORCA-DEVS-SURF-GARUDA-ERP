@@ -39,6 +39,7 @@ const EMPTY: Branch = {
   branch_type: "",
   trip_series_prefix: "TR",
   lr_series_prefix: "LR",
+  manifest_series_prefix: "MF",
   address_line1: "",
   address_line2: "",
   area_locality: "",
@@ -134,17 +135,18 @@ export function BranchSettings() {
     if (!editing) return;
     const tripPrefix = (editing.trip_series_prefix ?? "").trim().toUpperCase();
     const lrPrefix = (editing.lr_series_prefix ?? "").trim().toUpperCase();
-    if (!tripPrefix || !lrPrefix) {
-      toast.error("Trip Series Prefix and LR Series Prefix are mandatory");
+    const manifestPrefix = (editing.manifest_series_prefix ?? "").trim().toUpperCase();
+    if (!tripPrefix || !lrPrefix || !manifestPrefix) {
+      toast.error("Trip, LR, and Manifest Series Prefixes are mandatory");
       return;
     }
-    if (![tripPrefix, lrPrefix].every((prefix) => /^[A-Z0-9]{1,10}$/.test(prefix))) {
+    if (![tripPrefix, lrPrefix, manifestPrefix].every((prefix) => /^[A-Z0-9]{1,10}$/.test(prefix))) {
       toast.error("Prefixes must contain only letters or numbers (maximum 10 characters)");
       return;
     }
     setSaving(true);
     const { id, created_at: _c, updated_at: _u, _eway_api_username, _eway_api_password, _eway_configured, eway_auto_fetch_enabled, ...rest } = editing;
-    const payload = { ...rest, eway_auto_fetch_enabled: eway_auto_fetch_enabled === "true", trip_series_prefix: tripPrefix, lr_series_prefix: lrPrefix } as never;
+    const payload = { ...rest, eway_auto_fetch_enabled: eway_auto_fetch_enabled === "true", trip_series_prefix: tripPrefix, lr_series_prefix: lrPrefix, manifest_series_prefix: manifestPrefix } as never;
     const res = id
       ? await supabase.from("branches").update(payload).eq("id", id).select("id").single()
       : await supabase.from("branches").insert(payload).select("id").single();
@@ -242,6 +244,20 @@ export function BranchSettings() {
             />
             <p className="text-[11px] text-muted-foreground">
               Mandatory prefix for branch LR numbers, followed by year and a six-digit sequence.
+            </p>
+          </div>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label className="text-xs font-medium text-muted-foreground">Manifest Series Prefix *</Label>
+            <input
+              className="flex h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm uppercase"
+              maxLength={10}
+              placeholder="e.g. MF, MUM"
+              value={editing.manifest_series_prefix ?? ""}
+              onChange={(e) => setEditing((f) => f ? { ...f, manifest_series_prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") } : f)}
+              required
+            />
+            <p className="text-[11px] text-muted-foreground">
+              Mandatory prefix for branch Manifest numbers, followed by year and a six-digit sequence.
             </p>
           </div>
         </Section>

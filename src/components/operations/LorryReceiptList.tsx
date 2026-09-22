@@ -266,7 +266,7 @@ export function LorryReceiptList() {
       let query = db
         .from("lorry_receipts")
         .select(
-          "*, source:contracts(contract_name), trip_link:trip_lorry_receipts(trip:trips(trip_code)), lorry_receipt_shipments:lr_shipments(shipment:shipments(*, shipment_items(*)))",
+          "*, source:contracts(contract_name), trip_link:trip_lorry_receipts(trip:trips(trip_code)), manifest_link:delivery_manifest_lorry_receipts(manifest:delivery_manifests(manifest_number)), lorry_receipt_shipments:lr_shipments(shipment:shipments(*, shipment_items(*)))",
         )
         .order("created_at", { ascending: false });
       if (allowed !== null)
@@ -276,7 +276,7 @@ export function LorryReceiptList() {
         );
       const { data, error } = await query;
       if (error) throw error;
-      setRows(((data ?? []) as Array<Record<string, any>>).map((row) => ({ ...row, trip_number: row.trip_link?.trip?.trip_code ?? null })));
+      setRows(((data ?? []) as Array<Record<string, any>>).map((row) => ({ ...row, trip_number: row.trip_link?.trip?.trip_code ?? null, manifest_number: row.manifest_link?.manifest?.manifest_number ?? null })));
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load LR records");
     }
@@ -295,6 +295,8 @@ export function LorryReceiptList() {
       .eq("lr_id", row.id)
       .maybeSingle();
     if (linkCheckError) return toast.error(linkCheckError.message);
+    const { data: manifestLink } = await db.from("delivery_manifest_lorry_receipts").select("manifest:delivery_manifests(manifest_number)").eq("lr_id", row.id).maybeSingle();
+    if (manifestLink) return toast.error(`LR ${row.lr_number} cannot be deleted while linked to ${manifestLink.manifest?.manifest_number ?? "the linked Manifest"}.`);
     if (activeLink) {
       const tripCode = activeLink.trip?.trip_code ?? "the linked Trip";
       return toast.error(`LR ${row.lr_number} cannot be deleted while linked to ${tripCode}. Delete the Trip or remove the LR link first.`);
@@ -309,7 +311,7 @@ export function LorryReceiptList() {
     await load();
   }
   function editLr(row: Record<string, any>) {
-    if (row.trip_number) return toast.error(`LR ${row.lr_number} cannot be edited while linked to ${row.trip_number}`);
+    if (row.trip_number || row.manifest_number) return toast.error(`LR ${row.lr_number} cannot be edited while linked to ${row.manifest_number ?? row.trip_number}`);
     setEditingRow(row);
   }
 
@@ -410,7 +412,7 @@ export function LorryReceiptList() {
               <th className="px-4 py-3">Source</th>
               <th className="px-4 py-3">Shipments</th>
               <th className="px-4 py-3">Route</th>
-              <th className="px-4 py-3">Trip Number</th>
+              <th className="px-4 py-3">Manifest Number</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -449,17 +451,17 @@ export function LorryReceiptList() {
                         ? `${base.dispatch_from_pin_code || "—"} → ${base.ship_to_pin_code || "—"}`
                         : "—"}
                     </td>
-                    <td className="px-4 py-3">{row.trip_number ?? "Unsigned"}</td>
+                    <td className="px-4 py-3">{row.manifest_number ?? "Unsigned"}</td>
                     <td className="px-4 py-3">{String(row.created_at ?? "").slice(0, 10)}</td>
                     <td className="px-4 py-3 text-right">
                       <div className="flex justify-end gap-1">
                         <Button variant="ghost" size="sm" onClick={() => setViewingRow(row)}>
                           <Eye className="mr-1 size-4" /> View
                         </Button>
-                        <Button variant="outline" size="sm" disabled={Boolean(row.trip_number)} title={row.trip_number ? `Locked while linked to ${row.trip_number}` : "Edit LR"} onClick={() => editLr(row)}>
+                        <Button variant="outline" size="sm" disabled={Boolean(row.trip_number || row.manifest_number)} title={row.trip_number || row.manifest_number ? `Locked while linked to ${row.manifest_number ?? row.trip_number}` : "Edit LR"} onClick={() => editLr(row)}>
                           <Pencil className="mr-1 size-4" /> Edit
                         </Button>
-                        <Button variant="destructive" size="sm" disabled={Boolean(row.trip_number)} title={row.trip_number ? `Locked while linked to ${row.trip_number}` : "Delete LR"} onClick={() => void deleteLr(row)}>
+                        <Button variant="destructive" size="sm" disabled={Boolean(row.trip_number || row.manifest_number)} title={row.trip_number || row.manifest_number ? `Locked while linked to ${row.manifest_number ?? row.trip_number}` : "Delete LR"} onClick={() => void deleteLr(row)}>
                           <Trash2 className="mr-1 size-4" /> Delete
                         </Button>
                       </div>
@@ -529,14 +531,14 @@ function LorryReceiptView({
       <div className="flex items-center gap-3 border-b border-border pb-4">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="size-5" /></Button>
         <div><h2 className="text-xl font-semibold">Lorry Receipt Details — {row.lr_number}</h2><p className="text-sm text-muted-foreground">View all LR and attached shipment details.</p></div>
-        <Button variant="destructive" disabled={Boolean(row.trip_number)} title={row.trip_number ? `Locked while linked to ${row.trip_number}` : "Delete LR"} onClick={onDelete}><Trash2 className="mr-2 size-4" /> {row.trip_number ? "LR Locked" : "Delete LR"}</Button>
+        <Button variant="destructive" disabled={Boolean(row.trip_number || row.manifest_number)} title={row.trip_number || row.manifest_number ? `Locked while linked to ${row.manifest_number ?? row.trip_number}` : "Delete LR"} onClick={onDelete}><Trash2 className="mr-2 size-4" /> {row.trip_number || row.manifest_number ? "LR Locked" : "Delete LR"}</Button>
       </div>
       <div className="grid gap-4 rounded-xl border border-border p-4 md:grid-cols-4">
         <Field label="LR Number" value={row.lr_number} />
         <Field label="Branch" value={branchName(row.branch_id)} />
         <Field label="Source / Contract" value={row.source?.contract_name || "—"} />
         <Field label="Created" value={String(row.created_at ?? "").slice(0, 10)} />
-        <Field label="Trip" value={row.trip_number || "Not linked"} />
+        <Field label="Manifest" value={row.manifest_number || "Not linked"} />
       </div>
       <section className="order-first space-y-3 rounded-xl border border-border p-4">
         <div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div>
@@ -658,7 +660,7 @@ function LorryReceiptEditForm({
     if (baseId === id) setBaseId(next[0]?.id ?? "");
   }
   async function save() {
-    if (row.trip_number) return toast.error(`LR ${row.lr_number} cannot be edited while linked to ${row.trip_number}`);
+    if (row.trip_number || row.manifest_number) return toast.error(`LR ${row.lr_number} cannot be edited while linked to ${row.manifest_number ?? row.trip_number}`);
     if (!base || selected.length === 0) return toast.error("At least one shipment is required");
     setSaving(true);
     try {

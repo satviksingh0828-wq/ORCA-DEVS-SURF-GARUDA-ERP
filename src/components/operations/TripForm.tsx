@@ -1235,6 +1235,7 @@ type LrOption = {
   calculated_income?: number | string | null;
   linked_trip_id?: string | null;
   linked_trip_code?: string | null;
+  linked_manifest_number?: string | null;
   created_at?: string | null;
   part_b_updated_at?: string | null;
 };
@@ -1276,16 +1277,17 @@ function LrTab({
   useEffect(() => {
     void (async () => {
       const db = supabase as any;
-      const [{ data, error }, { data: links, error: linkError }] = await Promise.all([
+      const [{ data, error }, { data: links, error: linkError }, { data: manifestLinks, error: manifestLinkError }] = await Promise.all([
         db
           .from("lorry_receipts")
           .select("id,branch_id,lr_number,created_at,part_b_updated_at,mode,calculated_income,source:contracts(contract_name),transporter:transporters(transporter_name)")
           .eq("branch_id", branchId)
           .order("created_at", { ascending: false }),
         db.from("trip_lorry_receipts").select("lr_id,trip_id,trip:trips(trip_code)"),
+        db.from("delivery_manifest_lorry_receipts").select("lr_id,manifest:delivery_manifests(manifest_number)"),
       ]);
-      if (error || linkError) {
-        toast.error(error?.message ?? linkError?.message ?? "Could not load LR links");
+      if (error || linkError || manifestLinkError) {
+        toast.error(error?.message ?? linkError?.message ?? manifestLinkError?.message ?? "Could not load LR links");
         return;
       }
       const linkByLr = new Map(
@@ -1294,11 +1296,13 @@ function LrTab({
           { tripId: link.trip_id, tripCode: link.trip?.trip_code ?? link.trip_id },
         ]),
       );
+      const manifestByLr = new Map((manifestLinks ?? []).map((link: any) => [link.lr_id, link.manifest?.manifest_number ?? null]));
       setRows(
         ((data ?? []) as LrOption[]).map((row) => ({
           ...row,
           linked_trip_id: linkByLr.get(row.id)?.tripId ?? null,
           linked_trip_code: linkByLr.get(row.id)?.tripCode ?? null,
+          linked_manifest_number: manifestByLr.get(row.id) ?? null,
         })),
       );
     })();
@@ -1400,8 +1404,8 @@ function LrTab({
       <Select value={assignment} onValueChange={setAssignment}><SelectTrigger className="w-40"><SelectValue placeholder="Assignment" /></SelectTrigger><SelectContent><SelectItem value="all">All LR</SelectItem><SelectItem value="assigned">Assigned</SelectItem><SelectItem value="unsigned">Unsigned</SelectItem></SelectContent></Select>
     </div>
     <div className="space-y-2">{rows.length === 0 ? <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No LR records found for this branch.</p> : rows.filter((row) => (!search.trim() || row.lr_number.toLowerCase().includes(search.trim().toLowerCase())) && (!date || String((row as any).created_at ?? "").slice(0, 10) === date) && (assignment === "all" || (assignment === "assigned" ? Boolean(row.linked_trip_id) : !row.linked_trip_id))).map((row) => {
-      const linkedToAnotherTrip = Boolean(row.linked_trip_id && !selected.includes(row.id));
-      return <div key={row.id} className={`flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 ${linkedToAnotherTrip ? "opacity-60" : ""}`}><label className={`flex min-w-0 flex-1 items-center gap-3 ${linkedToAnotherTrip ? "cursor-not-allowed" : "cursor-pointer"}`}><input type="checkbox" checked={selected.includes(row.id)} disabled={isViewer || linkedToAnotherTrip} onChange={(event) => setSelected((old) => event.target.checked ? [...old, row.id] : old.filter((id) => id !== row.id))} /><span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-6"><strong>{row.lr_number}</strong><span>{row.source?.contract_name ?? "—"}</span><span>{row.transporter?.transporter_name ?? "—"}</span><span>{row.mode ?? "ROAD"}</span><span className="text-right font-medium">{inr(num(row.calculated_income))}</span><span className="text-right text-muted-foreground">Trip: {row.linked_trip_code ?? "Not linked"}</span></span></label>{selected.includes(row.id) ? (row.part_b_updated_at ? <span className="shrink-0 text-xs text-emerald-600">Part-B updated</span> : <Button type="button" size="sm" variant="outline" disabled={isViewer || linkedToAnotherTrip || partBUpdating === row.id} onClick={() => void updatePartB(row)}>{partBUpdating === row.id ? "Updating…" : "Update Part-B"}</Button>) : null}</div>;
+      const linkedToAnotherTrip = Boolean((row.linked_trip_id || row.linked_manifest_number) && !selected.includes(row.id));
+      return <div key={row.id} className={`flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 ${linkedToAnotherTrip ? "opacity-60" : ""}`}><label className={`flex min-w-0 flex-1 items-center gap-3 ${linkedToAnotherTrip ? "cursor-not-allowed" : "cursor-pointer"}`}><input type="checkbox" checked={selected.includes(row.id)} disabled={isViewer || linkedToAnotherTrip} onChange={(event) => setSelected((old) => event.target.checked ? [...old, row.id] : old.filter((id) => id !== row.id))} /><span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-6"><strong>{row.lr_number}</strong><span>{row.source?.contract_name ?? "—"}</span><span>{row.transporter?.transporter_name ?? "—"}</span><span>{row.mode ?? "ROAD"}</span><span className="text-right font-medium">{inr(num(row.calculated_income))}</span><span className="text-right text-muted-foreground">{row.linked_manifest_number ? `Manifest: ${row.linked_manifest_number}` : `Trip: ${row.linked_trip_code ?? "Not linked"}`}</span></span></label>{selected.includes(row.id) ? (row.part_b_updated_at ? <span className="shrink-0 text-xs text-emerald-600">Part-B updated</span> : <Button type="button" size="sm" variant="outline" disabled={isViewer || linkedToAnotherTrip || partBUpdating === row.id} onClick={() => void updatePartB(row)}>{partBUpdating === row.id ? "Updating…" : "Update Part-B"}</Button>) : null}</div>;
     })}</div>
     <div className="flex justify-end border-t border-border pt-3 text-sm font-semibold">Linked LR income: {inr(total)}</div>
   </div>;

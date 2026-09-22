@@ -34,6 +34,7 @@ import { ReportFiltersContext } from "@/lib/report-filters";
 import { ShipmentList } from "@/components/operations/ShipmentList";
 import { LorryReceiptList } from "@/components/operations/LorryReceiptList";
 import { EwayBillList } from "@/components/operations/EwayBillList";
+import { ManifestList } from "@/components/operations/ManifestList";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -90,6 +91,14 @@ const ALL_TABS = [
     label: "LR",
     desc: "Combine shipments into Lorry Receipts",
     icon: Truck,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
+    id: "manifest",
+    label: "Manifest",
+    desc: "Delivery manifests and LR links",
+    icon: ClipboardList,
     adminOnly: false,
     dividerBefore: false,
   },
@@ -249,6 +258,11 @@ function OperationsPage() {
           {safeTab === "lr" && (
             <TabErrorBoundary label="LR">
               <LorryReceiptList />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "manifest" && (
+            <TabErrorBoundary label="Manifest">
+              <ManifestList />
             </TabErrorBoundary>
           )}
           {safeTab === "eway-bill" && (
