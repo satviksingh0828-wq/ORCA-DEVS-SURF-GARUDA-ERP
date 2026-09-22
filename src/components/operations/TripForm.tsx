@@ -35,6 +35,7 @@ import { isAdminLike } from "@/lib/roles";
 import { serverCloseTrip } from "@/lib/close-trip";
 import { serverSaveTripLines } from "@/lib/trip-actions";
 import { serverRequireTripCheckpointVerification } from "@/lib/driver-checkpoint-status";
+import { serverUpdateEwayBillPartB } from "@/lib/ewaybill-partb";
 import { invalidManifestDates } from "@/lib/manifest-date-validation";
 import { logAction } from "@/lib/log-actions";
 import { ensureLocationForPin, ensureLocationsForPins } from "@/lib/ensure-location";
@@ -1104,6 +1105,10 @@ export function TripForm({
             <LrTab
               tripId={trip.id ?? null}
               branchId={trip.branch_id}
+              tripCode={trip.trip_code}
+              startPlace={locations.find((location) => location.id === trip.start_location_id)?.city ?? locations.find((location) => location.id === trip.start_location_id)?.location_name ?? ""}
+              startStateCode={allBranches.find((branch) => branch.id === trip.branch_id)?.state_code ?? ""}
+              vehicleNumber={isOwn ? String(vehicle?.registration_number ?? "") : trip.third_party_vehicle_number}
               requireTripId={requireTripId}
               selectedIds={linkedLrIds}
               onSaved={(ids) => setLinkedLrIds(ids)}
@@ -1229,11 +1234,17 @@ type LrOption = {
   calculated_income?: number | string | null;
   linked_trip_id?: string | null;
   linked_trip_code?: string | null;
+  created_at?: string | null;
+  part_b_updated_at?: string | null;
 };
 
 function LrTab({
   tripId,
   branchId,
+  tripCode,
+  startPlace,
+  startStateCode,
+  vehicleNumber,
   requireTripId,
   selectedIds,
   onSaved,
@@ -1241,17 +1252,23 @@ function LrTab({
 }: {
   tripId: string | null;
   branchId: string | null;
+  tripCode: string;
+  startPlace: string;
+  startStateCode: string;
+  vehicleNumber: string;
   requireTripId: () => Promise<string | null>;
   selectedIds: string[];
   onSaved: (ids: string[]) => void;
   isViewer?: boolean;
 }) {
+  const { user } = useSession();
   const [rows, setRows] = useState<LrOption[]>([]);
   const [selected, setSelected] = useState<string[]>(selectedIds);
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState("");
   const [date, setDate] = useState("");
   const [assignment, setAssignment] = useState("all");
+  const [partBUpdating, setPartBUpdating] = useState<string | null>(null);
   useEffect(() => setSelected(selectedIds), [selectedIds]);
   useEffect(() => {
     void (async () => {
@@ -1259,7 +1276,7 @@ function LrTab({
       const [{ data, error }, { data: links, error: linkError }] = await Promise.all([
         db
           .from("lorry_receipts")
-          .select("id,branch_id,lr_number,created_at,mode,calculated_income,source:contracts(contract_name),transporter:transporters(transporter_name)")
+          .select("id,branch_id,lr_number,created_at,part_b_updated_at,mode,calculated_income,source:contracts(contract_name),transporter:transporters(transporter_name)")
           .eq("branch_id", branchId)
           .order("created_at", { ascending: false }),
         db.from("trip_lorry_receipts").select("lr_id,trip_id,trip:trips(trip_code)"),
@@ -1297,6 +1314,46 @@ function LrTab({
     else { onSaved([]); toast.success("Trip LR links updated"); }
     setSaving(false);
   }
+  async function updatePartB(row: LrOption) {
+    if (!branchId) return toast.error("Select a trip branch first");
+    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+    if (!startPlace.trim()) return toast.error("Set the trip starting location before updating Part-B");
+    if (!/^\d+$/.test(startStateCode) || Number(startStateCode) < 1) return toast.error("Set a valid branch state code before updating Part-B");
+    if (!vehicleNumber.trim()) return toast.error("Set the trip vehicle number before updating Part-B");
+    setPartBUpdating(row.id);
+    try {
+      const db = supabase as any;
+      const { data: linked, error } = await db.from("lr_shipments").select("shipment:shipments(eway_bill_number)").eq("lr_id", row.id);
+      if (error) throw error;
+      const ewayBillNumbers = ((linked ?? []) as Array<{ shipment?: { eway_bill_number?: string } | null }>)
+        .map((item) => String(item.shipment?.eway_bill_number ?? ""))
+        .filter((number) => /^\d{12}$/.test(number));
+      if (!ewayBillNumbers.length) throw new Error("No valid E-Way Bills are linked to this LR");
+      const created = new Date(row.created_at ?? "");
+      const transDocDate = Number.isNaN(created.getTime()) ? "" : `${String(created.getDate()).padStart(2, "0")}/${String(created.getMonth() + 1).padStart(2, "0")}/${created.getFullYear()}`;
+      if (!transDocDate) throw new Error("LR date is missing");
+      const result = await serverUpdateEwayBillPartB({
+        data: {
+          token: user.sessionToken,
+          branchId,
+          ewayBillNumbers,
+          fromPlace: startPlace.trim(),
+          fromState: Number(startStateCode),
+          vehicleNo: vehicleNumber.trim().toUpperCase(),
+          transMode: "1",
+          transDocNo: row.lr_number,
+          transDocDate,
+        },
+      });
+      const { error: markError } = await db.from("lorry_receipts").update({ part_b_updated_at: new Date().toISOString() }).eq("id", row.id);
+      if (markError) throw markError;
+      setRows((current) => current.map((item) => item.id === row.id ? { ...item, part_b_updated_at: new Date().toISOString() } : item));
+      toast.success(`Part-B updated for ${result.updated} E-Way Bill${result.updated === 1 ? "" : "s"}`);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update Part-B");
+    }
+    setPartBUpdating(null);
+  }
   const total = rows.filter((row) => selected.includes(row.id)).reduce((sum, row) => sum + num(row.calculated_income), 0);
   return <div className="space-y-4">
     <div className="flex items-center gap-2"><div><h3 className="text-sm font-semibold tracking-tight">Linked LR</h3><p className="text-xs text-muted-foreground">Select an LR to link it to this trip. Source, transporter, mode and calculated income come from the LR.</p></div>{!isViewer && <Button type="button" size="sm" onClick={() => void save()} disabled={saving} className="ml-auto"><Link2 className="size-4" />{saving ? "Saving…" : "Save links"}</Button>}</div>
@@ -1307,7 +1364,7 @@ function LrTab({
     </div>
     <div className="space-y-2">{rows.length === 0 ? <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No LR records found for this branch.</p> : rows.filter((row) => (!search.trim() || row.lr_number.toLowerCase().includes(search.trim().toLowerCase())) && (!date || String((row as any).created_at ?? "").slice(0, 10) === date) && (assignment === "all" || (assignment === "assigned" ? Boolean(row.linked_trip_id) : !row.linked_trip_id))).map((row) => {
       const linkedToAnotherTrip = Boolean(row.linked_trip_id && !selected.includes(row.id));
-      return <label key={row.id} className={`flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 ${linkedToAnotherTrip ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}><input type="checkbox" checked={selected.includes(row.id)} disabled={isViewer || linkedToAnotherTrip} onChange={(event) => setSelected((old) => event.target.checked ? [...old, row.id] : old.filter((id) => id !== row.id))} /><span className="grid flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-6"><strong>{row.lr_number}</strong><span>{row.source?.contract_name ?? "—"}</span><span>{row.transporter?.transporter_name ?? "—"}</span><span>{row.mode ?? "ROAD"}</span><span className="text-right font-medium">{inr(num(row.calculated_income))}</span><span className="text-right text-muted-foreground">Trip: {row.linked_trip_code ?? "Not linked"}</span></span></label>;
+      return <div key={row.id} className={`flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 ${linkedToAnotherTrip ? "opacity-60" : ""}`}><label className={`flex min-w-0 flex-1 items-center gap-3 ${linkedToAnotherTrip ? "cursor-not-allowed" : "cursor-pointer"}`}><input type="checkbox" checked={selected.includes(row.id)} disabled={isViewer || linkedToAnotherTrip} onChange={(event) => setSelected((old) => event.target.checked ? [...old, row.id] : old.filter((id) => id !== row.id))} /><span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-6"><strong>{row.lr_number}</strong><span>{row.source?.contract_name ?? "—"}</span><span>{row.transporter?.transporter_name ?? "—"}</span><span>{row.mode ?? "ROAD"}</span><span className="text-right font-medium">{inr(num(row.calculated_income))}</span><span className="text-right text-muted-foreground">Trip: {row.linked_trip_code ?? "Not linked"}</span></span></label>{selected.includes(row.id) ? (row.part_b_updated_at ? <span className="shrink-0 text-xs text-emerald-600">Part-B updated</span> : <Button type="button" size="sm" variant="outline" disabled={isViewer || linkedToAnotherTrip || partBUpdating === row.id} onClick={() => void updatePartB(row)}>{partBUpdating === row.id ? "Updating…" : "Update Part-B"}</Button>) : null}</div>;
     })}</div>
     <div className="flex justify-end border-t border-border pt-3 text-sm font-semibold">Linked LR income: {inr(total)}</div>
   </div>;

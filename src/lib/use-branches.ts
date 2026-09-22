@@ -9,6 +9,7 @@ export type BranchOption = {
   trip_series_prefix: string | null;
   lr_series_prefix: string | null;
   pin_code: string | null;
+  state_code: string | null;
 };
 
 export function useBranches() {
@@ -18,7 +19,7 @@ export function useBranches() {
       const rows = await fetchAll<BranchOption>(() =>
         supabase
           .from("branches")
-          .select("id,branch_name,branch_type,trip_series_prefix,lr_series_prefix,pin_code")
+          .select("id,branch_name,branch_type,trip_series_prefix,lr_series_prefix,pin_code,state_code")
           .order("branch_name", { ascending: true }),
       );
       setBranches(rows);
