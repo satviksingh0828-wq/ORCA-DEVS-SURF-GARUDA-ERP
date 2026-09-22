@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BarChart3, Database, DollarSign, FileCog, FileText, Truck, Wallet } from "lucide-react";
+import { Database, DollarSign, FileCog, FileText, Truck, Wallet } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { WorkspaceModulePage } from "@/components/WorkspaceModulePage";
 
@@ -34,14 +34,6 @@ export const Route = createFileRoute("/tms")({
             icon: Database,
             to: "/masters",
             roles: ["admin", "semi_admin", "viewer"],
-          },
-          {
-            key: "dashboard",
-            label: "Dashboard",
-            desc: "Profit & loss, revenue overview",
-            icon: BarChart3,
-            to: "/dashboard",
-            roles: ["admin"],
           },
           {
             key: "reports",

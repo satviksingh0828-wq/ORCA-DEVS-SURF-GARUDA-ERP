@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Loader2, Lock, Plus, Printer, Save, Trash2 } from "lucide-react";
+import { ArrowLeft, Link2, Loader2, Lock, Plus, Printer, Save, Trash2 } from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -109,8 +109,10 @@ const DEFAULT_EXPENSES = [
 ];
 
 const THIRD_PARTY_EXPENSES = ["Hire Charges", "Toll Charges (paid in cash)"];
+const ALL_EXPENSES = ["Hire Charges", ...DEFAULT_EXPENSES];
 
-const THIRD_PARTY_DEFAULT_INCOMES = ["Approval Charge"];
+const DEFAULT_INCOMES = ["Approval Charge"];
+const THIRD_PARTY_DEFAULT_INCOMES = DEFAULT_INCOMES;
 
 function formatDateInput(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -158,7 +160,7 @@ export function emptyTrip(): TripRow {
 
 // Tabs visible to all users
 const TABS_ALL = [
-  { id: "manifest", label: "Manifest" },
+  { id: "manifest", label: "LR" },
   { id: "income", label: "Other Income" },
   { id: "expense", label: "Expenses" },
   { id: "vehicle", label: "Vehicle" },
@@ -169,7 +171,7 @@ const TABS_ALL = [
 
 // Tabs visible to basic users only
 const TABS_BASIC = [
-  { id: "manifest", label: "Manifest" },
+  { id: "manifest", label: "LR" },
   { id: "income", label: "Other Income" },
   { id: "expense", label: "Expenses" },
   { id: "vehicle", label: "Vehicle" },
@@ -214,14 +216,15 @@ export function TripForm({
   const [showTransporterForm, setShowTransporterForm] = useState(false);
 
   const [manifests, setManifests] = useState<ManifestRow[]>([]);
-  const defaultIncomeList = trip.ownership === "third_party" ? THIRD_PARTY_DEFAULT_INCOMES : [];
+  const [linkedLrIds, setLinkedLrIds] = useState<string[]>([]);
+  const defaultIncomeList = DEFAULT_INCOMES;
   const [incomes, setIncomes] = useState<LineRow[]>(
     defaultIncomeList.map((name) => ({ name, amount: "", note: "" })),
   );
   const defaultExpenseList =
     trip.ownership === "third_party" ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES;
   const [expenses, setExpenses] = useState<LineRow[]>(
-    defaultExpenseList.map((name) => ({ name, amount: "", note: "" })),
+    ALL_EXPENSES.map((name) => ({ name, amount: "", note: "" })),
   );
 
   const { locations } = useLocations();
@@ -285,10 +288,11 @@ export function TripForm({
   }, [allBranches, trip.branch_id, locationIdByPin]);
 
   async function loadChildren(tripId: string) {
-    const [m, i, e, approvalAdvance] = await Promise.all([
+    const [m, i, e, lrLinks, approvalAdvance] = await Promise.all([
       supabase.from("trip_manifests").select("*").eq("trip_id", tripId).order("created_at"),
       supabase.from("trip_other_income").select("*").eq("trip_id", tripId).order("created_at"),
       supabase.from("trip_expenses").select("*").eq("trip_id", tripId).order("sort_order"),
+      supabase.from("trip_lorry_receipts").select("lr_id").eq("trip_id", tripId),
       supabase
         .from("approval_charge_advances" as never)
         .select("advance")
@@ -306,6 +310,7 @@ export function TripForm({
       return;
     }
     setManifests((m.data as unknown as ManifestRow[]) ?? []);
+    setLinkedLrIds(((lrLinks.data as Array<{ lr_id: string }> | null) ?? []).map((row) => row.lr_id));
     const savedApprovalAdvance = String(
       ((approvalAdvance.data as { advance?: string | number } | null)?.advance ?? "") || "",
     );
@@ -318,7 +323,7 @@ export function TripForm({
       amount: r.amount ?? "",
       note: r.note ?? "",
     }));
-    const incDefList = trip.ownership === "third_party" ? THIRD_PARTY_DEFAULT_INCOMES : [];
+    const incDefList = DEFAULT_INCOMES;
     setIncomes(
       incRows.length > 0 ? incRows : incDefList.map((name) => ({ name, amount: "", note: "" })),
     );
@@ -334,7 +339,7 @@ export function TripForm({
         ? { advance: savedApprovalAdvance }
         : {}),
     }));
-    const ownDefList = trip.ownership === "third_party" ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES;
+    const ownDefList = ALL_EXPENSES;
     setExpenses(exp.length > 0 ? exp : ownDefList.map((name) => ({ name, amount: "", note: "" })));
   }
   useEffect(() => {
@@ -912,9 +917,9 @@ export function TripForm({
               value={trip.ownership}
               onValueChange={(v) => {
                 const isThirdParty = v === "third_party";
-                const newDefaultExpenses = isThirdParty ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES;
+                const newDefaultExpenses = ALL_EXPENSES;
                 setExpenses(newDefaultExpenses.map((name) => ({ name, amount: "", note: "" })));
-                const newDefaultIncomes = isThirdParty ? THIRD_PARTY_DEFAULT_INCOMES : [];
+                const newDefaultIncomes = DEFAULT_INCOMES;
                 setIncomes(newDefaultIncomes.map((name) => ({ name, amount: "", note: "" })));
                 patch({
                   ownership: v,
@@ -1096,21 +1101,12 @@ export function TripForm({
         </div>
         <div className="p-6">
           {activeTab === "manifest" ? (
-            <ManifestTab
+            <LrTab
               tripId={trip.id ?? null}
               requireTripId={requireTripId}
-              manifests={manifests}
-              lines={lines}
-              total={manifestTotal}
-              locations={locations}
-              startLocationId={trip.start_location_id ?? null}
-              reload={(id) => loadChildren(id)}
-              isAdmin={isAdmin}
+              selectedIds={linkedLrIds}
+              onSaved={(ids) => setLinkedLrIds(ids)}
               isViewer={isViewer}
-              otherIncomeTotal={otherIncomeTotal}
-              expenseTotal={expenseTotal}
-              totalWeight={totalWeight}
-              contracts={selectableContracts}
             />
           ) : null}
           {activeTab === "income" ? (
@@ -1219,6 +1215,90 @@ function Field({
       />
     </div>
   );
+}
+
+/* ---------------- LR tab ---------------- */
+
+type LrOption = {
+  id: string;
+  lr_number: string;
+  mode?: "ROAD" | "RAIL" | "AIR" | "SHIP";
+  source?: { contract_name?: string } | null;
+  transporter?: { transporter_name?: string } | null;
+  calculated_income?: number | string | null;
+  linked_trip_id?: string | null;
+  linked_trip_code?: string | null;
+};
+
+function LrTab({
+  tripId,
+  requireTripId,
+  selectedIds,
+  onSaved,
+  isViewer = false,
+}: {
+  tripId: string | null;
+  requireTripId: () => Promise<string | null>;
+  selectedIds: string[];
+  onSaved: (ids: string[]) => void;
+  isViewer?: boolean;
+}) {
+  const [rows, setRows] = useState<LrOption[]>([]);
+  const [selected, setSelected] = useState<string[]>(selectedIds);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => setSelected(selectedIds), [selectedIds]);
+  useEffect(() => {
+    void (async () => {
+      const db = supabase as any;
+      const [{ data, error }, { data: links, error: linkError }] = await Promise.all([
+        db
+          .from("lorry_receipts")
+          .select("id,lr_number,mode,calculated_income,source:contracts(contract_name),transporter:transporters(transporter_name)")
+          .order("created_at", { ascending: false }),
+        db.from("trip_lorry_receipts").select("lr_id,trip_id,trip:trips(trip_code)"),
+      ]);
+      if (error || linkError) {
+        toast.error(error?.message ?? linkError?.message ?? "Could not load LR links");
+        return;
+      }
+      const linkByLr = new Map(
+        ((links ?? []) as Array<{ lr_id: string; trip_id: string; trip?: { trip_code?: string } | null }>).map((link) => [
+          link.lr_id,
+          { tripId: link.trip_id, tripCode: link.trip?.trip_code ?? link.trip_id },
+        ]),
+      );
+      setRows(
+        ((data ?? []) as LrOption[]).map((row) => ({
+          ...row,
+          linked_trip_id: linkByLr.get(row.id)?.tripId ?? null,
+          linked_trip_code: linkByLr.get(row.id)?.tripCode ?? null,
+        })),
+      );
+    })();
+  }, []);
+  async function save() {
+    const id = await requireTripId();
+    if (!id) return;
+    setSaving(true);
+    const db = supabase as any;
+    const { error: deleteError } = await db.from("trip_lorry_receipts").delete().eq("trip_id", id);
+    if (!deleteError && selected.length) {
+      const { error } = await db.from("trip_lorry_receipts").insert(selected.map((lrId) => ({ trip_id: id, lr_id: lrId })));
+      if (error) toast.error(error.message);
+      else { onSaved(selected); toast.success("LR linked to trip"); }
+    } else if (deleteError) toast.error(deleteError.message);
+    else { onSaved([]); toast.success("Trip LR links updated"); }
+    setSaving(false);
+  }
+  const total = rows.filter((row) => selected.includes(row.id)).reduce((sum, row) => sum + num(row.calculated_income), 0);
+  return <div className="space-y-4">
+    <div className="flex items-center gap-2"><div><h3 className="text-sm font-semibold tracking-tight">Linked LR</h3><p className="text-xs text-muted-foreground">Select an LR to link it to this trip. Source, transporter, mode and calculated income come from the LR.</p></div>{!isViewer && <Button type="button" size="sm" onClick={() => void save()} disabled={saving} className="ml-auto"><Link2 className="size-4" />{saving ? "Saving…" : "Save links"}</Button>}</div>
+    <div className="space-y-2">{rows.length === 0 ? <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">No LR records found.</p> : rows.map((row) => {
+      const linkedToAnotherTrip = Boolean(row.linked_trip_id && !selected.includes(row.id));
+      return <label key={row.id} className={`flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 ${linkedToAnotherTrip ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}><input type="checkbox" checked={selected.includes(row.id)} disabled={isViewer || linkedToAnotherTrip} onChange={(event) => setSelected((old) => event.target.checked ? [...old, row.id] : old.filter((id) => id !== row.id))} /><span className="grid flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-6"><strong>{row.lr_number}</strong><span>{row.source?.contract_name ?? "—"}</span><span>{row.transporter?.transporter_name ?? "—"}</span><span>{row.mode ?? "ROAD"}</span><span className="text-right font-medium">{inr(num(row.calculated_income))}</span><span className="text-right text-muted-foreground">Trip: {row.linked_trip_code ?? "Not linked"}</span></span></label>;
+    })}</div>
+    <div className="flex justify-end border-t border-border pt-3 text-sm font-semibold">Linked LR income: {inr(total)}</div>
+  </div>;
 }
 
 /* ---------------- Manifest tab ---------------- */
@@ -1702,16 +1782,6 @@ function LineTab({
         <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
         {!isViewer && (
           <>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              className="ml-auto"
-              onClick={() => setRows([...rows, { name: "Other", amount: "", note: "" }])}
-            >
-              <Plus className="size-4" />
-              Add field
-            </Button>
             <Button type="button" size="sm" onClick={onSave}>
               <Save className="size-4" />
               Save
@@ -1735,8 +1805,7 @@ function LineTab({
                 <Input
                   className="h-10"
                   value={r.name}
-                  readOnly={isViewer}
-                  onChange={(e) => !isViewer && update(i, { name: e.target.value })}
+                  readOnly
                 />
               </div>
               <div className="space-y-1.5">
@@ -1758,16 +1827,7 @@ function LineTab({
                   onChange={(e) => !isViewer && update(i, { note: e.target.value })}
                 />
               </div>
-              {!isViewer && (
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setRows(rows.filter((_, idx) => idx !== i))}
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              )}
+
               {isHireCharge ? (
                 <div className="grid grid-cols-1 gap-3 sm:col-span-4 sm:grid-cols-2">
                   <div className="space-y-1.5">
