@@ -290,6 +290,16 @@ export function LorryReceiptList() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allowedKey]);
   async function deleteLr(row: Record<string, any>) {
+    const { data: activeLink, error: linkCheckError } = await db
+      .from("trip_lorry_receipts")
+      .select("trip:trips(trip_code)")
+      .eq("lr_id", row.id)
+      .maybeSingle();
+    if (linkCheckError) return toast.error(linkCheckError.message);
+    if (activeLink) {
+      const tripCode = activeLink.trip?.trip_code ?? "the linked Trip";
+      return toast.error(`LR ${row.lr_number} cannot be deleted while linked to ${tripCode}. Delete the Trip or remove the LR link first.`);
+    }
     if (!window.confirm(`Delete LR ${row.lr_number}? Its shipments will be disconnected but not deleted.`)) return;
     const { error: unlinkError } = await db.from("lr_shipments").delete().eq("lr_id", row.id);
     if (unlinkError) return toast.error(unlinkError.message);
