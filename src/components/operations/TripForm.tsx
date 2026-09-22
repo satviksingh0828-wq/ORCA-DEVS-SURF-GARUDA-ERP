@@ -411,6 +411,28 @@ export function TripForm({
     const { id, created_at, reopened_at, ...rest } = trip;
     void created_at;
     void reopened_at;
+    let payload = rest;
+    if (!id) {
+      const branch = allBranches.find((candidate) => candidate.id === trip.branch_id);
+      const prefix = String(branch?.trip_series_prefix ?? "").trim().toUpperCase();
+      if (!/^[A-Z0-9]{1,10}$/.test(prefix)) {
+        setSaving(false);
+        toast.error("Trip Series Prefix is mandatory for the selected branch");
+        return null;
+      }
+      const { data: generatedCode, error: numberError } = await supabase.rpc("next_branch_series_number", {
+        p_branch_id: trip.branch_id,
+        p_document_type: "trip",
+        p_prefix: prefix,
+        p_series_year: Number(String(trip.start_date).slice(0, 4)) || new Date().getFullYear(),
+      });
+      if (numberError || !generatedCode) {
+        setSaving(false);
+        toast.error(numberError?.message ?? "Could not generate trip number");
+        return null;
+      }
+      payload = { ...rest, trip_code: generatedCode };
+    }
     const res = id
       ? await supabase
           .from("trips")
@@ -420,7 +442,7 @@ export function TripForm({
           .single()
       : await supabase
           .from("trips")
-          .insert(rest as never)
+          .insert(payload as never)
           .select("id")
           .single();
     setSaving(false);
@@ -433,7 +455,7 @@ export function TripForm({
     const isNew = !id;
     logAction(isNew ? "created" : "updated", "trip", {
       entityId: newId,
-      entityLabel: trip.trip_code,
+      entityLabel: String(payload.trip_code ?? trip.trip_code),
       details: { ownership: trip.ownership, branch_id: trip.branch_id ?? "" },
     });
     toast.success(id ? "Trip updated" : "Trip created");

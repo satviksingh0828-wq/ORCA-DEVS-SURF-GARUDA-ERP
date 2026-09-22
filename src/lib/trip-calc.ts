@@ -140,8 +140,6 @@ export function manifestCharges(
 }
 
 export function newTripCode(prefix?: string | null): string {
-  let digits = "";
-  for (let i = 0; i < 10; i++) digits += Math.floor(Math.random() * 10);
   const p = (prefix ?? "").trim().toUpperCase() || "TR";
-  return `${p}-${digits}`;
+  return `${p}${new Date().getFullYear()}000001`;
 }

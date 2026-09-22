@@ -522,7 +522,7 @@ function CreateAndAddShipment({
       const { error: itemError } = await db.from("shipment_items").insert({ shipment_id: created.id, item_no: 1, ...item, quantity: Number(item.quantity || 0), weight_kg: Number(item.weight_kg || 0), taxable_value: Number(item.taxable_value || 0), total_invoice_value: Number(item.total_invoice_value || 0), gst_rate: 0, cgst: 0, sgst_utgst: 0, igst: 0, cess: 0, other_tax_charges: 0 });
       if (itemError) { await db.from("shipments").delete().eq("id", created.id); throw itemError; }
       toast.success("Shipment created and added to LR");
-      onCreated({ ...created, item_count: 1, lr_number: null } as Shipment);
+      onCreated({ ...created, item_count: 1, lr_number: null, shipment_items: [{ ...item, quantity: Number(item.quantity || 0), weight_kg: Number(item.weight_kg || 0), taxable_value: Number(item.taxable_value || 0), total_invoice_value: Number(item.total_invoice_value || 0) }] } as Shipment);
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not create shipment"); }
     setSaving(false);
   }
@@ -578,7 +578,7 @@ function LorryReceiptEditForm({
     void (async () => {
       const [s, sh] = await Promise.all([
         db.from("contracts").select("id,contract_name,branch_id,status").eq("branch_id", row.branch_id).order("contract_name"),
-        db.from("shipments").select("*").eq("branch_id", row.branch_id).order("eway_bill_date", { ascending: false }),
+        db.from("shipments").select("*, shipment_items(*)").eq("branch_id", row.branch_id).order("eway_bill_date", { ascending: false }),
       ]);
       const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number)");
       const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.lr_number ?? null]));
@@ -627,6 +627,7 @@ function LorryReceiptEditForm({
       </div>
       <div className="flex flex-col">
       <div className="order-last"><ShipmentDetails shipment={base ?? blankShipment} /></div>
+      <div className="order-last"><LrTotals shipments={selected} /></div>
       <section className="order-first space-y-3 rounded-xl border border-border p-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div><div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)}><Plus className="mr-1 size-4" /> Add Shipment</Button><Button type="button" onClick={() => setShowCreateShipment(true)} disabled={!row.branch_id}><Plus className="mr-1 size-4" /> Create and Add</Button></div></div>
         {selected.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">No shipments attached yet.</p> : <div className="space-y-2 text-sm">{selected.map((s) => <div key={s.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Button variant="ghost" size="icon" onClick={() => removeShipment(s.id)}><X className="size-4" /></Button></div>)}</div>}
@@ -645,13 +646,12 @@ function LorryReceiptForm({
   onCancel,
   onSaved,
 }: {
-  branches: Array<{ id: string; branch_name: string }>;
+  branches: Array<{ id: string; branch_name: string; lr_series_prefix?: string | null }>;
   user: any;
   onCancel: () => void;
   onSaved: () => void;
 }) {
   const [branchId, setBranchId] = useState("");
-  const [lrNumber] = useState(newNumber());
   const [sourceId, setSourceId] = useState("");
   const [sources, setSources] = useState<Source[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
@@ -660,6 +660,8 @@ function LorryReceiptForm({
   const [showPicker, setShowPicker] = useState(false);
   const [showCreateShipment, setShowCreateShipment] = useState(false);
   const [saving, setSaving] = useState(false);
+  const previewPrefix = String(branches.find((branch) => branch.id === branchId)?.lr_series_prefix ?? "").trim().toUpperCase();
+  const previewLrNumber = previewPrefix ? `${previewPrefix}${new Date().getFullYear()}000001` : "Generated after branch prefix is set";
   useEffect(() => {
     if (!branchId) {
       setSources([]);
@@ -675,7 +677,7 @@ function LorryReceiptForm({
           .order("contract_name"),
         db
           .from("shipments")
-          .select("*")
+          .select("*, shipment_items(*)")
           .eq("branch_id", branchId)
           .order("eway_bill_date", { ascending: false }),
       ]);
@@ -710,15 +712,24 @@ function LorryReceiptForm({
     if (baseId === id) setBaseId(selected.find((s) => s.id !== id)?.id ?? "");
   }
   async function save() {
-    if (!branchId || !sourceId || !base || selected.length === 0)
+    const branch = branches.find((candidate) => candidate.id === branchId);
+    const lrPrefix = String(branch?.lr_series_prefix ?? "").trim().toUpperCase();
+    if (!branchId || !sourceId || !base || selected.length === 0 || !/^[A-Z0-9]{1,10}$/.test(lrPrefix))
       return toast.error("Branch, source and at least one shipment are required");
     setSaving(true);
     try {
+      const { data: generatedNumber, error: numberError } = await db.rpc("next_branch_series_number", {
+        p_branch_id: branchId,
+        p_document_type: "lr",
+        p_prefix: lrPrefix,
+        p_series_year: new Date().getFullYear(),
+      });
+      if (numberError || !generatedNumber) throw numberError ?? new Error("Could not generate LR number");
       const { data: lr, error } = await db
         .from("lorry_receipts")
         .insert({
           branch_id: branchId,
-          lr_number: lrNumber,
+          lr_number: generatedNumber,
           source_id: sourceId,
           base_shipment_id: base.id,
           created_by: user?.id ?? null,
@@ -734,7 +745,7 @@ function LorryReceiptForm({
         throw linkError;
       }
       toast.success(
-        `LR ${lrNumber} created with ${selected.length} shipment${selected.length === 1 ? "" : "s"}`,
+        `LR ${generatedNumber} created with ${selected.length} shipment${selected.length === 1 ? "" : "s"}`,
       );
       onSaved();
     } catch (error) {
@@ -750,9 +761,7 @@ function LorryReceiptForm({
         </Button>
         <div>
           <h2 className="text-xl font-semibold">Create Lorry Receipt</h2>
-          <p className="text-sm text-muted-foreground">
-            Attach one or more compatible shipments to this LR.
-          </p>
+          <p className="text-sm text-muted-foreground">Attach one or more compatible shipments to this LR.</p>
         </div>
       </div>
       <div className="grid gap-4 rounded-xl border border-border p-4 md:grid-cols-3">
@@ -780,7 +789,7 @@ function LorryReceiptForm({
         </div>
         <div className="space-y-1.5">
           <Label>LR Number *</Label>
-          <Input value={lrNumber} readOnly />
+          <Input value={previewLrNumber} readOnly />
         </div>
         <div className="space-y-1.5">
           <Label>Source / Contract *</Label>
@@ -892,6 +901,7 @@ function LorryReceiptForm({
           </p>
         )}
       </section>
+      <LrTotals shipments={selected} />
       </div>
       {showCreateShipment && <CreateAndAddShipment branchId={branchId} branches={branches} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
       <div className="flex justify-end gap-2 border-t border-border pt-4">
