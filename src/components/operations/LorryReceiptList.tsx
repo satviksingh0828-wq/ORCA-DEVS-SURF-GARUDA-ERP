@@ -821,12 +821,16 @@ function LorryReceiptForm({
     setBaseId((old) => old || shipment.id);
     setShowPicker(false);
   }
-  function addExistingShipment() {
-    const number = shipmentSearch.trim();
+  async function addExistingShipment() {
+    const number = shipmentSearch.replace(/\D/g, "");
     if (!number) return toast.error("Enter an existing shipment number");
-    const shipment = shipments.find((item) => String(item.eway_bill_number).trim() === number);
+    const shipmentResult = await db.from("shipments").select("*").eq("branch_id", branchId).eq("eway_bill_number", number).maybeSingle();
+    if (shipmentResult.error) return toast.error(`Could not find shipment: ${shipmentResult.error.message}`);
+    const shipment = shipmentResult.data as Shipment | null;
     if (!shipment) return toast.error("Shipment was not found in the selected branch");
-    if (linkedShipmentIds.has(shipment.id)) return toast.error("This shipment is already connected to another LR");
+    const linkResult = await db.from("lr_shipments").select("id").eq("shipment_id", shipment.id).limit(1);
+    if (linkResult.error) return toast.error(`Could not check shipment status: ${linkResult.error.message}`);
+    if (linkResult.data?.length || linkedShipmentIds.has(shipment.id)) return toast.error("This shipment is already connected to another LR");
     if (selected.some((item) => item.id === shipment.id)) return toast.error("This shipment is already added to this LR");
     addShipment(shipment);
     setShipmentSearch("");
