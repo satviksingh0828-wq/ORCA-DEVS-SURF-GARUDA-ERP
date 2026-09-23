@@ -69,7 +69,11 @@ export function ManifestList() {
   async function transfer(row: any, onlyLinkId?: string) {
     if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
     const partner = firstRelation(row.partner) ?? {};
-    const partnerGstin = String(partner.gstin ?? "").trim().toUpperCase();
+    let partnerGstin = String(partner.gstin ?? partner.gst_number ?? partner.gstin_number ?? "").trim().toUpperCase();
+    if (!partnerGstin && row.delivery_partner_id) {
+      const partnerResult = await db.from("delivery_partners").select("gstin").eq("id", row.delivery_partner_id).maybeSingle();
+      if (!partnerResult.error) partnerGstin = String(partnerResult.data?.gstin ?? "").trim().toUpperCase();
+    }
     if (!/^\d{2}[0-9A-Z]{13}$/.test(partnerGstin)) return toast.error("Delivery Partner GSTIN is required for transfer");
     const pendingLinks = (row.lr_links ?? []).filter((link: any) => link.transfer_status !== "transferred" && (!onlyLinkId || link.id === onlyLinkId));
     const items = pendingLinks.flatMap((link: any) => lrEwayBills(link).map((ewayBillNumber) => ({ linkId: link.id, ewayBillNumber })));
