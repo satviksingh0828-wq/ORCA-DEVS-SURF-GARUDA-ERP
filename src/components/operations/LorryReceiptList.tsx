@@ -25,6 +25,7 @@ import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { toast } from "sonner";
 import { findEntry, manifestCharges, num, type EntryLite } from "@/lib/trip-calc";
+import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
 
 type Shipment = {
   id: string;
@@ -94,6 +95,15 @@ const blankShipment: Shipment = {
 
 type NewShipmentItem = { description: string; hsn_code: string; quantity: string; weight_kg: string; unit: string; taxable_value: string; total_invoice_value: string };
 type NewShipmentForm = Omit<Shipment, "id" | "branch_id" | "approximate_distance_km"> & { branch_id: string; approximate_distance_km: string; document_type: string; document_number: string; document_date: string; eway_bill_status: string; valid_from: string; valid_until: string; supply_type: string; sub_type: string };
+function ewayDate(value: unknown): string {
+  const raw = String(value ?? "").trim();
+  if (!raw) return "";
+  const match = raw.match(/(\d{2})[\/-](\d{2})[\/-](\d{4})/);
+  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+  const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+  return iso ? iso[0] : "";
+}
+
 const blankNewShipment = (branchId: string): NewShipmentForm => ({
   branch_id: branchId, eway_bill_number: "", eway_bill_date: new Date().toISOString().slice(0, 10), eway_bill_status: "Active", valid_from: "", valid_until: "", supply_type: "Outward", sub_type: "Supply", document_type: "Tax Invoice", document_number: "", document_date: new Date().toISOString().slice(0, 10), supplier_gstin: "URP", supplier_trade_name: "", supplier_legal_name: "", supplier_address: "", supplier_place: "", supplier_state: "", supplier_pin_code: "", recipient_gstin: "URP", recipient_trade_name: "", recipient_legal_name: "", recipient_address: "", recipient_place: "", recipient_state: "", recipient_pin_code: "", dispatch_from_address: "", dispatch_from_place: "", dispatch_from_state: "", dispatch_from_pin_code: "", ship_to_address: "", ship_to_place: "", ship_to_state: "", ship_to_pin_code: "", transporter_id: "", approximate_distance_km: "", total_taxable_value: 0, total_invoice_value: 0, item_count: 0, created_at: "", lr_number: null,
 });
@@ -333,6 +343,7 @@ export function LorryReceiptList() {
       <LorryReceiptEditForm
         row={editingRow}
         branches={visibleBranches}
+        user={user}
         onCancel={() => setEditingRow(null)}
         onSaved={() => {
           setEditingRow(null);
@@ -559,13 +570,33 @@ function CreateAndAddShipment({
 }: {
   branchId: string;
   branches: Array<{ id: string; branch_name: string }>;
+  user?: any;
   onCreated: (shipment: Shipment) => void;
   onClose: () => void;
 }) {
   const [form, setForm] = useState<NewShipmentForm>(() => blankNewShipment(branchId));
   const [item, setItem] = useState<NewShipmentItem>({ description: "", hsn_code: "", quantity: "1", weight_kg: "", unit: "NOS", taxable_value: "", total_invoice_value: "" });
   const [saving, setSaving] = useState(false);
+  const [fetchingEwb, setFetchingEwb] = useState(false);
   const set = (key: keyof NewShipmentForm, value: string) => setForm((old) => ({ ...old, [key]: value }));
+  async function fetchEwayBill() {
+    if (!/^\d{12}$/.test(form.eway_bill_number)) return toast.error("Enter a valid 12-digit E-Way Bill number");
+    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+    setFetchingEwb(true);
+    try {
+      const raw = await serverFetchEwayBillDetails({ data: { token: user.sessionToken, branchId, ewayBillNumber: form.eway_bill_number } });
+      const source = ((raw as Record<string, unknown>)?.data ?? raw) as Record<string, unknown>;
+      const text = (key: string) => String(source[key] ?? "");
+      const fromAddress = [text("fromAddr1"), text("fromAddr2")].filter(Boolean).join(", ");
+      const toAddress = [text("toAddr1"), text("toAddr2")].filter(Boolean).join(", ");
+      const itemList = Array.isArray(source.itemList) ? source.itemList as Array<Record<string, unknown>> : [];
+      const firstItem = itemList[0] ?? {};
+      setForm((old) => ({ ...old, eway_bill_number: text("ewayBillNo") || old.eway_bill_number, eway_bill_date: ewayDate(source.ewayBillDate) || old.eway_bill_date, valid_from: ewayDate(source.ewayBillDate), valid_until: ewayDate(source.validUpto), supply_type: text("supplyType") === "I" ? "Inward" : "Outward", sub_type: text("subSupplyType") || old.sub_type, document_type: text("docType") === "INV" ? "Tax Invoice" : text("docType") || old.document_type, document_number: text("docNo"), document_date: ewayDate(source.docDate) || old.document_date, supplier_gstin: text("fromGstin") || old.supplier_gstin, supplier_trade_name: text("fromTrdName"), supplier_address: fromAddress, supplier_place: text("fromPlace"), supplier_state: text("fromStateCode"), supplier_pin_code: text("fromPincode"), recipient_gstin: text("toGstin") || old.recipient_gstin, recipient_trade_name: text("toTrdName"), recipient_address: toAddress, recipient_place: text("toPlace"), recipient_state: text("toStateCode"), recipient_pin_code: text("toPincode"), dispatch_from_address: fromAddress, dispatch_from_place: text("fromPlace"), dispatch_from_state: text("fromStateCode"), dispatch_from_pin_code: text("fromPincode"), ship_to_address: [text("shipToAddr1"), text("shipToAddr2")].filter(Boolean).join(", ") || toAddress, ship_to_place: text("shipToPlace") || text("toPlace"), ship_to_state: text("toStateCode"), ship_to_pin_code: text("shipToPincode") || text("toPincode"), transporter_id: text("transporterId"), approximate_distance_km: text("transDistance") }));
+      setItem((old) => ({ ...old, description: String(firstItem.productName ?? firstItem.productDesc ?? old.description), hsn_code: String(firstItem.hsnCode ?? old.hsn_code), quantity: String(firstItem.quantity ?? old.quantity), unit: String(firstItem.qtyUnit ?? old.unit), taxable_value: String(firstItem.taxableAmount ?? old.taxable_value), total_invoice_value: String(firstItem.taxableAmount ?? old.total_invoice_value) }));
+      toast.success("E-Way Bill details fetched and form filled");
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not fetch E-Way Bill details"); }
+    setFetchingEwb(false);
+  }
   async function save() {
     if (!/^[0-9]{12}$/.test(form.eway_bill_number) || !form.branch_id || !form.document_number || !form.document_date || !item.description.trim() || !item.hsn_code.trim()) return toast.error("Enter a valid 12-digit E-Way Bill, document details and one item");
     setSaving(true);
@@ -588,7 +619,7 @@ function CreateAndAddShipment({
         <div className="space-y-4 py-2">
           <div className="grid gap-3 md:grid-cols-3">
             <div className="space-y-1.5"><Label>Branch</Label><Input value={branches.find((b) => b.id === branchId)?.branch_name ?? "—"} readOnly /></div>
-            <EntryField label="E-Way Bill Number *" value={form.eway_bill_number} onChange={(v) => set("eway_bill_number", v.replace(/\D/g, "").slice(0, 12))} />
+            <div className="space-y-1.5"><Label>E-Way Bill Number *</Label><div className="flex gap-2"><Input value={form.eway_bill_number} onChange={(event) => set("eway_bill_number", event.target.value.replace(/\D/g, "").slice(0, 12))} /><Button type="button" variant="outline" onClick={() => void fetchEwayBill()} disabled={fetchingEwb}>{fetchingEwb ? "Fetching…" : "Fetch"}</Button></div></div>
             <EntryField label="E-Way Bill Date *" type="date" value={form.eway_bill_date} onChange={(v) => set("eway_bill_date", v)} />
             <EntryField label="Document Number *" value={form.document_number} onChange={(v) => set("document_number", v)} />
             <EntryField label="Document Date *" type="date" value={form.document_date} onChange={(v) => set("document_date", v)} />
@@ -611,11 +642,13 @@ function CreateAndAddShipment({
 function LorryReceiptEditForm({
   row,
   branches,
+  user,
   onCancel,
   onSaved,
 }: {
   row: Record<string, any>;
   branches: Array<{ id: string; branch_name: string }>;
+  user?: any;
   onCancel: () => void;
   onSaved: () => void;
 }) {
@@ -639,8 +672,8 @@ function LorryReceiptEditForm({
         db.from("shipments").select("*, shipment_items(*)").eq("branch_id", row.branch_id).order("eway_bill_date", { ascending: false }),
         db.from("contract_entries").select("*").eq("contract_id", row.source_id),
       ]);
-      const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number)");
-      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.lr_number ?? null]));
+      const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number,branch_id)");
+      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.branch_id === row.branch_id ? link.lr?.lr_number ?? null : null]));
       setSources((s.data ?? []) as Source[]);
       setEntries((e.data ?? []) as EntryLite[]);
       setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
@@ -696,7 +729,7 @@ function LorryReceiptEditForm({
         {showPicker && <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3"><p className="text-sm font-medium">Select compatible shipment</p><div className="flex flex-wrap gap-2"><Input className="flex-1" placeholder="Search shipment number" value={shipmentSearch} onChange={(e) => setShipmentSearch(e.target.value)} /><Input className="w-40" type="date" value={shipmentDate} onChange={(e) => setShipmentDate(e.target.value)} /></div>{available.length === 0 ? <p className="text-sm text-muted-foreground">No unlinked shipments available for this branch.</p> : available.slice(0, 50).map((s) => <button type="button" key={s.id} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Link2 className="size-4 text-primary" /></button>)}</div>}
       </section>
       </div>
-      {showCreateShipment && <CreateAndAddShipment branchId={row.branch_id} branches={branches} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
+      {showCreateShipment && <CreateAndAddShipment branchId={row.branch_id} branches={branches} user={user} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
       <div className="flex justify-end gap-2 border-t border-border pt-4"><Button variant="outline" onClick={onCancel}>Cancel</Button><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Save Changes"}</Button></div>
     </div>
   );
@@ -750,8 +783,8 @@ function LorryReceiptForm({
       ]);
       if (s.error || sh.error)
         toast.error(s.error?.message ?? sh.error?.message ?? "Could not load LR options");
-      const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number)");
-      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.lr_number ?? null]));
+      const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number,branch_id)");
+      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.branch_id === branchId ? link.lr?.lr_number ?? null : null]));
       setSources((s.data ?? []) as Source[]);
       setEntries((e.data ?? []) as EntryLite[]);
       setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
@@ -980,7 +1013,7 @@ function LorryReceiptForm({
       </section>
       <LrTotals shipments={selected} />
       </div>
-      {showCreateShipment && <CreateAndAddShipment branchId={branchId} branches={branches} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
+      {showCreateShipment && <CreateAndAddShipment branchId={branchId} branches={branches} user={user} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
       <div className="flex justify-end gap-2 border-t border-border pt-4">
         <Button variant="outline" onClick={onCancel}>
           Cancel
