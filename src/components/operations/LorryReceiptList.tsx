@@ -884,148 +884,147 @@ function LorryReceiptForm({
     setSaving(false);
   }
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3 border-b border-border pb-4">
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 border-b-2 border-primary/70 pb-3">
         <Button variant="ghost" size="icon" onClick={onCancel}>
           <ArrowLeft className="size-5" />
         </Button>
         <div>
           <h2 className="text-xl font-semibold">Create Lorry Receipt</h2>
-          <p className="text-sm text-muted-foreground">Attach one or more compatible shipments to this LR.</p>
+          <p className="text-sm text-muted-foreground">LR entry using the existing shipment and contract data.</p>
         </div>
       </div>
-      <div className="grid gap-4 rounded-xl border border-border p-4 md:grid-cols-3">
-        <div className="space-y-1.5">
-          <Label>Branch *</Label>
-          <Select
-            value={branchId}
-            onValueChange={(v) => {
-              setBranchId(v);
-              setSelected([]);
-              setBaseId("");
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Select branch" />
-            </SelectTrigger>
-            <SelectContent>
-              {branches.map((b) => (
-                <SelectItem key={b.id} value={b.id}>
-                  {b.branch_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5">
-          <Label>LR Number *</Label>
-          <Input value={previewLrNumber} readOnly />
-        </div>
-        <div className="space-y-1.5">
-          <Label>Source / Contract *</Label>
-          <Select value={sourceId} onValueChange={setSourceId} disabled={!branchId}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select source" />
-            </SelectTrigger>
-            <SelectContent>
-              {sources
-                .filter((s) => s.status !== "inactive")
-                .map((s) => (
-                  <SelectItem key={s.id} value={s.id}>
-                    {s.contract_name}
-                  </SelectItem>
-                ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="space-y-1.5"><Label>Transport Mode *</Label><Select value={mode} onValueChange={(value) => setMode(value as TransportMode)}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="ROAD">Road</SelectItem><SelectItem value="RAIL">Rail</SelectItem><SelectItem value="AIR">Air</SelectItem><SelectItem value="SHIP">Ship</SelectItem></SelectContent></Select></div>
-        <Field label="Calculated Income" value={`₹${lrIncome(sourceId, mode, selected as any[], entries).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`} />
-      </div>
-      <div className="flex flex-col">
-      <div className="space-y-4 order-last">
-        {base && (
-          <div className="flex items-center gap-2 rounded-lg bg-primary/5 p-3 text-sm">
-            <Truck className="size-4 text-primary" />
-            <span>
-              Base shipment: <strong>{base.eway_bill_number}</strong>. Other shipments must match
-              its party GSTINs and route PIN codes.
-            </span>
+
+      <section className="rounded-md border border-border bg-background shadow-sm">
+        <div className="grid gap-x-4 gap-y-3 border-b border-border p-3 md:grid-cols-4">
+          <Field label="Document Type" value="LORRY RECEIPT" />
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Branch *</Label>
+            <Select
+              value={branchId}
+              onValueChange={(v) => {
+                setBranchId(v);
+                setSelected([]);
+                setBaseId("");
+              }}
+            >
+              <SelectTrigger><SelectValue placeholder="Select branch" /></SelectTrigger>
+              <SelectContent>
+                {branches.map((b) => <SelectItem key={b.id} value={b.id}>{b.branch_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-        )}
-        <ShipmentDetails shipment={base ?? blankShipment} />
-      </div>
-      <section className="space-y-3 rounded-xl border border-border p-4 order-first">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="font-semibold">Attached Shipments</h3>
-            <p className="text-xs text-muted-foreground">
-              Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.
-            </p>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Source / Contract *</Label>
+            <Select value={sourceId} onValueChange={setSourceId} disabled={!branchId}>
+              <SelectTrigger><SelectValue placeholder="Select source" /></SelectTrigger>
+              <SelectContent>
+                {sources.filter((s) => s.status !== "inactive").map((s) => <SelectItem key={s.id} value={s.id}>{s.contract_name}</SelectItem>)}
+              </SelectContent>
+            </Select>
           </div>
-          <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)} disabled={!branchId}><Plus className="mr-1 size-4" /> Add Existing Shipment</Button><Button type="button" onClick={() => setShowCreateShipment(true)} disabled={!branchId}><Plus className="mr-1 size-4" /> Create and Add</Button></div>
+          <Field label="LR Number" value={previewLrNumber} />
+
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Transport Mode *</Label>
+            <Select value={mode} onValueChange={(value) => setMode(value as TransportMode)}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ROAD">Road</SelectItem>
+                <SelectItem value="RAIL">Rail</SelectItem>
+                <SelectItem value="AIR">Air</SelectItem>
+                <SelectItem value="SHIP">Ship</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Field label="E-Way Bill No." value={base?.eway_bill_number ?? "Select shipment"} />
+          <Field label="E-Way Bill Date" value={base?.eway_bill_date ?? "—"} />
+          <Field label="Calculated Income" value={`₹${lrIncome(sourceId, mode, selected as any[], entries).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`} />
         </div>
-        {selected.length === 0 ? (
-          <p className="py-5 text-center text-sm text-muted-foreground">
-            No shipments attached yet.
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="text-left text-xs text-muted-foreground">
-                <tr>
-                  <th className="px-2 py-2">Shipment / E-Way Bill</th>
-                  <th className="px-2 py-2">Supplier GSTIN</th>
-                  <th className="px-2 py-2">Consignee GSTIN</th>
-                  <th className="px-2 py-2">Route</th>
-                  <th className="px-2 py-2" />
-                </tr>
-              </thead>
-              <tbody>
-                {selected.map((s) => (
-                  <tr key={s.id} className="border-t border-border">
-                    <td className="px-2 py-2 font-medium">{s.eway_bill_number}</td>
-                    <td className="px-2 py-2">{s.supplier_gstin || "URP"}</td>
-                    <td className="px-2 py-2">{s.recipient_gstin || "URP"}</td>
-                    <td className="px-2 py-2">
-                      {s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}
-                    </td>
-                    <td className="px-2 py-2 text-right">
-                      <Button variant="ghost" size="icon" onClick={() => removeShipment(s.id)}>
-                        <X className="size-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+        <div className="grid gap-3 border-b border-border p-3 md:grid-cols-2">
+          <section className="rounded-md border border-border">
+            <div className="border-b border-border bg-primary/10 px-3 py-2 text-sm font-semibold">Consignor</div>
+            <div className="grid gap-x-3 gap-y-2 p-3 sm:grid-cols-2">
+              <Field label="GSTIN / URP" value={base?.supplier_gstin ?? "—"} />
+              <Field label="Trade Name" value={base?.supplier_trade_name ?? "—"} />
+              <Field label="Legal Name" value={base?.supplier_legal_name ?? "—"} />
+              <Field label="Place" value={base?.supplier_place ?? "—"} />
+              <Field label="State" value={base?.supplier_state ?? "—"} />
+              <Field label="PIN Code" value={base?.supplier_pin_code ?? "—"} />
+              <div className="sm:col-span-2"><Field label="Address" value={base?.supplier_address ?? "—"} /></div>
+            </div>
+          </section>
+          <section className="rounded-md border border-border">
+            <div className="border-b border-border bg-primary/10 px-3 py-2 text-sm font-semibold">Consignee</div>
+            <div className="grid gap-x-3 gap-y-2 p-3 sm:grid-cols-2">
+              <Field label="GSTIN / URP" value={base?.recipient_gstin ?? "—"} />
+              <Field label="Trade Name" value={base?.recipient_trade_name ?? "—"} />
+              <Field label="Legal Name" value={base?.recipient_legal_name ?? "—"} />
+              <Field label="Place" value={base?.recipient_place ?? "—"} />
+              <Field label="State" value={base?.recipient_state ?? "—"} />
+              <Field label="PIN Code" value={base?.recipient_pin_code ?? "—"} />
+              <div className="sm:col-span-2"><Field label="Address" value={base?.recipient_address ?? "—"} /></div>
+            </div>
+          </section>
+        </div>
+
+        <div className="grid gap-x-4 gap-y-3 border-b border-border p-3 md:grid-cols-4">
+          <Field label="Source / Dispatch From" value={base?.dispatch_from_place ?? "—"} />
+          <Field label="Destination / Ship To" value={base?.ship_to_place ?? "—"} />
+          <Field label="Route" value={base ? `${base.dispatch_from_pin_code || "—"} → ${base.ship_to_pin_code || "—"}` : "—"} />
+          <Field label="Distance (KM)" value={base?.approximate_distance_km ?? "—"} />
+          <Field label="Delivery Address" value={base?.ship_to_address ?? "—"} />
+          <Field label="Transporter ID / GSTIN" value={base?.transporter_id ?? "—"} />
+          <Field label="Dispatch State" value={base?.dispatch_from_state ?? "—"} />
+          <Field label="Ship To State" value={base?.ship_to_state ?? "—"} />
+        </div>
+
+        <section className="space-y-3 p-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold">Shipment Details</h3>
+              <p className="text-xs text-muted-foreground">Use existing shipments or create a shipment from the current repository fields.</p>
+            </div>
+            <div className="flex gap-2">
+              <Button type="button" size="sm" variant="outline" onClick={() => setShowPicker((v) => !v)} disabled={!branchId}><Plus className="mr-1 size-4" /> Add Existing</Button>
+              <Button type="button" size="sm" onClick={() => setShowCreateShipment(true)} disabled={!branchId}><Plus className="mr-1 size-4" /> Create and Add</Button>
+            </div>
           </div>
-        )}
-        {showPicker && (
-          <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-            <p className="text-sm font-medium">Add Existing Shipment</p>
-            <div className="flex gap-2"><Input className="flex-1" placeholder="Enter existing shipment number" value={shipmentSearch} onChange={(event) => setShipmentSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addExistingShipment(); } }} /><Button type="button" onClick={addExistingShipment}>Add</Button></div>
-            {visibleShipments.length === 0 ? (
-              <p className="text-sm text-muted-foreground">No shipments found for this branch.</p>
-            ) : (
-              visibleShipments.slice(0, 100).map((s) => { const linked = linkedShipmentIds.has(s.id); const selectedAlready = selected.some((x) => x.id === s.id); return (
-                <button type="button" key={s.id} disabled={linked || selectedAlready} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60">
-                  <span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.eway_bill_date || "—"} · {s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span>
-                  <Badge variant={linked ? "outline" : selectedAlready ? "secondary" : "default"}>{linked ? "Linked to LR" : selectedAlready ? "Selected" : "Unlinked"}</Badge>
-                </button>
-              ); })
-            )}
-          </div>
-        )}
-        {!base && (
-          <p className="rounded-lg border border-dashed border-border p-3 text-center text-sm text-muted-foreground">
-            Select a shipment to auto-fill LR details.
-          </p>
-        )}
+          {selected.length === 0 ? (
+            <p className="rounded-md border border-dashed border-border p-4 text-center text-sm text-muted-foreground">Select a shipment to auto-fill the LR details.</p>
+          ) : (
+            <div className="overflow-x-auto rounded-md border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-primary/80 text-left text-xs text-primary-foreground">
+                  <tr><th className="px-3 py-2">E-Way Bill No.</th><th className="px-3 py-2">Consignor GSTIN</th><th className="px-3 py-2">Consignee GSTIN</th><th className="px-3 py-2">Route</th><th className="px-3 py-2">Action</th></tr>
+                </thead>
+                <tbody>
+                  {selected.map((s) => (
+                    <tr key={s.id} className="border-t border-border">
+                      <td className="px-3 py-2 font-medium">{s.eway_bill_number}</td>
+                      <td className="px-3 py-2">{s.supplier_gstin || "URP"}</td>
+                      <td className="px-3 py-2">{s.recipient_gstin || "URP"}</td>
+                      <td className="px-3 py-2">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</td>
+                      <td className="px-3 py-2"><Button variant="ghost" size="icon" onClick={() => removeShipment(s.id)}><X className="size-4" /></Button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {showPicker && (
+            <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+              <p className="text-sm font-medium">Add Existing Shipment</p>
+              <div className="flex gap-2"><Input className="flex-1" placeholder="Enter existing shipment number" value={shipmentSearch} onChange={(event) => setShipmentSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addExistingShipment(); } }} /><Button type="button" onClick={addExistingShipment}>Add</Button></div>
+              {visibleShipments.length === 0 ? <p className="text-sm text-muted-foreground">No shipments found for this branch.</p> : visibleShipments.slice(0, 100).map((s) => { const linked = linkedShipmentIds.has(s.id); const selectedAlready = selected.some((x) => x.id === s.id); return <button type="button" key={s.id} disabled={linked || selectedAlready} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-md border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.eway_bill_date || "—"} · {s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Badge variant={linked ? "outline" : selectedAlready ? "secondary" : "default"}>{linked ? "Linked to LR" : selectedAlready ? "Selected" : "Unlinked"}</Badge></button>; })}
+            </div>
+          )}
+        </section>
+        <div className="border-t border-border px-3 py-3"><LrTotals shipments={selected} /></div>
       </section>
-      <LrTotals shipments={selected} />
-      </div>
       {showCreateShipment && <CreateAndAddShipment branchId={branchId} branches={branches} user={user} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
-      <div className="flex justify-end gap-2 border-t border-border pt-4">
+      <div className="flex justify-end gap-2 border-t border-border pt-3">
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
