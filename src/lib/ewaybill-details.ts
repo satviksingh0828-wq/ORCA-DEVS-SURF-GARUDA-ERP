@@ -37,7 +37,9 @@ export const serverFetchEwayBillDetails = createServerFn({ method: "POST" })
     const body = await response.json().catch(() => null) as Record<string, unknown> | null;
     if (!response.ok || body?.ok === false) {
       const error = body?.error as Record<string, unknown> | undefined;
-      throw new Error(String(error?.message ?? "Could not fetch E-Way Bill details"));
+      const details = error?.details as Record<string, unknown> | undefined;
+      const detailText = details ? `: ${JSON.stringify(details)}` : "";
+      throw new Error(`${String(error?.message ?? "Could not fetch E-Way Bill details")} (HTTP ${response.status})${detailText}`);
     }
     return body?.data ?? body;
   });

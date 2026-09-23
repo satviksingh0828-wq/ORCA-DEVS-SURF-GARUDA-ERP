@@ -660,6 +660,7 @@ function LorryReceiptEditForm({
   const initialSelected = ((row.lorry_receipt_shipments ?? []).map((x: any) => x.shipment).filter(Boolean) as Shipment[]);
   const [selected, setSelected] = useState<Shipment[]>(initialSelected);
   const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [linkedShipmentIds, setLinkedShipmentIds] = useState<Set<string>>(new Set());
   const [baseId, setBaseId] = useState(String(row.base_shipment_id ?? initialSelected[0]?.id ?? ""));
   const [showPicker, setShowPicker] = useState(false);
   const [shipmentSearch, setShipmentSearch] = useState("");
@@ -673,18 +674,21 @@ function LorryReceiptEditForm({
         db.from("shipments").select("*, shipment_items(*)").eq("branch_id", row.branch_id).order("eway_bill_date", { ascending: false }),
         db.from("contract_entries").select("*").eq("contract_id", row.source_id),
       ]);
-      const { data: branchLrs } = await db.from("lorry_receipts").select("id,lr_number").eq("branch_id", row.branch_id);
+      if (s.error || sh.error) toast.error(s.error?.message ?? sh.error?.message ?? "Could not load LR options");
+      const { data: branchLrs, error: branchLrError } = await db.from("lorry_receipts").select("id,lr_number").eq("branch_id", row.branch_id);
+      if (branchLrError) toast.error(`Could not check linked shipments: ${branchLrError.message}`);
       const branchLrIds = (branchLrs ?? []).map((lr: any) => lr.id);
       const { data: links } = branchLrIds.length ? await db.from("lr_shipments").select("shipment_id,lr_id").in("lr_id", branchLrIds) : { data: [] };
       const lrNumbers = new Map((branchLrs ?? []).map((lr: any) => [String(lr.id), lr.lr_number]));
       const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), lrNumbers.get(String(link.lr_id)) ?? null]));
+      setLinkedShipmentIds(new Set((links ?? []).map((link: any) => String(link.shipment_id))));
       setSources((s.data ?? []) as Source[]);
       setEntries((e.data ?? []) as EntryLite[]);
       setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
     })();
   }, [row.branch_id]);
   const base = selected.find((s) => s.id === baseId) ?? selected[0];
-  const available = shipments.filter((s) => !selected.some((x) => x.id === s.id) && !s.lr_number && (!shipmentSearch.trim() || s.eway_bill_number.includes(shipmentSearch.trim())) && (!shipmentDate || s.eway_bill_date === shipmentDate));
+  const available = shipments.filter((s) => !selected.some((x) => x.id === s.id) && !linkedShipmentIds.has(s.id) && (!shipmentSearch.trim() || s.eway_bill_number.includes(shipmentSearch.trim())) && (!shipmentDate || s.eway_bill_date === shipmentDate));
   function addShipment(shipment: Shipment) {
     if (base && (!same(base.supplier_gstin, shipment.supplier_gstin) || !same(base.recipient_gstin, shipment.recipient_gstin) || !same(base.dispatch_from_pin_code, shipment.dispatch_from_pin_code) || !same(base.ship_to_pin_code, shipment.ship_to_pin_code)))
       return toast.error("This shipment does not match the LR base shipment");
@@ -756,6 +760,7 @@ function LorryReceiptForm({
   const [sources, setSources] = useState<Source[]>([]);
   const [entries, setEntries] = useState<EntryLite[]>([]);
   const [shipments, setShipments] = useState<Shipment[]>([]);
+  const [linkedShipmentIds, setLinkedShipmentIds] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<Shipment[]>([]);
   const [baseId, setBaseId] = useState("");
   const [showPicker, setShowPicker] = useState(false);
@@ -785,13 +790,14 @@ function LorryReceiptForm({
           .order("eway_bill_date", { ascending: false }),
         db.from("contract_entries").select("*").eq("contract_id", sourceId),
       ]);
-      if (s.error || sh.error)
-        toast.error(s.error?.message ?? sh.error?.message ?? "Could not load LR options");
-      const { data: branchLrs } = await db.from("lorry_receipts").select("id,lr_number").eq("branch_id", branchId);
+      if (s.error || sh.error) toast.error(s.error?.message ?? sh.error?.message ?? "Could not load LR options");
+      const { data: branchLrs, error: branchLrError } = await db.from("lorry_receipts").select("id,lr_number").eq("branch_id", branchId);
+      if (branchLrError) toast.error(`Could not check linked shipments: ${branchLrError.message}`);
       const branchLrIds = (branchLrs ?? []).map((lr: any) => lr.id);
       const { data: links } = branchLrIds.length ? await db.from("lr_shipments").select("shipment_id,lr_id").in("lr_id", branchLrIds) : { data: [] };
       const lrNumbers = new Map((branchLrs ?? []).map((lr: any) => [String(lr.id), lr.lr_number]));
       const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), lrNumbers.get(String(link.lr_id)) ?? null]));
+      setLinkedShipmentIds(new Set((links ?? []).map((link: any) => String(link.shipment_id))));
       setSources((s.data ?? []) as Source[]);
       setEntries((e.data ?? []) as EntryLite[]);
       setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
@@ -799,7 +805,7 @@ function LorryReceiptForm({
   }, [branchId]);
   const base = selected.find((s) => s.id === baseId) ?? selected[0];
   const available = shipments.filter((s) =>
-    !s.lr_number &&
+    !linkedShipmentIds.has(s.id) &&
     !selected.some((x) => x.id === s.id) &&
     (!shipmentSearch.trim() || s.eway_bill_number.includes(shipmentSearch.trim())) &&
     (!shipmentDate || s.eway_bill_date === shipmentDate),
