@@ -622,16 +622,23 @@ function CreateAndAddShipment({
             <div className="space-y-1.5"><Label>Branch</Label><Input value={branches.find((b) => b.id === branchId)?.branch_name ?? "—"} readOnly /></div>
             <div className="space-y-1.5"><Label>E-Way Bill Number *</Label><div className="flex gap-2"><Input value={form.eway_bill_number} onChange={(event) => set("eway_bill_number", event.target.value.replace(/\D/g, "").slice(0, 12))} /><Button type="button" variant="outline" onClick={() => void fetchEwayBill()} disabled={fetchingEwb}>{fetchingEwb ? "Fetching…" : "Fetch"}</Button></div></div>
             <EntryField label="E-Way Bill Date *" type="date" value={form.eway_bill_date} onChange={(v) => set("eway_bill_date", v)} />
+            <EntryField label="E-Way Bill Status" value={form.eway_bill_status} onChange={(v) => set("eway_bill_status", v)} />
+            <EntryField label="Valid From" type="datetime-local" value={form.valid_from} onChange={(v) => set("valid_from", v)} />
+            <EntryField label="Valid Until" type="datetime-local" value={form.valid_until} onChange={(v) => set("valid_until", v)} />
+            <EntryField label="Supply Type" value={form.supply_type} onChange={(v) => set("supply_type", v)} />
+            <EntryField label="Sub-type" value={form.sub_type} onChange={(v) => set("sub_type", v)} />
             <EntryField label="Document Number *" value={form.document_number} onChange={(v) => set("document_number", v)} />
             <EntryField label="Document Date *" type="date" value={form.document_date} onChange={(v) => set("document_date", v)} />
+            <EntryField label="Document Type *" value={form.document_type} onChange={(v) => set("document_type", v)} />
             <EntryField label="Supplier GSTIN" value={form.supplier_gstin} onChange={(v) => set("supplier_gstin", v.toUpperCase())} />
             <EntryField label="Recipient GSTIN" value={form.recipient_gstin} onChange={(v) => set("recipient_gstin", v.toUpperCase())} />
             <EntryField label="Dispatch From PIN" value={form.dispatch_from_pin_code} onChange={(v) => set("dispatch_from_pin_code", v)} />
             <EntryField label="Ship To PIN" value={form.ship_to_pin_code} onChange={(v) => set("ship_to_pin_code", v)} />
             <EntryField label="Approximate Distance (KM)" type="number" value={form.approximate_distance_km} onChange={(v) => set("approximate_distance_km", v)} />
           </div>
-          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Supplier / Consignor</h3><div className="grid gap-3 md:grid-cols-3"><EntryField label="Trade Name" value={form.supplier_trade_name} onChange={(v) => set("supplier_trade_name", v)} /><EntryField label="Legal Name" value={form.supplier_legal_name} onChange={(v) => set("supplier_legal_name", v)} /><EntryField label="Address" value={form.supplier_address} onChange={(v) => set("supplier_address", v)} /><EntryField label="Place" value={form.supplier_place} onChange={(v) => set("supplier_place", v)} /><EntryField label="State" value={form.supplier_state} onChange={(v) => set("supplier_state", v)} /></div></section>
-          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Recipient / Consignee</h3><div className="grid gap-3 md:grid-cols-3"><EntryField label="Trade Name" value={form.recipient_trade_name} onChange={(v) => set("recipient_trade_name", v)} /><EntryField label="Legal Name" value={form.recipient_legal_name} onChange={(v) => set("recipient_legal_name", v)} /><EntryField label="Address" value={form.recipient_address} onChange={(v) => set("recipient_address", v)} /><EntryField label="Place" value={form.recipient_place} onChange={(v) => set("recipient_place", v)} /><EntryField label="State" value={form.recipient_state} onChange={(v) => set("recipient_state", v)} /></div></section>
+          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Supplier / Consignor (Bill From)</h3><div className="grid gap-3 md:grid-cols-3"><EntryField label="GSTIN" value={form.supplier_gstin} onChange={(v) => set("supplier_gstin", v.toUpperCase())} /><EntryField label="Trade Name" value={form.supplier_trade_name} onChange={(v) => set("supplier_trade_name", v)} /><EntryField label="Legal Name" value={form.supplier_legal_name} onChange={(v) => set("supplier_legal_name", v)} /><EntryField label="Address" value={form.supplier_address} onChange={(v) => set("supplier_address", v)} /><EntryField label="Place" value={form.supplier_place} onChange={(v) => set("supplier_place", v)} /><EntryField label="State" value={form.supplier_state} onChange={(v) => set("supplier_state", v)} /><EntryField label="PIN Code" value={form.supplier_pin_code} onChange={(v) => set("supplier_pin_code", v)} /></div></section>
+          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Recipient / Consignee (Bill To)</h3><div className="grid gap-3 md:grid-cols-3"><EntryField label="GSTIN" value={form.recipient_gstin} onChange={(v) => set("recipient_gstin", v.toUpperCase())} /><EntryField label="Trade Name" value={form.recipient_trade_name} onChange={(v) => set("recipient_trade_name", v)} /><EntryField label="Legal Name" value={form.recipient_legal_name} onChange={(v) => set("recipient_legal_name", v)} /><EntryField label="Address" value={form.recipient_address} onChange={(v) => set("recipient_address", v)} /><EntryField label="Place" value={form.recipient_place} onChange={(v) => set("recipient_place", v)} /><EntryField label="State" value={form.recipient_state} onChange={(v) => set("recipient_state", v)} /><EntryField label="PIN Code" value={form.recipient_pin_code} onChange={(v) => set("recipient_pin_code", v)} /></div></section>
+          <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Dispatch From / Ship To</h3><div className="grid gap-3 md:grid-cols-2"><EntryField label="Dispatch From Address" value={form.dispatch_from_address} onChange={(v) => set("dispatch_from_address", v)} /><EntryField label="Dispatch From Place" value={form.dispatch_from_place} onChange={(v) => set("dispatch_from_place", v)} /><EntryField label="Dispatch From State" value={form.dispatch_from_state} onChange={(v) => set("dispatch_from_state", v)} /><EntryField label="Dispatch From PIN" value={form.dispatch_from_pin_code} onChange={(v) => set("dispatch_from_pin_code", v)} /><EntryField label="Ship To Address" value={form.ship_to_address} onChange={(v) => set("ship_to_address", v)} /><EntryField label="Ship To Place" value={form.ship_to_place} onChange={(v) => set("ship_to_place", v)} /><EntryField label="Ship To State" value={form.ship_to_state} onChange={(v) => set("ship_to_state", v)} /><EntryField label="Ship To PIN" value={form.ship_to_pin_code} onChange={(v) => set("ship_to_pin_code", v)} /></div></section>
           <section className="rounded-xl border border-border p-4"><h3 className="mb-3 font-semibold">Goods / Invoice Details</h3><div className="grid gap-3 md:grid-cols-2"><EntryField label="Product / Item Description *" value={item.description} onChange={(v) => setItem((old) => ({ ...old, description: v }))} /><EntryField label="HSN Code *" value={item.hsn_code} onChange={(v) => setItem((old) => ({ ...old, hsn_code: v }))} /><EntryField label="Quantity" type="number" value={item.quantity} onChange={(v) => setItem((old) => ({ ...old, quantity: v }))} /><EntryField label="Weight (KG)" type="number" value={item.weight_kg} onChange={(v) => setItem((old) => ({ ...old, weight_kg: v }))} /><EntryField label="Unit" value={item.unit} onChange={(v) => setItem((old) => ({ ...old, unit: v }))} /><EntryField label="Taxable Value" type="number" value={item.taxable_value} onChange={(v) => setItem((old) => ({ ...old, taxable_value: v }))} /><EntryField label="Total Invoice Value" type="number" value={item.total_invoice_value} onChange={(v) => setItem((old) => ({ ...old, total_invoice_value: v }))} /></div><div className="mt-3 flex flex-wrap justify-end gap-5 border-t border-border pt-3 text-sm"><span>Total quantity: <strong>{Number(item.quantity || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</strong></span><span>Total Weight (in kg): <strong>{Number(item.weight_kg || 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg</strong></span><span>Taxable total: <strong>₹{Number(item.taxable_value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span><span>Invoice total: <strong>₹{Number(item.total_invoice_value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong></span></div></section>
         </div>
         <DialogFooter><Button variant="outline" onClick={onClose}>Cancel</Button><Button onClick={() => void save()} disabled={saving}>{saving ? "Saving…" : "Create and Add"}</Button></DialogFooter>
@@ -675,16 +682,12 @@ function LorryReceiptEditForm({
         db.from("contract_entries").select("*").eq("contract_id", row.source_id),
       ]);
       if (s.error || sh.error) toast.error(s.error?.message ?? sh.error?.message ?? "Could not load LR options");
-      const { data: branchLrs, error: branchLrError } = await db.from("lorry_receipts").select("id,lr_number").eq("branch_id", row.branch_id);
-      if (branchLrError) toast.error(`Could not check linked shipments: ${branchLrError.message}`);
-      const branchLrIds = (branchLrs ?? []).map((lr: any) => lr.id);
-      const { data: links } = branchLrIds.length ? await db.from("lr_shipments").select("shipment_id,lr_id").in("lr_id", branchLrIds) : { data: [] };
-      const lrNumbers = new Map((branchLrs ?? []).map((lr: any) => [String(lr.id), lr.lr_number]));
-      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), lrNumbers.get(String(link.lr_id)) ?? null]));
+      const { data: links, error: linksError } = await db.from("lr_shipments").select("shipment_id");
+      if (linksError) toast.error(`Could not check linked shipments: ${linksError.message}`);
       setLinkedShipmentIds(new Set((links ?? []).map((link: any) => String(link.shipment_id))));
       setSources((s.data ?? []) as Source[]);
       setEntries((e.data ?? []) as EntryLite[]);
-      setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
+      setShipments((sh.data ?? []) as Shipment[]);
     })();
   }, [row.branch_id]);
   const base = selected.find((s) => s.id === baseId) ?? selected[0];
@@ -791,16 +794,12 @@ function LorryReceiptForm({
         db.from("contract_entries").select("*").eq("contract_id", sourceId),
       ]);
       if (s.error || sh.error) toast.error(s.error?.message ?? sh.error?.message ?? "Could not load LR options");
-      const { data: branchLrs, error: branchLrError } = await db.from("lorry_receipts").select("id,lr_number").eq("branch_id", branchId);
-      if (branchLrError) toast.error(`Could not check linked shipments: ${branchLrError.message}`);
-      const branchLrIds = (branchLrs ?? []).map((lr: any) => lr.id);
-      const { data: links } = branchLrIds.length ? await db.from("lr_shipments").select("shipment_id,lr_id").in("lr_id", branchLrIds) : { data: [] };
-      const lrNumbers = new Map((branchLrs ?? []).map((lr: any) => [String(lr.id), lr.lr_number]));
-      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), lrNumbers.get(String(link.lr_id)) ?? null]));
+      const { data: links, error: linksError } = await db.from("lr_shipments").select("shipment_id");
+      if (linksError) toast.error(`Could not check linked shipments: ${linksError.message}`);
       setLinkedShipmentIds(new Set((links ?? []).map((link: any) => String(link.shipment_id))));
       setSources((s.data ?? []) as Source[]);
       setEntries((e.data ?? []) as EntryLite[]);
-      setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
+      setShipments((sh.data ?? []) as Shipment[]);
     })();
   }, [branchId]);
   const base = selected.find((s) => s.id === baseId) ?? selected[0];
