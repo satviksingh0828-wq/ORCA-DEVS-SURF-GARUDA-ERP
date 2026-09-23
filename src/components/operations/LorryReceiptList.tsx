@@ -679,7 +679,7 @@ function LorryReceiptEditForm({
     void (async () => {
       const [s, sh, t, e] = await Promise.all([
         db.from("contracts").select("id,contract_name,branch_id,status").eq("branch_id", row.branch_id).order("contract_name"),
-        db.from("shipments").select("*, shipment_items(*)").eq("branch_id", row.branch_id).order("eway_bill_date", { ascending: false }),
+        db.from("shipments").select("*").eq("branch_id", row.branch_id).order("eway_bill_date", { ascending: false }),
         db.from("contract_entries").select("*").eq("contract_id", row.source_id),
       ]);
       if (s.error || sh.error) toast.error(s.error?.message ?? sh.error?.message ?? "Could not load LR options");
@@ -789,7 +789,7 @@ function LorryReceiptForm({
           .order("contract_name"),
         db
           .from("shipments")
-          .select("*, shipment_items(*)")
+          .select("*")
           .eq("branch_id", branchId)
           .order("eway_bill_date", { ascending: false }),
         db.from("contract_entries").select("*").eq("contract_id", sourceId),
