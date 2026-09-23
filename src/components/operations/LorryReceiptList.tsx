@@ -140,6 +140,7 @@ function lrIncome(sourceId: string, mode: TransportMode, shipments: Array<Record
 }
 
 const db = supabase as any;
+const firstRelation = (value: any) => Array.isArray(value) ? value[0] : value;
 const same = (a: unknown, b: unknown) =>
   String(a ?? "")
     .trim()
@@ -672,8 +673,11 @@ function LorryReceiptEditForm({
         db.from("shipments").select("*, shipment_items(*)").eq("branch_id", row.branch_id).order("eway_bill_date", { ascending: false }),
         db.from("contract_entries").select("*").eq("contract_id", row.source_id),
       ]);
-      const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number,branch_id)");
-      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.branch_id === row.branch_id ? link.lr?.lr_number ?? null : null]));
+      const { data: branchLrs } = await db.from("lorry_receipts").select("id,lr_number").eq("branch_id", row.branch_id);
+      const branchLrIds = (branchLrs ?? []).map((lr: any) => lr.id);
+      const { data: links } = branchLrIds.length ? await db.from("lr_shipments").select("shipment_id,lr_id").in("lr_id", branchLrIds) : { data: [] };
+      const lrNumbers = new Map((branchLrs ?? []).map((lr: any) => [String(lr.id), lr.lr_number]));
+      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), lrNumbers.get(String(link.lr_id)) ?? null]));
       setSources((s.data ?? []) as Source[]);
       setEntries((e.data ?? []) as EntryLite[]);
       setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
@@ -783,8 +787,11 @@ function LorryReceiptForm({
       ]);
       if (s.error || sh.error)
         toast.error(s.error?.message ?? sh.error?.message ?? "Could not load LR options");
-      const { data: links } = await db.from("lr_shipments").select("shipment_id, lr:lorry_receipts(lr_number,branch_id)");
-      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), link.lr?.branch_id === branchId ? link.lr?.lr_number ?? null : null]));
+      const { data: branchLrs } = await db.from("lorry_receipts").select("id,lr_number").eq("branch_id", branchId);
+      const branchLrIds = (branchLrs ?? []).map((lr: any) => lr.id);
+      const { data: links } = branchLrIds.length ? await db.from("lr_shipments").select("shipment_id,lr_id").in("lr_id", branchLrIds) : { data: [] };
+      const lrNumbers = new Map((branchLrs ?? []).map((lr: any) => [String(lr.id), lr.lr_number]));
+      const lrByShipment = new Map(((links ?? []) as Array<Record<string, any>>).map((link) => [String(link.shipment_id), lrNumbers.get(String(link.lr_id)) ?? null]));
       setSources((s.data ?? []) as Source[]);
       setEntries((e.data ?? []) as EntryLite[]);
       setShipments(((sh.data ?? []) as Shipment[]).map((shipment) => ({ ...shipment, lr_number: lrByShipment.get(shipment.id) ?? null })));
