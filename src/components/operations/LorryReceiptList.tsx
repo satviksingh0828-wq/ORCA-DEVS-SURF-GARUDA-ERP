@@ -692,7 +692,8 @@ function LorryReceiptEditForm({
     })();
   }, [row.branch_id]);
   const base = selected.find((s) => s.id === baseId) ?? selected[0];
-  const available = shipments.filter((s) => !selected.some((x) => x.id === s.id) && !linkedShipmentIds.has(s.id) && (!shipmentSearch.trim() || s.eway_bill_number.includes(shipmentSearch.trim())) && (!shipmentDate || s.eway_bill_date === shipmentDate));
+  const visibleShipments = shipments.filter((s) => (!shipmentSearch.trim() || s.eway_bill_number.includes(shipmentSearch.trim())) && (!shipmentDate || s.eway_bill_date === shipmentDate));
+  const available = visibleShipments.filter((s) => !selected.some((x) => x.id === s.id) && !linkedShipmentIds.has(s.id));
   function addShipment(shipment: Shipment) {
     if (base && (!same(base.supplier_gstin, shipment.supplier_gstin) || !same(base.recipient_gstin, shipment.recipient_gstin) || !same(base.dispatch_from_pin_code, shipment.dispatch_from_pin_code) || !same(base.ship_to_pin_code, shipment.ship_to_pin_code)))
       return toast.error("This shipment does not match the LR base shipment");
@@ -738,7 +739,7 @@ function LorryReceiptEditForm({
       <section className="order-first space-y-3 rounded-xl border border-border p-4">
         <div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold">Attached Shipments</h3><p className="text-xs text-muted-foreground">Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.</p></div><div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)}><Plus className="mr-1 size-4" /> Add Shipment</Button><Button type="button" onClick={() => setShowCreateShipment(true)} disabled={!row.branch_id}><Plus className="mr-1 size-4" /> Create and Add</Button></div></div>
         {selected.length === 0 ? <p className="py-5 text-center text-sm text-muted-foreground">No shipments attached yet.</p> : <div className="space-y-2 text-sm">{selected.map((s) => <div key={s.id} className="flex items-center justify-between rounded-lg border border-border px-3 py-2"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Button variant="ghost" size="icon" onClick={() => removeShipment(s.id)}><X className="size-4" /></Button></div>)}</div>}
-        {showPicker && <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3"><p className="text-sm font-medium">Select compatible shipment</p><div className="flex flex-wrap gap-2"><Input className="flex-1" placeholder="Search shipment number" value={shipmentSearch} onChange={(e) => setShipmentSearch(e.target.value)} /><Input className="w-40" type="date" value={shipmentDate} onChange={(e) => setShipmentDate(e.target.value)} /></div>{available.length === 0 ? <p className="text-sm text-muted-foreground">No unlinked shipments available for this branch.</p> : available.slice(0, 50).map((s) => <button type="button" key={s.id} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Link2 className="size-4 text-primary" /></button>)}</div>}
+        {showPicker && <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3"><p className="text-sm font-medium">Select compatible shipment</p><div className="flex flex-wrap gap-2"><Input className="flex-1" placeholder="Search shipment number" value={shipmentSearch} onChange={(e) => setShipmentSearch(e.target.value)} /><Input className="w-40" type="date" value={shipmentDate} onChange={(e) => setShipmentDate(e.target.value)} /></div>{visibleShipments.length === 0 ? <p className="text-sm text-muted-foreground">No shipments found for this branch/date.</p> : visibleShipments.slice(0, 100).map((s) => { const linked = linkedShipmentIds.has(s.id); const selectedAlready = selected.some((x) => x.id === s.id); return <button type="button" key={s.id} disabled={linked || selectedAlready} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"><span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.eway_bill_date || "—"} · {s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span><Badge variant={linked ? "outline" : selectedAlready ? "secondary" : "default"}>{linked ? "Linked to LR" : selectedAlready ? "Selected" : "Unlinked"}</Badge></button> })}</div>}
       </section>
       </div>
       {showCreateShipment && <CreateAndAddShipment branchId={row.branch_id} branches={branches} user={user} onClose={() => setShowCreateShipment(false)} onCreated={(shipment) => { addShipment(shipment); setShowCreateShipment(false); }} />}
@@ -804,12 +805,8 @@ function LorryReceiptForm({
     })();
   }, [branchId]);
   const base = selected.find((s) => s.id === baseId) ?? selected[0];
-  const available = shipments.filter((s) =>
-    !linkedShipmentIds.has(s.id) &&
-    !selected.some((x) => x.id === s.id) &&
-    (!shipmentSearch.trim() || s.eway_bill_number.includes(shipmentSearch.trim())) &&
-    (!shipmentDate || s.eway_bill_date === shipmentDate),
-  );
+  const visibleShipments = shipments.filter((s) => (!shipmentSearch.trim() || s.eway_bill_number.includes(shipmentSearch.trim())) && (!shipmentDate || s.eway_bill_date === shipmentDate));
+  const available = visibleShipments.filter((s) => !linkedShipmentIds.has(s.id) && !selected.some((x) => x.id === s.id));
   function addShipment(shipment: Shipment) {
     if (
       selected.length &&
@@ -994,27 +991,15 @@ function LorryReceiptForm({
         {showPicker && (
           <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
             <p className="text-sm font-medium">Select compatible shipment</p>
-            {available.length === 0 ? (
-              <p className="text-sm text-muted-foreground">
-                No unlinked shipments available for this branch.
-              </p>
+            {visibleShipments.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No shipments found for this branch/date.</p>
             ) : (
-              available.slice(0, 50).map((s) => (
-                <button
-                  type="button"
-                  key={s.id}
-                  onClick={() => addShipment(s)}
-                  className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted"
-                >
-                  <span>
-                    <strong>{s.eway_bill_number}</strong>
-                    <span className="ml-3 text-muted-foreground">
-                      {s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}
-                    </span>
-                  </span>
-                  <Link2 className="size-4 text-primary" />
+              visibleShipments.slice(0, 100).map((s) => { const linked = linkedShipmentIds.has(s.id); const selectedAlready = selected.some((x) => x.id === s.id); return (
+                <button type="button" key={s.id} disabled={linked || selectedAlready} onClick={() => addShipment(s)} className="flex w-full items-center justify-between rounded-lg border border-border bg-background px-3 py-2 text-left text-sm hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60">
+                  <span><strong>{s.eway_bill_number}</strong><span className="ml-3 text-muted-foreground">{s.eway_bill_date || "—"} · {s.dispatch_from_pin_code || "—"} → {s.ship_to_pin_code || "—"}</span></span>
+                  <Badge variant={linked ? "outline" : selectedAlready ? "secondary" : "default"}>{linked ? "Linked to LR" : selectedAlready ? "Selected" : "Unlinked"}</Badge>
                 </button>
-              ))
+              ); })
             )}
           </div>
         )}
