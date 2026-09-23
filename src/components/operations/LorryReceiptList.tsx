@@ -821,6 +821,16 @@ function LorryReceiptForm({
     setBaseId((old) => old || shipment.id);
     setShowPicker(false);
   }
+  function addExistingShipment() {
+    const number = shipmentSearch.trim();
+    if (!number) return toast.error("Enter an existing shipment number");
+    const shipment = shipments.find((item) => String(item.eway_bill_number).trim() === number);
+    if (!shipment) return toast.error("Shipment was not found in the selected branch");
+    if (linkedShipmentIds.has(shipment.id)) return toast.error("This shipment is already connected to another LR");
+    if (selected.some((item) => item.id === shipment.id)) return toast.error("This shipment is already added to this LR");
+    addShipment(shipment);
+    setShipmentSearch("");
+  }
   function removeShipment(id: string) {
     setSelected((old) => old.filter((s) => s.id !== id));
     if (baseId === id) setBaseId(selected.find((s) => s.id !== id)?.id ?? "");
@@ -948,7 +958,7 @@ function LorryReceiptForm({
               Shipment number is the E-Way Bill number. Route is shown from PIN to PIN.
             </p>
           </div>
-          <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)} disabled={!branchId}><Plus className="mr-1 size-4" /> Add Shipment</Button><Button type="button" onClick={() => setShowCreateShipment(true)} disabled={!branchId}><Plus className="mr-1 size-4" /> Create and Add</Button></div>
+          <div className="flex gap-2"><Button type="button" variant="outline" onClick={() => setShowPicker((v) => !v)} disabled={!branchId}><Plus className="mr-1 size-4" /> Add Existing Shipment</Button><Button type="button" onClick={() => setShowCreateShipment(true)} disabled={!branchId}><Plus className="mr-1 size-4" /> Create and Add</Button></div>
         </div>
         {selected.length === 0 ? (
           <p className="py-5 text-center text-sm text-muted-foreground">
@@ -988,7 +998,8 @@ function LorryReceiptForm({
         )}
         {showPicker && (
           <div className="space-y-2 rounded-lg border border-border bg-muted/20 p-3">
-            <p className="text-sm font-medium">Select compatible shipment</p>
+            <p className="text-sm font-medium">Add Existing Shipment</p>
+            <div className="flex gap-2"><Input className="flex-1" placeholder="Enter existing shipment number" value={shipmentSearch} onChange={(event) => setShipmentSearch(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); addExistingShipment(); } }} /><Button type="button" onClick={addExistingShipment}>Add</Button></div>
             {visibleShipments.length === 0 ? (
               <p className="text-sm text-muted-foreground">No shipments found for this branch.</p>
             ) : (
