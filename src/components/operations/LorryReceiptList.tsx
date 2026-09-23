@@ -566,6 +566,7 @@ function LorryReceiptView({
 function CreateAndAddShipment({
   branchId,
   branches,
+  user,
   onCreated,
   onClose,
 }: {
@@ -596,7 +597,7 @@ function CreateAndAddShipment({
       setItem((old) => ({ ...old, description: String(firstItem.productName ?? firstItem.productDesc ?? old.description), hsn_code: String(firstItem.hsnCode ?? old.hsn_code), quantity: String(firstItem.quantity ?? old.quantity), unit: String(firstItem.qtyUnit ?? old.unit), taxable_value: String(firstItem.taxableAmount ?? old.taxable_value), total_invoice_value: String(firstItem.taxableAmount ?? old.total_invoice_value) }));
       toast.success("E-Way Bill details fetched and form filled");
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not fetch E-Way Bill details"); }
-    setFetchingEwb(false);
+    finally { setFetchingEwb(false); }
   }
   async function save() {
     if (!/^[0-9]{12}$/.test(form.eway_bill_number) || !form.branch_id || !form.document_number || !form.document_date || !item.description.trim() || !item.hsn_code.trim()) return toast.error("Enter a valid 12-digit E-Way Bill, document details and one item");
