@@ -354,10 +354,11 @@ export function ShipmentList() {
         .from("lr_shipments")
         .select("shipment_id, lorry_receipt:lorry_receipts(lr_number)");
       const lrByShipment = new Map(
-        ((linkedRows ?? []) as Array<Record<string, unknown>>).map((row) => [
-          String(row.shipment_id),
-          (row.lorry_receipt as { lr_number?: string } | null)?.lr_number ?? null,
-        ]),
+        ((linkedRows ?? []) as Array<Record<string, unknown>>).map((row) => {
+          const relation = row.lorry_receipt;
+          const lorryReceipt = Array.isArray(relation) ? relation[0] : relation;
+          return [String(row.shipment_id), (lorryReceipt as { lr_number?: string } | null)?.lr_number ?? null];
+        }),
       );
       setShipments(
         ((data ?? []) as Array<Record<string, unknown>>).map(
