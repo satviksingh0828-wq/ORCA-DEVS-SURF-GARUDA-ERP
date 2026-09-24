@@ -305,7 +305,7 @@ function ShipmentView({
   );
 }
 
-export function ShipmentList() {
+export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {}) {
   const { user } = useSession();
   const branches = useBranches();
   const isBasic = user?.role === "basic";
@@ -631,9 +631,11 @@ export function ShipmentList() {
                 One shipment is one E-Way Bill. Part A details are stored with nested goods items.
               </p>
             </div>
-            <Button onClick={openCreate} className="gap-1.5">
-              <Plus className="size-4" /> Create Shipment
-            </Button>
+            {canCreate && (
+              <Button onClick={openCreate} className="gap-1.5">
+                <Plus className="size-4" /> Create Shipment
+              </Button>
+            )}
           </div>
           <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-muted/20 p-3">
             <div className="min-w-[190px] space-y-1.5">

@@ -156,7 +156,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const isViewer = user?.role === "viewer";
 
   const TABS = ALL_TABS.filter((t) => {
-    const isLtmsTab = t.id === "monthly-mis" || t.id === "eway-bill";
+    const isLtmsTab = t.id === "monthly-mis" || t.id === "shipments" || t.id === "eway-bill";
     if (mode === "ltms" && !isLtmsTab) return false;
     if (mode === "tms" && isLtmsTab) return false;
     if ("basicOnly" in t && t.basicOnly && user?.role !== "basic") return false;
@@ -258,7 +258,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           )}
           {safeTab === "shipments" && (
             <TabErrorBoundary label="Shipments">
-              <ShipmentList />
+              <ShipmentList canCreate={mode !== "ltms"} />
             </TabErrorBoundary>
           )}
           {safeTab === "lr" && (
