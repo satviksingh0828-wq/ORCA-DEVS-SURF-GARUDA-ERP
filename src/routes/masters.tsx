@@ -52,17 +52,20 @@ const ALL_TABS = [
 
 type TabId = (typeof ALL_TABS)[number]["id"];
 
-function MastersPage() {
+export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
   const { user } = useSession();
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
 
   // viewer (Manager) sees all tabs except Sources; basic users see non-adminOnly tabs only
-  const TABS = isAdmin
+  const roleTabs = isAdmin
     ? ALL_TABS
     : isViewer
       ? ALL_TABS.filter((t) => t.id !== "contract")
       : ALL_TABS.filter((t) => !t.adminOnly);
+  const TABS = ltmsMode
+    ? roleTabs.filter((t) => t.id !== "transporter" && t.id !== "delivery-partner")
+    : roleTabs;
 
   const [tab, setTab] = useState<TabId>(isAdmin || isViewer ? "vehicle" : "driver");
   const [navOpen, setNavOpen] = useState(true);
@@ -76,7 +79,7 @@ function MastersPage() {
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">Workspace</Link>
           <ChevronRight className="size-3.5" />
-          <Link to="/tms" className="hover:text-foreground">TMS</Link>
+          <Link to={ltmsMode ? "/ltms" : "/tms"} className="hover:text-foreground">{ltmsMode ? "LTMS" : "TMS"}</Link>
           <ChevronRight className="size-3.5" />
           <span className="text-foreground">Masters</span>
         </span>
