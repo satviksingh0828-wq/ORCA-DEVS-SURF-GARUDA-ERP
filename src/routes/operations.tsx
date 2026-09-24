@@ -148,19 +148,25 @@ const ALL_TABS = [
 
 type TabId = (typeof ALL_TABS)[number]["id"];
 
-function OperationsPage() {
+export type OperationsMode = "tms" | "ltms";
+
+export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {}) {
   const { user } = useSession();
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
 
   const TABS = ALL_TABS.filter((t) => {
+    const isLtmsTab = t.id === "monthly-mis" || t.id === "eway-bill";
+    if (mode === "ltms" && !isLtmsTab) return false;
+    if (mode === "tms" && isLtmsTab) return false;
     if ("basicOnly" in t && t.basicOnly && user?.role !== "basic") return false;
     return isViewer ? t.id !== "import-trips" && t.id !== "monthly-mis" : isAdmin || !t.adminOnly;
   });
-  const [tab, setTab] = useState<TabId>("trip");
+  const [tab, setTab] = useState<TabId>(mode === "ltms" ? "monthly-mis" : "trip");
   const [navOpen, setNavOpen] = useState(true);
 
-  const safeTab: TabId = (TABS.find((t) => t.id === tab) ? tab : "trip") as TabId;
+  const defaultTab: TabId = mode === "ltms" ? "eway-bill" : "trip";
+  const safeTab: TabId = (TABS.find((t) => t.id === tab) ? tab : defaultTab) as TabId;
   const active = TABS.find((t) => t.id === safeTab) ?? TABS[0];
 
   return (
@@ -171,8 +177,8 @@ function OperationsPage() {
             Workspace
           </Link>
           <ChevronRight className="size-3.5" />
-          <Link to="/tms" className="hover:text-foreground">
-            TMS
+          <Link to={mode === "ltms" ? "/ltms" : "/tms"} className="hover:text-foreground">
+            {mode === "ltms" ? "LTMS" : "TMS"}
           </Link>
           <ChevronRight className="size-3.5" />
           <span className="text-foreground">Operations</span>

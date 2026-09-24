@@ -58,6 +58,7 @@ import { Route as EmployeesIndexRouteImport } from './routes/employees.index'
 import { Route as EmployeesDepartmentsRouteImport } from './routes/employees.departments'
 import { Route as EmployeesNewRouteImport } from './routes/employees.new'
 import { Route as LtmsMastersRouteImport } from './routes/ltms_.masters'
+import { Route as LtmsOperationsRouteImport } from './routes/ltms_.operations'
 import { Route as PayrollIndexRouteImport } from './routes/payroll.index'
 import { Route as PayrollAdvancesRouteImport } from './routes/payroll.advances'
 import { Route as PayrollDeductionsRouteImport } from './routes/payroll.deductions'
@@ -339,6 +340,11 @@ const LtmsMastersRoute = LtmsMastersRouteImport.update({
   path: '/ltms/masters',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LtmsOperationsRoute = LtmsOperationsRouteImport.update({
+  id: '/ltms_/operations',
+  path: '/ltms/operations',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PayrollIndexRoute = PayrollIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -570,6 +576,7 @@ export interface FileRoutesByFullPath {
   '/employees/departments': typeof EmployeesDepartmentsRouteWithChildren
   '/employees/new': typeof EmployeesNewRoute
   '/ltms/masters': typeof LtmsMastersRoute
+  '/ltms/operations': typeof LtmsOperationsRoute
   '/payroll/advances': typeof PayrollAdvancesRoute
   '/payroll/deductions': typeof PayrollDeductionsRoute
   '/payroll/generate': typeof PayrollGenerateRoute
@@ -648,6 +655,7 @@ export interface FileRoutesByTo {
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/employees/new': typeof EmployeesNewRoute
   '/ltms/masters': typeof LtmsMastersRoute
+  '/ltms/operations': typeof LtmsOperationsRoute
   '/payroll/advances': typeof PayrollAdvancesRoute
   '/payroll/deductions': typeof PayrollDeductionsRoute
   '/payroll/generate': typeof PayrollGenerateRoute
@@ -735,6 +743,7 @@ export interface FileRoutesById {
   '/employees/departments': typeof EmployeesDepartmentsRouteWithChildren
   '/employees/new': typeof EmployeesNewRoute
   '/ltms_/masters': typeof LtmsMastersRoute
+  '/ltms_/operations': typeof LtmsOperationsRoute
   '/payroll/advances': typeof PayrollAdvancesRoute
   '/payroll/deductions': typeof PayrollDeductionsRoute
   '/payroll/generate': typeof PayrollGenerateRoute
@@ -823,6 +832,7 @@ export interface FileRouteTypes {
     | '/employees/departments'
     | '/employees/new'
     | '/ltms/masters'
+    | '/ltms/operations'
     | '/payroll/advances'
     | '/payroll/deductions'
     | '/payroll/generate'
@@ -901,6 +911,7 @@ export interface FileRouteTypes {
     | '/dashboard/payroll'
     | '/employees/new'
     | '/ltms/masters'
+    | '/ltms/operations'
     | '/payroll/advances'
     | '/payroll/deductions'
     | '/payroll/generate'
@@ -987,6 +998,7 @@ export interface FileRouteTypes {
     | '/employees/departments'
     | '/employees/new'
     | '/ltms_/masters'
+    | '/ltms_/operations'
     | '/payroll/advances'
     | '/payroll/deductions'
     | '/payroll/generate'
@@ -1057,6 +1069,7 @@ export interface RootRouteChildren {
   ApiNotifyExpiryRoute: typeof ApiNotifyExpiryRoute
   ApiNotifyOpenTripsRoute: typeof ApiNotifyOpenTripsRoute
   LtmsMastersRoute: typeof LtmsMastersRoute
+  LtmsOperationsRoute: typeof LtmsOperationsRoute
   ApiDriverThemeRoute: typeof ApiDriverThemeRoute
   ApiHrPayrollEmailRoute: typeof ApiHrPayrollEmailRoute
   ApiDriverTripsClaimRoute: typeof ApiDriverTripsClaimRoute
@@ -1415,6 +1428,13 @@ declare module '@tanstack/react-router' {
       path: '/ltms/masters'
       fullPath: '/ltms/masters'
       preLoaderRoute: typeof LtmsMastersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ltms_/operations': {
+      id: '/ltms_/operations'
+      path: '/ltms/operations'
+      fullPath: '/ltms/operations'
+      preLoaderRoute: typeof LtmsOperationsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/payroll/': {
@@ -1867,6 +1887,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiNotifyExpiryRoute: ApiNotifyExpiryRoute,
   ApiNotifyOpenTripsRoute: ApiNotifyOpenTripsRoute,
   LtmsMastersRoute: LtmsMastersRoute,
+  LtmsOperationsRoute: LtmsOperationsRoute,
   ApiDriverThemeRoute: ApiDriverThemeRoute,
   ApiHrPayrollEmailRoute: ApiHrPayrollEmailRoute,
   ApiDriverTripsClaimRoute: ApiDriverTripsClaimRoute,

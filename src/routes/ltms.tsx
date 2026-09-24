@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Database, DollarSign } from "lucide-react";
+import { ClipboardList, Database, DollarSign } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { WorkspaceModulePage } from "@/components/WorkspaceModulePage";
 
@@ -9,9 +9,16 @@ export const Route = createFileRoute("/ltms")({
       <WorkspaceModulePage
         eyebrow="Workspace / LTMS"
         title="LTMS"
-        description="Logistics finance and transport-management support tools."
+        description="Logistics operations, finance and transport-management support tools."
         allowedRoles={["admin", "semi_admin", "basic", "viewer"]}
         tiles={[
+          {
+            key: "operations",
+            label: "Operations",
+            desc: "Monthly MIS and E-Way Bill management",
+            icon: ClipboardList,
+            to: "/ltms/operations",
+          },
           {
             key: "finance",
             label: "Finance",
