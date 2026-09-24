@@ -115,16 +115,23 @@ type Shipment = Form & {
 };
 type PartBHistory = {
   id: string;
+  eway_bill_number: string;
   from_place: string;
   from_state: number;
+  transporter_id: string | null;
+  transporter_name: string | null;
   vehicle_no: string;
   vehicle_type: string;
   trans_mode: string;
+  trans_distance: string | null;
   trans_doc_no: string | null;
   trans_doc_date: string | null;
   reason_rem: string | null;
   updated_at: string;
 };
+
+const transportModeLabel = (mode: string) => ({ "1": "Road", "2": "Rail", "3": "Air", "4": "Ship" }[mode] ?? mode ?? "—");
+const vehicleTypeLabel = (type: string) => type === "O" ? "ODC" : type === "R" ? "Regular" : type || "—";
 
 const blankItem = (): Item => ({
   product_name: "",
@@ -322,12 +329,16 @@ function ShipmentView({
   history,
   branchName,
   onBack,
+  onFetchPartB,
+  fetchingPartB,
 }: {
   shipment: Shipment;
   items: Item[];
   history: PartBHistory[];
   branchName: (id: string) => string;
   onBack: () => void;
+  onFetchPartB: () => void;
+  fetchingPartB: boolean;
 }) {
   return (
     <div className="space-y-5">
@@ -337,6 +348,11 @@ function ShipmentView({
           <h2 className="text-xl font-semibold">Shipment Details — {shipment.eway_bill_number}</h2>
           <p className="text-sm text-muted-foreground">{shipment.lr_number ? `Assigned to LR ${shipment.lr_number}` : "Not assigned to an LR"}</p>
         </div>
+        {shipment.lr_number && (
+          <Button type="button" variant="outline" onClick={onFetchPartB} disabled={fetchingPartB}>
+            {fetchingPartB ? "Fetching Part B…" : "Fetch Part B"}
+          </Button>
+        )}
       </div>
       <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-3">
         <Field label="E-Way Bill Number" value={shipment.eway_bill_number} onChange={() => {}} readOnly />
@@ -378,7 +394,8 @@ function ShipmentView({
       </div>
       <div className="rounded-xl border border-border p-4">
         <h3 className="mb-3 font-semibold">Part-B Update History</h3>
-        {history.length === 0 ? <p className="text-sm text-muted-foreground">No Part-B updates have been stored for this shipment.</p> : <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Updated</th><th className="px-2 py-2">Vehicle</th><th className="px-2 py-2">From</th><th className="px-2 py-2">Mode</th><th className="px-2 py-2">Transport document</th><th className="px-2 py-2">Reason</th></tr></thead><tbody>{history.map((entry) => <tr key={entry.id} className="border-t border-border"><td className="px-2 py-2">{new Date(entry.updated_at).toLocaleString("en-IN")}</td><td className="px-2 py-2">{entry.vehicle_no} ({entry.vehicle_type})</td><td className="px-2 py-2">{entry.from_place} · {entry.from_state}</td><td className="px-2 py-2">{entry.trans_mode}</td><td className="px-2 py-2">{entry.trans_doc_no || "—"} {entry.trans_doc_date ? `· ${entry.trans_doc_date}` : ""}</td><td className="px-2 py-2">{entry.reason_rem || "—"}</td></tr>)}</tbody></table></div>}
+        {shipment.lr_number && <p className="mb-3 text-xs text-muted-foreground">Each Fetch Part B action stores a separate transport snapshot for this LR-linked shipment.</p>}
+        {history.length === 0 ? <p className="text-sm text-muted-foreground">No Part-B updates have been stored for this shipment.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[1250px] text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Updated</th><th className="px-2 py-2">Transport Mode</th><th className="px-2 py-2">Transporter ID</th><th className="px-2 py-2">Transporter Name</th><th className="px-2 py-2">Transport Document No.</th><th className="px-2 py-2">Document Date</th><th className="px-2 py-2">Vehicle Number</th><th className="px-2 py-2">Vehicle Type</th><th className="px-2 py-2">Distance (KM)</th><th className="px-2 py-2">From</th></tr></thead><tbody>{history.map((entry) => <tr key={entry.id} className="border-t border-border"><td className="px-2 py-2">{new Date(entry.updated_at).toLocaleString("en-IN")}</td><td className="px-2 py-2">{transportModeLabel(entry.trans_mode)}</td><td className="px-2 py-2">{entry.transporter_id || "—"}</td><td className="px-2 py-2">{entry.transporter_name || "—"}</td><td className="px-2 py-2">{entry.trans_doc_no || "—"}</td><td className="px-2 py-2">{entry.trans_doc_date || "—"}</td><td className="px-2 py-2">{entry.vehicle_no || "—"}</td><td className="px-2 py-2">{vehicleTypeLabel(entry.vehicle_type)}</td><td className="px-2 py-2">{entry.trans_distance || "—"}</td><td className="px-2 py-2">{entry.from_place || "—"} · {entry.from_state || "—"}</td></tr>)}</tbody></table></div>}
       </div>
     </div>
   );
@@ -411,6 +428,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   const [search, setSearch] = useState("");
   const [assignment, setAssignment] = useState("all");
   const [fetchingEwb, setFetchingEwb] = useState(false);
+  const [fetchingPartB, setFetchingPartB] = useState(false);
 
   const visibleBranches = useMemo(
     () => (allowed === null ? branches : branches.filter((b) => allowed.includes(b.id))),
@@ -495,12 +513,18 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     );
     setItems(
       ((data ?? []) as Array<Record<string, unknown>>).map((item) => ({
+        product_name: String(item.product_name ?? ""),
         description: String(item.description ?? ""),
         hsn_code: String(item.hsn_code ?? ""),
         quantity: String(item.quantity ?? ""),
         weight_kg: String(item.weight_kg ?? ""),
         unit: String(item.unit ?? "NOS"),
         taxable_value: String(item.taxable_value ?? ""),
+        cgst_rate: String(item.cgst_rate ?? ""),
+        sgst_rate: String(item.sgst_rate ?? ""),
+        igst_rate: String(item.igst_rate ?? ""),
+        cess_rate: String(item.cess_rate ?? ""),
+        cess_nonadvol: String(item.cess_nonadvol ?? ""),
         gst_rate: String(item.gst_rate ?? ""),
         cgst: String(item.cgst ?? ""),
         sgst_utgst: String(item.sgst_utgst ?? ""),
@@ -521,18 +545,24 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
       .eq("shipment_id", shipment.id)
       .order("item_no"), db
       .from("shipment_part_b_history")
-      .select("id,from_place,from_state,vehicle_no,vehicle_type,trans_mode,trans_doc_no,trans_doc_date,reason_rem,updated_at")
+      .select("id,eway_bill_number,from_place,from_state,transporter_id,transporter_name,vehicle_no,vehicle_type,trans_mode,trans_distance,trans_doc_no,trans_doc_date,reason_rem,updated_at")
       .eq("shipment_id", shipment.id)
       .order("updated_at", { ascending: false })]);
     if (historyError) return toast.error(historyError.message);
     setViewingItems(
       ((data ?? []) as Array<Record<string, unknown>>).map((item) => ({
+        product_name: String(item.product_name ?? ""),
         description: String(item.description ?? ""),
         hsn_code: String(item.hsn_code ?? ""),
         quantity: String(item.quantity ?? ""),
         weight_kg: String(item.weight_kg ?? ""),
         unit: String(item.unit ?? "NOS"),
         taxable_value: String(item.taxable_value ?? ""),
+        cgst_rate: String(item.cgst_rate ?? ""),
+        sgst_rate: String(item.sgst_rate ?? ""),
+        igst_rate: String(item.igst_rate ?? ""),
+        cess_rate: String(item.cess_rate ?? ""),
+        cess_nonadvol: String(item.cess_nonadvol ?? ""),
         gst_rate: String(item.gst_rate ?? ""),
         cgst: String(item.cgst ?? ""),
         sgst_utgst: String(item.sgst_utgst ?? ""),
@@ -544,6 +574,42 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     );
     setViewingHistory((history ?? []) as PartBHistory[]);
     setViewingShipment(shipment);
+  }
+  async function fetchPartB() {
+    if (!viewingShipment?.lr_number) return toast.error("Part B can be fetched only after an LR is assigned");
+    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+    setFetchingPartB(true);
+    try {
+      const raw = await serverFetchEwayBillDetails({
+        data: { token: user.sessionToken, branchId: viewingShipment.branch_id, ewayBillNumber: viewingShipment.eway_bill_number },
+      });
+      const source = ((raw as Record<string, unknown>)?.data ?? raw) as Record<string, unknown>;
+      const text = (key: string) => String(source[key] ?? "");
+      const snapshot = {
+        shipment_id: viewingShipment.id,
+        eway_bill_number: viewingShipment.eway_bill_number,
+        from_place: text("fromPlace"),
+        from_state: Number(text("actFromStateCode") || text("fromStateCode") || 0),
+        transporter_id: text("transporterId") || null,
+        transporter_name: text("transporterName") || null,
+        vehicle_no: text("vehicleNo"),
+        vehicle_type: text("vehicleType") || "R",
+        trans_mode: text("transMode"),
+        trans_distance: text("transDistance") || null,
+        trans_doc_no: text("transDocNo") || null,
+        trans_doc_date: ewayDate(source.transDocDate) || null,
+        response_data: source,
+        updated_by: user.id,
+      };
+      const { data: saved, error } = await db.from("shipment_part_b_history").insert(snapshot).select("*").single();
+      if (error) throw error;
+      if (saved) setViewingHistory((current) => [saved as PartBHistory, ...current]);
+      toast.success("Part B details fetched and saved to history");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not fetch Part B details");
+    } finally {
+      setFetchingPartB(false);
+    }
   }
   async function deleteShipment(shipment: Shipment) {
     if (shipment.lr_number) {
@@ -663,7 +729,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   }
 
   if (viewingShipment)
-    return <ShipmentView shipment={viewingShipment} items={viewingItems} history={viewingHistory} branchName={branchName} onBack={() => setViewingShipment(null)} />;
+    return <ShipmentView shipment={viewingShipment} items={viewingItems} history={viewingHistory} branchName={branchName} onBack={() => setViewingShipment(null)} onFetchPartB={() => void fetchPartB()} fetchingPartB={fetchingPartB} />;
   const setItem = (index: number, key: keyof Item, value: string) =>
     setItems(items.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   const totalTaxable = items.reduce((sum, item) => sum + n(item.taxable_value), 0);
