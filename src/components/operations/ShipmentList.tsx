@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, Plus, Search, Trash2, Truck, X } from "lucide-react";
+import { Eye, Plus, Search, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
@@ -506,16 +506,6 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     setViewingHistory((history ?? []) as PartBHistory[]);
     setViewingShipment(shipment);
   }
-  async function deleteShipment(shipment: Shipment) {
-    if (!window.confirm(`Delete shipment ${shipment.eway_bill_number}? This cannot be undone.`)) return;
-    const { error: unlinkError } = await db.from("lr_shipments").delete().eq("shipment_id", shipment.id);
-    if (unlinkError) return toast.error(`Could not disconnect shipment from LR: ${unlinkError.message}`);
-    const { error } = await db.from("shipments").delete().eq("id", shipment.id);
-    if (error) return toast.error(error.message);
-    toast.success(`Shipment ${shipment.eway_bill_number} deleted`);
-    await load();
-  }
-
   async function fetchEwayBillDetails() {
     if (!form.branch_id) return toast.error("Select a branch first");
     if (!/^\d{12}$/.test(form.eway_bill_number)) return toast.error("Enter a valid 12-digit E-Way Bill number");
@@ -793,9 +783,6 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                         <div className="flex justify-end gap-1">
                           <Button variant="ghost" size="sm" onClick={() => void openView(s)}>
                             <Eye className="mr-1 size-4" /> View
-                          </Button>
-                          <Button variant="ghost" size="sm" onClick={() => void deleteShipment(s)} title="Delete shipment">
-                            <Trash2 className="mr-1 size-4 text-destructive" /> Delete
                           </Button>
                         </div>
                       </td>

@@ -31,6 +31,7 @@ import { isAdminLike } from "@/lib/roles";
 import { FastagLedger } from "@/components/reports/FastagLedger";
 import { ReportFiltersContext } from "@/lib/report-filters";
 import { ShipmentList } from "@/components/operations/ShipmentList";
+import { ConsignmentList } from "@/components/operations/ConsignmentList";
 import { LorryReceiptList } from "@/components/operations/LorryReceiptList";
 import { EwayBillList } from "@/components/operations/EwayBillList";
 import { ManifestList } from "@/components/operations/ManifestList";
@@ -73,6 +74,14 @@ const ALL_TABS = [
     id: "shipments",
     label: "Shipments",
     desc: "E-Way Bills and Part A goods",
+    icon: FileText,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
+    id: "consignment",
+    label: "Consignment",
+    desc: "Create shipments from E-Way Bills",
     icon: FileText,
     adminOnly: false,
     dividerBefore: false,
@@ -147,7 +156,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const isViewer = user?.role === "viewer";
 
   const TABS = ALL_TABS.filter((t) => {
-    const isLtmsTab = t.id === "shipments" || t.id === "eway-bill";
+    const isLtmsTab = t.id === "shipments" || t.id === "consignment" || t.id === "eway-bill";
     if (mode === "ltms" && !isLtmsTab) return false;
     if (mode === "tms" && isLtmsTab) return false;
     if ("basicOnly" in t && t.basicOnly && user?.role !== "basic") return false;
@@ -249,7 +258,12 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           )}
           {safeTab === "shipments" && (
             <TabErrorBoundary label="Shipments">
-              <ShipmentList canCreate={mode !== "ltms"} />
+              <ShipmentList canCreate={false} />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "consignment" && (
+            <TabErrorBoundary label="Consignment">
+              <ConsignmentList />
             </TabErrorBoundary>
           )}
           {safeTab === "lr" && (
