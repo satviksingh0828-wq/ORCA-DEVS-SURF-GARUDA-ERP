@@ -156,6 +156,15 @@ const ADMIN_VIEWER_MODULES = [
     roles: ["admin", "semi_admin", "viewer"] as const,
   },
   {
+    key: "ltms",
+    label: "LTMS",
+    desc: "Logistics finance, income & expenditure",
+    icon: Landmark,
+    active: true,
+    to: "/ltms" as const,
+    roles: ["admin", "semi_admin", "viewer"] as const,
+  },
+  {
     key: "hrms",
     label: "HRMS",
     desc: "Employees, attendance, payroll & HR dashboards",

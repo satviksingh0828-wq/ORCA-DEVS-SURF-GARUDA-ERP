@@ -21,6 +21,7 @@ import { Route as HrDashboardRouteImport } from './routes/hr-dashboard'
 import { Route as HrDataRouteImport } from './routes/hr-data'
 import { Route as HrmsRouteImport } from './routes/hrms'
 import { Route as ImportTripsRouteImport } from './routes/import-trips'
+import { Route as LtmsRouteImport } from './routes/ltms'
 import { Route as MastersRouteImport } from './routes/masters'
 import { Route as OperationsRouteImport } from './routes/operations'
 import { Route as PayrollRouteImport } from './routes/payroll'
@@ -150,6 +151,11 @@ const HrmsRoute = HrmsRouteImport.update({
 const ImportTripsRoute = ImportTripsRouteImport.update({
   id: '/import-trips',
   path: '/import-trips',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LtmsRoute = LtmsRouteImport.update({
+  id: '/ltms',
+  path: '/ltms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MastersRoute = MastersRouteImport.update({
@@ -525,6 +531,7 @@ export interface FileRoutesByFullPath {
   '/hr-data': typeof HrDataRoute
   '/hrms': typeof HrmsRoute
   '/import-trips': typeof ImportTripsRoute
+  '/ltms': typeof LtmsRoute
   '/masters': typeof MastersRoute
   '/operations': typeof OperationsRoute
   '/payroll': typeof PayrollRouteWithChildren
@@ -605,6 +612,7 @@ export interface FileRoutesByTo {
   '/hr-data': typeof HrDataRoute
   '/hrms': typeof HrmsRoute
   '/import-trips': typeof ImportTripsRoute
+  '/ltms': typeof LtmsRoute
   '/masters': typeof MastersRoute
   '/operations': typeof OperationsRoute
   '/report-master': typeof ReportMasterRoute
@@ -686,6 +694,7 @@ export interface FileRoutesById {
   '/hr-data': typeof HrDataRoute
   '/hrms': typeof HrmsRoute
   '/import-trips': typeof ImportTripsRoute
+  '/ltms': typeof LtmsRoute
   '/masters': typeof MastersRoute
   '/operations': typeof OperationsRoute
   '/payroll': typeof PayrollRouteWithChildren
@@ -772,6 +781,7 @@ export interface FileRouteTypes {
     | '/hr-data'
     | '/hrms'
     | '/import-trips'
+    | '/ltms'
     | '/masters'
     | '/operations'
     | '/payroll'
@@ -852,6 +862,7 @@ export interface FileRouteTypes {
     | '/hr-data'
     | '/hrms'
     | '/import-trips'
+    | '/ltms'
     | '/masters'
     | '/operations'
     | '/report-master'
@@ -932,6 +943,7 @@ export interface FileRouteTypes {
     | '/hr-data'
     | '/hrms'
     | '/import-trips'
+    | '/ltms'
     | '/masters'
     | '/operations'
     | '/payroll'
@@ -1017,6 +1029,7 @@ export interface RootRouteChildren {
   HrDataRoute: typeof HrDataRoute
   HrmsRoute: typeof HrmsRoute
   ImportTripsRoute: typeof ImportTripsRoute
+  LtmsRoute: typeof LtmsRoute
   MastersRoute: typeof MastersRoute
   OperationsRoute: typeof OperationsRoute
   PayrollRoute: typeof PayrollRouteWithChildren
@@ -1130,6 +1143,13 @@ declare module '@tanstack/react-router' {
       path: '/import-trips'
       fullPath: '/import-trips'
       preLoaderRoute: typeof ImportTripsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ltms': {
+      id: '/ltms'
+      path: '/ltms'
+      fullPath: '/ltms'
+      preLoaderRoute: typeof LtmsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/masters': {
@@ -1811,6 +1831,7 @@ const rootRouteChildren: RootRouteChildren = {
   HrDataRoute: HrDataRoute,
   HrmsRoute: HrmsRoute,
   ImportTripsRoute: ImportTripsRoute,
+  LtmsRoute: LtmsRoute,
   MastersRoute: MastersRoute,
   OperationsRoute: OperationsRoute,
   PayrollRoute: PayrollRouteWithChildren,
