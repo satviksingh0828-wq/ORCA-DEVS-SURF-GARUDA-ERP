@@ -689,7 +689,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         valid_from: form.valid_from || null,
         valid_until: form.valid_until || null,
         total_taxable_value: totalTaxable,
-        total_invoice_value: totalInvoice,
+        total_invoice_value: n(form.total_invoice_value) || totalInvoice,
         created_by: user?.id ?? null,
       };
       const { data: shipment, error } = editingShipmentId
