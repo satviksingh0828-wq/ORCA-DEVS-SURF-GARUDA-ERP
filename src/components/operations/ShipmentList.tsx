@@ -26,12 +26,18 @@ import {
 } from "@/components/ui/select";
 
 type Item = {
+  product_name: string;
   description: string;
   hsn_code: string;
   quantity: string;
   weight_kg: string;
   unit: string;
   taxable_value: string;
+  cgst_rate: string;
+  sgst_rate: string;
+  igst_rate: string;
+  cess_rate: string;
+  cess_nonadvol: string;
   gst_rate: string;
   cgst: string;
   sgst_utgst: string;
@@ -50,6 +56,7 @@ type Form = {
   valid_until: string;
   supply_type: string;
   sub_type: string;
+  sub_supply_desc: string;
   document_type: string;
   document_number: string;
   document_date: string;
@@ -57,26 +64,45 @@ type Form = {
   supplier_trade_name: string;
   supplier_legal_name: string;
   supplier_address: string;
+  supplier_address_line_1: string;
+  supplier_address_line_2: string;
   supplier_place: string;
   supplier_state: string;
   supplier_pin_code: string;
+  actual_from_state_code: string;
   recipient_gstin: string;
   recipient_trade_name: string;
   recipient_legal_name: string;
   recipient_address: string;
+  recipient_address_line_1: string;
+  recipient_address_line_2: string;
   recipient_place: string;
   recipient_state: string;
   recipient_pin_code: string;
+  actual_to_state_code: string;
   dispatch_from_address: string;
+  dispatch_from_address_line_1: string;
+  dispatch_from_address_line_2: string;
   dispatch_from_place: string;
   dispatch_from_state: string;
   dispatch_from_pin_code: string;
   ship_to_address: string;
+  ship_to_address_line_1: string;
+  ship_to_address_line_2: string;
   ship_to_place: string;
   ship_to_state: string;
   ship_to_pin_code: string;
   transporter_id: string;
   approximate_distance_km: string;
+  transaction_type: string;
+  total_value: string;
+  cgst_value: string;
+  sgst_value: string;
+  igst_value: string;
+  cess_value: string;
+  cess_non_advol_value: string;
+  other_value: string;
+  total_invoice_value: string;
 };
 
 type Shipment = Form & {
@@ -101,12 +127,18 @@ type PartBHistory = {
 };
 
 const blankItem = (): Item => ({
+  product_name: "",
   description: "",
   hsn_code: "",
   quantity: "",
   weight_kg: "",
   unit: "NOS",
   taxable_value: "",
+  cgst_rate: "",
+  sgst_rate: "",
+  igst_rate: "",
+  cess_rate: "",
+  cess_nonadvol: "",
   gst_rate: "",
   cgst: "",
   sgst_utgst: "",
@@ -124,6 +156,7 @@ const blankForm = (): Form => ({
   valid_until: "",
   supply_type: "Outward",
   sub_type: "Supply",
+  sub_supply_desc: "",
   document_type: "Tax Invoice",
   document_number: "",
   document_date: new Date().toISOString().slice(0, 10),
@@ -131,26 +164,45 @@ const blankForm = (): Form => ({
   supplier_trade_name: "",
   supplier_legal_name: "",
   supplier_address: "",
+  supplier_address_line_1: "",
+  supplier_address_line_2: "",
   supplier_place: "",
   supplier_state: "",
   supplier_pin_code: "",
+  actual_from_state_code: "",
   recipient_gstin: "URP",
   recipient_trade_name: "",
   recipient_legal_name: "",
   recipient_address: "",
+  recipient_address_line_1: "",
+  recipient_address_line_2: "",
   recipient_place: "",
   recipient_state: "",
   recipient_pin_code: "",
+  actual_to_state_code: "",
   dispatch_from_address: "",
+  dispatch_from_address_line_1: "",
+  dispatch_from_address_line_2: "",
   dispatch_from_place: "",
   dispatch_from_state: "",
   dispatch_from_pin_code: "",
   ship_to_address: "",
+  ship_to_address_line_1: "",
+  ship_to_address_line_2: "",
   ship_to_place: "",
   ship_to_state: "",
   ship_to_pin_code: "",
   transporter_id: "",
   approximate_distance_km: "",
+  transaction_type: "",
+  total_value: "",
+  cgst_value: "",
+  sgst_value: "",
+  igst_value: "",
+  cess_value: "",
+  cess_non_advol_value: "",
+  other_value: "",
+  total_invoice_value: "",
 });
 const n = (v: string) => Number(v || 0) || 0;
 const money = (v: number) =>
@@ -213,6 +265,7 @@ function PartySection({
 }) {
   const get = (key: string) => form[`${prefix}_${key}` as keyof Form] as string;
   const set = (key: string, value: string) => setForm({ ...form, [`${prefix}_${key}`]: value });
+  const actualState = prefix === "supplier" ? form.actual_from_state_code : prefix === "recipient" ? form.actual_to_state_code : "";
   return (
     <section className="space-y-3 rounded-xl border border-border p-4">
       <h3 className="font-semibold">{title}</h3>
@@ -242,12 +295,22 @@ function PartySection({
             readOnly={readOnly}
           />
         )}
+        <Field label="Address Line 1" value={get("address_line_1")} onChange={(v) => set("address_line_1", v)} readOnly={readOnly} />
+        <Field label="Address Line 2" value={get("address_line_2")} onChange={(v) => set("address_line_2", v)} readOnly={readOnly} />
         <div className="md:col-span-2">
-          <Field label="Address" value={get("address")} onChange={(v) => set("address", v)} readOnly={readOnly} />
+          <Field label="Combined Address" value={get("address")} onChange={(v) => set("address", v)} readOnly={readOnly} />
         </div>
         <Field label="Place" value={get("place")} onChange={(v) => set("place", v)} readOnly={readOnly} />
         <Field label="State" value={get("state")} onChange={(v) => set("state", v)} readOnly={readOnly} />
         <Field label="PIN Code" value={get("pin_code")} onChange={(v) => set("pin_code", v)} readOnly={readOnly} />
+        {(prefix === "supplier" || prefix === "recipient") && (
+          <Field
+            label="Actual State Code"
+            value={actualState}
+            onChange={(v) => setForm({ ...form, [prefix === "supplier" ? "actual_from_state_code" : "actual_to_state_code"]: v })}
+            readOnly={readOnly}
+          />
+        )}
       </div>
     </section>
   );
@@ -279,9 +342,25 @@ function ShipmentView({
         <Field label="E-Way Bill Number" value={shipment.eway_bill_number} onChange={() => {}} readOnly />
         <Field label="E-Way Bill Date" value={shipment.eway_bill_date} onChange={() => {}} readOnly />
         <Field label="Status" value={shipment.eway_bill_status} onChange={() => {}} readOnly />
-        <Field label="Document" value={`${shipment.document_type} · ${shipment.document_number}`} onChange={() => {}} readOnly />
+        <Field label="Supply Type" value={shipment.supply_type} onChange={() => {}} readOnly />
+        <Field label="Sub-Supply Type" value={shipment.sub_type} onChange={() => {}} readOnly />
+        <Field label="Sub-Supply Description" value={shipment.sub_supply_desc} onChange={() => {}} readOnly />
+        <Field label="Document Type" value={shipment.document_type} onChange={() => {}} readOnly />
+        <Field label="Document Number" value={shipment.document_number} onChange={() => {}} readOnly />
+        <Field label="Document Date" value={shipment.document_date} onChange={() => {}} readOnly />
         <Field label="Branch" value={branchName(shipment.branch_id)} onChange={() => {}} readOnly />
         <Field label="LR Number" value={shipment.lr_number || "Not assigned"} onChange={() => {}} readOnly />
+      </div>
+      <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-3">
+        <Field label="Transaction Type" value={shipment.transaction_type} onChange={() => {}} readOnly />
+        <Field label="Value of Goods / Taxable Value" value={shipment.total_value} onChange={() => {}} readOnly />
+        <Field label="Total Invoice Value" value={shipment.total_invoice_value} onChange={() => {}} readOnly />
+        <Field label="CGST Value" value={shipment.cgst_value} onChange={() => {}} readOnly />
+        <Field label="SGST Value" value={shipment.sgst_value} onChange={() => {}} readOnly />
+        <Field label="IGST Value" value={shipment.igst_value} onChange={() => {}} readOnly />
+        <Field label="Cess Value" value={shipment.cess_value} onChange={() => {}} readOnly />
+        <Field label="Cess Non-Advol Value" value={shipment.cess_non_advol_value} onChange={() => {}} readOnly />
+        <Field label="Other Value / Charges" value={shipment.other_value} onChange={() => {}} readOnly />
       </div>
       <PartySection title="Supplier / Consignor" prefix="supplier" form={shipment} setForm={() => {}} readOnly />
       <PartySection title="Recipient / Consignee" prefix="recipient" form={shipment} setForm={() => {}} readOnly />
@@ -289,7 +368,7 @@ function ShipmentView({
       <PartySection title="Ship To" prefix="ship_to" form={shipment} setForm={() => {}} readOnly />
       <div className="rounded-xl border border-border p-4">
         <h3 className="mb-3 font-semibold">Goods / Invoice Details</h3>
-        <div className="overflow-x-auto"><table className="w-full text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Item</th><th className="px-2 py-2">HSN</th><th className="px-2 py-2">Quantity</th><th className="px-2 py-2">Weight (KG)</th><th className="px-2 py-2 text-right">Value</th></tr></thead><tbody>{items.map((item, index) => <tr key={`${item.description}-${index}`} className="border-t border-border"><td className="px-2 py-2">{item.description}</td><td className="px-2 py-2">{item.hsn_code}</td><td className="px-2 py-2">{item.quantity} {item.unit}</td><td className="px-2 py-2">{n(item.weight_kg).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg</td><td className="px-2 py-2 text-right">{money(n(item.total_invoice_value))}</td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Product Name</th><th className="px-2 py-2">Description</th><th className="px-2 py-2">HSN</th><th className="px-2 py-2">Quantity / Unit</th><th className="px-2 py-2">Taxable</th><th className="px-2 py-2">CGST %</th><th className="px-2 py-2">SGST %</th><th className="px-2 py-2">IGST %</th><th className="px-2 py-2">Cess %</th><th className="px-2 py-2">Cess Non-Advol</th><th className="px-2 py-2 text-right">Invoice Value</th></tr></thead><tbody>{items.map((item, index) => <tr key={`${item.description}-${index}`} className="border-t border-border"><td className="px-2 py-2">{item.product_name || "—"}</td><td className="px-2 py-2">{item.description}</td><td className="px-2 py-2">{item.hsn_code}</td><td className="px-2 py-2">{item.quantity} {item.unit}</td><td className="px-2 py-2">{money(n(item.taxable_value))}</td><td className="px-2 py-2">{item.cgst_rate || "0"}</td><td className="px-2 py-2">{item.sgst_rate || "0"}</td><td className="px-2 py-2">{item.igst_rate || "0"}</td><td className="px-2 py-2">{item.cess_rate || "0"}</td><td className="px-2 py-2">{item.cess_nonadvol || "0"}</td><td className="px-2 py-2 text-right">{money(n(item.total_invoice_value))}</td></tr>)}</tbody></table></div>
         <div className="flex flex-wrap justify-end gap-5 border-t border-border pt-3 text-sm">
           <span>Taxable total: <strong>{money(items.reduce((sum, item) => sum + n(item.taxable_value), 0))}</strong></span>
           <span>Invoice total: <strong>{money(items.reduce((sum, item) => sum + n(item.total_invoice_value), 0))}</strong></span>
@@ -489,9 +568,15 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
       });
       const source = ((raw as Record<string, unknown>)?.data ?? raw) as Record<string, unknown>;
       const text = (key: string) => String(source[key] ?? "");
-      const fromAddress = [text("fromAddr1"), text("fromAddr2")].filter(Boolean).join(", ");
-      const toAddress = [text("toAddr1"), text("toAddr2")].filter(Boolean).join(", ");
-      const shipToAddress = [text("shipToAddr1"), text("shipToAddr2")].filter(Boolean).join(", ");
+      const fromAddressLine1 = text("fromAddr1");
+      const fromAddressLine2 = text("fromAddr2");
+      const toAddressLine1 = text("toAddr1");
+      const toAddressLine2 = text("toAddr2");
+      const shipToAddressLine1 = text("shipToAddr1") || toAddressLine1;
+      const shipToAddressLine2 = text("shipToAddr2") || toAddressLine2;
+      const fromAddress = [fromAddressLine1, fromAddressLine2].filter(Boolean).join(", ");
+      const toAddress = [toAddressLine1, toAddressLine2].filter(Boolean).join(", ");
+      const shipToAddress = [shipToAddressLine1, shipToAddressLine2].filter(Boolean).join(", ");
       const itemList = Array.isArray(source.itemList) ? source.itemList as Array<Record<string, unknown>> : [];
       setForm({
         ...form,
@@ -501,40 +586,66 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         valid_until: ewayDate(source.validUpto),
         supply_type: text("supplyType") === "I" ? "Inward" : text("supplyType") === "O" ? "Outward" : form.supply_type,
         sub_type: text("subSupplyType") || form.sub_type,
+        sub_supply_desc: text("subSupplyDesc"),
         document_type: text("docType") === "INV" ? "Tax Invoice" : text("docType") || form.document_type,
         document_number: text("docNo"),
         document_date: ewayDate(source.docDate),
         supplier_gstin: text("fromGstin") || form.supplier_gstin,
         supplier_trade_name: text("fromTrdName"),
         supplier_address: fromAddress,
+        supplier_address_line_1: fromAddressLine1,
+        supplier_address_line_2: fromAddressLine2,
         supplier_place: text("fromPlace"),
         supplier_state: text("fromStateCode"),
         supplier_pin_code: text("fromPincode"),
+        actual_from_state_code: text("actFromStateCode"),
         recipient_gstin: text("toGstin") || form.recipient_gstin,
         recipient_trade_name: text("toTrdName"),
         recipient_address: toAddress,
+        recipient_address_line_1: toAddressLine1,
+        recipient_address_line_2: toAddressLine2,
         recipient_place: text("toPlace"),
         recipient_state: text("toStateCode"),
         recipient_pin_code: text("toPincode"),
+        actual_to_state_code: text("actToStateCode"),
         dispatch_from_address: fromAddress,
+        dispatch_from_address_line_1: fromAddressLine1,
+        dispatch_from_address_line_2: fromAddressLine2,
         dispatch_from_place: text("fromPlace"),
         dispatch_from_state: text("fromStateCode"),
         dispatch_from_pin_code: text("fromPincode"),
         ship_to_address: shipToAddress || toAddress,
+        ship_to_address_line_1: shipToAddressLine1,
+        ship_to_address_line_2: shipToAddressLine2,
         ship_to_place: text("shipToPlace") || text("toPlace"),
         ship_to_state: text("toStateCode"),
         ship_to_pin_code: text("shipToPincode") || text("toPincode"),
         transporter_id: text("transporterId"),
         approximate_distance_km: text("transDistance"),
+        transaction_type: text("transactionType"),
+        total_value: text("totalValue"),
+        cgst_value: text("cgstValue"),
+        sgst_value: text("sgstValue"),
+        igst_value: text("igstValue"),
+        cess_value: text("cessValue"),
+        cess_non_advol_value: text("cessNonAdvolValue"),
+        other_value: text("otherValue"),
+        total_invoice_value: text("totInvValue"),
       });
       if (itemList.length) {
         setItems(itemList.map((item) => ({
-          description: String(item.productName ?? item.productDesc ?? ""),
+          product_name: String(item.productName ?? ""),
+          description: String(item.productDesc ?? item.productName ?? ""),
           hsn_code: String(item.hsnCode ?? ""),
           quantity: String(item.quantity ?? ""),
           weight_kg: String(item.quantity ?? ""),
           unit: String(item.qtyUnit ?? "NOS"),
           taxable_value: String(item.taxableAmount ?? ""),
+          cgst_rate: String(item.cgstRate ?? ""),
+          sgst_rate: String(item.sgstRate ?? ""),
+          igst_rate: String(item.igstRate ?? ""),
+          cess_rate: String(item.cessRate ?? ""),
+          cess_nonadvol: String(item.cessNonadvol ?? ""),
           gst_rate: String(Number(item.cgstRate ?? 0) + Number(item.sgstRate ?? 0) + Number(item.igstRate ?? 0)),
           cgst: String(item.cgstValue ?? ""),
           sgst_utgst: String(item.sgstValue ?? ""),
@@ -859,6 +970,11 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                   value={form.sub_type}
                   onChange={(v) => setForm({ ...form, sub_type: v })}
                 />
+                <Field
+                  label="Sub-Supply Description"
+                  value={form.sub_supply_desc}
+                  onChange={(v) => setForm({ ...form, sub_supply_desc: v })}
+                />
               </div>
             </section>
             <section className="space-y-3 rounded-xl border border-border p-4">
@@ -899,6 +1015,20 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                   value={form.document_date}
                   onChange={(v) => setForm({ ...form, document_date: v })}
                 />
+              </div>
+            </section>
+            <section className="space-y-3 rounded-xl border border-border p-4">
+              <h3 className="font-semibold">Transaction and Tax Summary</h3>
+              <div className="grid gap-3 md:grid-cols-3">
+                <Field label="Transaction Type" value={form.transaction_type} onChange={(v) => setForm({ ...form, transaction_type: v })} />
+                <Field label="Value of Goods / Taxable Value" type="number" value={form.total_value} onChange={(v) => setForm({ ...form, total_value: v })} />
+                <Field label="Total Invoice Value" type="number" value={form.total_invoice_value} onChange={(v) => setForm({ ...form, total_invoice_value: v })} />
+                <Field label="CGST Value" type="number" value={form.cgst_value} onChange={(v) => setForm({ ...form, cgst_value: v })} />
+                <Field label="SGST Value" type="number" value={form.sgst_value} onChange={(v) => setForm({ ...form, sgst_value: v })} />
+                <Field label="IGST Value" type="number" value={form.igst_value} onChange={(v) => setForm({ ...form, igst_value: v })} />
+                <Field label="Cess Value" type="number" value={form.cess_value} onChange={(v) => setForm({ ...form, cess_value: v })} />
+                <Field label="Cess Non-Advol Value" type="number" value={form.cess_non_advol_value} onChange={(v) => setForm({ ...form, cess_non_advol_value: v })} />
+                <Field label="Other Value / Charges" type="number" value={form.other_value} onChange={(v) => setForm({ ...form, other_value: v })} />
               </div>
             </section>
             <PartySection
@@ -1041,7 +1171,14 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
             <div className="grid gap-3 py-2 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Field
-                  label="Product / Item Description *"
+                  label="Product / Item Name"
+                  value={selectedItem.product_name}
+                  onChange={(v) => setItem(selectedItemIndex, "product_name", v)}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Field
+                  label="Product Description *"
                   value={selectedItem.description}
                   onChange={(v) => setItem(selectedItemIndex, "description", v)}
                 />
@@ -1080,6 +1217,11 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                 value={selectedItem.gst_rate}
                 onChange={(v) => setItem(selectedItemIndex, "gst_rate", v)}
               />
+              <Field label="CGST Rate %" type="number" value={selectedItem.cgst_rate} onChange={(v) => setItem(selectedItemIndex, "cgst_rate", v)} />
+              <Field label="SGST Rate %" type="number" value={selectedItem.sgst_rate} onChange={(v) => setItem(selectedItemIndex, "sgst_rate", v)} />
+              <Field label="IGST Rate %" type="number" value={selectedItem.igst_rate} onChange={(v) => setItem(selectedItemIndex, "igst_rate", v)} />
+              <Field label="Cess Rate %" type="number" value={selectedItem.cess_rate} onChange={(v) => setItem(selectedItemIndex, "cess_rate", v)} />
+              <Field label="Cess Non-Advol" type="number" value={selectedItem.cess_nonadvol} onChange={(v) => setItem(selectedItemIndex, "cess_nonadvol", v)} />
               <Field
                 label="CGST"
                 type="number"
