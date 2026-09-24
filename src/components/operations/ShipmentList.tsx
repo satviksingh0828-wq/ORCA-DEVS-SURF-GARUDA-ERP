@@ -508,6 +508,8 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   }
   async function deleteShipment(shipment: Shipment) {
     if (!window.confirm(`Delete shipment ${shipment.eway_bill_number}? This cannot be undone.`)) return;
+    const { error: unlinkError } = await db.from("lr_shipments").delete().eq("shipment_id", shipment.id);
+    if (unlinkError) return toast.error(`Could not disconnect shipment from LR: ${unlinkError.message}`);
     const { error } = await db.from("shipments").delete().eq("id", shipment.id);
     if (error) return toast.error(error.message);
     toast.success(`Shipment ${shipment.eway_bill_number} deleted`);
