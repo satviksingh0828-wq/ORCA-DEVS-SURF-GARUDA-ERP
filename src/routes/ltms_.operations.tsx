@@ -8,7 +8,7 @@ export const Route = createFileRoute("/ltms_/operations")({
       { title: "LTMS Operations — Garuda Logistics Solutions | ORCA DEVS SURF" },
       {
         name: "description",
-        content: "Monthly MIS and E-Way Bill management for logistics operations.",
+        content: "E-Way Bill management for logistics operations.",
       },
     ],
   }),

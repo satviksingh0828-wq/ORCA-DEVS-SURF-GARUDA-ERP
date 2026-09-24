@@ -28,7 +28,6 @@ import { TripDetailsPanel } from "@/components/operations/TripDetailsPanel";
 import { TripImport } from "@/components/import/TripImport";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
-import { MonthlyMIS } from "@/components/operations/MonthlyMIS";
 import { FastagLedger } from "@/components/reports/FastagLedger";
 import { ReportFiltersContext } from "@/lib/report-filters";
 import { ShipmentList } from "@/components/operations/ShipmentList";
@@ -62,14 +61,6 @@ export const Route = createFileRoute("/operations")({
 });
 
 const ALL_TABS = [
-  {
-    id: "monthly-mis",
-    label: "Monthly MIS",
-    desc: "Monthly branch compliance",
-    icon: ClipboardList,
-    adminOnly: false,
-    dividerBefore: false,
-  },
   {
     id: "trip",
     label: "Trip",
@@ -156,13 +147,13 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const isViewer = user?.role === "viewer";
 
   const TABS = ALL_TABS.filter((t) => {
-    const isLtmsTab = t.id === "monthly-mis" || t.id === "shipments" || t.id === "eway-bill";
+    const isLtmsTab = t.id === "shipments" || t.id === "eway-bill";
     if (mode === "ltms" && !isLtmsTab) return false;
     if (mode === "tms" && isLtmsTab) return false;
     if ("basicOnly" in t && t.basicOnly && user?.role !== "basic") return false;
-    return isViewer ? t.id !== "import-trips" && t.id !== "monthly-mis" : isAdmin || !t.adminOnly;
+    return isViewer ? t.id !== "import-trips" : isAdmin || !t.adminOnly;
   });
-  const [tab, setTab] = useState<TabId>(mode === "ltms" ? "monthly-mis" : "trip");
+  const [tab, setTab] = useState<TabId>(mode === "ltms" ? "eway-bill" : "trip");
   const [navOpen, setNavOpen] = useState(true);
 
   const defaultTab: TabId = mode === "ltms" ? "eway-bill" : "trip";
@@ -274,11 +265,6 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           {safeTab === "eway-bill" && (
             <TabErrorBoundary label="E-Way Bill">
               <EwayBillList />
-            </TabErrorBoundary>
-          )}
-          {safeTab === "monthly-mis" && !isViewer && (
-            <TabErrorBoundary label="Monthly MIS">
-              <MonthlyMIS />
             </TabErrorBoundary>
           )}
           {safeTab === "trip-averages" && (isAdmin || isViewer) && (

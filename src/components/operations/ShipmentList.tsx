@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, Pencil, Plus, Search, Trash2, Truck, X } from "lucide-react";
+import { Eye, Plus, Search, Trash2, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
@@ -111,7 +111,6 @@ type Shipment = Form & {
   total_invoice_value: number;
   item_count: number;
   created_at: string;
-  lr_number?: string | null;
 };
 type PartBHistory = {
   id: string;
@@ -329,16 +328,12 @@ function ShipmentView({
   history,
   branchName,
   onBack,
-  onFetchPartB,
-  fetchingPartB,
 }: {
   shipment: Shipment;
   items: Item[];
   history: PartBHistory[];
   branchName: (id: string) => string;
   onBack: () => void;
-  onFetchPartB: () => void;
-  fetchingPartB: boolean;
 }) {
   return (
     <div className="space-y-5">
@@ -346,13 +341,8 @@ function ShipmentView({
         <div>
           <button type="button" className="mb-2 text-sm text-muted-foreground hover:text-foreground" onClick={onBack}>← Back to Shipments</button>
           <h2 className="text-xl font-semibold">Shipment Details — {shipment.eway_bill_number}</h2>
-          <p className="text-sm text-muted-foreground">{shipment.lr_number ? `Assigned to LR ${shipment.lr_number}` : "Not assigned to an LR"}</p>
+          <p className="text-sm text-muted-foreground">E-Way Bill and shipment details</p>
         </div>
-        {shipment.lr_number && (
-          <Button type="button" variant="outline" onClick={onFetchPartB} disabled={fetchingPartB}>
-            {fetchingPartB ? "Fetching Part B…" : "Fetch Part B"}
-          </Button>
-        )}
       </div>
       <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-3">
         <Field label="E-Way Bill Number" value={shipment.eway_bill_number} onChange={() => {}} readOnly />
@@ -365,7 +355,6 @@ function ShipmentView({
         <Field label="Document Number" value={shipment.document_number} onChange={() => {}} readOnly />
         <Field label="Document Date" value={shipment.document_date} onChange={() => {}} readOnly />
         <Field label="Branch" value={branchName(shipment.branch_id)} onChange={() => {}} readOnly />
-        <Field label="LR Number" value={shipment.lr_number || "Not assigned"} onChange={() => {}} readOnly />
       </div>
       <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-3">
         <Field label="Transaction Type" value={shipment.transaction_type} onChange={() => {}} readOnly />
@@ -394,7 +383,6 @@ function ShipmentView({
       </div>
       <div className="rounded-xl border border-border p-4">
         <h3 className="mb-3 font-semibold">Part-B Update History</h3>
-        {shipment.lr_number && <p className="mb-3 text-xs text-muted-foreground">Each Fetch Part B action stores a separate transport snapshot for this LR-linked shipment.</p>}
         {history.length === 0 ? <p className="text-sm text-muted-foreground">No Part-B updates have been stored for this shipment.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[1250px] text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Updated</th><th className="px-2 py-2">Transport Mode</th><th className="px-2 py-2">Transporter ID</th><th className="px-2 py-2">Transporter Name</th><th className="px-2 py-2">Transport Document No.</th><th className="px-2 py-2">Document Date</th><th className="px-2 py-2">Vehicle Number</th><th className="px-2 py-2">Vehicle Type</th><th className="px-2 py-2">Distance (KM)</th><th className="px-2 py-2">From</th></tr></thead><tbody>{history.map((entry) => <tr key={entry.id} className="border-t border-border"><td className="px-2 py-2">{new Date(entry.updated_at).toLocaleString("en-IN")}</td><td className="px-2 py-2">{transportModeLabel(entry.trans_mode)}</td><td className="px-2 py-2">{entry.transporter_id || "—"}</td><td className="px-2 py-2">{entry.transporter_name || "—"}</td><td className="px-2 py-2">{entry.trans_doc_no || "—"}</td><td className="px-2 py-2">{entry.trans_doc_date || "—"}</td><td className="px-2 py-2">{entry.vehicle_no || "—"}</td><td className="px-2 py-2">{vehicleTypeLabel(entry.vehicle_type)}</td><td className="px-2 py-2">{entry.trans_distance || "—"}</td><td className="px-2 py-2">{entry.from_place || "—"} · {entry.from_state || "—"}</td></tr>)}</tbody></table></div>}
       </div>
     </div>
@@ -426,9 +414,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   const [branchFilter, setBranchFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [search, setSearch] = useState("");
-  const [assignment, setAssignment] = useState("all");
   const [fetchingEwb, setFetchingEwb] = useState(false);
-  const [fetchingPartB, setFetchingPartB] = useState(false);
 
   const visibleBranches = useMemo(
     () => (allowed === null ? branches : branches.filter((b) => allowed.includes(b.id))),
@@ -447,22 +433,11 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         q = q.in("branch_id", allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"]);
       const { data, error } = await q;
       if (error) throw error;
-      const { data: linkedRows } = await db
-        .from("lr_shipments")
-        .select("shipment_id, lorry_receipt:lorry_receipts(lr_number)");
-      const lrByShipment = new Map(
-        ((linkedRows ?? []) as Array<Record<string, unknown>>).map((row) => {
-          const relation = row.lorry_receipt;
-          const lorryReceipt = Array.isArray(relation) ? relation[0] : relation;
-          return [String(row.shipment_id), (lorryReceipt as { lr_number?: string } | null)?.lr_number ?? null];
-        }),
-      );
       setShipments(
         ((data ?? []) as Array<Record<string, unknown>>).map(
           (row) =>
             ({
               ...row,
-              lr_number: lrByShipment.get(String(row.id)) ?? null,
               item_count: Number(
                 (row.shipment_items as Array<{ count?: number }> | undefined)?.[0]?.count ?? 0,
               ),
@@ -483,7 +458,6 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   const filtered = shipments.filter((s) => {
     if (branchFilter !== "all" && s.branch_id !== branchFilter) return false;
     if (monthFilter !== "all" && !s.eway_bill_date.startsWith(monthFilter)) return false;
-    if (assignment !== "all" && (assignment === "assigned") !== Boolean(s.lr_number)) return false;
     return !search.trim() || s.eway_bill_number.includes(search.trim());
   });
 
@@ -494,49 +468,6 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     setItems([blankItem()]);
     setShowCreate(true);
     setEditingShipmentId(null);
-  }
-  async function openEdit(shipment: Shipment) {
-    if (shipment.lr_number) {
-      toast.error("This shipment is already assigned to an LR and is read-only");
-      return;
-    }
-    const { data, error } = await db
-      .from("shipment_items")
-      .select("*")
-      .eq("shipment_id", shipment.id)
-      .order("item_no");
-    if (error) return toast.error(error.message);
-    setForm(
-      Object.fromEntries(
-        Object.keys(blankForm()).map((key) => [key, String((shipment as Record<string, unknown>)[key] ?? "")]),
-      ) as Form,
-    );
-    setItems(
-      ((data ?? []) as Array<Record<string, unknown>>).map((item) => ({
-        product_name: String(item.product_name ?? ""),
-        description: String(item.description ?? ""),
-        hsn_code: String(item.hsn_code ?? ""),
-        quantity: String(item.quantity ?? ""),
-        weight_kg: String(item.weight_kg ?? ""),
-        unit: String(item.unit ?? "NOS"),
-        taxable_value: String(item.taxable_value ?? ""),
-        cgst_rate: String(item.cgst_rate ?? ""),
-        sgst_rate: String(item.sgst_rate ?? ""),
-        igst_rate: String(item.igst_rate ?? ""),
-        cess_rate: String(item.cess_rate ?? ""),
-        cess_nonadvol: String(item.cess_nonadvol ?? ""),
-        gst_rate: String(item.gst_rate ?? ""),
-        cgst: String(item.cgst ?? ""),
-        sgst_utgst: String(item.sgst_utgst ?? ""),
-        igst: String(item.igst ?? ""),
-        cess: String(item.cess ?? ""),
-        other_tax_charges: String(item.other_tax_charges ?? ""),
-        total_invoice_value: String(item.total_invoice_value ?? ""),
-      })),
-    );
-    setSelectedItemIndex(null);
-    setEditingShipmentId(shipment.id);
-    setShowCreate(true);
   }
   async function openView(shipment: Shipment) {
     const [{ data }, { data: history, error: historyError }] = await Promise.all([db
@@ -575,47 +506,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     setViewingHistory((history ?? []) as PartBHistory[]);
     setViewingShipment(shipment);
   }
-  async function fetchPartB() {
-    if (!viewingShipment?.lr_number) return toast.error("Part B can be fetched only after an LR is assigned");
-    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
-    setFetchingPartB(true);
-    try {
-      const raw = await serverFetchEwayBillDetails({
-        data: { token: user.sessionToken, branchId: viewingShipment.branch_id, ewayBillNumber: viewingShipment.eway_bill_number },
-      });
-      const source = ((raw as Record<string, unknown>)?.data ?? raw) as Record<string, unknown>;
-      const text = (key: string) => String(source[key] ?? "");
-      const snapshot = {
-        shipment_id: viewingShipment.id,
-        eway_bill_number: viewingShipment.eway_bill_number,
-        from_place: text("fromPlace"),
-        from_state: Number(text("actFromStateCode") || text("fromStateCode") || 0),
-        transporter_id: text("transporterId") || null,
-        transporter_name: text("transporterName") || null,
-        vehicle_no: text("vehicleNo"),
-        vehicle_type: text("vehicleType") || "R",
-        trans_mode: text("transMode"),
-        trans_distance: text("transDistance") || null,
-        trans_doc_no: text("transDocNo") || null,
-        trans_doc_date: ewayDate(source.transDocDate) || null,
-        response_data: source,
-        updated_by: user.id,
-      };
-      const { data: saved, error } = await db.from("shipment_part_b_history").insert(snapshot).select("*").single();
-      if (error) throw error;
-      if (saved) setViewingHistory((current) => [saved as PartBHistory, ...current]);
-      toast.success("Part B details fetched and saved to history");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not fetch Part B details");
-    } finally {
-      setFetchingPartB(false);
-    }
-  }
   async function deleteShipment(shipment: Shipment) {
-    if (shipment.lr_number) {
-      toast.error("A shipment assigned to an LR cannot be deleted");
-      return;
-    }
     if (!window.confirm(`Delete shipment ${shipment.eway_bill_number}? This cannot be undone.`)) return;
     const { error } = await db.from("shipments").delete().eq("id", shipment.id);
     if (error) return toast.error(error.message);
@@ -729,7 +620,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   }
 
   if (viewingShipment)
-    return <ShipmentView shipment={viewingShipment} items={viewingItems} history={viewingHistory} branchName={branchName} onBack={() => setViewingShipment(null)} onFetchPartB={() => void fetchPartB()} fetchingPartB={fetchingPartB} />;
+    return <ShipmentView shipment={viewingShipment} items={viewingItems} history={viewingHistory} branchName={branchName} onBack={() => setViewingShipment(null)} />;
   const setItem = (index: number, key: keyof Item, value: string) =>
     setItems(items.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   const totalTaxable = items.reduce((sum, item) => sum + n(item.taxable_value), 0);
@@ -873,7 +764,6 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                     <th className="px-4 py-3">Document</th>
                     <th className="px-4 py-3 text-right">Items</th>
                     <th className="px-4 py-3 text-right">Invoice Value</th>
-                    <th className="px-4 py-3">LR Number</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-4 py-3 text-right">Actions</th>
                   </tr>
@@ -894,7 +784,6 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                       <td className="px-4 py-3 text-right">
                         {money(Number(s.total_invoice_value))}
                       </td>
-                      <td className="px-4 py-3">{s.lr_number || "—"}</td>
                       <td className="px-4 py-3">
                         <Badge variant="outline">{s.eway_bill_status}</Badge>
                       </td>
@@ -903,16 +792,9 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                           <Button variant="ghost" size="sm" onClick={() => void openView(s)}>
                             <Eye className="mr-1 size-4" /> View
                           </Button>
-                          {!s.lr_number && (
-                            <>
-                              <Button variant="outline" size="sm" onClick={() => void openEdit(s)}>
-                                <Pencil className="mr-1 size-4" /> Edit
-                              </Button>
-                              <Button variant="ghost" size="sm" onClick={() => void deleteShipment(s)} title="Delete shipment">
-                                <Trash2 className="size-4 text-destructive" />
-                              </Button>
-                            </>
-                          )}
+                          <Button variant="ghost" size="sm" onClick={() => void deleteShipment(s)} title="Delete shipment">
+                            <Trash2 className="mr-1 size-4 text-destructive" /> Delete
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -1350,7 +1232,6 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
           <DialogHeader>
             <DialogTitle>
               Shipment Details — {viewingShipment?.eway_bill_number}
-              {viewingShipment?.lr_number ? ` (LR ${viewingShipment.lr_number})` : ""}
             </DialogTitle>
           </DialogHeader>
           {viewingShipment && (
@@ -1361,7 +1242,6 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                 <Field label="Status" value={viewingShipment.eway_bill_status} onChange={() => {}} />
                 <Field label="Document" value={`${viewingShipment.document_type} · ${viewingShipment.document_number}`} onChange={() => {}} />
                 <Field label="Branch" value={branchName(viewingShipment.branch_id)} onChange={() => {}} />
-                <Field label="LR Number" value={viewingShipment.lr_number || "Not assigned"} onChange={() => {}} />
               </div>
               <PartySection title="Supplier / Consignor" prefix="supplier" form={viewingShipment} setForm={() => {}} readOnly />
               <PartySection title="Recipient / Consignee" prefix="recipient" form={viewingShipment} setForm={() => {}} readOnly />

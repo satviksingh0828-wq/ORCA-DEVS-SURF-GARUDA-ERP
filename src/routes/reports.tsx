@@ -2,7 +2,6 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   BarChart3,
-  ClipboardList,
   Car,
   ChevronRight,
   CreditCard,
@@ -22,7 +21,6 @@ import { VehicleExpenseReport } from "@/components/reports/VehicleExpenseReport"
 import { DriverExpenseReport } from "@/components/reports/DriverExpenseReport";
 import { TransporterExpenseReport } from "@/components/reports/TransporterExpenseReport";
 import { OtherExpenseReport } from "@/components/reports/OtherExpenseReport";
-import { MonthlyMISReport } from "@/components/reports/MonthlyMISReport";
 import { TripDetailsPanel } from "@/components/operations/TripDetailsPanel";
 import { useSession } from "@/lib/session";
 import { ReportFiltersContext } from "@/lib/report-filters";
@@ -61,12 +59,6 @@ const TABS = [
     label: "Booking Report",
     desc: "Trip and manifest booking details",
     icon: CalendarRange,
-  },
-  {
-    id: "monthly-mis",
-    label: "Monthly MIS",
-    desc: "Depot submissions & compliance",
-    icon: ClipboardList,
   },
   {
     id: "pnl-compare",
@@ -121,7 +113,7 @@ function ReportsPage() {
   useEffect(() => {
     if (user && user.role !== "admin" && user.role !== "semi_admin" && user.role !== "viewer")
       navigate({ to: "/home", replace: true });
-    if (user?.role === "viewer" && tab === "pnl-compare") setTab("monthly-mis");
+    if (user?.role === "viewer" && tab === "pnl-compare") setTab("booking-report");
   }, [user, navigate, tab]);
 
   if (user?.role !== "admin" && user?.role !== "semi_admin" && user?.role !== "viewer") return null;
@@ -209,7 +201,7 @@ function ReportsPage() {
               <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
             </header>
-            {tab !== "pnl-compare" && tab !== "monthly-mis" && (
+            {tab !== "pnl-compare" && (
               <div className="mb-4 flex flex-wrap gap-2 rounded-xl border border-border bg-muted/30 p-3">
                 <Select value={branchId} onValueChange={setBranchId}>
                   <SelectTrigger className="h-9 w-44">
@@ -240,7 +232,6 @@ function ReportsPage() {
               </div>
             )}
             {tab === "pnl-compare" && <ProfitLossComparison />}
-            {tab === "monthly-mis" && <MonthlyMISReport />}
             {tab === "booking-report" && <TripDetailsPanel />}
             {tab === "fastag" && <FastagLedger />}
             {tab === "vehicle-expenses" && <VehicleExpenseReport />}
