@@ -13,6 +13,7 @@ import { isAdminLike } from "@/lib/roles";
 import {
   DRIVER_CONFIG,
   DELIVERY_PARTNER_CONFIG,
+  LTMS_TRANSPORTER_CONFIG,
   LOCATION_CONFIG,
   TRANSPORTER_CONFIG,
   VEHICLE_CONFIG,
@@ -45,6 +46,7 @@ const ALL_TABS = [
   { id: "vehicle",     label: "Vehicle",    desc: "Fleet & specifications",  icon: Truck,     adminOnly: true  },
   { id: "driver",      label: "Driver",     desc: "Staff & licences",        icon: User,      adminOnly: false },
   { id: "transporter", label: "Transporter",desc: "Owners & brokers",        icon: Building2, adminOnly: false },
+  { id: "ltms-transporter", label: "Transporters", desc: "LTMS owners & brokers", icon: Building2, adminOnly: false },
   { id: "delivery-partner", label: "Delivery Partners", desc: "Delivery partners", icon: Building2, adminOnly: false },
   { id: "location",    label: "Locations",  desc: "Pickup & drop points",    icon: MapPin,    adminOnly: true  },
   { id: "contract",    label: "Sources",    desc: "Rates & slabs",           icon: FileText,  adminOnly: true  },
@@ -65,7 +67,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
       : ALL_TABS.filter((t) => !t.adminOnly);
   const TABS = ltmsMode
     ? roleTabs.filter((t) => t.id !== "transporter" && t.id !== "delivery-partner")
-    : roleTabs;
+    : roleTabs.filter((t) => t.id !== "ltms-transporter");
 
   const [tab, setTab] = useState<TabId>(isAdmin || isViewer ? "vehicle" : "driver");
   const [navOpen, setNavOpen] = useState(true);
@@ -167,6 +169,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
           ) : null}
           {safeTab === "driver"      ? <MasterList config={DRIVER_CONFIG} />      : null}
           {safeTab === "transporter" ? <MasterList config={TRANSPORTER_CONFIG} /> : null}
+          {safeTab === "ltms-transporter" ? <MasterList config={LTMS_TRANSPORTER_CONFIG} /> : null}
           {safeTab === "delivery-partner" ? <MasterList config={DELIVERY_PARTNER_CONFIG} /> : null}
           {safeTab === "location"    ? <MasterList config={LOCATION_CONFIG} />    : null}
           {safeTab === "contract"    ? <Contracts />                               : null}

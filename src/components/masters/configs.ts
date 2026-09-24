@@ -246,6 +246,12 @@ export const TRANSPORTER_CONFIG: MasterConfig = {
   ],
 };
 
+export const LTMS_TRANSPORTER_CONFIG: MasterConfig = {
+  ...TRANSPORTER_CONFIG,
+  table: "ltms_transporters",
+  emptyMsg: "LTMS transporters maintained separately from TMS transporters.",
+};
+
 export const LOCATION_CONFIG: MasterConfig = {
   table: "locations",
   entityLabel: "Locations",
