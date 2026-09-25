@@ -475,6 +475,8 @@ export function ConsignmentList() {
       return toast.error(
         `${partnerDialog === "rental" ? "Rental" : "Transporter"} name is required`,
       );
+    if (!partnerForm.gstin.trim())
+      return toast.error("GSTIN is mandatory for Transporters and Rentals");
     const payload = {
       [nameColumn]: partnerForm.name.trim(),
       legal_business_name: partnerForm.legalName,
@@ -1244,10 +1246,18 @@ function PartnerDialog({
   onSave: () => void;
 }) {
   const update = (key: keyof PartnerForm, value: string) => setForm({ ...form, [key]: value });
-  const field = (key: keyof PartnerForm, label: string, type = "text") => (
+  const field = (key: keyof PartnerForm, label: string, type = "text", required = false) => (
     <div className="space-y-1.5">
-      <Label>{label}</Label>
-      <Input type={type} value={form[key]} onChange={(event) => update(key, event.target.value)} />
+      <Label>
+        {label}
+        {required && <span className="text-destructive"> *</span>}
+      </Label>
+      <Input
+        type={type}
+        value={form[key]}
+        required={required}
+        onChange={(event) => update(key, event.target.value)}
+      />
     </div>
   );
   return (
@@ -1263,7 +1273,7 @@ function PartnerDialog({
             {field("type", "Type")}
           </div>
           <div className="grid gap-3 md:grid-cols-3">
-            {field("gstin", "GSTIN")}
+            {field("gstin", "GSTIN", "text", true)}
             {field("pan", "PAN")}
             {field("pin", "PIN Code")}
           </div>
