@@ -155,6 +155,22 @@ function futureMonths(fromMonth: string, count: number): string[] {
   return result;
 }
 
+/**
+ * Generate deduction months while skipping payroll months that already exist.
+ * An advance must never be applied retroactively to a generated payroll.
+ */
+function futureUngeneratedMonths(fromMonth: string, count: number, generatedMonths: Set<string>): string[] {
+  const result: string[] = [];
+  let cur = fromMonth;
+  let guard = 0;
+  while (result.length < count && guard < count + generatedMonths.size + 24) {
+    cur = nextMonthFrom(cur);
+    guard += 1;
+    if (!generatedMonths.has(cur)) result.push(cur);
+  }
+  return result;
+}
+
 function today(): string {
   return new Date().toISOString().slice(0, 10);
 }
@@ -225,10 +241,13 @@ export function DriverPayroll() {
     [advances],
   );
 
+  // Payroll months already generated (to prevent duplicates and retroactive deductions)
+  const usedMonths = new Set(payrolls.map((p) => p.month));
+
   /** Sum of pending scheduled deductions for a given month. */
   const scheduledDeductionForMonth = (month: string) =>
     deductions
-      .filter((d) => d.month === month && !d.is_applied)
+      .filter((d) => d.month === month && !d.is_applied && !usedMonths.has(month))
       .reduce((s, d) => s + Number(d.deduction_amount), 0);
 
   const years = useMemo(() => {
@@ -261,9 +280,6 @@ export function DriverPayroll() {
     return true;
   });
 
-  // Payroll months already generated (to prevent duplicates)
-  const usedMonths = new Set(payrolls.map((p) => p.month));
-
   // Advance schedule preview (used in advance dialog)
   const advanceSchedulePreview = useMemo(() => {
     const amt = num(aAmount);
@@ -274,7 +290,7 @@ export function DriverPayroll() {
     let rem = amt;
     const startMonth = currentMonth();
     for (let i = 0; i < months; i++) {
-      const m = addMonths(startMonth, i);
+      const m = futureUngeneratedMonths(startMonth, i + 1, usedMonths)[i];
       const d = Math.min(monthly, rem);
       result.push({ month: m, amount: d });
       rem -= d;
@@ -595,7 +611,7 @@ export function DriverPayroll() {
         const numMonths = Math.ceil(amount / monthly);
         let rem = amount;
         const schedule: Array<{ month: string; amount: number }> = [];
-        for (const m of futureMonths(currentMonth(), numMonths)) {
+        for (const m of futureUngeneratedMonths(currentMonth(), numMonths, usedMonths)) {
           const d = Math.min(monthly, rem);
           schedule.push({ month: m, amount: d });
           rem -= d;
@@ -637,7 +653,7 @@ export function DriverPayroll() {
 
       // Generate deduction schedule (starting NEXT month)
       const numMonths = Math.ceil(amount / monthly);
-      const schedMonths = futureMonths(currentMonth(), numMonths);
+      const schedMonths = futureUngeneratedMonths(currentMonth(), numMonths, usedMonths);
       let rem = amount;
       for (const m of schedMonths) {
         const d = Math.min(monthly, rem);

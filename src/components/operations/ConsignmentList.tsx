@@ -469,7 +469,7 @@ export function ConsignmentList() {
     setRentals(
       (rentalResult.data ?? []).map((row: any) => ({
         id: row.id,
-        label: row.rental_name,
+        label: `${row.rental_name}${row.details_pending ? " (Update Later)" : ""}`,
         pin_code: row.pin_code,
         gstin: row.gstin,
       })),
@@ -573,16 +573,16 @@ export function ConsignmentList() {
     }
   }
 
-  async function savePartner() {
+  async function savePartner(updateLater = false) {
     const table = partnerDialog === "rental" ? "rentals" : "ltms_transporters";
     const nameColumn = partnerDialog === "rental" ? "rental_name" : "transporter_name";
     if (!partnerForm.name.trim())
       return toast.error(
         `${partnerDialog === "rental" ? "Rental" : "Transporter"} name is required`,
       );
-    if (!partnerForm.gstin.trim())
+    if (!updateLater && !partnerForm.gstin.trim())
       return toast.error("GSTIN is mandatory for Transporters and Rentals");
-    if (!partnerForm.pin.trim())
+    if (!updateLater && !partnerForm.pin.trim())
       return toast.error("PIN Code is mandatory for Transporters and Rentals");
     const payload = {
       [nameColumn]: partnerForm.name.trim(),
@@ -610,6 +610,7 @@ export function ConsignmentList() {
       bank_ifsc: partnerForm.ifsc,
       upi_id: partnerForm.upi,
       branch_id: branchId || null,
+      ...(partnerDialog === "rental" ? { details_pending: updateLater } : {}),
     };
     const { data, error } = await db.from(table).insert(payload).select("id").single();
     if (error) return toast.error(error.message);
@@ -618,7 +619,9 @@ export function ConsignmentList() {
     else setTransporterId(data.id);
     setPartnerDialog(null);
     setPartnerForm(emptyPartner());
-    toast.success(`${partnerDialog === "rental" ? "Rental" : "Transporter"} created and selected`);
+    toast.success(
+      `${partnerDialog === "rental" ? "Rental" : "Transporter"} ${updateLater ? "saved for later update and selected" : "created and selected"}`,
+    );
   }
 
   async function save() {
@@ -785,7 +788,7 @@ export function ConsignmentList() {
             form={partnerForm}
             setForm={setPartnerForm}
             onClose={() => setPartnerDialog(null)}
-            onSave={() => void savePartner()}
+            onSave={(updateLater) => void savePartner(updateLater)}
           />
         )}
       </>
@@ -1352,7 +1355,7 @@ function PartnerDialog({
   form: PartnerForm;
   setForm: (value: PartnerForm) => void;
   onClose: () => void;
-  onSave: () => void;
+  onSave: (updateLater?: boolean) => void;
 }) {
   const update = (key: keyof PartnerForm, value: string) => setForm({ ...form, [key]: value });
   const field = (key: keyof PartnerForm, label: string, type = "text", required = false) => (
@@ -1413,6 +1416,11 @@ function PartnerDialog({
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
+          {kind === "rental" && (
+            <Button type="button" variant="secondary" onClick={() => onSave(true)}>
+              Update Later
+            </Button>
+          )}
           <Button onClick={onSave}>Save and Select</Button>
         </DialogFooter>
       </DialogContent>
@@ -1506,7 +1514,14 @@ function ConsignmentView({
                 : "—"
             }
           />
-          <ReadonlyField label="Rental" value={row.rental?.rental_name} />
+          <ReadonlyField
+            label="Rental"
+            value={
+              row.rental
+                ? `${row.rental.rental_name}${row.rental.details_pending ? " (Update Later)" : ""}`
+                : undefined
+            }
+          />
           <ReadonlyField label="Transporter" value={row.transporter?.transporter_name} />
           <ReadonlyField label="Transporter GSTIN" value={row.transporter?.gstin} />
           <ReadonlyField label="Transporter PIN Code" value={row.transporter?.pin_code} />
