@@ -401,8 +401,12 @@ export function ConsignmentList() {
     }
   }, [branchId, branch?.pin_code]);
   useEffect(() => {
-    if (movement === "drop") setToPin(selectedTransporter?.pin_code ?? "");
-  }, [movement, selectedTransporter?.pin_code]);
+    if (type === "third_party" && movement === "drop") {
+      setToPin(selectedTransporter?.pin_code ?? "");
+    } else {
+      setToPin("");
+    }
+  }, [type, movement, selectedTransporter?.pin_code]);
 
   function openCreate() {
     setScreen("create");
@@ -1021,14 +1025,16 @@ function ConsignmentForm(props: any) {
               placeholder={branch?.pin_code ?? "Branch pincode"}
             />
           </div>
-          <div>
-            <Label>To Pincode {type === "third_party" && movement === "drop" ? "*" : ""}</Label>
-            <Input
-              value={toPin}
-              onChange={(event) => setToPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder={selectedTransporter?.pin_code ?? "Transporter pincode"}
-            />
-          </div>
+          {type === "third_party" && movement === "drop" && (
+            <div>
+              <Label>To Pincode *</Label>
+              <Input
+                value={toPin}
+                onChange={(event) => setToPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="Transporter pincode"
+              />
+            </div>
+          )}
         </div>
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
