@@ -252,6 +252,23 @@ export const LTMS_TRANSPORTER_CONFIG: MasterConfig = {
   emptyMsg: "LTMS transporters maintained separately from TMS transporters.",
 };
 
+export const RENTAL_CONFIG: MasterConfig = {
+  ...TRANSPORTER_CONFIG,
+  table: "rentals",
+  entityLabel: "Rentals",
+  singular: "rental",
+  titleKey: "rental_name",
+  emptyMsg: "Rental vehicle providers available for Own → Rental consignments.",
+  sections: TRANSPORTER_CONFIG.sections.map((section) => ({
+    ...section,
+    fields: section.fields.map((field) =>
+      field.key === "transporter_name"
+        ? { ...field, key: "rental_name", label: "Rental Name" }
+        : field,
+    ),
+  })) as any,
+};
+
 export const LOCATION_CONFIG: MasterConfig = {
   table: "locations",
   entityLabel: "Locations",
@@ -296,7 +313,11 @@ export const DELIVERY_PARTNER_CONFIG: MasterConfig = {
       fields: [
         { key: "delivery_partner_name", label: "Delivery Partner Name", required: true },
         { key: "legal_business_name", label: "Legal Business Name" },
-        { key: "delivery_partner_type", label: "Delivery Partner Type", options: ["Fleet Owner", "Broker", "Transport Company", "Individual Owner"] },
+        {
+          key: "delivery_partner_type",
+          label: "Delivery Partner Type",
+          options: ["Fleet Owner", "Broker", "Transport Company", "Individual Owner"],
+        },
       ],
     },
     {

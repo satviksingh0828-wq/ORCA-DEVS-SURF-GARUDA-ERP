@@ -1,6 +1,15 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { Building2, ChevronRight, FileText, MapPin, PanelLeftClose, PanelLeftOpen, Truck, User } from "lucide-react";
+import {
+  Building2,
+  ChevronRight,
+  FileText,
+  MapPin,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Truck,
+  User,
+} from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
@@ -15,6 +24,7 @@ import {
   DELIVERY_PARTNER_CONFIG,
   LTMS_TRANSPORTER_CONFIG,
   LOCATION_CONFIG,
+  RENTAL_CONFIG,
   TRANSPORTER_CONFIG,
   VEHICLE_CONFIG,
 } from "@/components/masters/configs";
@@ -43,13 +53,44 @@ export const Route = createFileRoute("/masters")({
 });
 
 const ALL_TABS = [
-  { id: "vehicle",     label: "Vehicle",    desc: "Fleet & specifications",  icon: Truck,     adminOnly: true  },
-  { id: "driver",      label: "Driver",     desc: "Staff & licences",        icon: User,      adminOnly: false },
-  { id: "transporter", label: "Transporter",desc: "Owners & brokers",        icon: Building2, adminOnly: false },
-  { id: "ltms-transporter", label: "Transporters", desc: "LTMS owners & brokers", icon: Building2, adminOnly: false },
-  { id: "delivery-partner", label: "Delivery Partners", desc: "Delivery partners", icon: Building2, adminOnly: false },
-  { id: "location",    label: "Locations",  desc: "Pickup & drop points",    icon: MapPin,    adminOnly: true  },
-  { id: "contract",    label: "Sources",    desc: "Rates & slabs",           icon: FileText,  adminOnly: true  },
+  { id: "vehicle", label: "Vehicle", desc: "Fleet & specifications", icon: Truck, adminOnly: true },
+  { id: "driver", label: "Driver", desc: "Staff & licences", icon: User, adminOnly: false },
+  {
+    id: "transporter",
+    label: "Transporter",
+    desc: "Owners & brokers",
+    icon: Building2,
+    adminOnly: false,
+  },
+  {
+    id: "ltms-transporter",
+    label: "Transporters",
+    desc: "LTMS owners & brokers",
+    icon: Building2,
+    adminOnly: false,
+  },
+  {
+    id: "rental",
+    label: "Rentals",
+    desc: "Rental vehicle providers",
+    icon: Truck,
+    adminOnly: false,
+  },
+  {
+    id: "delivery-partner",
+    label: "Delivery Partners",
+    desc: "Delivery partners",
+    icon: Building2,
+    adminOnly: false,
+  },
+  {
+    id: "location",
+    label: "Locations",
+    desc: "Pickup & drop points",
+    icon: MapPin,
+    adminOnly: true,
+  },
+  { id: "contract", label: "Sources", desc: "Rates & slabs", icon: FileText, adminOnly: true },
 ] as const;
 
 type TabId = (typeof ALL_TABS)[number]["id"];
@@ -72,16 +113,20 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
   const [tab, setTab] = useState<TabId>(isAdmin || isViewer ? "vehicle" : "driver");
   const [navOpen, setNavOpen] = useState(true);
 
-  const active  = TABS.find((t) => t.id === tab) ?? TABS[0];
+  const active = TABS.find((t) => t.id === tab) ?? TABS[0];
   const safeTab = active?.id ?? "driver";
 
   return (
     <AppShell
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Link to="/home" className="hover:text-foreground">Workspace</Link>
+          <Link to="/home" className="hover:text-foreground">
+            Workspace
+          </Link>
           <ChevronRight className="size-3.5" />
-          <Link to={ltmsMode ? "/ltms" : "/tms"} className="hover:text-foreground">{ltmsMode ? "LTMS" : "TMS"}</Link>
+          <Link to={ltmsMode ? "/ltms" : "/tms"} className="hover:text-foreground">
+            {ltmsMode ? "LTMS" : "TMS"}
+          </Link>
           <ChevronRight className="size-3.5" />
           <span className="text-foreground">Masters</span>
         </span>
@@ -89,14 +134,21 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
       headerEnd={
         <button
           type="button"
-          onClick={() => setNavOpen(v => !v)}
+          onClick={() => setNavOpen((v) => !v)}
           title={navOpen ? "Hide sidebar" : "Show sidebar"}
           className="hidden lg:flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
         >
-          {navOpen
-            ? <><PanelLeftClose className="size-3.5" /><span>Hide sidebar</span></>
-            : <><PanelLeftOpen  className="size-3.5" /><span>Show sidebar</span></>
-          }
+          {navOpen ? (
+            <>
+              <PanelLeftClose className="size-3.5" />
+              <span>Hide sidebar</span>
+            </>
+          ) : (
+            <>
+              <PanelLeftOpen className="size-3.5" />
+              <span>Show sidebar</span>
+            </>
+          )}
         </button>
       }
     >
@@ -109,7 +161,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
             </p>
             <ul className="space-y-1">
               {TABS.map((t) => {
-                const Icon     = t.icon;
+                const Icon = t.icon;
                 const isActive = t.id === safeTab;
                 return (
                   <li key={t.id}>
@@ -136,12 +188,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
         )}
 
         {/* Mobile dropdown navigation */}
-        <MobileTabDropdown
-          tabs={TABS}
-          activeId={safeTab}
-          label="Masters"
-          onChange={setTab}
-        />
+        <MobileTabDropdown tabs={TABS} activeId={safeTab} label="Masters" onChange={setTab} />
 
         <div key={safeTab} className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>
           <header className="mb-6">
@@ -151,28 +198,33 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
           {safeTab === "vehicle" ? (
             <MasterList
               config={VEHICLE_CONFIG}
-              renderExtraEditSections={isAdmin ? (id, row) => (
-                <>
-                  <VehicleInsuranceSection
-                    vehicleId={id}
-                    branchId={(row.branch_id as string | null) ?? null}
-                    registrationNumber={String(row.registration_number ?? "")}
-                  />
-                  <VehicleRoadTaxSection
-                    vehicleId={id}
-                    branchId={(row.branch_id as string | null) ?? null}
-                    registrationNumber={String(row.registration_number ?? "")}
-                  />
-                </>
-              ) : undefined}
+              renderExtraEditSections={
+                isAdmin
+                  ? (id, row) => (
+                      <>
+                        <VehicleInsuranceSection
+                          vehicleId={id}
+                          branchId={(row.branch_id as string | null) ?? null}
+                          registrationNumber={String(row.registration_number ?? "")}
+                        />
+                        <VehicleRoadTaxSection
+                          vehicleId={id}
+                          branchId={(row.branch_id as string | null) ?? null}
+                          registrationNumber={String(row.registration_number ?? "")}
+                        />
+                      </>
+                    )
+                  : undefined
+              }
             />
           ) : null}
-          {safeTab === "driver"      ? <MasterList config={DRIVER_CONFIG} />      : null}
+          {safeTab === "driver" ? <MasterList config={DRIVER_CONFIG} /> : null}
           {safeTab === "transporter" ? <MasterList config={TRANSPORTER_CONFIG} /> : null}
           {safeTab === "ltms-transporter" ? <MasterList config={LTMS_TRANSPORTER_CONFIG} /> : null}
+          {safeTab === "rental" ? <MasterList config={RENTAL_CONFIG} /> : null}
           {safeTab === "delivery-partner" ? <MasterList config={DELIVERY_PARTNER_CONFIG} /> : null}
-          {safeTab === "location"    ? <MasterList config={LOCATION_CONFIG} />    : null}
-          {safeTab === "contract"    ? <Contracts />                               : null}
+          {safeTab === "location" ? <MasterList config={LOCATION_CONFIG} /> : null}
+          {safeTab === "contract" ? <Contracts /> : null}
         </div>
       </div>
     </AppShell>
