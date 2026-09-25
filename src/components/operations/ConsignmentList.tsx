@@ -994,7 +994,7 @@ function ConsignmentForm(props: any) {
   const needsRental = type === "own" && ownTransportMode === "rental";
   const needsTransporter = type === "third_party";
   return (
-    <div className="relative left-1/2 w-screen -translate-x-1/2 space-y-3">
+    <div className="w-full min-w-0 space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Create Consignment</h2>
@@ -1008,20 +1008,20 @@ function ConsignmentForm(props: any) {
       </div>
       <section className="space-y-2 border border-primary/30 bg-primary/[0.02] p-2">
         <h3 className="font-semibold">Consignment Details</h3>
-        <div className="grid grid-cols-1 items-end gap-2 border-y border-border py-2 sm:grid-cols-6">
-          <div className="min-w-0 sm:col-span-5">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+          <div className="min-w-0 space-y-1.5 sm:col-span-2">
             <Label>E-Way Bill Number *</Label>
-            <Input
-              value={ewayNo}
-              onChange={(event) => setEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))}
-              placeholder="12-digit E-Way Bill Number"
-            />
+            <div className="flex min-w-0 gap-1">
+              <Input
+                value={ewayNo}
+                onChange={(event) => setEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))}
+                placeholder="12-digit E-Way Bill Number"
+              />
+              <Button type="button" onClick={() => void addEway()} disabled={fetching}>
+                {fetching ? "Fetching…" : "Add"}
+              </Button>
+            </div>
           </div>
-          <Button type="button" onClick={() => void addEway()} disabled={fetching}>
-            {fetching ? "Fetching…" : "Add"}
-          </Button>
-        </div>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <ReadonlyField label="Document Type" value="Consignment" />
           <ReadonlyField
             label="Consignment No."
