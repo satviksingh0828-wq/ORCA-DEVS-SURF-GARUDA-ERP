@@ -1015,19 +1015,6 @@ function ConsignmentForm(props: any) {
       <section className="space-y-2 border border-primary/30 bg-primary/[0.02] p-2">
         <h3 className="font-semibold">Consignment Details</h3>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
-          <div className="min-w-0 space-y-1.5 sm:col-span-2">
-            <Label>E-Way Bill Number *</Label>
-            <div className="flex min-w-0 gap-1">
-              <Input
-                value={ewayNo}
-                onChange={(event) => setEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))}
-                placeholder="12-digit E-Way Bill Number"
-              />
-              <Button type="button" onClick={() => void addEway()} disabled={fetching}>
-                {fetching ? "Fetching…" : "Add"}
-              </Button>
-            </div>
-          </div>
           <ReadonlyField label="Document Type" value="Consignment" />
           <ReadonlyField
             label="Consignment No."
@@ -1078,6 +1065,19 @@ function ConsignmentForm(props: any) {
                 ))}
               </SelectContent>
             </Select>
+          </div>
+          <div className="min-w-0 space-y-1.5 sm:col-span-2">
+            <Label>E-Way Bill Number *</Label>
+            <div className="flex min-w-0 gap-1">
+              <Input
+                value={ewayNo}
+                onChange={(event) => setEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))}
+                placeholder="12-digit E-Way Bill Number"
+              />
+              <Button type="button" onClick={() => void addEway()} disabled={fetching}>
+                {fetching ? "Fetching…" : "Add"}
+              </Button>
+            </div>
           </div>
         </div>
         <CommonEwayDetails draft={common} />
