@@ -34,6 +34,7 @@ type ShipmentDraft = {
   eway_bill_status: string;
   valid_until: string;
   document_number: string;
+  document_date: string;
   generation_mode: string;
   generation_mode_code: string;
   transaction_type: string;
@@ -243,6 +244,8 @@ function mapEway(raw: unknown): ShipmentDraft {
     eway_bill_status: read(source, "status") || "Active",
     valid_until: dateOnly(source.validUpto || source.validUntil),
     document_number: read(source, "docNo"),
+    document_date:
+      dateOnly(source.docDate) || dateOnly(source.ewayBillDate || source.ewayBillDateStr),
     generation_mode_code: generationCode,
     generation_mode: humanLabel(generationModeLabel, generationCode, "API"),
     transaction_type_code: transactionCode,
