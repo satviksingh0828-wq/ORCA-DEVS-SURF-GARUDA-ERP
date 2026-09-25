@@ -994,7 +994,7 @@ function ConsignmentForm(props: any) {
   const needsRental = type === "own" && ownTransportMode === "rental";
   const needsTransporter = type === "third_party";
   return (
-    <div className="space-y-5">
+    <div className="relative left-1/2 w-screen -translate-x-1/2 space-y-3">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-xl font-semibold">Create Consignment</h2>
@@ -1006,9 +1006,10 @@ function ConsignmentForm(props: any) {
           <X className="mr-1 size-4" /> Cancel
         </Button>
       </div>
-      <section className="space-y-4 rounded-xl border border-primary/30 bg-primary/[0.02] p-4">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[260px] flex-1">
+      <section className="space-y-2 border border-primary/30 bg-primary/[0.02] p-2">
+        <h3 className="font-semibold">Consignment Details</h3>
+        <div className="grid grid-cols-1 items-end gap-2 border-y border-border py-2 sm:grid-cols-6">
+          <div className="min-w-0 sm:col-span-5">
             <Label>E-Way Bill Number *</Label>
             <Input
               value={ewayNo}
@@ -1020,18 +1021,7 @@ function ConsignmentForm(props: any) {
             {fetching ? "Fetching…" : "Add"}
           </Button>
         </div>
-        <EwayTable
-          drafts={drafts}
-          remove={(index) =>
-            setDrafts((items: ShipmentDraft[]) =>
-              items.filter((_, itemIndex) => itemIndex !== index),
-            )
-          }
-        />
-      </section>
-      <section className="space-y-4 rounded-xl border border-border p-4">
-        <h3 className="font-semibold">Consignment Details</h3>
-        <div className="grid gap-3 md:grid-cols-4">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <ReadonlyField label="Document Type" value="Consignment" />
           <ReadonlyField
             label="Consignment No."
@@ -1086,9 +1076,9 @@ function ConsignmentForm(props: any) {
         </div>
         <CommonEwayDetails draft={common} />
       </section>
-      <section className="space-y-4 rounded-xl border border-border p-4">
+      <section className="space-y-2 border border-border p-2">
         <h3 className="font-semibold">Transport Assignment</h3>
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
           <div className={`space-y-1.5 ${type !== "own" ? "opacity-60" : ""}`}>
             <Label>Own Transport Option *</Label>
             <Select
@@ -1117,8 +1107,6 @@ function ConsignmentForm(props: any) {
               </SelectContent>
             </Select>
           </div>
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
           <SelectField
             label="Vehicle *"
             value={vehicleId}
@@ -1187,10 +1175,10 @@ function ConsignmentForm(props: any) {
           </div>
         </div>
       </section>
-      <section className="space-y-4 rounded-xl border border-border p-4">
+      <section className="space-y-2 border border-border p-2">
         <h3 className="font-semibold">Pincodes</h3>
-        <div className="grid gap-3 md:grid-cols-2">
-          <div>
+        <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
+          <div className="lg:col-span-3">
             <Label>From Pincode</Label>
             <Input
               value={fromPin}
@@ -1198,7 +1186,7 @@ function ConsignmentForm(props: any) {
               placeholder={branch?.pin_code ?? "Branch pincode"}
             />
           </div>
-          <div>
+          <div className="lg:col-span-3">
             <Label>To Pincode *</Label>
             <Input
               value={toPin}
@@ -1209,7 +1197,18 @@ function ConsignmentForm(props: any) {
           </div>
         </div>
       </section>
-      <section className="space-y-3 rounded-xl border border-border p-4">
+      <section className="space-y-2 border border-border p-2">
+        <h3 className="font-semibold">E-Way Bills</h3>
+        <EwayTable
+          drafts={drafts}
+          remove={(index) =>
+            setDrafts((items: ShipmentDraft[]) =>
+              items.filter((_, itemIndex) => itemIndex !== index),
+            )
+          }
+        />
+      </section>
+      <section className="space-y-2 border border-border p-2">
         <h3 className="font-semibold">Goods from all E-Way Bills</h3>
         <GoodsTable drafts={drafts} />
       </section>
@@ -1291,18 +1290,18 @@ function EwayTable({
 
 function CommonEwayDetails({ draft }: { draft?: ShipmentDraft }) {
   return (
-    <section className="space-y-4 rounded-xl border border-border p-4">
+    <section className="space-y-2 border-t border-border pt-2">
       <h3 className="font-semibold">Common E-Way Bill Details</h3>
       <p className="text-xs text-muted-foreground">
         These values apply to every E-Way Bill in this Consignment and are shown once.
       </p>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <ReadonlyField label="Generation Mode" value={draft?.generation_mode} />
         <ReadonlyField label="Transaction Type" value={draft?.transaction_type} />
         <ReadonlyField label="Supply Type" value={draft?.supply_type} />
         <ReadonlyField label="Sub-Supply Type" value={draft?.sub_type} />
       </div>
-      <div className="grid gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
         <ReadonlyField label="From GSTIN" value={draft?.supplier_gstin} />
         <ReadonlyField label="From Trade Name" value={draft?.supplier_trade_name} />
         <ReadonlyField label="From Legal Name" value={draft?.supplier_legal_name} />
