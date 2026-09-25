@@ -35,6 +35,7 @@ import { ConsignmentList } from "@/components/operations/ConsignmentList";
 import { LorryReceiptList } from "@/components/operations/LorryReceiptList";
 import { EwayBillList } from "@/components/operations/EwayBillList";
 import { ManifestList } from "@/components/operations/ManifestList";
+import { LtmsManifestList } from "@/components/operations/LtmsManifestList";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -103,6 +104,14 @@ const ALL_TABS = [
     dividerBefore: false,
   },
   {
+    id: "ltms-manifest",
+    label: "Manifest",
+    desc: "Update transporter on consignment E-Way Bills",
+    icon: ClipboardList,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
     id: "eway-bill",
     label: "E-Way Bill",
     desc: "Saved daily assigned-EWB snapshots",
@@ -156,7 +165,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const isViewer = user?.role === "viewer";
 
   const TABS = ALL_TABS.filter((t) => {
-    const isLtmsTab = t.id === "shipments" || t.id === "consignment" || t.id === "eway-bill";
+    const isLtmsTab = t.id === "shipments" || t.id === "consignment" || t.id === "eway-bill" || t.id === "ltms-manifest";
     if (mode === "ltms" && !isLtmsTab) return false;
     if (mode === "tms" && isLtmsTab) return false;
     if ("basicOnly" in t && t.basicOnly && user?.role !== "basic") return false;
@@ -274,6 +283,11 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           {safeTab === "manifest" && (
             <TabErrorBoundary label="Manifest">
               <ManifestList />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "ltms-manifest" && (
+            <TabErrorBoundary label="Manifest">
+              <LtmsManifestList />
             </TabErrorBoundary>
           )}
           {safeTab === "eway-bill" && (

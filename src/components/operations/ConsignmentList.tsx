@@ -862,21 +862,22 @@ export function ConsignmentList() {
               <th className="px-4 py-3">Branch</th>
               <th className="px-4 py-3">Type</th>
               <th className="px-4 py-3">Movement</th>
+              <th className="px-4 py-3">Transporter Update</th>
               <th className="px-4 py-3">Created</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
-            {loading && (
+                  {loading && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center">
+                <td colSpan={7} className="px-4 py-10 text-center">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && !filteredRows.length && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
                   No consignments found.
                 </td>
               </tr>
@@ -892,6 +893,17 @@ export function ConsignmentList() {
                 </td>
                 <td className="px-4 py-3">
                   {row.movement_mode} · {row.transport_mode}
+                </td>
+                <td className="px-4 py-3">
+                  {row.consignment_type === "third_party" ? (
+                    <Badge variant="outline">
+                      {row.transporter_update_status === "updated"
+                        ? "Transporter Updated"
+                        : row.transporter_update_status === "partial"
+                          ? "Partially Updated — Retry"
+                          : "Transporter Update Pending"}
+                    </Badge>
+                  ) : "—"}
                 </td>
                 <td className="px-4 py-3">
                   {new Date(row.created_at).toLocaleDateString("en-IN")}
@@ -1525,6 +1537,18 @@ function ConsignmentView({
           <ReadonlyField label="Transporter" value={row.transporter?.transporter_name} />
           <ReadonlyField label="Transporter GSTIN" value={row.transporter?.gstin} />
           <ReadonlyField label="Transporter PIN Code" value={row.transporter?.pin_code} />
+          {row.consignment_type === "third_party" && (
+            <ReadonlyField
+              label="Transporter Update Status"
+              value={
+                row.transporter_update_status === "updated"
+                  ? "Transporter Updated"
+                  : row.transporter_update_status === "partial"
+                    ? "Partially Updated — Retry"
+                    : "Transporter Update Pending"
+              }
+            />
+          )}
         </div>
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
