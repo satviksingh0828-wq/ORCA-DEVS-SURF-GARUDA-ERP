@@ -341,11 +341,25 @@ function mapEway(raw: unknown): ShipmentDraft {
   };
 }
 
-function ReadonlyField({ label, value }: { label: string; value: unknown }) {
+function ReadonlyField({
+  label,
+  value,
+  dense = false,
+}: {
+  label: string;
+  value: unknown;
+  dense?: boolean;
+}) {
   return (
-    <div>
-      <Label>{label}</Label>
-      <div className="mt-1 min-h-9 rounded-md border border-input bg-muted/30 px-3 py-2 text-sm">
+    <div className={dense ? "min-w-0 space-y-1" : "min-w-0"}>
+      <Label className={dense ? "text-xs font-semibold" : undefined}>{label}</Label>
+      <div
+        className={
+          dense
+            ? "mt-1 min-h-8 break-words whitespace-normal border border-input border-l-2 border-l-sky-600 bg-background px-2 py-1.5 text-xs text-foreground"
+            : "mt-1 min-h-9 rounded-md border border-input bg-muted/30 px-3 py-2 text-sm"
+        }
+      >
         {String(value || "—")}
       </div>
     </div>
@@ -368,10 +382,13 @@ function SelectField({
   disabled?: boolean;
 }) {
   return (
-    <div className="space-y-1.5">
-      <Label>{label}</Label>
+    <div className="min-w-0 space-y-1">
+      <Label className="text-xs font-semibold">{label}</Label>
       <Select value={value} onValueChange={onChange} disabled={disabled}>
-        <SelectTrigger disabled={disabled}>
+        <SelectTrigger
+          className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs"
+          disabled={disabled}
+        >
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -1000,26 +1017,37 @@ function ConsignmentForm(props: any) {
   const needsRental = type === "own" && ownTransportMode === "rental";
   const needsTransporter = type === "third_party";
   return (
-    <div className="w-full min-w-0 space-y-1.5">
-      <div className="flex items-center justify-between">
+    <div className="consignment-entry w-full min-w-0 space-y-0 bg-background p-3 text-foreground">
+      <div className="-mx-3 -mt-3 mb-3 flex min-h-12 flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/70 px-4 py-2">
         <div className="flex min-w-0 items-baseline gap-2">
-          <h2 className="shrink-0 text-base font-semibold">Consignment</h2>
-          <p className="truncate text-sm text-muted-foreground">
-            Create shipments from E-Way Bills
+          <h2 className="shrink-0 text-base font-semibold">Consignment / Create</h2>
+          <p className="truncate text-xs text-muted-foreground">
+            Create consignment from E-Way Bills
           </p>
         </div>
-        <Button variant="outline" onClick={onBack}>
-          <X className="mr-1 size-4" /> Cancel
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button onClick={() => void save()} disabled={loading || drafts.length === 0}>
+            {loading ? "Saving…" : "Create Consignment"}
+          </Button>
+          <Button variant="outline" onClick={onBack}>
+            <X className="mr-1 size-4" /> Discard
+          </Button>
+        </div>
       </div>
-      <section className="space-y-1.5 border border-primary/30 bg-primary/[0.02] p-1.5">
-        <h3 className="font-semibold">Consignment Details</h3>
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-6">
-          <ReadonlyField label="Document Type" value="Consignment" />
-          <div className="space-y-1.5">
-            <Label>Type *</Label>
+      <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+        <span>
+          Four-column entry layout · E-Way Bill details are populated from the added bill.
+        </span>
+        <span>{branch?.branch_name ?? "Select branch"}</span>
+      </div>
+      <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+        <h3 className="text-sm font-semibold text-sky-800">Consignment Details</h3>
+        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+          <ReadonlyField dense label="Document Type" value="Consignment" />
+          <div className="min-w-0 space-y-1">
+            <Label className="text-xs font-semibold">Type *</Label>
             <Select value={type} onValueChange={setType}>
-              <SelectTrigger>
+              <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1029,6 +1057,7 @@ function ConsignmentForm(props: any) {
             </Select>
           </div>
           <ReadonlyField
+            dense
             label="Consignment No."
             value={previewNumber ? `${previewNumber} (preview)` : "Select branch to preview number"}
           />
@@ -1049,12 +1078,12 @@ function ConsignmentForm(props: any) {
             options={contracts}
             placeholder="Select source"
           />
-          <ReadonlyField label="Consignment From PIN" value={common?.supplier_pin_code} />
-          <ReadonlyField label="Consignment To PIN" value={common?.recipient_pin_code} />
-          <div className="space-y-1.5">
-            <Label>Mode *</Label>
+          <ReadonlyField dense label="Consignment From PIN" value={common?.supplier_pin_code} />
+          <ReadonlyField dense label="Consignment To PIN" value={common?.recipient_pin_code} />
+          <div className="min-w-0 space-y-1">
+            <Label className="text-xs font-semibold">Mode *</Label>
             <Select value={transportMode} onValueChange={setTransportMode}>
-              <SelectTrigger>
+              <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1066,13 +1095,14 @@ function ConsignmentForm(props: any) {
               </SelectContent>
             </Select>
           </div>
-          <div className="min-w-0 space-y-1.5 sm:col-span-2">
-            <Label>E-Way Bill No. *</Label>
+          <div className="min-w-0 space-y-1 xl:col-span-2">
+            <Label className="text-xs font-semibold">E-Way Bill No. *</Label>
             <div className="flex min-w-0 gap-1">
               <Input
                 value={ewayNo}
                 onChange={(event) => setEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))}
                 placeholder="12-digit E-Way Bill Number"
+                className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
               <Button type="button" onClick={() => void addEway()} disabled={fetching}>
                 {fetching ? "Fetching…" : "Add"}
@@ -1082,19 +1112,20 @@ function ConsignmentForm(props: any) {
         </div>
         <CommonEwayDetails draft={common} />
       </section>
-      <section className="space-y-1.5 border border-border p-1.5">
-        <h3 className="font-semibold">Transport Assignment</h3>
-        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-6 lg:grid-cols-12">
-          <div
-            className={`space-y-1.5 sm:col-span-2 lg:col-span-2 ${type !== "own" ? "opacity-60" : ""}`}
-          >
-            <Label>Own Transport Option *</Label>
+      <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+        <h3 className="text-sm font-semibold text-sky-800">Transport Assignment</h3>
+        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className={`min-w-0 space-y-1 ${type !== "own" ? "opacity-60" : ""}`}>
+            <Label className="text-xs font-semibold">Own Transport Option *</Label>
             <Select
               value={ownTransportMode}
               onValueChange={setOwnTransportMode}
               disabled={type !== "own"}
             >
-              <SelectTrigger disabled={type !== "own"}>
+              <SelectTrigger
+                className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs"
+                disabled={type !== "own"}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1103,12 +1134,13 @@ function ConsignmentForm(props: any) {
               </SelectContent>
             </Select>
           </div>
-          <div
-            className={`space-y-1.5 sm:col-span-2 lg:col-span-2 ${type !== "third_party" ? "opacity-60" : ""}`}
-          >
-            <Label>Movement *</Label>
+          <div className={`min-w-0 space-y-1 ${type !== "third_party" ? "opacity-60" : ""}`}>
+            <Label className="text-xs font-semibold">Movement *</Label>
             <Select value={movement} onValueChange={setMovement} disabled={type !== "third_party"}>
-              <SelectTrigger disabled={type !== "third_party"}>
+              <SelectTrigger
+                className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs"
+                disabled={type !== "third_party"}
+              >
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1117,7 +1149,7 @@ function ConsignmentForm(props: any) {
               </SelectContent>
             </Select>
           </div>
-          <div className="sm:col-span-2 lg:col-span-2">
+          <div className="min-w-0">
             <SelectField
               label="Vehicle *"
               value={vehicleId}
@@ -1127,8 +1159,8 @@ function ConsignmentForm(props: any) {
               disabled={!needsOwnVehicle}
             />
           </div>
-          <div className="col-span-2 min-w-0 space-y-1.5 sm:col-span-3 lg:col-span-3">
-            <Label>Rental *</Label>
+          <div className="col-span-1 min-w-0 space-y-1 sm:col-span-2 xl:col-span-2">
+            <Label className="text-xs font-semibold">Rental *</Label>
             <div className="flex min-w-0 gap-2">
               <div className="min-w-0 flex-1">
                 <Select value={rentalId} onValueChange={setRentalId} disabled={!needsRental}>
@@ -1155,8 +1187,8 @@ function ConsignmentForm(props: any) {
               </Button>
             </div>
           </div>
-          <div className="col-span-2 min-w-0 space-y-1.5 sm:col-span-3 lg:col-span-3">
-            <Label>Transporter *</Label>
+          <div className="col-span-1 min-w-0 space-y-1 sm:col-span-2 xl:col-span-2">
+            <Label className="text-xs font-semibold">Transporter *</Label>
             <div className="flex min-w-0 gap-2">
               <div className="min-w-0 flex-1">
                 <Select
@@ -1189,20 +1221,22 @@ function ConsignmentForm(props: any) {
           </div>
         </div>
       </section>
-      <section className="space-y-1.5 border border-border p-1.5">
-        <h3 className="font-semibold">Pincodes</h3>
-        <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-6">
-          <div className="lg:col-span-3">
-            <Label>From Pincode</Label>
+      <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+        <h3 className="text-sm font-semibold text-sky-800">Pincodes</h3>
+        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
+          <div className="min-w-0 space-y-1">
+            <Label className="text-xs font-semibold">From Pincode</Label>
             <Input
+              className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               value={fromPin}
               onChange={(event) => setFromPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
               placeholder={branch?.pin_code ?? "Branch pincode"}
             />
           </div>
-          <div className="lg:col-span-3">
-            <Label>To Pincode *</Label>
+          <div className="min-w-0 space-y-1">
+            <Label className="text-xs font-semibold">To Pincode *</Label>
             <Input
+              className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               value={toPin}
               disabled={type !== "third_party" || movement !== "drop"}
               onChange={(event) => setToPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
@@ -1211,8 +1245,8 @@ function ConsignmentForm(props: any) {
           </div>
         </div>
       </section>
-      <section className="space-y-1.5 border border-border p-1.5">
-        <h3 className="font-semibold">E-Way Bills</h3>
+      <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+        <h3 className="text-sm font-semibold text-sky-800">E-Way Bills</h3>
         <EwayTable
           drafts={drafts}
           remove={(index) =>
@@ -1222,11 +1256,11 @@ function ConsignmentForm(props: any) {
           }
         />
       </section>
-      <section className="space-y-1.5 border border-border p-1.5">
-        <h3 className="font-semibold">Goods from all E-Way Bills</h3>
+      <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+        <h3 className="text-sm font-semibold text-sky-800">Goods from all E-Way Bills</h3>
         <GoodsTable drafts={drafts} />
       </section>
-      <div className="flex justify-end gap-2">
+      <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
         <Button variant="outline" onClick={onBack}>
           Cancel
         </Button>
@@ -1250,7 +1284,7 @@ function EwayTable({
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-sm">
-        <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+        <thead className="bg-sky-800 text-left text-xs text-white">
           <tr>
             {[
               "EWB No.",
@@ -1304,34 +1338,52 @@ function EwayTable({
 
 function CommonEwayDetails({ draft }: { draft?: ShipmentDraft }) {
   return (
-    <section className="space-y-1.5 border-t border-border pt-1.5">
-      <h3 className="font-semibold">Common E-Way Bill Details</h3>
-      <p className="text-xs text-muted-foreground">
+    <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+      <h3 className="text-sm font-semibold text-sky-800">Common E-Way Bill Details</h3>
+      <p className="-mt-2 text-xs text-muted-foreground">
         These values apply to every E-Way Bill in this Consignment and are shown once.
       </p>
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-        <ReadonlyField label="Generation Mode" value={draft?.generation_mode} />
-        <ReadonlyField label="Transaction Type" value={draft?.transaction_type} />
-        <ReadonlyField label="Supply Type" value={draft?.supply_type} />
-        <ReadonlyField label="Sub-Supply Type" value={draft?.sub_type} />
+      <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+        <ReadonlyField dense label="Generation Mode" value={draft?.generation_mode} />
+        <ReadonlyField dense label="Transaction Type" value={draft?.transaction_type} />
+        <ReadonlyField dense label="Supply Type" value={draft?.supply_type} />
+        <ReadonlyField dense label="Sub-Supply Type" value={draft?.sub_type} />
       </div>
-      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
-        <ReadonlyField label="From GSTIN" value={draft?.supplier_gstin} />
-        <ReadonlyField label="From Trade Name" value={draft?.supplier_trade_name} />
-        <ReadonlyField label="From Legal Name" value={draft?.supplier_legal_name} />
-        <ReadonlyField label="From Address 1" value={draft?.supplier_address_line_1} />
-        <ReadonlyField label="From Address 2" value={draft?.supplier_address_line_2} />
-        <ReadonlyField label="From Place" value={draft?.supplier_place} />
-        <ReadonlyField label="From Pincode" value={draft?.supplier_pin_code} />
-        <ReadonlyField label="From State" value={draft?.supplier_state} />
-        <ReadonlyField label="To GSTIN" value={draft?.recipient_gstin} />
-        <ReadonlyField label="To Trade Name" value={draft?.recipient_trade_name} />
-        <ReadonlyField label="To Legal Name" value={draft?.recipient_legal_name} />
-        <ReadonlyField label="To Address 1" value={draft?.recipient_address_line_1} />
-        <ReadonlyField label="To Address 2" value={draft?.recipient_address_line_2} />
-        <ReadonlyField label="To Place" value={draft?.recipient_place} />
-        <ReadonlyField label="To Pincode" value={draft?.recipient_pin_code} />
-        <ReadonlyField label="To State" value={draft?.recipient_state} />
+      <div className="space-y-3">
+        <h4 className="text-xs font-bold uppercase tracking-wide text-foreground">
+          Consignor / From Party
+        </h4>
+        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+          <ReadonlyField dense label="Consignor GSTIN" value={draft?.supplier_gstin} />
+          <ReadonlyField dense label="Consignor Trade Name" value={draft?.supplier_trade_name} />
+          <ReadonlyField dense label="Consignor Legal Name" value={draft?.supplier_legal_name} />
+          <ReadonlyField dense label="Consignor Address 1" value={draft?.supplier_address_line_1} />
+          <ReadonlyField dense label="Consignor Address 2" value={draft?.supplier_address_line_2} />
+          <ReadonlyField dense label="Consignor Place" value={draft?.supplier_place} />
+          <ReadonlyField dense label="Consignor Pincode" value={draft?.supplier_pin_code} />
+          <ReadonlyField dense label="Consignor State" value={draft?.supplier_state} />
+        </div>
+        <h4 className="pt-1 text-xs font-bold uppercase tracking-wide text-foreground">
+          Consignee / To Party
+        </h4>
+        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+          <ReadonlyField dense label="Consignee GSTIN" value={draft?.recipient_gstin} />
+          <ReadonlyField dense label="Consignee Trade Name" value={draft?.recipient_trade_name} />
+          <ReadonlyField dense label="Consignee Legal Name" value={draft?.recipient_legal_name} />
+          <ReadonlyField
+            dense
+            label="Consignee Address 1"
+            value={draft?.recipient_address_line_1}
+          />
+          <ReadonlyField
+            dense
+            label="Consignee Address 2"
+            value={draft?.recipient_address_line_2}
+          />
+          <ReadonlyField dense label="Consignee Place" value={draft?.recipient_place} />
+          <ReadonlyField dense label="Consignee Pincode" value={draft?.recipient_pin_code} />
+          <ReadonlyField dense label="Consignee State" value={draft?.recipient_state} />
+        </div>
       </div>
     </section>
   );
@@ -1341,7 +1393,7 @@ function GoodsTable({ drafts }: { drafts: ShipmentDraft[] }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full min-w-[1100px] text-xs">
-        <thead className="bg-muted/40 text-left">
+        <thead className="bg-sky-800 text-left text-white">
           <tr>
             {[
               "EWB No.",
