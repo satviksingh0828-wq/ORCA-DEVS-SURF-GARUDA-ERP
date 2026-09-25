@@ -329,7 +329,6 @@ export function LtmsManifestList() {
   const branchIds = useMemo(() => (branchIdsKey ? branchIdsKey.split(",") : []), [branchIdsKey]);
   const [transporters, setTransporters] = useState<Transporter[]>([]);
   const [transporterId, setTransporterId] = useState("");
-  const [transporterFilterId, setTransporterFilterId] = useState("");
   const [profile, setProfile] = useState<TransporterFields>(EMPTY_TRANSPORTER);
   const [rows, setRows] = useState<Consignment[]>([]);
   const [history, setHistory] = useState<ManifestHistoryRow[]>([]);
@@ -338,7 +337,7 @@ export function LtmsManifestList() {
   const [search, setSearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState("pending");
   const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7));
   const [historyTransporterFilterId, setHistoryTransporterFilterId] = useState("");
   const [loading, setLoading] = useState(false);
@@ -347,7 +346,6 @@ export function LtmsManifestList() {
   const visibleRows = useMemo(
     () =>
       rows.filter((row) => {
-        const transporterMatch = !transporterFilterId || row.transporter_id === transporterFilterId;
         const rowStatus = row.transporter_update_status || "pending";
         const statusMatch =
           statusFilter === "all" ||
@@ -360,13 +358,12 @@ export function LtmsManifestList() {
         const text =
           `${row.consignment_number} ${row.from_pin_code} ${row.to_pin_code} ${row.branch?.branch_name ?? ""} ${row.shipments.map((item) => `${item.eway_bill_number} ${item.recipient_trade_name ?? ""} ${item.recipient_gstin ?? ""}`).join(" ")}`.toLowerCase();
         return (
-          transporterMatch &&
           statusMatch &&
           monthMatch &&
           (!search.trim() || text.includes(search.trim().toLowerCase()))
         );
       }),
-    [rows, transporterFilterId, statusFilter, month, search],
+    [rows, statusFilter, month, search],
   );
 
   const filteredHistory = useMemo(
@@ -409,12 +406,6 @@ export function LtmsManifestList() {
   const loadData = useCallback(async () => {
     setLoading(true);
     const allowedBranches = role === "basic" ? branchIds : null;
-    let consignmentQuery = db
-      .from("consignments")
-      .select(
-        "id,consignment_number,branch_id,consignment_type,movement_mode,from_pin_code,to_pin_code,transporter_id,transporter_update_status,transporter_update_error,created_at,branch:branches(branch_name)",
-      )
-      .order("created_at", { ascending: false });
     let manifestQuery = db
       .from("ltms_manifest_transfers")
       .select(
@@ -425,10 +416,29 @@ export function LtmsManifestList() {
       const ids = allowedBranches.length
         ? allowedBranches
         : ["00000000-0000-0000-0000-000000000000"];
-      consignmentQuery = consignmentQuery.in("branch_id", ids);
       manifestQuery = manifestQuery.in("branch_id", ids);
     }
-    const [consignmentResult, historyResult] = await Promise.all([consignmentQuery, manifestQuery]);
+    let consignmentPromise: Promise<any> = Promise.resolve({ data: [], error: null });
+    if (transporterId) {
+      let consignmentQuery = db
+        .from("consignments")
+        .select(
+          "id,consignment_number,branch_id,consignment_type,movement_mode,from_pin_code,to_pin_code,transporter_id,transporter_update_status,transporter_update_error,created_at,branch:branches(branch_name)",
+        )
+        .eq("transporter_id", transporterId)
+        .order("created_at", { ascending: false });
+      if (allowedBranches !== null) {
+        consignmentQuery = consignmentQuery.in(
+          "branch_id",
+          allowedBranches.length ? allowedBranches : ["00000000-0000-0000-0000-000000000000"],
+        );
+      }
+      consignmentPromise = consignmentQuery;
+    }
+    const [consignmentResult, historyResult] = await Promise.all([
+      consignmentPromise,
+      manifestQuery,
+    ]);
     if (consignmentResult.error)
       toast.error(`Could not load consignments: ${consignmentResult.error.message}`);
     if (historyResult.error)
@@ -455,7 +465,7 @@ export function LtmsManifestList() {
     setHistory((historyResult.data ?? []) as ManifestHistoryRow[]);
     setSelectedIds([]);
     setLoading(false);
-  }, [role, branchIds]);
+  }, [role, branchIds, transporterId]);
 
   useEffect(() => {
     void loadTransporters();
@@ -586,6 +596,9 @@ export function LtmsManifestList() {
           <Button
             onClick={() => {
               setSelectedIds([]);
+              setTransporterId("");
+              setProfile(EMPTY_TRANSPORTER);
+              setStatusFilter("pending");
               setIsCreating(true);
             }}
           >
@@ -706,14 +719,17 @@ export function LtmsManifestList() {
           <div className="min-w-64 flex-1 space-y-1.5">
             <Label>Transporter</Label>
             <Select
-              value={transporterId || "manual"}
-              onValueChange={(value) => setTransporterId(value === "manual" ? "" : value)}
+              value={transporterId}
+              onValueChange={(value) => {
+                setTransporterId(value);
+                setSelectedIds([]);
+                setRows([]);
+              }}
             >
               <SelectTrigger>
-                <SelectValue placeholder="Choose a transporter" />
+                <SelectValue placeholder="Select transporter" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="manual">ORCA / enter transporter details</SelectItem>
                 {transporters.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
                     {item.transporter_name}
@@ -745,96 +761,88 @@ export function LtmsManifestList() {
         </div>
       </section>
 
-      <section className="space-y-3 rounded-xl border border-border bg-card p-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="relative min-w-60 flex-1">
-            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
-            <Input
-              className="pl-9"
-              placeholder="Search consignment or E-Way Bill"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <Select
-            value={transporterFilterId || "all"}
-            onValueChange={(value) => setTransporterFilterId(value === "all" ? "" : value)}
-          >
-            <SelectTrigger className="w-52">
-              <SelectValue placeholder="All transporters" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All transporters</SelectItem>
-              {transporters.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.transporter_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            className="w-44"
-            type="month"
-            aria-label="Manifest month"
-            value={month}
-            onChange={(event) => setMonth(event.target.value)}
-          />
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Transferred or pending</SelectItem>
-              <SelectItem value="transferred">Transferred</SelectItem>
-              <SelectItem value="pending">Not yet transferred</SelectItem>
-              <SelectItem value="partial">Partially transferred</SelectItem>
-            </SelectContent>
-          </Select>
-          <Button variant="outline" onClick={() => void loadData()} disabled={loading}>
-            <RefreshCw className={`mr-2 size-4 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Button
-            onClick={() => void updateTransporter()}
-            disabled={transferring || selectedIds.length === 0}
-          >
-            {transferring ? (
-              <Loader2 className="mr-2 size-4 animate-spin" />
-            ) : (
-              <Check className="mr-2 size-4" />
-            )}
-            Create Manifest & Transfer ({selectedIds.length})
-          </Button>
-        </div>
-      </section>
+      {transporterId ? (
+        <>
+          <section className="space-y-3 rounded-xl border border-border bg-card p-3">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="relative min-w-60 flex-1">
+                <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search consignment or E-Way Bill"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                />
+              </div>
+              <Input
+                className="w-44"
+                type="month"
+                aria-label="Manifest month"
+                value={month}
+                onChange={(event) => setMonth(event.target.value)}
+              />
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-48">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Transferred or pending</SelectItem>
+                  <SelectItem value="transferred">Transferred</SelectItem>
+                  <SelectItem value="pending">Not yet transferred</SelectItem>
+                  <SelectItem value="partial">Partially transferred</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button variant="outline" onClick={() => void loadData()} disabled={loading}>
+                <RefreshCw className={`mr-2 size-4 ${loading ? "animate-spin" : ""}`} />
+                Refresh
+              </Button>
+              <Button
+                onClick={() => void updateTransporter()}
+                disabled={transferring || selectedIds.length === 0}
+              >
+                {transferring ? (
+                  <Loader2 className="mr-2 size-4 animate-spin" />
+                ) : (
+                  <Check className="mr-2 size-4" />
+                )}
+                Create Manifest & Transfer ({selectedIds.length})
+              </Button>
+            </div>
+          </section>
 
-      <section className="space-y-3">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold">Consignments ({visibleRows.length})</h3>
-          <span className="text-xs text-muted-foreground">
-            The list remains visible while filters are changed.
-          </span>
+          <section className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold">Consignments ({visibleRows.length})</h3>
+              <span className="text-xs text-muted-foreground">
+                The list remains visible while filters are changed.
+              </span>
+            </div>
+            {loading ? (
+              <div className="flex items-center justify-center rounded-xl border border-border p-10 text-sm text-muted-foreground">
+                <Loader2 className="mr-2 size-4 animate-spin" />
+                Loading consignments…
+              </div>
+            ) : visibleRows.length ? (
+              visibleRows.map((row) => (
+                <ConsignmentRow
+                  key={row.id}
+                  row={row}
+                  selected={selectedIds.includes(row.id)}
+                  onToggle={() => toggle(row.id)}
+                />
+              ))
+            ) : (
+              <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                No consignments match the selected month, transporter, and status filters.
+              </div>
+            )}
+          </section>
+        </>
+      ) : (
+        <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+          Select a transporter to load its consignments.
         </div>
-        {loading ? (
-          <div className="flex items-center justify-center rounded-xl border border-border p-10 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 size-4 animate-spin" />
-            Loading consignments…
-          </div>
-        ) : visibleRows.length ? (
-          visibleRows.map((row) => (
-            <ConsignmentRow
-              key={row.id}
-              row={row}
-              selected={selectedIds.includes(row.id)}
-              onToggle={() => toggle(row.id)}
-            />
-          ))
-        ) : (
-          <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-            No consignments match the selected month, transporter, and status filters.
-          </div>
-        )}
-      </section>
+      )}
     </div>
   );
 }
