@@ -914,6 +914,7 @@ function ConsignmentForm(props: any) {
             </Select>
           </div>
         </div>
+        <CommonEwayDetails draft={common} />
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Transport Assignment</h3>
@@ -1060,13 +1061,10 @@ function ConsignmentForm(props: any) {
           }
         />
       </section>
-      {common && <CommonEwayDetails draft={common} />}
-      {drafts.length > 0 && (
-        <section className="space-y-3 rounded-xl border border-border p-4">
-          <h3 className="font-semibold">Goods from all E-Way Bills</h3>
-          <GoodsTable drafts={drafts} />
-        </section>
-      )}
+      <section className="space-y-3 rounded-xl border border-border p-4">
+        <h3 className="font-semibold">Goods from all E-Way Bills</h3>
+        <GoodsTable drafts={drafts} />
+      </section>
       <div className="flex justify-end gap-2">
         <Button variant="outline" onClick={onBack}>
           Cancel
@@ -1136,7 +1134,7 @@ function EwayTable({
   );
 }
 
-function CommonEwayDetails({ draft }: { draft: ShipmentDraft }) {
+function CommonEwayDetails({ draft }: { draft?: ShipmentDraft }) {
   return (
     <section className="space-y-4 rounded-xl border border-border p-4">
       <h3 className="font-semibold">Common E-Way Bill Details</h3>
@@ -1144,28 +1142,28 @@ function CommonEwayDetails({ draft }: { draft: ShipmentDraft }) {
         These values apply to every E-Way Bill in this Consignment and are shown once.
       </p>
       <div className="grid gap-3 md:grid-cols-4">
-        <ReadonlyField label="Generation Mode" value={draft.generation_mode} />
-        <ReadonlyField label="Transaction Type" value={draft.transaction_type} />
-        <ReadonlyField label="Supply Type" value={draft.supply_type} />
-        <ReadonlyField label="Sub-Supply Type" value={draft.sub_type} />
+        <ReadonlyField label="Generation Mode" value={draft?.generation_mode} />
+        <ReadonlyField label="Transaction Type" value={draft?.transaction_type} />
+        <ReadonlyField label="Supply Type" value={draft?.supply_type} />
+        <ReadonlyField label="Sub-Supply Type" value={draft?.sub_type} />
       </div>
       <div className="grid gap-3 md:grid-cols-4">
-        <ReadonlyField label="From GSTIN" value={draft.supplier_gstin} />
-        <ReadonlyField label="From Trade Name" value={draft.supplier_trade_name} />
-        <ReadonlyField label="From Legal Name" value={draft.supplier_legal_name} />
-        <ReadonlyField label="From Address 1" value={draft.supplier_address_line_1} />
-        <ReadonlyField label="From Address 2" value={draft.supplier_address_line_2} />
-        <ReadonlyField label="From Place" value={draft.supplier_place} />
-        <ReadonlyField label="From Pincode" value={draft.supplier_pin_code} />
-        <ReadonlyField label="From State" value={draft.supplier_state} />
-        <ReadonlyField label="To GSTIN" value={draft.recipient_gstin} />
-        <ReadonlyField label="To Trade Name" value={draft.recipient_trade_name} />
-        <ReadonlyField label="To Legal Name" value={draft.recipient_legal_name} />
-        <ReadonlyField label="To Address 1" value={draft.recipient_address_line_1} />
-        <ReadonlyField label="To Address 2" value={draft.recipient_address_line_2} />
-        <ReadonlyField label="To Place" value={draft.recipient_place} />
-        <ReadonlyField label="To Pincode" value={draft.recipient_pin_code} />
-        <ReadonlyField label="To State" value={draft.recipient_state} />
+        <ReadonlyField label="From GSTIN" value={draft?.supplier_gstin} />
+        <ReadonlyField label="From Trade Name" value={draft?.supplier_trade_name} />
+        <ReadonlyField label="From Legal Name" value={draft?.supplier_legal_name} />
+        <ReadonlyField label="From Address 1" value={draft?.supplier_address_line_1} />
+        <ReadonlyField label="From Address 2" value={draft?.supplier_address_line_2} />
+        <ReadonlyField label="From Place" value={draft?.supplier_place} />
+        <ReadonlyField label="From Pincode" value={draft?.supplier_pin_code} />
+        <ReadonlyField label="From State" value={draft?.supplier_state} />
+        <ReadonlyField label="To GSTIN" value={draft?.recipient_gstin} />
+        <ReadonlyField label="To Trade Name" value={draft?.recipient_trade_name} />
+        <ReadonlyField label="To Legal Name" value={draft?.recipient_legal_name} />
+        <ReadonlyField label="To Address 1" value={draft?.recipient_address_line_1} />
+        <ReadonlyField label="To Address 2" value={draft?.recipient_address_line_2} />
+        <ReadonlyField label="To Place" value={draft?.recipient_place} />
+        <ReadonlyField label="To Pincode" value={draft?.recipient_pin_code} />
+        <ReadonlyField label="To State" value={draft?.recipient_state} />
       </div>
     </section>
   );
@@ -1199,24 +1197,32 @@ function GoodsTable({ drafts }: { drafts: ShipmentDraft[] }) {
           </tr>
         </thead>
         <tbody>
-          {drafts.flatMap((draft) =>
-            draft.items.map((item, index) => (
-              <tr key={`${draft.eway_bill_number}-${index}`} className="border-t border-border">
-                <td className="px-2 py-2">{draft.eway_bill_number}</td>
-                <td className="px-2 py-2">{item.product_name || "—"}</td>
-                <td className="px-2 py-2">{item.description || "—"}</td>
-                <td className="px-2 py-2">{item.hsn_code || "—"}</td>
-                <td className="px-2 py-2">{item.quantity || "—"}</td>
-                <td className="px-2 py-2">{item.unit || "—"}</td>
-                <td className="px-2 py-2">{item.weight_kg || "—"}</td>
-                <td className="px-2 py-2">{item.taxable_value || "—"}</td>
-                <td className="px-2 py-2">{item.cgst || "—"}</td>
-                <td className="px-2 py-2">{item.sgst_utgst || "—"}</td>
-                <td className="px-2 py-2">{item.igst || "—"}</td>
-                <td className="px-2 py-2">{item.cess || "—"}</td>
-                <td className="px-2 py-2">{item.total_invoice_value || "—"}</td>
-              </tr>
-            )),
+          {drafts.length === 0 ? (
+            <tr>
+              <td colSpan={13} className="px-3 py-8 text-center text-muted-foreground">
+                Goods will appear here after an E-Way Bill is added.
+              </td>
+            </tr>
+          ) : (
+            drafts.flatMap((draft) =>
+              draft.items.map((item, index) => (
+                <tr key={`${draft.eway_bill_number}-${index}`} className="border-t border-border">
+                  <td className="px-2 py-2">{draft.eway_bill_number}</td>
+                  <td className="px-2 py-2">{item.product_name || "—"}</td>
+                  <td className="px-2 py-2">{item.description || "—"}</td>
+                  <td className="px-2 py-2">{item.hsn_code || "—"}</td>
+                  <td className="px-2 py-2">{item.quantity || "—"}</td>
+                  <td className="px-2 py-2">{item.unit || "—"}</td>
+                  <td className="px-2 py-2">{item.weight_kg || "—"}</td>
+                  <td className="px-2 py-2">{item.taxable_value || "—"}</td>
+                  <td className="px-2 py-2">{item.cgst || "—"}</td>
+                  <td className="px-2 py-2">{item.sgst_utgst || "—"}</td>
+                  <td className="px-2 py-2">{item.igst || "—"}</td>
+                  <td className="px-2 py-2">{item.cess || "—"}</td>
+                  <td className="px-2 py-2">{item.total_invoice_value || "—"}</td>
+                </tr>
+              )),
+            )
           )}
         </tbody>
       </table>
