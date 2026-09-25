@@ -325,7 +325,7 @@ export function ConsignmentList() {
 
   async function loadRows() {
     setLoading(true);
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("consignments")
       .select("*, branch:branches(branch_name), transporter:ltms_transporters(transporter_name)")
       .order("created_at", { ascending: false });
@@ -337,7 +337,7 @@ export function ConsignmentList() {
   async function loadMasters() {
     const [sourceResult, vehicleResult, driverResult, rentalResult, transporterResult] =
       await Promise.all([
-        supabase
+        db
           .from("contracts")
           .select("id,contract_name")
           .eq("status", "active")
@@ -345,7 +345,7 @@ export function ConsignmentList() {
         db.from("vehicles").select("id,registration_number").order("registration_number"),
         db.from("drivers").select("id,full_name").order("full_name"),
         db.from("rentals").select("id,rental_name,pin_code,gstin").order("rental_name"),
-        supabase
+        db
           .from("ltms_transporters")
           .select("id,transporter_name,pin_code,gstin")
           .order("transporter_name"),
@@ -430,7 +430,7 @@ export function ConsignmentList() {
     if (!branchId || !user?.sessionToken) return toast.error("Select a branch and sign in again");
     if (drafts.some((item) => item.eway_bill_number === ewayNo))
       return toast.error("This E-Way Bill is already added");
-    const existing = await supabase
+    const existing = await db
       .from("shipments")
       .select("id")
       .eq("eway_bill_number", ewayNo)
@@ -573,7 +573,7 @@ export function ConsignmentList() {
       setLoading(false);
       return toast.error(error.message);
     }
-    const { error: updateError } = await supabase
+    const { error: updateError } = await db
       .from("consignments")
       .update({
         own_transport_mode: type === "own" ? ownTransportMode : "own_vehicle",
@@ -590,7 +590,7 @@ export function ConsignmentList() {
   }
 
   async function openView(row: Record<string, any>) {
-    const { data, error } = await supabase
+    const { data, error } = await db
       .from("shipments")
       .select("*, shipment_items(*)")
       .eq("consignment_id", row.id)

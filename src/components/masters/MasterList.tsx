@@ -45,7 +45,14 @@ export type FieldDef = {
 export type SectionDef = { title: string; fields: FieldDef[] };
 
 export type MasterConfig = {
-  table: "vehicles" | "drivers" | "transporters" | "delivery_partners" | "locations";
+  table:
+    | "vehicles"
+    | "drivers"
+    | "transporters"
+    | "ltms_transporters"
+    | "rentals"
+    | "delivery_partners"
+    | "locations";
   entityLabel: string; // "Vehicles"
   singular: string; // "vehicle"
   icon: LucideIcon;
@@ -167,7 +174,9 @@ export function MasterList({
   const [loadingMore, setLoadingMore] = useState(false);
   const [locationOffset, setLocationOffset] = useState(0);
   const [locationSearch, setLocationSearch] = useState("");
-  const [locationSearchBy, setLocationSearchBy] = useState<"location_name" | "pin_code">("location_name");
+  const [locationSearchBy, setLocationSearchBy] = useState<"location_name" | "pin_code">(
+    "location_name",
+  );
   const branches = useBranches();
   const { user } = useSession();
   const isAdmin = isAdminLike(user?.role);
@@ -631,7 +640,10 @@ export function MasterList({
           <div className="flex items-center gap-2 text-sm font-medium">
             <Search className="size-4 text-muted-foreground" />
             <span className="sr-only">Search locations</span>
-            <Select value={locationSearchBy} onValueChange={(value) => setLocationSearchBy(value as "location_name" | "pin_code")}>
+            <Select
+              value={locationSearchBy}
+              onValueChange={(value) => setLocationSearchBy(value as "location_name" | "pin_code")}
+            >
               <SelectTrigger className="h-9 w-[150px]">
                 <SelectValue />
               </SelectTrigger>
@@ -644,10 +656,16 @@ export function MasterList({
           <Input
             value={locationSearch}
             onChange={(event) => setLocationSearch(event.target.value)}
-            placeholder={locationSearchBy === "pin_code" ? "Search by PIN code" : "Search by location name"}
+            placeholder={
+              locationSearchBy === "pin_code" ? "Search by PIN code" : "Search by location name"
+            }
             inputMode={locationSearchBy === "pin_code" ? "numeric" : "text"}
             className="h-9 min-w-[220px] flex-1"
-            aria-label={locationSearchBy === "pin_code" ? "Search locations by PIN code" : "Search locations by name"}
+            aria-label={
+              locationSearchBy === "pin_code"
+                ? "Search locations by PIN code"
+                : "Search locations by name"
+            }
           />
           {locationSearch ? (
             <Button type="button" variant="ghost" size="sm" onClick={() => setLocationSearch("")}>
