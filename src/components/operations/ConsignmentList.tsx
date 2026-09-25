@@ -1446,6 +1446,8 @@ function ConsignmentView({
   const isThirdPartyDrop = row.consignment_type === "third_party" && row.movement_mode === "drop";
   const fromDetails = row.from_details ?? {};
   const toDetails = row.to_details ?? {};
+  const commonFromPin = drafts[0]?.supplier_pin_code || fromDetails.pincode || row.from_pin_code;
+  const commonToPin = drafts[0]?.recipient_pin_code || toDetails.pincode || row.to_pin_code;
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -1472,8 +1474,8 @@ function ConsignmentView({
           value={row.consignment_type === "third_party" ? "Third Party" : "Own"}
         />
         <ReadonlyField label="Transport Mode" value={row.transport_mode} />
-        <ReadonlyField label="Consignment From PIN" value={row.from_pin_code} />
-        <ReadonlyField label="Consignment To PIN" value={row.to_pin_code} />
+        <ReadonlyField label="Consignment From PIN" value={commonFromPin} />
+        <ReadonlyField label="Consignment To PIN" value={commonToPin} />
       </div>
       <CommonEwayDetails draft={drafts[0]} />
       <section className="space-y-4 rounded-xl border border-border p-4">
@@ -1533,11 +1535,11 @@ function ConsignmentView({
           <ReadonlyField label="Total Quantity" value={totalQuantity.toLocaleString("en-IN")} />
           <ReadonlyField
             label="Consignment From"
-            value={`${fromDetails.trade_name || fromDetails.legal_name || row.from_gstin || "—"} · ${row.from_pin_code || "—"}`}
+            value={`${fromDetails.trade_name || fromDetails.legal_name || row.from_gstin || "—"} · ${commonFromPin || "—"}`}
           />
           <ReadonlyField
             label="Consignment To"
-            value={`${toDetails.trade_name || toDetails.legal_name || row.to_gstin || "—"} · ${row.to_pin_code || "—"}`}
+            value={`${toDetails.trade_name || toDetails.legal_name || row.to_gstin || "—"} · ${commonToPin || "—"}`}
           />
           <ReadonlyField
             label="Transporter From"
