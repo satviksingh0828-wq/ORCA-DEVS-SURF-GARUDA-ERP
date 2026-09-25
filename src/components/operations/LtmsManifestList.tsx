@@ -1,6 +1,15 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Check, ChevronDown, ChevronRight, Loader2, RefreshCw, Search } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Loader2,
+  Plus,
+  RefreshCw,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -324,10 +333,14 @@ export function LtmsManifestList() {
   const [profile, setProfile] = useState<TransporterFields>(EMPTY_TRANSPORTER);
   const [rows, setRows] = useState<Consignment[]>([]);
   const [history, setHistory] = useState<ManifestHistoryRow[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
+  const [historySearch, setHistorySearch] = useState("");
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [statusFilter, setStatusFilter] = useState("all");
+  const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [historyTransporterFilterId, setHistoryTransporterFilterId] = useState("");
   const [loading, setLoading] = useState(false);
   const [transferring, setTransferring] = useState(false);
 
@@ -359,23 +372,28 @@ export function LtmsManifestList() {
   const filteredHistory = useMemo(
     () =>
       history.filter((row) => {
-        const statusMatch =
-          statusFilter === "all" ||
-          (statusFilter === "transferred"
-            ? row.transfer_status === "transferred"
-            : statusFilter === "pending"
-              ? row.transfer_status !== "transferred"
-              : row.transfer_status === "partial");
-        const monthMatch = !month || String(row.created_at ?? "").slice(0, 7) === month;
-        const transporterMatch = !transporterFilterId || row.transporter_id === transporterFilterId;
+        const monthMatch =
+          !historyMonth || String(row.created_at ?? "").slice(0, 7) === historyMonth;
+        const selectedTransporter = transporters.find(
+          (transporter) => transporter.id === historyTransporterFilterId,
+        );
+        const transporterMatch =
+          !historyTransporterFilterId ||
+          row.transporter_id === historyTransporterFilterId ||
+          String(row.transporter_name ?? "")
+            .trim()
+            .toLowerCase() ===
+            String(selectedTransporter?.transporter_name ?? "")
+              .trim()
+              .toLowerCase();
         const searchMatch =
-          !search.trim() ||
-          `${row.manifest_number} ${row.transporter?.transporter_name ?? ""} ${row.transporter_gstin ?? ""}`
+          !historySearch.trim() ||
+          String(row.manifest_number ?? "")
             .toLowerCase()
-            .includes(search.trim().toLowerCase());
-        return statusMatch && monthMatch && transporterMatch && searchMatch;
+            .includes(historySearch.trim().toLowerCase());
+        return monthMatch && transporterMatch && searchMatch;
       }),
-    [history, month, statusFilter, transporterFilterId, search],
+    [history, historyMonth, historyTransporterFilterId, historySearch, transporters],
   );
 
   const loadTransporters = useCallback(async () => {
@@ -400,7 +418,7 @@ export function LtmsManifestList() {
     let manifestQuery = db
       .from("ltms_manifest_transfers")
       .select(
-        "id,branch_id,manifest_number,transporter_id,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),items:ltms_manifest_transfer_items(id,consignment_number,eway_bill_number,transfer_status,transfer_error)",
+        "id,branch_id,manifest_number,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),items:ltms_manifest_transfer_items(id,consignment_number,eway_bill_number,transfer_status,transfer_error)",
       )
       .order("created_at", { ascending: false });
     if (allowedBranches !== null) {
@@ -545,6 +563,7 @@ export function LtmsManifestList() {
       if (failed.length)
         toast.error(`${failed.length} shipment(s) have no valid E-Way Bill and were not sent`);
       await loadData();
+      setIsCreating(false);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Transfer failed; no success was recorded",
@@ -554,14 +573,132 @@ export function LtmsManifestList() {
     }
   }
 
+  if (!isCreating) {
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Manifest Transfer History</h2>
+            <p className="text-sm text-muted-foreground">
+              Each recorded transfer has its generated manifest number and transfer details.
+            </p>
+          </div>
+          <Button
+            onClick={() => {
+              setSelectedIds([]);
+              setIsCreating(true);
+            }}
+          >
+            <Plus className="mr-2 size-4" />
+            Create Manifest
+          </Button>
+        </div>
+        <section className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
+          <Input
+            className="w-48"
+            type="month"
+            aria-label="Manifest history month"
+            value={historyMonth}
+            onChange={(event) => setHistoryMonth(event.target.value)}
+          />
+          <div className="relative min-w-60 flex-1">
+            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              className="pl-9"
+              placeholder="Search by manifest number"
+              value={historySearch}
+              onChange={(event) => setHistorySearch(event.target.value)}
+            />
+          </div>
+          <Select
+            value={historyTransporterFilterId || "all"}
+            onValueChange={(value) => setHistoryTransporterFilterId(value === "all" ? "" : value)}
+          >
+            <SelectTrigger className="w-52">
+              <SelectValue placeholder="All transporters" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All transporters</SelectItem>
+              {transporters.map((item) => (
+                <SelectItem key={item.id} value={item.id}>
+                  {item.transporter_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </section>
+        <section className="overflow-x-auto rounded-xl border border-border bg-card">
+          <table className="w-full min-w-[720px] text-sm">
+            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-3 py-2">Manifest Number</th>
+                <th className="px-3 py-2">Branch</th>
+                <th className="px-3 py-2">Transporter</th>
+                <th className="px-3 py-2">GSTIN</th>
+                <th className="px-3 py-2">E-Way Bills</th>
+                <th className="px-3 py-2">Status</th>
+                <th className="px-3 py-2">Created</th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading ? (
+                <tr>
+                  <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                    Loading…
+                  </td>
+                </tr>
+              ) : filteredHistory.length ? (
+                filteredHistory.map((row) => (
+                  <tr key={row.id} className="border-t border-border">
+                    <td className="px-3 py-2 font-semibold">
+                      {row.manifest_number}
+                      <HistoryItems row={row} />
+                    </td>
+                    <td className="px-3 py-2">{row.branch?.branch_name || "—"}</td>
+                    <td className="px-3 py-2">
+                      {row.transporter?.transporter_name || row.transporter_name || "—"}
+                    </td>
+                    <td className="px-3 py-2">{row.transporter_gstin}</td>
+                    <td className="px-3 py-2">{row.eway_bill_count}</td>
+                    <td className="px-3 py-2">
+                      <TransferBadge status={row.transfer_status} />
+                    </td>
+                    <td className="px-3 py-2">
+                      {row.created_at ? new Date(row.created_at).toLocaleString("en-GB") : "—"}
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                    No manifest transfer history for these filters yet.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      <header>
-        <h2 className="text-lg font-semibold">Manifest</h2>
-        <p className="text-sm text-muted-foreground">
-          Review transfers and create a branch-numbered manifest when updating transporter details
-          on E-Way Bills.
-        </p>
+      <header className="flex items-center gap-3 border-b border-border pb-3">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsCreating(false)}
+          aria-label="Back to manifest history"
+        >
+          <ArrowLeft className="size-5" />
+        </Button>
+        <div>
+          <h2 className="text-lg font-semibold">Create Manifest</h2>
+          <p className="text-sm text-muted-foreground">
+            Choose consignments, update their transporter, and record the transfer.
+          </p>
+        </div>
       </header>
 
       <section className="space-y-4 rounded-xl border border-border bg-card p-4">
@@ -669,10 +806,6 @@ export function LtmsManifestList() {
             Create Manifest & Transfer ({selectedIds.length})
           </Button>
         </div>
-        <div className="text-xs text-muted-foreground">
-          Manifest numbers are generated per branch using its Manifest Series Prefix, year, and
-          six-digit sequence (for example, MF2026000001). Each transfer attempt is saved to history.
-        </div>
       </section>
 
       <section className="space-y-3">
@@ -701,65 +834,6 @@ export function LtmsManifestList() {
             No consignments match the selected month, transporter, and status filters.
           </div>
         )}
-      </section>
-
-      <section className="space-y-3 rounded-xl border border-border bg-card p-4">
-        <div>
-          <h3 className="font-semibold">Manifest Transfer History</h3>
-          <p className="text-xs text-muted-foreground">
-            Each recorded transfer has its generated manifest number, branch, transporter, time, and
-            item-level outcome.
-          </p>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2">Manifest Number</th>
-                <th className="px-3 py-2">Branch</th>
-                <th className="px-3 py-2">Transporter</th>
-                <th className="px-3 py-2">GSTIN</th>
-                <th className="px-3 py-2">E-Way Bills</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr>
-                  <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                    Loading…
-                  </td>
-                </tr>
-              ) : filteredHistory.length ? (
-                filteredHistory.map((row) => (
-                  <tr key={row.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-semibold">
-                      {row.manifest_number}
-                      <HistoryItems row={row} />
-                    </td>
-                    <td className="px-3 py-2">{row.branch?.branch_name || "—"}</td>
-                    <td className="px-3 py-2">{row.transporter?.transporter_name || "—"}</td>
-                    <td className="px-3 py-2">{row.transporter_gstin}</td>
-                    <td className="px-3 py-2">{row.eway_bill_count}</td>
-                    <td className="px-3 py-2">
-                      <TransferBadge status={row.transfer_status} />
-                    </td>
-                    <td className="px-3 py-2">
-                      {row.created_at ? new Date(row.created_at).toLocaleString("en-GB") : "—"}
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="p-6 text-center text-muted-foreground">
-                    No manifest transfer history for these filters yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </section>
     </div>
   );
