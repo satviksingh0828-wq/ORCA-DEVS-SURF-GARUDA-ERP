@@ -358,18 +358,20 @@ function SelectField({
   onChange,
   options,
   placeholder,
+  disabled = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Master[];
   placeholder: string;
+  disabled?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
       <Label>{label}</Label>
-      <Select value={value} onValueChange={onChange}>
-        <SelectTrigger>
+      <Select value={value} onValueChange={onChange} disabled={disabled}>
+        <SelectTrigger disabled={disabled}>
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
@@ -990,6 +992,7 @@ function ConsignmentForm(props: any) {
   const needsOwnVehicle =
     type === "third_party" ? movement === "drop" : ownTransportMode === "own_vehicle";
   const needsRental = type === "own" && ownTransportMode === "rental";
+  const needsTransporter = type === "third_party";
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -1003,6 +1006,29 @@ function ConsignmentForm(props: any) {
           <X className="mr-1 size-4" /> Cancel
         </Button>
       </div>
+      <section className="space-y-4 rounded-xl border border-primary/30 bg-primary/[0.02] p-4">
+        <div className="flex flex-wrap items-end gap-2">
+          <div className="min-w-[260px] flex-1">
+            <Label>E-Way Bill Number *</Label>
+            <Input
+              value={ewayNo}
+              onChange={(event) => setEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))}
+              placeholder="12-digit E-Way Bill Number"
+            />
+          </div>
+          <Button type="button" onClick={() => void addEway()} disabled={fetching}>
+            {fetching ? "Fetching…" : "Add"}
+          </Button>
+        </div>
+        <EwayTable
+          drafts={drafts}
+          remove={(index) =>
+            setDrafts((items: ShipmentDraft[]) =>
+              items.filter((_, itemIndex) => itemIndex !== index),
+            )
+          }
+        />
+      </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Consignment Details</h3>
         <div className="grid gap-3 md:grid-cols-4">
@@ -1062,11 +1088,15 @@ function ConsignmentForm(props: any) {
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Transport Assignment</h3>
-        {type === "own" && (
-          <div className="space-y-1.5">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className={`space-y-1.5 ${type !== "own" ? "opacity-60" : ""}`}>
             <Label>Own Transport Option *</Label>
-            <Select value={ownTransportMode} onValueChange={setOwnTransportMode}>
-              <SelectTrigger>
+            <Select
+              value={ownTransportMode}
+              onValueChange={setOwnTransportMode}
+              disabled={type !== "own"}
+            >
+              <SelectTrigger disabled={type !== "own"}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1075,12 +1105,10 @@ function ConsignmentForm(props: any) {
               </SelectContent>
             </Select>
           </div>
-        )}
-        {type === "third_party" && (
-          <div className="space-y-1.5">
+          <div className={`space-y-1.5 ${type !== "third_party" ? "opacity-60" : ""}`}>
             <Label>Movement *</Label>
-            <Select value={movement} onValueChange={setMovement}>
-              <SelectTrigger>
+            <Select value={movement} onValueChange={setMovement} disabled={type !== "third_party"}>
+              <SelectTrigger disabled={type !== "third_party"}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1089,67 +1117,74 @@ function ConsignmentForm(props: any) {
               </SelectContent>
             </Select>
           </div>
-        )}
+        </div>
         <div className="grid gap-3 md:grid-cols-3">
-          {needsOwnVehicle && (
-            <>
-              <SelectField
-                label="Vehicle *"
-                value={vehicleId}
-                onChange={setVehicleId}
-                options={vehicles}
-                placeholder="Select company vehicle"
-              />
-            </>
-          )}
-          {needsRental && (
-            <div className="space-y-1.5">
-              <Label>Rental *</Label>
-              <div className="flex gap-2">
-                <div className="min-w-0 flex-1">
-                  <Select value={rentalId} onValueChange={setRentalId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select rental provider" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {rentals.map((item: Master) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button type="button" variant="outline" onClick={() => openPartner("rental")}>
-                  Create New Rental
-                </Button>
+          <SelectField
+            label="Vehicle *"
+            value={vehicleId}
+            onChange={setVehicleId}
+            options={vehicles}
+            placeholder="Select company vehicle"
+            disabled={!needsOwnVehicle}
+          />
+          <div className="space-y-1.5">
+            <Label>Rental *</Label>
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <Select value={rentalId} onValueChange={setRentalId} disabled={!needsRental}>
+                  <SelectTrigger disabled={!needsRental}>
+                    <SelectValue placeholder="Select rental provider" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {rentals.map((item: Master) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => openPartner("rental")}
+                disabled={!needsRental}
+              >
+                Create New Rental
+              </Button>
             </div>
-          )}
-          {type === "third_party" && (
-            <div className="space-y-1.5">
-              <Label>Transporter *</Label>
-              <div className="flex gap-2">
-                <div className="min-w-0 flex-1">
-                  <Select value={transporterId} onValueChange={setTransporterId}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select transporter" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {transporters.map((item: Master) => (
-                        <SelectItem key={item.id} value={item.id}>
-                          {item.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button type="button" variant="outline" onClick={() => openPartner("transporter")}>
-                  Create New
-                </Button>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Transporter *</Label>
+            <div className="flex gap-2">
+              <div className="min-w-0 flex-1">
+                <Select
+                  value={transporterId}
+                  onValueChange={setTransporterId}
+                  disabled={!needsTransporter}
+                >
+                  <SelectTrigger disabled={!needsTransporter}>
+                    <SelectValue placeholder="Select transporter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {transporters.map((item: Master) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => openPartner("transporter")}
+                disabled={!needsTransporter}
+              >
+                Create New
+              </Button>
             </div>
-          )}
+          </div>
         </div>
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
@@ -1163,40 +1198,16 @@ function ConsignmentForm(props: any) {
               placeholder={branch?.pin_code ?? "Branch pincode"}
             />
           </div>
-          {type === "third_party" && movement === "drop" && (
-            <div>
-              <Label>To Pincode *</Label>
-              <Input
-                value={toPin}
-                onChange={(event) => setToPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
-                placeholder="Transporter pincode"
-              />
-            </div>
-          )}
-        </div>
-      </section>
-      <section className="space-y-4 rounded-xl border border-border p-4">
-        <div className="flex flex-wrap items-end gap-2">
-          <div className="min-w-[260px] flex-1">
-            <Label>E-Way Bill Number *</Label>
+          <div>
+            <Label>To Pincode *</Label>
             <Input
-              value={ewayNo}
-              onChange={(event) => setEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))}
-              placeholder="12-digit E-Way Bill Number"
+              value={toPin}
+              disabled={type !== "third_party" || movement !== "drop"}
+              onChange={(event) => setToPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              placeholder="Transporter pincode"
             />
           </div>
-          <Button type="button" onClick={() => void addEway()} disabled={fetching}>
-            {fetching ? "Fetching…" : "Add"}
-          </Button>
         </div>
-        <EwayTable
-          drafts={drafts}
-          remove={(index) =>
-            setDrafts((items: ShipmentDraft[]) =>
-              items.filter((_, itemIndex) => itemIndex !== index),
-            )
-          }
-        />
       </section>
       <section className="space-y-3 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Goods from all E-Way Bills</h3>
