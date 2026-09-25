@@ -177,13 +177,18 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   });
   const [tab, setTab] = useState<TabId>(mode === "ltms" ? "eway-bill" : "trip");
   const [navOpen, setNavOpen] = useState(true);
+  const [consignmentCreateOpen, setConsignmentCreateOpen] = useState(false);
 
   const defaultTab: TabId = mode === "ltms" ? "eway-bill" : "trip";
   const safeTab: TabId = (TABS.find((t) => t.id === tab) ? tab : defaultTab) as TabId;
   const active = TABS.find((t) => t.id === safeTab) ?? TABS[0];
+  const fullBleedConsignment = safeTab === "consignment" && consignmentCreateOpen;
 
   return (
     <AppShell
+      mainClassName={
+        fullBleedConsignment ? "w-full max-w-none px-0 py-1 sm:px-0 sm:py-1" : undefined
+      }
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">
@@ -219,7 +224,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       }
     >
       <div
-        className={`grid items-start gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}
+        className={`grid items-start ${fullBleedConsignment ? "gap-0" : "gap-6"} ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}
       >
         {/* Desktop left nav */}
         {navOpen && (
@@ -257,13 +262,17 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
         )}
 
         {/* Mobile dropdown navigation */}
-        <MobileTabDropdown tabs={TABS} activeId={safeTab} label="Operations" onChange={setTab} />
+        {!fullBleedConsignment && (
+          <MobileTabDropdown tabs={TABS} activeId={safeTab} label="Operations" onChange={setTab} />
+        )}
 
         <div className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>
-          <header className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-tight">{active?.label}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{active?.desc}</p>
-          </header>
+          {!fullBleedConsignment && (
+            <header className="mb-6">
+              <h1 className="text-2xl font-semibold tracking-tight">{active?.label}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{active?.desc}</p>
+            </header>
+          )}
           {safeTab === "trip" && (
             <TabErrorBoundary label="Trip">
               <Trips />

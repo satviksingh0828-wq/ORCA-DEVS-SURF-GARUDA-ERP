@@ -388,8 +388,10 @@ function SelectField({
 
 export function ConsignmentList({
   onSidebarVisibilityChange,
+  onCreateModeChange,
 }: {
   onSidebarVisibilityChange?: (visible: boolean) => void;
+  onCreateModeChange?: (open: boolean) => void;
 }) {
   const branches = useBranches();
   const { user } = useSession();
@@ -523,6 +525,7 @@ export function ConsignmentList({
   function openCreate() {
     setScreen("create");
     onSidebarVisibilityChange?.(false);
+    onCreateModeChange?.(true);
     setBranchId(branches.length === 1 ? branches[0].id : "");
     setSourceId("");
     setType("own");
@@ -708,6 +711,7 @@ export function ConsignmentList({
     );
     setScreen("list");
     onSidebarVisibilityChange?.(true);
+    onCreateModeChange?.(false);
     await loadRows();
   }
 
@@ -744,6 +748,7 @@ export function ConsignmentList({
         onBack={() => {
           setScreen("list");
           onSidebarVisibilityChange?.(true);
+          onCreateModeChange?.(false);
         }}
       />
     );
@@ -797,6 +802,7 @@ export function ConsignmentList({
             onBack: () => {
               setScreen("list");
               onSidebarVisibilityChange?.(true);
+              onCreateModeChange?.(false);
             },
           }}
         />
@@ -996,10 +1002,10 @@ function ConsignmentForm(props: any) {
   return (
     <div className="w-full min-w-0 space-y-3">
       <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Create Consignment</h2>
-          <p className="text-sm text-muted-foreground">
-            Common E-Way Bill parties stay visible once for the whole Consignment.
+        <div className="flex min-w-0 items-baseline gap-2">
+          <h2 className="shrink-0 text-base font-semibold">Consignment</h2>
+          <p className="truncate text-sm text-muted-foreground">
+            Create shipments from E-Way Bills
           </p>
         </div>
         <Button variant="outline" onClick={onBack}>

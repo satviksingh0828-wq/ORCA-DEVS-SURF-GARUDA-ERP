@@ -13,11 +13,13 @@ export function AppShell({
   children,
   breadcrumb,
   headerEnd,
+  mainClassName,
 }: {
   children: ReactNode;
   breadcrumb?: ReactNode;
   /** Extra content rendered between the breadcrumb and the user area (e.g. sidebar toggle) */
   headerEnd?: ReactNode;
+  mainClassName?: string;
 }) {
   const { signOut, user } = useSession();
   const navigate = useNavigate();
@@ -26,11 +28,20 @@ export function AppShell({
   const isViewer = user?.role === "viewer";
 
   return (
-    <div className={cn("min-h-screen bg-background transition-all duration-300", isAdmin && open ? "lg:mr-[360px]" : "")}>
+    <div
+      className={cn(
+        "min-h-screen bg-background transition-all duration-300",
+        isAdmin && open ? "lg:mr-[360px]" : "",
+      )}
+    >
       <header className="sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
           <Link to="/home" className="shrink-0">
-            <img src="/garuda-logo.png" alt="Garuda Logistics Solution" className="h-8 w-auto sm:h-10" />
+            <img
+              src="/garuda-logo.png"
+              alt="Garuda Logistics Solution"
+              className="h-8 w-auto sm:h-10"
+            />
           </Link>
           {breadcrumb && <div className="ml-2 hidden md:block shrink-0">{breadcrumb}</div>}
           {headerEnd && <div className="ml-2 hidden lg:block">{headerEnd}</div>}
@@ -57,7 +68,13 @@ export function AppShell({
                 {user?.fullName ?? user?.username}
               </span>
               <span className="hidden md:inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide shrink-0">
-                {isAdmin ? (user?.role === "semi_admin" ? "Semi-Admin" : "Admin") : isViewer ? "Viewer" : "User"}
+                {isAdmin
+                  ? user?.role === "semi_admin"
+                    ? "Semi-Admin"
+                    : "Admin"
+                  : isViewer
+                    ? "Viewer"
+                    : "User"}
               </span>
             </span>
             <Button
@@ -75,7 +92,12 @@ export function AppShell({
           </div>
         </div>
       </header>
-      <main className="mx-auto min-w-0 max-w-screen-xl overflow-x-hidden [overflow-anchor:none] px-3 py-5 sm:px-6 sm:py-8">
+      <main
+        className={cn(
+          "mx-auto min-w-0 max-w-screen-xl overflow-x-hidden [overflow-anchor:none] px-3 py-5 sm:px-6 sm:py-8",
+          mainClassName,
+        )}
+      >
         {children}
       </main>
     </div>
