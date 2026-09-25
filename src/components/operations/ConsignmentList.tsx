@@ -291,7 +291,6 @@ export function ConsignmentList() {
   const [movement, setMovement] = useState("pickup");
   const [transportMode, setTransportMode] = useState("Road");
   const [vehicleId, setVehicleId] = useState("");
-  const [driverId, setDriverId] = useState("");
   const [rentalId, setRentalId] = useState("");
   const [transporterId, setTransporterId] = useState("");
   const [fromPin, setFromPin] = useState("");
@@ -302,7 +301,6 @@ export function ConsignmentList() {
   const [drafts, setDrafts] = useState<ShipmentDraft[]>([]);
   const [contracts, setContracts] = useState<Master[]>([]);
   const [vehicles, setVehicles] = useState<Master[]>([]);
-  const [drivers, setDrivers] = useState<Master[]>([]);
   const [rentals, setRentals] = useState<Master[]>([]);
   const [transporters, setTransporters] = useState<Master[]>([]);
   const [partnerDialog, setPartnerDialog] = useState<"rental" | "transporter" | null>(null);
@@ -335,21 +333,15 @@ export function ConsignmentList() {
   }
 
   async function loadMasters() {
-    const [sourceResult, vehicleResult, driverResult, rentalResult, transporterResult] =
-      await Promise.all([
-        db
-          .from("contracts")
-          .select("id,contract_name")
-          .eq("status", "active")
-          .order("contract_name"),
-        db.from("vehicles").select("id,registration_number").order("registration_number"),
-        db.from("drivers").select("id,full_name").order("full_name"),
-        db.from("rentals").select("id,rental_name,pin_code,gstin").order("rental_name"),
-        db
-          .from("ltms_transporters")
-          .select("id,transporter_name,pin_code,gstin")
-          .order("transporter_name"),
-      ]);
+    const [sourceResult, vehicleResult, rentalResult, transporterResult] = await Promise.all([
+      db.from("contracts").select("id,contract_name").eq("status", "active").order("contract_name"),
+      db.from("vehicles").select("id,registration_number").order("registration_number"),
+      db.from("rentals").select("id,rental_name,pin_code,gstin").order("rental_name"),
+      db
+        .from("ltms_transporters")
+        .select("id,transporter_name,pin_code,gstin")
+        .order("transporter_name"),
+    ]);
     setContracts(
       (sourceResult.data ?? []).map((row: any) => ({ id: row.id, label: row.contract_name })),
     );
@@ -359,7 +351,6 @@ export function ConsignmentList() {
         label: row.registration_number,
       })),
     );
-    setDrivers((driverResult.data ?? []).map((row: any) => ({ id: row.id, label: row.full_name })));
     setRentals(
       (rentalResult.data ?? []).map((row: any) => ({
         id: row.id,
@@ -417,7 +408,6 @@ export function ConsignmentList() {
     setMovement("pickup");
     setTransportMode("Road");
     setVehicleId("");
-    setDriverId("");
     setRentalId("");
     setTransporterId("");
     setFromPin("");
@@ -536,7 +526,6 @@ export function ConsignmentList() {
       movement_mode: movement,
       transport_mode: transportMode,
       vehicle_id: needsOwnVehicle ? vehicleId : "",
-      driver_id: needsOwnVehicle ? driverId : "",
       transporter_id: needsTransporter ? transporterId : "",
       from_pin_code: fromPin,
       to_pin_code: toPin,
@@ -649,9 +638,6 @@ export function ConsignmentList() {
             vehicles,
             vehicleId,
             setVehicleId,
-            drivers,
-            driverId,
-            setDriverId,
             rentals,
             rentalId,
             setRentalId,
@@ -822,9 +808,6 @@ function ConsignmentForm(props: any) {
     vehicles,
     vehicleId,
     setVehicleId,
-    drivers,
-    driverId,
-    setDriverId,
     rentals,
     rentalId,
     setRentalId,
@@ -960,13 +943,6 @@ function ConsignmentForm(props: any) {
                 onChange={setVehicleId}
                 options={vehicles}
                 placeholder="Select company vehicle"
-              />
-              <SelectField
-                label="Driver"
-                value={driverId}
-                onChange={setDriverId}
-                options={drivers}
-                placeholder="Select company driver"
               />
             </>
           )}
