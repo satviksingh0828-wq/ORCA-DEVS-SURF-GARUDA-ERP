@@ -1000,7 +1000,7 @@ function ConsignmentForm(props: any) {
   const needsRental = type === "own" && ownTransportMode === "rental";
   const needsTransporter = type === "third_party";
   return (
-    <div className="w-full min-w-0 space-y-3">
+    <div className="w-full min-w-0 space-y-1.5">
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 items-baseline gap-2">
           <h2 className="shrink-0 text-base font-semibold">Consignment</h2>
@@ -1012,9 +1012,9 @@ function ConsignmentForm(props: any) {
           <X className="mr-1 size-4" /> Cancel
         </Button>
       </div>
-      <section className="space-y-2 border border-primary/30 bg-primary/[0.02] p-2">
+      <section className="space-y-1.5 border border-primary/30 bg-primary/[0.02] p-1.5">
         <h3 className="font-semibold">Consignment Details</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-6">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-6">
           <ReadonlyField label="Document Type" value="Consignment" />
           <ReadonlyField
             label="Consignment No."
@@ -1082,9 +1082,9 @@ function ConsignmentForm(props: any) {
         </div>
         <CommonEwayDetails draft={common} />
       </section>
-      <section className="space-y-2 border border-border p-2">
+      <section className="space-y-1.5 border border-border p-1.5">
         <h3 className="font-semibold">Transport Assignment</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-6 lg:grid-cols-12">
+        <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-6 lg:grid-cols-12">
           <div
             className={`space-y-1.5 sm:col-span-2 lg:col-span-2 ${type !== "own" ? "opacity-60" : ""}`}
           >
@@ -1189,9 +1189,9 @@ function ConsignmentForm(props: any) {
           </div>
         </div>
       </section>
-      <section className="space-y-2 border border-border p-2">
+      <section className="space-y-1.5 border border-border p-1.5">
         <h3 className="font-semibold">Pincodes</h3>
-        <div className="grid grid-cols-2 gap-2 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-6">
           <div className="lg:col-span-3">
             <Label>From Pincode</Label>
             <Input
@@ -1211,7 +1211,7 @@ function ConsignmentForm(props: any) {
           </div>
         </div>
       </section>
-      <section className="space-y-2 border border-border p-2">
+      <section className="space-y-1.5 border border-border p-1.5">
         <h3 className="font-semibold">E-Way Bills</h3>
         <EwayTable
           drafts={drafts}
@@ -1222,7 +1222,7 @@ function ConsignmentForm(props: any) {
           }
         />
       </section>
-      <section className="space-y-2 border border-border p-2">
+      <section className="space-y-1.5 border border-border p-1.5">
         <h3 className="font-semibold">Goods from all E-Way Bills</h3>
         <GoodsTable drafts={drafts} />
       </section>
@@ -1304,18 +1304,18 @@ function EwayTable({
 
 function CommonEwayDetails({ draft }: { draft?: ShipmentDraft }) {
   return (
-    <section className="space-y-2 border-t border-border pt-2">
+    <section className="space-y-1.5 border-t border-border pt-1.5">
       <h3 className="font-semibold">Common E-Way Bill Details</h3>
       <p className="text-xs text-muted-foreground">
         These values apply to every E-Way Bill in this Consignment and are shown once.
       </p>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
         <ReadonlyField label="Generation Mode" value={draft?.generation_mode} />
         <ReadonlyField label="Transaction Type" value={draft?.transaction_type} />
         <ReadonlyField label="Supply Type" value={draft?.supply_type} />
         <ReadonlyField label="Sub-Supply Type" value={draft?.sub_type} />
       </div>
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+      <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3 lg:grid-cols-6">
         <ReadonlyField label="From GSTIN" value={draft?.supplier_gstin} />
         <ReadonlyField label="From Trade Name" value={draft?.supplier_trade_name} />
         <ReadonlyField label="From Legal Name" value={draft?.supplier_legal_name} />

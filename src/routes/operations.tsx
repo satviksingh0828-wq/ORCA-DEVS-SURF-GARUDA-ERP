@@ -285,7 +285,10 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           )}
           {safeTab === "consignment" && (
             <TabErrorBoundary label="Consignment">
-              <ConsignmentList onSidebarVisibilityChange={setNavOpen} />
+              <ConsignmentList
+                onSidebarVisibilityChange={setNavOpen}
+                onCreateModeChange={setConsignmentCreateOpen}
+              />
             </TabErrorBoundary>
           )}
           {safeTab === "lr" && (
