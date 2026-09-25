@@ -118,7 +118,12 @@ const emptyPartner = (): PartnerForm => ({
 });
 
 const read = (source: Record<string, unknown>, key: string) => String(source[key] ?? "");
-const dateOnly = (value: unknown) => String(value ?? "").slice(0, 10);
+const dateOnly = (value: unknown) => {
+  const text = String(value ?? "").trim();
+  const indianDate = text.match(/^(\d{2})[/-](\d{2})[/-](\d{4})/);
+  if (indianDate) return `${indianDate[3]}-${indianDate[2]}-${indianDate[1]}`;
+  return text.slice(0, 10);
+};
 const numberValue = (value: unknown) => Number(value || 0);
 
 const generationModeLabel: Record<string, string> = {
