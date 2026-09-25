@@ -477,8 +477,8 @@ export function ConsignmentList() {
       );
     if (!partnerForm.gstin.trim())
       return toast.error("GSTIN is mandatory for Transporters and Rentals");
-    if (partnerDialog === "transporter" && !partnerForm.pin.trim())
-      return toast.error("PIN Code is mandatory for Transporters");
+    if (!partnerForm.pin.trim())
+      return toast.error("PIN Code is mandatory for Transporters and Rentals");
     const payload = {
       [nameColumn]: partnerForm.name.trim(),
       legal_business_name: partnerForm.legalName,
@@ -1278,7 +1278,7 @@ function PartnerDialog({
           <div className="grid gap-3 md:grid-cols-3">
             {field("gstin", "GSTIN", "text", true)}
             {field("pan", "PAN")}
-            {field("pin", "PIN Code", "text", kind === "transporter")}
+            {field("pin", "PIN Code", "text", true)}
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {field("address1", "Address Line 1")}

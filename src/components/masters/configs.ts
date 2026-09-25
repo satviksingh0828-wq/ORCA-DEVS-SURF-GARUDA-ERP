@@ -265,7 +265,7 @@ export const RENTAL_CONFIG: MasterConfig = {
       field.key === "transporter_name"
         ? { ...field, key: "rental_name", label: "Rental Name" }
         : field.key === "pin_code"
-          ? { ...field, required: false }
+          ? { ...field, required: true }
           : field,
     ),
   })) as any,
