@@ -1016,6 +1016,18 @@ function ConsignmentForm(props: any) {
         <h3 className="font-semibold">Consignment Details</h3>
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-6">
           <ReadonlyField label="Document Type" value="Consignment" />
+          <div className="space-y-1.5">
+            <Label>Type *</Label>
+            <Select value={type} onValueChange={setType}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="own">Own</SelectItem>
+                <SelectItem value="third_party">Third Party</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <ReadonlyField
             label="Consignment No."
             value={previewNumber ? `${previewNumber} (preview)` : "Select branch to preview number"}
@@ -1031,7 +1043,7 @@ function ConsignmentForm(props: any) {
             placeholder="Select branch"
           />
           <SelectField
-            label="Source / Contract *"
+            label="Source *"
             value={sourceId}
             onChange={setSourceId}
             options={contracts}
@@ -1040,19 +1052,7 @@ function ConsignmentForm(props: any) {
           <ReadonlyField label="Consignment From PIN" value={common?.supplier_pin_code} />
           <ReadonlyField label="Consignment To PIN" value={common?.recipient_pin_code} />
           <div className="space-y-1.5">
-            <Label>Type *</Label>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="own">Own</SelectItem>
-                <SelectItem value="third_party">Third Party</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Transport Mode *</Label>
+            <Label>Mode *</Label>
             <Select value={transportMode} onValueChange={setTransportMode}>
               <SelectTrigger>
                 <SelectValue />
@@ -1067,7 +1067,7 @@ function ConsignmentForm(props: any) {
             </Select>
           </div>
           <div className="min-w-0 space-y-1.5 sm:col-span-2">
-            <Label>E-Way Bill Number *</Label>
+            <Label>E-Way Bill No. *</Label>
             <div className="flex min-w-0 gap-1">
               <Input
                 value={ewayNo}

@@ -187,7 +187,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   return (
     <AppShell
       mainClassName={
-        fullBleedConsignment ? "w-full max-w-none px-0 py-1 sm:px-0 sm:py-1" : undefined
+        fullBleedConsignment ? "w-full max-w-none px-1 py-1 sm:px-1 sm:py-1" : undefined
       }
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
