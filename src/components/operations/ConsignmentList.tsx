@@ -438,7 +438,9 @@ export function ConsignmentList() {
     setLoading(true);
     const { data, error } = await db
       .from("consignments")
-      .select("*, branch:branches(branch_name), transporter:ltms_transporters(transporter_name)")
+      .select(
+        "*, branch:branches(branch_name), source:contracts(contract_name), vehicle:vehicles(registration_number,nickname), rental:rentals(rental_name), transporter:ltms_transporters(transporter_name,gstin,pin_code)",
+      )
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
     setRows((data ?? []) as Record<string, any>[]);
@@ -1182,9 +1184,11 @@ function ConsignmentForm(props: any) {
 function EwayTable({
   drafts,
   remove,
+  readOnly = false,
 }: {
   drafts: ShipmentDraft[];
-  remove: (index: number) => void;
+  remove?: (index: number) => void;
+  readOnly?: boolean;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
@@ -1198,7 +1202,7 @@ function EwayTable({
               "Destination",
               "Valid Until",
               "Status",
-              "Action",
+              ...(readOnly ? [] : ["Action"]),
             ].map((heading) => (
               <th key={heading} className="px-3 py-2">
                 {heading}
@@ -1209,7 +1213,10 @@ function EwayTable({
         <tbody>
           {drafts.length === 0 ? (
             <tr>
-              <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
+              <td
+                colSpan={readOnly ? 6 : 7}
+                className="px-3 py-8 text-center text-muted-foreground"
+              >
                 Add an E-Way Bill to begin.
               </td>
             </tr>
@@ -1222,11 +1229,13 @@ function EwayTable({
                 <td className="px-3 py-2">{draft.recipient_place || "—"}</td>
                 <td className="px-3 py-2">{draft.valid_until || "—"}</td>
                 <td className="px-3 py-2">{draft.eway_bill_status || "—"}</td>
-                <td className="px-3 py-2">
-                  <Button variant="ghost" size="sm" onClick={() => remove(index)}>
-                    Remove
-                  </Button>
-                </td>
+                {!readOnly && (
+                  <td className="px-3 py-2">
+                    <Button variant="ghost" size="sm" onClick={() => remove?.(index)}>
+                      Remove
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))
           )}
@@ -1452,21 +1461,70 @@ function ConsignmentView({
       </div>
       <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-4">
         <ReadonlyField label="Document Type" value="Consignment" />
+        <ReadonlyField label="Consignment No." value={row.consignment_number} />
         <ReadonlyField label="Branch" value={row.branch?.branch_name} />
+        <ReadonlyField
+          label="Source / Contract"
+          value={row.source?.contract_name || row.source_id}
+        />
         <ReadonlyField
           label="Type"
           value={row.consignment_type === "third_party" ? "Third Party" : "Own"}
         />
-        <ReadonlyField
-          label="Movement / Mode"
-          value={`${row.movement_mode} / ${row.transport_mode}`}
-        />
-        <ReadonlyField label="From GSTIN" value={row.from_gstin} />
-        <ReadonlyField label="To GSTIN" value={row.to_gstin} />
-        <ReadonlyField label="From Pincode" value={row.from_pin_code} />
-        <ReadonlyField label="To Pincode" value={row.to_pin_code} />
+        <ReadonlyField label="Transport Mode" value={row.transport_mode} />
+        <ReadonlyField label="Consignment From PIN" value={row.from_pin_code} />
+        <ReadonlyField label="Consignment To PIN" value={row.to_pin_code} />
       </div>
-      {shipments.length > 0 && <GoodsTable drafts={drafts} />}
+      <CommonEwayDetails draft={drafts[0]} />
+      <section className="space-y-4 rounded-xl border border-border p-4">
+        <h3 className="font-semibold">Transport Assignment</h3>
+        <div className="grid gap-3 md:grid-cols-3">
+          {row.consignment_type === "own" ? (
+            <ReadonlyField
+              label="Own Transport Option"
+              value={row.own_transport_mode === "rental" ? "Rental Vehicle" : "Own Vehicle"}
+            />
+          ) : (
+            <ReadonlyField
+              label="Movement"
+              value={
+                row.movement_mode === "drop"
+                  ? "Drop — our vehicle delivers to transporter"
+                  : "Pickup — transporter collects from us"
+              }
+            />
+          )}
+          <ReadonlyField
+            label="Vehicle"
+            value={
+              row.vehicle
+                ? [row.vehicle.registration_number, row.vehicle.nickname]
+                    .filter(Boolean)
+                    .join(" · ")
+                : "—"
+            }
+          />
+          <ReadonlyField label="Rental" value={row.rental?.rental_name} />
+          <ReadonlyField label="Transporter" value={row.transporter?.transporter_name} />
+          <ReadonlyField label="Transporter GSTIN" value={row.transporter?.gstin} />
+          <ReadonlyField label="Transporter PIN Code" value={row.transporter?.pin_code} />
+        </div>
+      </section>
+      <section className="space-y-4 rounded-xl border border-border p-4">
+        <h3 className="font-semibold">Pincodes</h3>
+        <div className="grid gap-3 md:grid-cols-2">
+          <ReadonlyField label="From Pincode" value={row.from_pin_code} />
+          {isThirdPartyDrop && <ReadonlyField label="To Pincode" value={row.to_pin_code} />}
+        </div>
+      </section>
+      <section className="space-y-4 rounded-xl border border-border p-4">
+        <h3 className="font-semibold">E-Way Bills</h3>
+        <EwayTable drafts={drafts} readOnly />
+      </section>
+      <section className="space-y-3 rounded-xl border border-border p-4">
+        <h3 className="font-semibold">Goods from all E-Way Bills</h3>
+        <GoodsTable drafts={drafts} />
+      </section>
       <section className="space-y-3 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Details</h3>
         <div className="grid gap-3 md:grid-cols-3">
