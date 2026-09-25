@@ -59,10 +59,10 @@ type TransporterFields = {
 };
 
 const EMPTY_TRANSPORTER: TransporterFields = {
-  transporter_name: "ORCA",
+  transporter_name: "",
   legal_business_name: "",
   transporter_type: "",
-  gstin: "01AARFB4347G004",
+  gstin: "",
   pan: "",
   msme_udyam: "",
   tan: "",
@@ -70,8 +70,8 @@ const EMPTY_TRANSPORTER: TransporterFields = {
   address_line2: "",
   city: "",
   state: "",
-  country: "India",
-  pin_code: "302020",
+  country: "",
+  pin_code: "",
   primary_contact_name: "",
   mobile_number: "",
 };
@@ -287,38 +287,195 @@ function ShipmentDetails({ shipment }: { shipment: Shipment }) {
   );
 }
 
-function HistoryItems({ row }: { row: ManifestHistoryRow }) {
-  const items = row.items ?? [];
+function relatedRecord(value: unknown): Record<string, any> {
+  if (Array.isArray(value)) return value[0] ?? {};
+  return value && typeof value === "object" ? (value as Record<string, any>) : {};
+}
+
+function ManifestDetailView({
+  manifest,
+  onBack,
+}: {
+  manifest: ManifestHistoryRow;
+  onBack: () => void;
+}) {
+  const grouped = new Map<
+    string,
+    { consignment: Record<string, any>; items: Record<string, any>[] }
+  >();
+  for (const item of manifest.items ?? []) {
+    const consignment = relatedRecord(item.consignment);
+    const key = String(item.consignment_id ?? consignment.id ?? item.consignment_number);
+    const group = grouped.get(key) ?? { consignment, items: [] };
+    group.items.push(item);
+    grouped.set(key, group);
+  }
+  const transporter = relatedRecord(manifest.transporter);
+
   return (
-    <details className="mt-2">
-      <summary className="cursor-pointer text-xs text-primary">
-        Show transferred E-Way Bills and consignments ({items.length})
-      </summary>
-      <div className="mt-2 overflow-x-auto">
-        <table className="w-full min-w-[650px] text-xs">
-          <thead className="bg-muted/40 text-left">
-            <tr>
-              <th className="p-2">Consignment</th>
-              <th className="p-2">E-Way Bill</th>
-              <th className="p-2">Status</th>
-              <th className="p-2">Error</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((item, index) => (
-              <tr key={item.id ?? index} className="border-t border-border/70">
-                <td className="p-2">{show(item.consignment_number)}</td>
-                <td className="p-2">{show(item.eway_bill_number)}</td>
-                <td className="p-2">
-                  {item.transfer_status === "transferred" ? "Transferred" : "Failed"}
-                </td>
-                <td className="p-2">{show(item.transfer_error)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </details>
+    <div className="space-y-5">
+      <header className="flex items-center gap-3 border-b border-border pb-3">
+        <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to manifest history">
+          <ArrowLeft className="size-5" />
+        </Button>
+        <div>
+          <h2 className="text-lg font-semibold">Manifest {show(manifest.manifest_number)}</h2>
+          <p className="text-sm text-muted-foreground">
+            Transfer record and linked consignment details
+          </p>
+        </div>
+      </header>
+      <section className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div>
+          <Label className="text-xs text-muted-foreground">Manifest Number</Label>
+          <p className="font-semibold">{show(manifest.manifest_number)}</p>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Branch</Label>
+          <p>{show(relatedRecord(manifest.branch).branch_name)}</p>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Status</Label>
+          <p>
+            <TransferBadge status={manifest.transfer_status} />
+          </p>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Created</Label>
+          <p>{manifest.created_at ? new Date(manifest.created_at).toLocaleString("en-GB") : "—"}</p>
+        </div>
+      </section>
+      <section className="rounded-xl border border-border bg-card p-4">
+        <h3 className="mb-3 font-semibold">Transporter Details</h3>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {TRANSPORTER_FIELDS.map(({ label, key }) => (
+            <div key={key}>
+              <Label className="text-xs text-muted-foreground">{label}</Label>
+              <p>
+                {show(
+                  key === "transporter_name"
+                    ? manifest.transporter_name || transporter[key]
+                    : key === "gstin"
+                      ? manifest.transporter_gstin || transporter[key]
+                      : transporter[key],
+                )}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+      <section className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h3 className="font-semibold">Consignments ({grouped.size})</h3>
+          <span className="text-sm text-muted-foreground">
+            E-Way Bills: {show(manifest.eway_bill_count)}
+          </span>
+        </div>
+        {grouped.size ? (
+          [...grouped.entries()].map(([key, group]) => (
+            <article key={key} className="space-y-3 rounded-xl border border-border bg-card p-4">
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div>
+                  <Label className="text-xs text-muted-foreground">Consignment</Label>
+                  <p className="font-semibold">
+                    {show(
+                      group.consignment.consignment_number || group.items[0]?.consignment_number,
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Branch</Label>
+                  <p>
+                    {show(
+                      relatedRecord(group.consignment.branch).branch_name ||
+                        relatedRecord(manifest.branch).branch_name,
+                    )}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">Type / Mode</Label>
+                  <p>
+                    {show(group.consignment.consignment_type)} /{" "}
+                    {show(group.consignment.movement_mode)}
+                  </p>
+                </div>
+                <div>
+                  <Label className="text-xs text-muted-foreground">From → To</Label>
+                  <p>
+                    {show(group.consignment.from_pin_code)} → {show(group.consignment.to_pin_code)}
+                  </p>
+                </div>
+              </div>
+              <div className="space-y-3">
+                {group.items.map((item, index) => {
+                  const shipment = relatedRecord(item.shipment);
+                  return (
+                    <section
+                      key={item.id ?? index}
+                      className="overflow-hidden rounded-lg border border-border/70"
+                    >
+                      <div className="grid gap-2 bg-muted/30 p-3 text-xs sm:grid-cols-2 lg:grid-cols-7">
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">E-Way Bill</Label>
+                          <p className="font-semibold">
+                            {show(shipment.eway_bill_number || item.eway_bill_number)}
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">Recipient</Label>
+                          <p>{show(shipment.recipient_trade_name)}</p>
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">
+                            Recipient GSTIN
+                          </Label>
+                          <p>{show(shipment.recipient_gstin)}</p>
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">Place</Label>
+                          <p>{show(shipment.recipient_place)}</p>
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">Valid Until</Label>
+                          <p>
+                            {shipment.valid_until
+                              ? new Date(shipment.valid_until).toLocaleString("en-GB")
+                              : "—"}
+                          </p>
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">
+                            E-Way Bill Status
+                          </Label>
+                          <p>{show(shipment.eway_bill_status)}</p>
+                        </div>
+                        <div>
+                          <Label className="text-[11px] text-muted-foreground">
+                            Transfer Result
+                          </Label>
+                          <p>{item.transfer_status === "transferred" ? "Transferred" : "Failed"}</p>
+                        </div>
+                      </div>
+                      {item.transfer_error && (
+                        <p className="px-3 py-2 text-xs text-destructive">{item.transfer_error}</p>
+                      )}
+                      <div className="border-t border-border/70">
+                        <h4 className="px-3 pt-3 text-sm font-medium">Goods</h4>
+                        <GoodsTable items={shipment.shipment_items ?? []} />
+                      </div>
+                    </section>
+                  );
+                })}
+              </div>
+            </article>
+          ))
+        ) : (
+          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+            No consignment details are linked to this manifest.
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 
@@ -332,6 +489,7 @@ export function LtmsManifestList() {
   const [profile, setProfile] = useState<TransporterFields>(EMPTY_TRANSPORTER);
   const [rows, setRows] = useState<Consignment[]>([]);
   const [history, setHistory] = useState<ManifestHistoryRow[]>([]);
+  const [selectedManifest, setSelectedManifest] = useState<ManifestHistoryRow | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
@@ -409,7 +567,7 @@ export function LtmsManifestList() {
     let manifestQuery = db
       .from("ltms_manifest_transfers")
       .select(
-        "id,branch_id,manifest_number,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),items:ltms_manifest_transfer_items(id,consignment_number,eway_bill_number,transfer_status,transfer_error)",
+        "id,branch_id,manifest_number,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(*),items:ltms_manifest_transfer_items(id,consignment_id,consignment_number,shipment_id,eway_bill_number,transfer_status,transfer_error,consignment:consignments(id,consignment_number,consignment_type,movement_mode,from_pin_code,to_pin_code,transporter_update_status,created_at,branch:branches(branch_name)),shipment:shipments(id,eway_bill_number,eway_bill_status,recipient_trade_name,recipient_gstin,recipient_place,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)))",
       )
       .order("created_at", { ascending: false });
     if (allowedBranches !== null) {
@@ -475,7 +633,7 @@ export function LtmsManifestList() {
   }, [loadData]);
   useEffect(() => {
     const selected = transporters.find((item) => item.id === transporterId);
-    if (selected) setProfile(profileFromTransporter(selected));
+    setProfile(selected ? profileFromTransporter(selected) : EMPTY_TRANSPORTER);
   }, [transporterId, transporters]);
 
   function setProfileValue(key: keyof TransporterFields, value: string) {
@@ -583,6 +741,12 @@ export function LtmsManifestList() {
     }
   }
 
+  if (selectedManifest) {
+    return (
+      <ManifestDetailView manifest={selectedManifest} onBack={() => setSelectedManifest(null)} />
+    );
+  }
+
   if (!isCreating) {
     return (
       <div className="space-y-5">
@@ -651,22 +815,20 @@ export function LtmsManifestList() {
                 <th className="px-3 py-2">E-Way Bills</th>
                 <th className="px-3 py-2">Status</th>
                 <th className="px-3 py-2">Created</th>
+                <th className="px-3 py-2">Details</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={7} className="p-6 text-center text-muted-foreground">
+                  <td colSpan={8} className="p-6 text-center text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
               ) : filteredHistory.length ? (
                 filteredHistory.map((row) => (
                   <tr key={row.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-semibold">
-                      {row.manifest_number}
-                      <HistoryItems row={row} />
-                    </td>
+                    <td className="px-3 py-2 font-semibold">{row.manifest_number}</td>
                     <td className="px-3 py-2">{row.branch?.branch_name || "—"}</td>
                     <td className="px-3 py-2">
                       {row.transporter?.transporter_name || row.transporter_name || "—"}
@@ -679,11 +841,16 @@ export function LtmsManifestList() {
                     <td className="px-3 py-2">
                       {row.created_at ? new Date(row.created_at).toLocaleString("en-GB") : "—"}
                     </td>
+                    <td className="px-3 py-2">
+                      <Button variant="outline" size="sm" onClick={() => setSelectedManifest(row)}>
+                        View
+                      </Button>
+                    </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={7} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
                     No manifest transfer history for these filters yet.
                   </td>
                 </tr>
