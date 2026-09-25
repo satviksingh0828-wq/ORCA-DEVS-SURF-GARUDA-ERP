@@ -1,6 +1,7 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { verifyAppToken } from "@/lib/user-auth";
+import { isManualEwayBill } from "@/lib/ewaybill-generation";
 
 const transferInputSchema = z.object({
   sessionToken: z.string().min(1),
@@ -90,6 +91,32 @@ export const serverTransferManifestLrs = createServerFn({ method: "POST" })
         .maybeSingle();
       if (error || !assignment) throw new Error("You do not have access to this branch");
     }
+    // Generated Supabase types predate the application's shipments table.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const shipmentDb = supabaseAdmin as any;
+    const { data: shipments, error: shipmentError } = await shipmentDb
+      .from("shipments")
+      .select("eway_bill_number,generation_mode")
+      .eq("branch_id", data.branchId)
+      .in("eway_bill_number", data.ewayBillNumbers);
+    if (shipmentError)
+      throw new Error(`Could not verify E-Way Bill generation mode: ${shipmentError.message}`);
+    const shipmentRows = (shipments ?? []) as Array<Record<string, unknown>>;
+    const verifiedBills = new Set(
+      shipmentRows.map((shipment) => String(shipment.eway_bill_number)),
+    );
+    const unverifiedBills = data.ewayBillNumbers.filter((number) => !verifiedBills.has(number));
+    if (unverifiedBills.length)
+      throw new Error(
+        `Cannot verify E-Way Bill generation mode for: ${unverifiedBills.join(", ")}`,
+      );
+    const manualBills = shipmentRows
+      .filter((shipment) => isManualEwayBill(shipment))
+      .map((shipment) => String(shipment.eway_bill_number));
+    if (manualBills.length)
+      throw new Error(
+        `Manual E-Way Bills must be updated in-app and cannot be sent to the E-Way Bill API: ${manualBills.join(", ")}`,
+      );
     const baseUrl = process.env.EWB_RENDER_URL?.trim().replace(/\/$/, "");
     const apiKey = process.env.EWB_RENDER_API_KEY?.trim();
     if (!baseUrl || !apiKey)

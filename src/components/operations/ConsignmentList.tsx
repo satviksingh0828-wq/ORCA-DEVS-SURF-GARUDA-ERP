@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Eye, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
   DialogContent,
@@ -32,7 +31,9 @@ type ShipmentDraft = {
   eway_bill_number: string;
   eway_bill_date: string;
   eway_bill_status: string;
+  valid_from: string;
   valid_until: string;
+  document_type: string;
   document_number: string;
   document_date: string;
   total_value: string;
@@ -51,6 +52,7 @@ type ShipmentDraft = {
   supplier_legal_name: string;
   supplier_address_line_1: string;
   supplier_address_line_2: string;
+  supplier_address: string;
   supplier_place: string;
   supplier_state: string;
   supplier_pin_code: string;
@@ -59,11 +61,30 @@ type ShipmentDraft = {
   recipient_legal_name: string;
   recipient_address_line_1: string;
   recipient_address_line_2: string;
+  recipient_address: string;
   recipient_place: string;
   recipient_state: string;
   recipient_pin_code: string;
   dispatch_from_pin_code: string;
+  dispatch_from_address: string;
+  dispatch_from_address_line_1: string;
+  dispatch_from_address_line_2: string;
+  dispatch_from_place: string;
+  dispatch_from_state: string;
   ship_to_pin_code: string;
+  ship_to_address: string;
+  ship_to_address_line_1: string;
+  ship_to_address_line_2: string;
+  ship_to_place: string;
+  ship_to_state: string;
+  transporter_id: string;
+  approximate_distance_km: string;
+  cgst_value: string;
+  sgst_value: string;
+  igst_value: string;
+  cess_value: string;
+  cess_non_advol_value: string;
+  other_value: string;
   items: Item[];
 };
 
@@ -165,6 +186,94 @@ const subSupplyTypeLabel: Record<string, string> = {
 
 const db = supabase as any;
 
+function emptyShipmentItem(): Item {
+  return {
+    product_name: "",
+    description: "",
+    hsn_code: "",
+    quantity: "1",
+    weight_kg: "",
+    unit: "NOS",
+    taxable_value: "",
+    cgst_rate: "",
+    sgst_rate: "",
+    igst_rate: "",
+    cess_rate: "",
+    cess_nonadvol: "",
+    gst_rate: "",
+    cgst: "",
+    sgst_utgst: "",
+    igst: "",
+    cess: "",
+    other_tax_charges: "",
+    total_invoice_value: "",
+  };
+}
+
+function emptyManualShipment(ewayBillNumber = ""): ShipmentDraft {
+  const today = new Date().toISOString().slice(0, 10);
+  return {
+    eway_bill_number: ewayBillNumber,
+    eway_bill_date: today,
+    eway_bill_status: "Active",
+    valid_from: "",
+    valid_until: "",
+    document_type: "Tax Invoice",
+    document_number: "",
+    document_date: today,
+    total_value: "",
+    total_taxable_value: "",
+    total_invoice_value: "",
+    generation_mode: "Manual",
+    generation_mode_code: "1",
+    transaction_type: "Regular",
+    transaction_type_code: "1",
+    supply_type: "Outward",
+    supply_type_code: "O",
+    sub_type: "Supply",
+    sub_type_code: "1",
+    supplier_gstin: "URP",
+    supplier_trade_name: "",
+    supplier_legal_name: "",
+    supplier_address_line_1: "",
+    supplier_address_line_2: "",
+    supplier_address: "",
+    supplier_place: "",
+    supplier_state: "",
+    supplier_pin_code: "",
+    recipient_gstin: "URP",
+    recipient_trade_name: "",
+    recipient_legal_name: "",
+    recipient_address_line_1: "",
+    recipient_address_line_2: "",
+    recipient_address: "",
+    recipient_place: "",
+    recipient_state: "",
+    recipient_pin_code: "",
+    dispatch_from_pin_code: "",
+    dispatch_from_address: "",
+    dispatch_from_address_line_1: "",
+    dispatch_from_address_line_2: "",
+    dispatch_from_place: "",
+    dispatch_from_state: "",
+    ship_to_pin_code: "",
+    ship_to_address: "",
+    ship_to_address_line_1: "",
+    ship_to_address_line_2: "",
+    ship_to_place: "",
+    ship_to_state: "",
+    transporter_id: "",
+    approximate_distance_km: "",
+    cgst_value: "",
+    sgst_value: "",
+    igst_value: "",
+    cess_value: "",
+    cess_non_advol_value: "",
+    other_value: "",
+    items: [emptyShipmentItem()],
+  };
+}
+
 function humanLabel(map: Record<string, string>, value: string, fallback = "Not specified") {
   return (map[value] ?? value) || fallback;
 }
@@ -236,6 +345,9 @@ function mapEway(raw: unknown): ShipmentDraft {
   const to2 = read(source, "toAddr2");
   const ship1 = read(source, "shipToAddr1") || to1;
   const ship2 = read(source, "shipToAddr2") || to2;
+  const fromAddress = [from1, from2].filter(Boolean).join(", ");
+  const toAddress = [to1, to2].filter(Boolean).join(", ");
+  const shipAddress = [ship1, ship2].filter(Boolean).join(", ");
   const transactionCode = read(source, "transactionType");
   const supplyCode = read(source, "supplyType");
   const subSupplyCode = read(source, "subSupplyType") || read(source, "subType");
@@ -265,7 +377,10 @@ function mapEway(raw: unknown): ShipmentDraft {
     eway_bill_number: read(source, "ewbNo") || read(source, "ewayBillNo"),
     eway_bill_date: dateOnly(source.ewayBillDate || source.ewayBillDateStr),
     eway_bill_status: read(source, "status") || "Active",
+    valid_from: dateOnly(source.ewayBillDate || source.ewayBillDateStr),
     valid_until: dateOnly(source.validUpto || source.validUntil),
+    document_type:
+      read(source, "docType") === "INV" ? "Tax Invoice" : read(source, "docType") || "Tax Invoice",
     document_number: read(source, "docNo"),
     document_date:
       dateOnly(source.docDate) || dateOnly(source.ewayBillDate || source.ewayBillDateStr),
@@ -285,6 +400,7 @@ function mapEway(raw: unknown): ShipmentDraft {
     supplier_legal_name: read(source, "fromLegalName") || read(source, "fromTrdName"),
     supplier_address_line_1: from1,
     supplier_address_line_2: from2,
+    supplier_address: fromAddress,
     supplier_place: read(source, "fromPlace"),
     supplier_state: read(source, "fromStateCode"),
     supplier_pin_code: read(source, "fromPincode"),
@@ -293,11 +409,30 @@ function mapEway(raw: unknown): ShipmentDraft {
     recipient_legal_name: read(source, "toLegalName") || read(source, "toTrdName"),
     recipient_address_line_1: to1,
     recipient_address_line_2: to2,
+    recipient_address: toAddress,
     recipient_place: read(source, "toPlace"),
     recipient_state: read(source, "toStateCode"),
     recipient_pin_code: read(source, "toPincode"),
     dispatch_from_pin_code: read(source, "fromPincode"),
+    dispatch_from_address: fromAddress,
+    dispatch_from_address_line_1: from1,
+    dispatch_from_address_line_2: from2,
+    dispatch_from_place: read(source, "fromPlace"),
+    dispatch_from_state: read(source, "fromStateCode"),
     ship_to_pin_code: read(source, "shipToPincode") || read(source, "toPincode"),
+    ship_to_address: shipAddress,
+    ship_to_address_line_1: ship1,
+    ship_to_address_line_2: ship2,
+    ship_to_place: read(source, "shipToPlace") || read(source, "toPlace"),
+    ship_to_state: read(source, "shipToStateCode") || read(source, "toStateCode"),
+    transporter_id: read(source, "transporterId"),
+    approximate_distance_km: read(source, "transDistance"),
+    cgst_value: readAny(source, "cgstValue", "cgst_value"),
+    sgst_value: readAny(source, "sgstValue", "sgst_value"),
+    igst_value: readAny(source, "igstValue", "igst_value"),
+    cess_value: readAny(source, "cessValue", "cess_value"),
+    cess_non_advol_value: readAny(source, "cessNonAdvolValue", "cess_non_advol_value"),
+    other_value: readAny(source, "otherValue", "other_value"),
     items: itemList.map((item) => ({
       product_name: readAny(item, "productName", "product_name", "itemName", "item_name"),
       description: readAny(
@@ -560,25 +695,28 @@ export function ConsignmentList({
     void loadMasters();
   }
 
-  async function addEway() {
-    if (!/^\d{12}$/.test(ewayNo))
-      return toast.error("E-Way Bill Number must contain exactly 12 digits");
-    if (!branchId || !user?.sessionToken) return toast.error("Select a branch and sign in again");
-    if (drafts.some((item) => item.eway_bill_number === ewayNo))
-      return toast.error("This E-Way Bill is already added");
-    const existing = await db
-      .from("shipments")
-      .select("id")
-      .eq("eway_bill_number", ewayNo)
-      .maybeSingle();
-    if (existing.data) return toast.error("This E-Way Bill is already used");
+  async function addEway(ewayBillNumber = ewayNo): Promise<boolean> {
+    const number = ewayBillNumber.trim();
+    if (!/^\d{12}$/.test(number))
+      return (toast.error("E-Way Bill Number must contain exactly 12 digits"), false);
+    if (!branchId || !user?.sessionToken)
+      return (toast.error("Select a branch and sign in again"), false);
+    if (drafts.some((item) => item.eway_bill_number === number))
+      return (toast.error("This E-Way Bill is already added"), false);
     setFetching(true);
     try {
+      const existing = await db
+        .from("shipments")
+        .select("id")
+        .eq("eway_bill_number", number)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+      if (existing.data) throw new Error("This E-Way Bill is already used");
       const raw = await serverFetchEwayBillDetails({
-        data: { token: user.sessionToken, branchId, ewayBillNumber: ewayNo },
+        data: { token: user.sessionToken, branchId, ewayBillNumber: number },
       });
       const draft = mapEway(raw);
-      if (!draft.eway_bill_number) draft.eway_bill_number = ewayNo;
+      if (!draft.eway_bill_number) draft.eway_bill_number = number;
       if (!draft.items.length) throw new Error("The E-Way Bill has no goods details");
       if (drafts.length) {
         const first = drafts[0];
@@ -591,10 +729,12 @@ export function ConsignmentList({
           throw new Error("Every E-Way Bill must have the same From/To GSTINs and Pincodes");
       }
       setDrafts((items) => [...items, draft]);
-      setEwayNo("");
+      if (!drafts.length) setEwayNo(number);
       toast.success("E-Way Bill fetched and added");
+      return true;
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not fetch E-Way Bill details");
+      return false;
     } finally {
       setFetching(false);
     }
@@ -1011,264 +1151,654 @@ function ConsignmentForm(props: any) {
     openPartner,
     onBack,
   } = props;
+  const [manualOpen, setManualOpen] = useState(false);
+  const [manualDraft, setManualDraft] = useState<ShipmentDraft>(() => emptyManualShipment());
+  const [manualSaving, setManualSaving] = useState(false);
+  const [additionalEwayNo, setAdditionalEwayNo] = useState("");
   const common = drafts[0] as ShipmentDraft | undefined;
   const needsOwnVehicle =
     type === "third_party" ? movement === "drop" : ownTransportMode === "own_vehicle";
   const needsRental = type === "own" && ownTransportMode === "rental";
   const needsTransporter = type === "third_party";
+
+  function openManualShipment(number = drafts.length ? "" : ewayNo) {
+    setManualDraft(emptyManualShipment(number));
+    setManualOpen(true);
+  }
+
+  async function addManualShipment() {
+    const number = manualDraft.eway_bill_number.trim();
+    if (!/^\d{12}$/.test(number)) return toast.error("Enter a valid 12-digit E-Way Bill Number");
+    if (!branchId) return toast.error("Select a branch before adding a shipment");
+    if (drafts.some((item: ShipmentDraft) => item.eway_bill_number === number))
+      return toast.error("This E-Way Bill is already added");
+    if (!manualDraft.document_number.trim() || !manualDraft.document_type.trim())
+      return toast.error("Document Type and Document Number are required");
+    if (!manualDraft.eway_bill_date || !manualDraft.document_date)
+      return toast.error("E-Way Bill Date and Document Date are required");
+    const items = manualDraft.items.filter((item) =>
+      String(item.description || item.product_name || "").trim(),
+    );
+    if (!items.length) return toast.error("Add at least one product with a description");
+    if (items.some((item) => !String(item.hsn_code || "").trim()))
+      return toast.error("Enter an HSN Code for every product");
+
+    setManualSaving(true);
+    try {
+      const existing = await db
+        .from("shipments")
+        .select("id")
+        .eq("eway_bill_number", number)
+        .maybeSingle();
+      if (existing.error) throw existing.error;
+      if (existing.data) throw new Error("This E-Way Bill is already used");
+      const first = drafts[0] as ShipmentDraft | undefined;
+      if (
+        first &&
+        (first.supplier_gstin.toUpperCase() !== manualDraft.supplier_gstin.toUpperCase() ||
+          first.recipient_gstin.toUpperCase() !== manualDraft.recipient_gstin.toUpperCase() ||
+          first.dispatch_from_pin_code !== manualDraft.dispatch_from_pin_code ||
+          first.ship_to_pin_code !== manualDraft.ship_to_pin_code)
+      )
+        throw new Error("Every E-Way Bill must have the same From/To GSTINs and Pincodes");
+
+      const taxableTotal = items.reduce((sum, item) => sum + numberValue(item.taxable_value), 0);
+      const invoiceTotal = items.reduce(
+        (sum, item) => sum + numberValue(item.total_invoice_value),
+        0,
+      );
+      const itemTaxTotal = (key: string) =>
+        items.reduce((sum, item) => sum + numberValue(item[key]), 0);
+      const shipment: ShipmentDraft = {
+        ...manualDraft,
+        eway_bill_number: number,
+        generation_mode: "Manual",
+        generation_mode_code: "1",
+        supplier_address: [manualDraft.supplier_address_line_1, manualDraft.supplier_address_line_2]
+          .filter(Boolean)
+          .join(", "),
+        recipient_address: [
+          manualDraft.recipient_address_line_1,
+          manualDraft.recipient_address_line_2,
+        ]
+          .filter(Boolean)
+          .join(", "),
+        dispatch_from_address: [
+          manualDraft.dispatch_from_address_line_1,
+          manualDraft.dispatch_from_address_line_2,
+        ]
+          .filter(Boolean)
+          .join(", "),
+        ship_to_address: [manualDraft.ship_to_address_line_1, manualDraft.ship_to_address_line_2]
+          .filter(Boolean)
+          .join(", "),
+        total_taxable_value: manualDraft.total_taxable_value || String(taxableTotal),
+        total_invoice_value: manualDraft.total_invoice_value || String(invoiceTotal),
+        total_value: manualDraft.total_value || String(invoiceTotal),
+        cgst_value: manualDraft.cgst_value || String(itemTaxTotal("cgst")),
+        sgst_value: manualDraft.sgst_value || String(itemTaxTotal("sgst_utgst")),
+        igst_value: manualDraft.igst_value || String(itemTaxTotal("igst")),
+        cess_value: manualDraft.cess_value || String(itemTaxTotal("cess")),
+        cess_non_advol_value:
+          manualDraft.cess_non_advol_value || String(itemTaxTotal("cess_nonadvol")),
+        other_value: manualDraft.other_value || String(itemTaxTotal("other_tax_charges")),
+        items: items.map((item) => ({
+          ...item,
+          gst_rate:
+            item.gst_rate ||
+            String(
+              numberValue(item.cgst_rate) +
+                numberValue(item.sgst_rate) +
+                numberValue(item.igst_rate),
+            ),
+        })),
+      };
+      setDrafts((current: ShipmentDraft[]) => [...current, shipment]);
+      if (!drafts.length) {
+        setEwayNo(number);
+        setFromPin(shipment.supplier_pin_code);
+      }
+      setManualOpen(false);
+      toast.success("Manual shipment added; no E-Way Bill API was called");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not add manual shipment");
+    } finally {
+      setManualSaving(false);
+    }
+  }
+
+  async function addAdditionalEway() {
+    if (await props.addEway(additionalEwayNo)) setAdditionalEwayNo("");
+  }
+
+  function removeEway(index: number) {
+    const remaining = (drafts as ShipmentDraft[]).filter((_, itemIndex) => itemIndex !== index);
+    setDrafts(remaining);
+    setEwayNo(remaining[0]?.eway_bill_number ?? "");
+  }
+
   return (
-    <div className="consignment-entry w-full min-w-0 space-y-0 bg-background p-3 text-foreground">
-      <div className="-mx-3 -mt-3 mb-3 flex min-h-12 flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/70 px-4 py-2">
-        <div className="flex min-w-0 items-baseline gap-2">
-          <h2 className="shrink-0 text-base font-semibold">Consignment / Create</h2>
-          <p className="truncate text-xs text-muted-foreground">
-            Create consignment from E-Way Bills
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={() => void save()} disabled={loading || drafts.length === 0}>
-            {loading ? "Saving…" : "Create Consignment"}
-          </Button>
-          <Button variant="outline" onClick={onBack}>
-            <X className="mr-1 size-4" /> Discard
-          </Button>
-        </div>
-      </div>
-      <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
-        <span>
-          Four-column entry layout · E-Way Bill details are populated from the added bill.
-        </span>
-        <span>{branch?.branch_name ?? "Select branch"}</span>
-      </div>
-      <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
-        <h3 className="text-sm font-semibold text-sky-800">Consignment Details</h3>
-        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-          <ReadonlyField dense label="Document Type" value="Consignment" />
-          <div className="min-w-0 space-y-1">
-            <Label className="text-xs font-semibold">Type *</Label>
-            <Select value={type} onValueChange={setType}>
-              <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="own">Own</SelectItem>
-                <SelectItem value="third_party">Third Party</SelectItem>
-              </SelectContent>
-            </Select>
+    <>
+      <div className="consignment-entry w-full min-w-0 space-y-0 bg-background p-3 text-foreground">
+        <div className="-mx-3 -mt-3 mb-3 flex min-h-12 flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/70 px-4 py-2">
+          <div className="flex min-w-0 items-baseline gap-2">
+            <h2 className="shrink-0 text-base font-semibold">Consignment / Create</h2>
+            <p className="truncate text-xs text-muted-foreground">
+              Create consignment from E-Way Bills
+            </p>
           </div>
-          <ReadonlyField
-            dense
-            label="Consignment No."
-            value={previewNumber ? `${previewNumber} (preview)` : "Select branch to preview number"}
-          />
-          <SelectField
-            label="Branch *"
-            value={branchId}
-            onChange={setBranchId}
-            options={branches.map((item: BranchOption) => ({
-              id: item.id,
-              label: item.branch_name,
-            }))}
-            placeholder="Select branch"
-          />
-          <SelectField
-            label="Source *"
-            value={sourceId}
-            onChange={setSourceId}
-            options={contracts}
-            placeholder="Select source"
-          />
-          <ReadonlyField dense label="Consignment From PIN" value={common?.supplier_pin_code} />
-          <ReadonlyField dense label="Consignment To PIN" value={common?.recipient_pin_code} />
-          <div className="min-w-0 space-y-1">
-            <Label className="text-xs font-semibold">Mode *</Label>
-            <Select value={transportMode} onValueChange={setTransportMode}>
-              <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {["Road", "Rail", "Air", "Ship"].map((item) => (
-                  <SelectItem key={item} value={item}>
-                    {item}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+          <div className="flex items-center gap-2">
+            <Button onClick={() => void save()} disabled={loading || drafts.length === 0}>
+              {loading ? "Saving…" : "Create Consignment"}
+            </Button>
+            <Button variant="outline" onClick={onBack}>
+              <X className="mr-1 size-4" /> Discard
+            </Button>
           </div>
-          <div className="min-w-0 space-y-1 xl:col-span-2">
-            <Label className="text-xs font-semibold">E-Way Bill No. *</Label>
-            <div className="flex min-w-0 gap-1">
+        </div>
+        <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            Four-column entry layout · E-Way Bill details are populated from the added bill.
+          </span>
+          <span>{branch?.branch_name ?? "Select branch"}</span>
+        </div>
+        <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+          <h3 className="text-sm font-semibold text-sky-800">Consignment Details</h3>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+            <ReadonlyField dense label="Document Type" value="Consignment" />
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">Type *</Label>
+              <Select value={type} onValueChange={setType}>
+                <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="own">Own</SelectItem>
+                  <SelectItem value="third_party">Third Party</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <ReadonlyField
+              dense
+              label="Consignment No."
+              value={
+                previewNumber ? `${previewNumber} (preview)` : "Select branch to preview number"
+              }
+            />
+            <SelectField
+              label="Branch *"
+              value={branchId}
+              onChange={setBranchId}
+              options={branches.map((item: BranchOption) => ({
+                id: item.id,
+                label: item.branch_name,
+              }))}
+              placeholder="Select branch"
+            />
+            <SelectField
+              label="Source *"
+              value={sourceId}
+              onChange={setSourceId}
+              options={contracts}
+              placeholder="Select source"
+            />
+            <ReadonlyField dense label="Consignment From PIN" value={common?.supplier_pin_code} />
+            <ReadonlyField dense label="Consignment To PIN" value={common?.recipient_pin_code} />
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">Mode *</Label>
+              <Select value={transportMode} onValueChange={setTransportMode}>
+                <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {["Road", "Rail", "Air", "Ship"].map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-0 space-y-1 xl:col-span-2">
+              <Label className="text-xs font-semibold">E-Way Bill No. *</Label>
+              <div className="flex min-w-0 flex-wrap gap-1">
+                <Input
+                  value={ewayNo}
+                  onChange={(event) =>
+                    setEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))
+                  }
+                  placeholder="12-digit E-Way Bill Number"
+                  className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+                  readOnly={drafts.length > 0}
+                />
+                <Button
+                  type="button"
+                  onClick={() => void addEway(ewayNo)}
+                  disabled={fetching || drafts.length > 0}
+                >
+                  {fetching ? "Fetching…" : "Verify / Add"}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => openManualShipment()}
+                  disabled={drafts.length > 0}
+                >
+                  Add Manually
+                </Button>
+              </div>
+            </div>
+          </div>
+          <CommonEwayDetails draft={common} />
+        </section>
+        <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+          <h3 className="text-sm font-semibold text-sky-800">Transport Assignment</h3>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className={`min-w-0 space-y-1 ${type !== "own" ? "opacity-60" : ""}`}>
+              <Label className="text-xs font-semibold">Own Transport Option *</Label>
+              <Select
+                value={ownTransportMode}
+                onValueChange={setOwnTransportMode}
+                disabled={type !== "own"}
+              >
+                <SelectTrigger
+                  className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs"
+                  disabled={type !== "own"}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="own_vehicle">Own Vehicle</SelectItem>
+                  <SelectItem value="rental">Rental Vehicle</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className={`min-w-0 space-y-1 ${type !== "third_party" ? "opacity-60" : ""}`}>
+              <Label className="text-xs font-semibold">Movement *</Label>
+              <Select
+                value={movement}
+                onValueChange={setMovement}
+                disabled={type !== "third_party"}
+              >
+                <SelectTrigger
+                  className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs"
+                  disabled={type !== "third_party"}
+                >
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="pickup">Pickup — transporter collects from us</SelectItem>
+                  <SelectItem value="drop">Drop — our vehicle delivers to transporter</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="min-w-0">
+              <SelectField
+                label="Vehicle *"
+                value={vehicleId}
+                onChange={setVehicleId}
+                options={vehicles}
+                placeholder="Select company vehicle"
+                disabled={!needsOwnVehicle}
+              />
+            </div>
+            <div className="col-span-1 min-w-0 space-y-1 sm:col-span-2 xl:col-span-2">
+              <Label className="text-xs font-semibold">Rental *</Label>
+              <div className="flex min-w-0 gap-2">
+                <div className="min-w-0 flex-1">
+                  <Select value={rentalId} onValueChange={setRentalId} disabled={!needsRental}>
+                    <SelectTrigger className="w-full min-w-0" disabled={!needsRental}>
+                      <SelectValue placeholder="Select rental provider" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rentals.map((item: Master) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => openPartner("rental")}
+                  disabled={!needsRental}
+                  className="shrink-0 whitespace-nowrap px-2"
+                >
+                  Create New Rental
+                </Button>
+              </div>
+            </div>
+            <div className="col-span-1 min-w-0 space-y-1 sm:col-span-2 xl:col-span-2">
+              <Label className="text-xs font-semibold">Transporter *</Label>
+              <div className="flex min-w-0 gap-2">
+                <div className="min-w-0 flex-1">
+                  <Select
+                    value={transporterId}
+                    onValueChange={setTransporterId}
+                    disabled={!needsTransporter}
+                  >
+                    <SelectTrigger className="w-full min-w-0" disabled={!needsTransporter}>
+                      <SelectValue placeholder="Select transporter" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {transporters.map((item: Master) => (
+                        <SelectItem key={item.id} value={item.id}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => openPartner("transporter")}
+                  disabled={!needsTransporter}
+                  className="shrink-0 whitespace-nowrap px-2"
+                >
+                  Create New
+                </Button>
+              </div>
+            </div>
+          </div>
+        </section>
+        <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+          <h3 className="text-sm font-semibold text-sky-800">Pincodes</h3>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">From Pincode</Label>
               <Input
-                value={ewayNo}
-                onChange={(event) => setEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))}
+                className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+                value={fromPin}
+                onChange={(event) => setFromPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder={branch?.pin_code ?? "Branch pincode"}
+              />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">To Pincode *</Label>
+              <Input
+                className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+                value={toPin}
+                disabled={type !== "third_party" || movement !== "drop"}
+                onChange={(event) => setToPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
+                placeholder="Transporter pincode"
+              />
+            </div>
+          </div>
+        </section>
+        <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h3 className="text-sm font-semibold text-sky-800">E-Way Bills</h3>
+            <Button type="button" variant="outline" onClick={() => openManualShipment()}>
+              <Plus className="mr-1 size-4" /> Add Manually
+            </Button>
+          </div>
+          <div className="grid grid-cols-1 items-end gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">Add Another E-Way Bill No.</Label>
+              <Input
+                value={additionalEwayNo}
+                onChange={(event) =>
+                  setAdditionalEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))
+                }
                 placeholder="12-digit E-Way Bill Number"
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
-              <Button type="button" onClick={() => void addEway()} disabled={fetching}>
-                {fetching ? "Fetching…" : "Add"}
-              </Button>
             </div>
-          </div>
-        </div>
-        <CommonEwayDetails draft={common} />
-      </section>
-      <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
-        <h3 className="text-sm font-semibold text-sky-800">Transport Assignment</h3>
-        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-          <div className={`min-w-0 space-y-1 ${type !== "own" ? "opacity-60" : ""}`}>
-            <Label className="text-xs font-semibold">Own Transport Option *</Label>
-            <Select
-              value={ownTransportMode}
-              onValueChange={setOwnTransportMode}
-              disabled={type !== "own"}
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void addAdditionalEway()}
+              disabled={fetching || !additionalEwayNo}
             >
-              <SelectTrigger
-                className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs"
-                disabled={type !== "own"}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="own_vehicle">Own Vehicle</SelectItem>
-                <SelectItem value="rental">Rental Vehicle</SelectItem>
-              </SelectContent>
-            </Select>
+              {fetching ? "Fetching…" : "Verify / Add"}
+            </Button>
           </div>
-          <div className={`min-w-0 space-y-1 ${type !== "third_party" ? "opacity-60" : ""}`}>
-            <Label className="text-xs font-semibold">Movement *</Label>
-            <Select value={movement} onValueChange={setMovement} disabled={type !== "third_party"}>
-              <SelectTrigger
-                className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs"
-                disabled={type !== "third_party"}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="pickup">Pickup — transporter collects from us</SelectItem>
-                <SelectItem value="drop">Drop — our vehicle delivers to transporter</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="min-w-0">
-            <SelectField
-              label="Vehicle *"
-              value={vehicleId}
-              onChange={setVehicleId}
-              options={vehicles}
-              placeholder="Select company vehicle"
-              disabled={!needsOwnVehicle}
-            />
-          </div>
-          <div className="col-span-1 min-w-0 space-y-1 sm:col-span-2 xl:col-span-2">
-            <Label className="text-xs font-semibold">Rental *</Label>
-            <div className="flex min-w-0 gap-2">
-              <div className="min-w-0 flex-1">
-                <Select value={rentalId} onValueChange={setRentalId} disabled={!needsRental}>
-                  <SelectTrigger className="w-full min-w-0" disabled={!needsRental}>
-                    <SelectValue placeholder="Select rental provider" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {rentals.map((item: Master) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => openPartner("rental")}
-                disabled={!needsRental}
-                className="shrink-0 whitespace-nowrap px-2"
-              >
-                Create New Rental
-              </Button>
-            </div>
-          </div>
-          <div className="col-span-1 min-w-0 space-y-1 sm:col-span-2 xl:col-span-2">
-            <Label className="text-xs font-semibold">Transporter *</Label>
-            <div className="flex min-w-0 gap-2">
-              <div className="min-w-0 flex-1">
-                <Select
-                  value={transporterId}
-                  onValueChange={setTransporterId}
-                  disabled={!needsTransporter}
-                >
-                  <SelectTrigger className="w-full min-w-0" disabled={!needsTransporter}>
-                    <SelectValue placeholder="Select transporter" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {transporters.map((item: Master) => (
-                      <SelectItem key={item.id} value={item.id}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => openPartner("transporter")}
-                disabled={!needsTransporter}
-                className="shrink-0 whitespace-nowrap px-2"
-              >
-                Create New
-              </Button>
-            </div>
-          </div>
+          <EwayTable drafts={drafts} remove={removeEway} />
+        </section>
+        <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+          <h3 className="text-sm font-semibold text-sky-800">Goods from all E-Way Bills</h3>
+          <GoodsTable drafts={drafts} />
+        </section>
+        <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
+          <Button variant="outline" onClick={onBack}>
+            Cancel
+          </Button>
+          <Button onClick={() => void save()} disabled={loading || drafts.length === 0}>
+            {loading ? "Saving…" : "Create Consignment"}
+          </Button>
         </div>
-      </section>
-      <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
-        <h3 className="text-sm font-semibold text-sky-800">Pincodes</h3>
-        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
-          <div className="min-w-0 space-y-1">
-            <Label className="text-xs font-semibold">From Pincode</Label>
-            <Input
-              className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
-              value={fromPin}
-              onChange={(event) => setFromPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder={branch?.pin_code ?? "Branch pincode"}
-            />
-          </div>
-          <div className="min-w-0 space-y-1">
-            <Label className="text-xs font-semibold">To Pincode *</Label>
-            <Input
-              className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
-              value={toPin}
-              disabled={type !== "third_party" || movement !== "drop"}
-              onChange={(event) => setToPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
-              placeholder="Transporter pincode"
-            />
-          </div>
-        </div>
-      </section>
-      <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
-        <h3 className="text-sm font-semibold text-sky-800">E-Way Bills</h3>
-        <EwayTable
-          drafts={drafts}
-          remove={(index) =>
-            setDrafts((items: ShipmentDraft[]) =>
-              items.filter((_, itemIndex) => itemIndex !== index),
-            )
-          }
-        />
-      </section>
-      <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
-        <h3 className="text-sm font-semibold text-sky-800">Goods from all E-Way Bills</h3>
-        <GoodsTable drafts={drafts} />
-      </section>
-      <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
-        <Button variant="outline" onClick={onBack}>
-          Cancel
-        </Button>
-        <Button onClick={() => void save()} disabled={loading || drafts.length === 0}>
-          {loading ? "Saving…" : "Create Consignment"}
-        </Button>
       </div>
+      <ManualShipmentDialog
+        open={manualOpen}
+        draft={manualDraft}
+        setDraft={setManualDraft}
+        saving={manualSaving}
+        onClose={() => setManualOpen(false)}
+        onSave={() => void addManualShipment()}
+      />
+    </>
+  );
+}
+
+type EditableShipmentField = Exclude<keyof ShipmentDraft, "items">;
+
+function ManualShipmentDialog({
+  open,
+  draft,
+  setDraft,
+  saving,
+  onClose,
+  onSave,
+}: {
+  open: boolean;
+  draft: ShipmentDraft;
+  setDraft: Dispatch<SetStateAction<ShipmentDraft>>;
+  saving: boolean;
+  onClose: () => void;
+  onSave: () => void;
+}) {
+  const setField = (key: EditableShipmentField, value: string) =>
+    setDraft((current) => ({ ...current, [key]: value }));
+  const setItem = (index: number, key: string, value: string) =>
+    setDraft((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, [key]: value } : item,
+      ),
+    }));
+  const field = (key: EditableShipmentField, label: string, type = "text", required = false) => (
+    <div className="min-w-0 space-y-1">
+      <Label className="text-xs font-semibold">
+        {label}
+        {required ? " *" : ""}
+      </Label>
+      <Input
+        className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+        type={type}
+        required={required}
+        value={draft[key]}
+        onChange={(event) => setField(key, event.target.value)}
+      />
     </div>
+  );
+  const itemField = (
+    index: number,
+    key: string,
+    label: string,
+    type = "text",
+    required = false,
+  ) => (
+    <div className="min-w-0 space-y-1">
+      <Label className="text-xs font-semibold">
+        {label}
+        {required ? " *" : ""}
+      </Label>
+      <Input
+        className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+        type={type}
+        min={type === "number" ? 0 : undefined}
+        step={type === "number" ? "any" : undefined}
+        required={required}
+        value={String(draft.items[index]?.[key] ?? "")}
+        onChange={(event) => setItem(index, key, event.target.value)}
+      />
+    </div>
+  );
+
+  return (
+    <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
+      <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Add Shipment Manually</DialogTitle>
+          <p className="text-sm text-muted-foreground">
+            Complete the bill, both parties and product lines. No E-Way Bill service call will be
+            made.
+          </p>
+        </DialogHeader>
+        <div className="space-y-5 py-1">
+          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+            <h3 className="text-sm font-semibold text-sky-800">E-Way Bill and Document Details</h3>
+            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+              {field("eway_bill_number", "E-Way Bill Number", "text", true)}
+              {field("eway_bill_date", "E-Way Bill Date", "date", true)}
+              {field("eway_bill_status", "E-Way Bill Status")}
+              {field("valid_from", "Valid From", "date")}
+              {field("valid_until", "Valid Until", "date")}
+              {field("document_type", "Document Type", "text", true)}
+              {field("document_number", "Document Number", "text", true)}
+              {field("document_date", "Document Date", "date", true)}
+              <ReadonlyField dense label="Generation Mode" value="Manual" />
+              {field("transaction_type", "Transaction Type")}
+              {field("supply_type", "Supply Type")}
+              {field("sub_type", "Sub-Supply Type")}
+              {field("total_value", "Total Value", "number")}
+              {field("total_taxable_value", "Total Taxable Value", "number")}
+              {field("total_invoice_value", "Total Invoice Value", "number")}
+              {field("cgst_value", "Total CGST", "number")}
+              {field("sgst_value", "Total SGST / UTGST", "number")}
+              {field("igst_value", "Total IGST", "number")}
+              {field("cess_value", "Total Cess", "number")}
+              {field("cess_non_advol_value", "Total Cess Non-Advol", "number")}
+              {field("other_value", "Other Charges", "number")}
+              {field("transporter_id", "Transporter GSTIN / ID")}
+              {field("approximate_distance_km", "Approx. Distance (KM)", "number")}
+            </div>
+          </section>
+          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+            <h3 className="text-sm font-semibold text-sky-800">Consignor / From Party</h3>
+            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+              {field("supplier_gstin", "Consignor GSTIN")}
+              {field("supplier_trade_name", "Consignor Trade Name")}
+              {field("supplier_legal_name", "Consignor Legal Name")}
+              {field("supplier_address_line_1", "Consignor Address 1")}
+              {field("supplier_address_line_2", "Consignor Address 2")}
+              {field("supplier_place", "Consignor Place")}
+              {field("supplier_state", "Consignor State")}
+              {field("supplier_pin_code", "Consignor PIN Code")}
+            </div>
+          </section>
+          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+            <h3 className="text-sm font-semibold text-sky-800">Consignee / To Party</h3>
+            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+              {field("recipient_gstin", "Consignee GSTIN")}
+              {field("recipient_trade_name", "Consignee Trade Name")}
+              {field("recipient_legal_name", "Consignee Legal Name")}
+              {field("recipient_address_line_1", "Consignee Address 1")}
+              {field("recipient_address_line_2", "Consignee Address 2")}
+              {field("recipient_place", "Consignee Place")}
+              {field("recipient_state", "Consignee State")}
+              {field("recipient_pin_code", "Consignee PIN Code")}
+            </div>
+          </section>
+          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+            <h3 className="text-sm font-semibold text-sky-800">Dispatch From / Ship To</h3>
+            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+              {field("dispatch_from_address_line_1", "Dispatch From Address 1")}
+              {field("dispatch_from_address_line_2", "Dispatch From Address 2")}
+              {field("dispatch_from_place", "Dispatch From Place")}
+              {field("dispatch_from_state", "Dispatch From State")}
+              {field("dispatch_from_pin_code", "Dispatch From PIN")}
+              {field("ship_to_address_line_1", "Ship To Address 1")}
+              {field("ship_to_address_line_2", "Ship To Address 2")}
+              {field("ship_to_place", "Ship To Place")}
+              {field("ship_to_state", "Ship To State")}
+              {field("ship_to_pin_code", "Ship To PIN")}
+            </div>
+          </section>
+          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-semibold text-sky-800">Products / Goods</h3>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  setDraft((current) => ({
+                    ...current,
+                    items: [...current.items, emptyShipmentItem()],
+                  }))
+                }
+              >
+                <Plus className="mr-1 size-4" /> Add Product
+              </Button>
+            </div>
+            {draft.items.map((item, index) => (
+              <div key={index} className="space-y-3 border border-border p-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold uppercase tracking-wide">Product {index + 1}</h4>
+                  {draft.items.length > 1 && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() =>
+                        setDraft((current) => ({
+                          ...current,
+                          items: current.items.filter((_, itemIndex) => itemIndex !== index),
+                        }))
+                      }
+                      aria-label={`Remove product ${index + 1}`}
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+                  {itemField(index, "product_name", "Product Name")}
+                  {itemField(index, "description", "Description", "text", true)}
+                  {itemField(index, "hsn_code", "HSN Code", "text", true)}
+                  {itemField(index, "quantity", "Quantity", "number")}
+                  {itemField(index, "unit", "Unit")}
+                  {itemField(index, "weight_kg", "Weight (KG)", "number")}
+                  {itemField(index, "taxable_value", "Taxable Value", "number")}
+                  {itemField(index, "cgst_rate", "CGST %", "number")}
+                  {itemField(index, "sgst_rate", "SGST %", "number")}
+                  {itemField(index, "igst_rate", "IGST %", "number")}
+                  {itemField(index, "cess_rate", "Cess %", "number")}
+                  {itemField(index, "cess_nonadvol", "Cess Non-Advol", "number")}
+                  {itemField(index, "cgst", "CGST Amount", "number")}
+                  {itemField(index, "sgst_utgst", "SGST Amount", "number")}
+                  {itemField(index, "igst", "IGST Amount", "number")}
+                  {itemField(index, "cess", "Cess Amount", "number")}
+                  {itemField(index, "other_tax_charges", "Other Tax Charges", "number")}
+                  {itemField(index, "total_invoice_value", "Invoice Value", "number")}
+                </div>
+              </div>
+            ))}
+          </section>
+        </div>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+            Cancel
+          </Button>
+          <Button type="button" onClick={onSave} disabled={saving}>
+            {saving ? "Adding…" : "Add Manual Shipment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

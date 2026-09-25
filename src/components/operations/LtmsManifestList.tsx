@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSession } from "@/lib/session";
+import { isManualEwayBill } from "@/lib/ewaybill-generation";
 import {
   serverTransferManifestLrs,
   serverRecordLtmsManifestTransfer,
@@ -603,7 +604,7 @@ export function LtmsManifestList({
     let manifestQuery = db
       .from("ltms_manifest_transfers")
       .select(
-        "id,branch_id,manifest_number,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(*),items:ltms_manifest_transfer_items(id,consignment_id,consignment_number,shipment_id,eway_bill_number,transfer_status,transfer_error,consignment:consignments(id,consignment_number,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_update_status,created_at,branch:branches(branch_name)),shipment:shipments(id,eway_bill_number,eway_bill_status,recipient_trade_name,recipient_gstin,recipient_place,recipient_pin_code,dispatch_from_place,dispatch_from_pin_code,ship_to_place,ship_to_pin_code,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)))",
+        "id,branch_id,manifest_number,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(*),items:ltms_manifest_transfer_items(id,consignment_id,consignment_number,shipment_id,eway_bill_number,transfer_status,transfer_error,consignment:consignments(id,consignment_number,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_update_status,created_at,branch:branches(branch_name)),shipment:shipments(id,eway_bill_number,eway_bill_status,generation_mode,recipient_trade_name,recipient_gstin,recipient_place,recipient_pin_code,dispatch_from_place,dispatch_from_pin_code,ship_to_place,ship_to_pin_code,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)))",
       )
       .order("created_at", { ascending: false });
     if (allowedBranches !== null) {
@@ -643,7 +644,7 @@ export function LtmsManifestList({
       ? await db
           .from("shipments")
           .select(
-            "id,consignment_id,eway_bill_number,eway_bill_status,recipient_trade_name,recipient_gstin,recipient_place,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)",
+            "id,consignment_id,eway_bill_number,eway_bill_status,generation_mode,recipient_trade_name,recipient_gstin,recipient_place,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)",
           )
           .in("consignment_id", ids)
       : { data: [], error: null };
@@ -709,15 +710,19 @@ export function LtmsManifestList({
       }
       for (const [branchId, branchEntries] of byBranch) {
         const entriesByEwb = new Map<string, Array<{ row: Consignment; shipment: Shipment }>>();
+        const results = new Map<string, { ok: boolean; error?: string }>();
         for (const entry of branchEntries) {
           const number = String(entry.shipment.eway_bill_number ?? "");
           if (!/^\d{12}$/.test(number)) continue;
+          if (isManualEwayBill(entry.shipment)) {
+            results.set(number, { ok: true });
+            continue;
+          }
           const list = entriesByEwb.get(number) ?? [];
           list.push(entry);
           entriesByEwb.set(number, list);
         }
         const ewayBillNumbers = [...entriesByEwb.keys()];
-        const results = new Map<string, { ok: boolean; error?: string }>();
         for (let offset = 0; offset < ewayBillNumbers.length; offset += 100) {
           const result = await serverTransferManifestLrs({
             data: {
@@ -754,8 +759,11 @@ export function LtmsManifestList({
             items: manifestItems,
           },
         });
+        const manualCount = branchEntries.filter(({ shipment }) =>
+          isManualEwayBill(shipment),
+        ).length;
         toast[saved.transferStatus === "transferred" ? "success" : "error"](
-          `Manifest ${saved.manifestNumber} recorded for ${profile.transporter_name || "ORCA"} (${saved.transferStatus})`,
+          `Manifest ${saved.manifestNumber} recorded for ${profile.transporter_name || "ORCA"} (${saved.transferStatus})${manualCount ? ` · ${manualCount} manual bill(s) updated in-app; E-Way Bill API skipped` : ""}`,
         );
       }
       const failed = rows
