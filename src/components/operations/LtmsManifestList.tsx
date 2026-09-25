@@ -372,103 +372,126 @@ function ManifestDetailView({
           </span>
         </div>
         {grouped.size ? (
-          [...grouped.entries()].map(([key, group]) => (
-            <article key={key} className="space-y-3 rounded-xl border border-border bg-card p-4">
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <Label className="text-xs text-muted-foreground">Consignment</Label>
-                  <p className="font-semibold">
-                    {show(
-                      group.consignment.consignment_number || group.items[0]?.consignment_number,
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Branch</Label>
-                  <p>
-                    {show(
-                      relatedRecord(group.consignment.branch).branch_name ||
-                        relatedRecord(manifest.branch).branch_name,
-                    )}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">Type / Mode</Label>
-                  <p>
-                    {show(group.consignment.consignment_type)} /{" "}
-                    {show(group.consignment.movement_mode)}
-                  </p>
-                </div>
-                <div>
-                  <Label className="text-xs text-muted-foreground">From → To</Label>
-                  <p>
-                    {show(group.consignment.from_pin_code)} → {show(group.consignment.to_pin_code)}
-                  </p>
-                </div>
-              </div>
-              <div className="space-y-3">
-                {group.items.map((item, index) => {
-                  const shipment = relatedRecord(item.shipment);
-                  return (
-                    <section
-                      key={item.id ?? index}
-                      className="overflow-hidden rounded-lg border border-border/70"
-                    >
-                      <div className="grid gap-2 bg-muted/30 p-3 text-xs sm:grid-cols-2 lg:grid-cols-7">
-                        <div>
-                          <Label className="text-[11px] text-muted-foreground">E-Way Bill</Label>
-                          <p className="font-semibold">
-                            {show(shipment.eway_bill_number || item.eway_bill_number)}
-                          </p>
-                        </div>
-                        <div>
-                          <Label className="text-[11px] text-muted-foreground">Recipient</Label>
-                          <p>{show(shipment.recipient_trade_name)}</p>
-                        </div>
-                        <div>
-                          <Label className="text-[11px] text-muted-foreground">
-                            Recipient GSTIN
-                          </Label>
-                          <p>{show(shipment.recipient_gstin)}</p>
-                        </div>
-                        <div>
-                          <Label className="text-[11px] text-muted-foreground">Place</Label>
-                          <p>{show(shipment.recipient_place)}</p>
-                        </div>
-                        <div>
-                          <Label className="text-[11px] text-muted-foreground">Valid Until</Label>
-                          <p>
-                            {shipment.valid_until
-                              ? new Date(shipment.valid_until).toLocaleString("en-GB")
-                              : "—"}
-                          </p>
-                        </div>
-                        <div>
-                          <Label className="text-[11px] text-muted-foreground">
-                            E-Way Bill Status
-                          </Label>
-                          <p>{show(shipment.eway_bill_status)}</p>
-                        </div>
-                        <div>
-                          <Label className="text-[11px] text-muted-foreground">
-                            Transfer Result
-                          </Label>
-                          <p>{item.transfer_status === "transferred" ? "Transferred" : "Failed"}</p>
-                        </div>
-                      </div>
-                      {item.transfer_error && (
-                        <p className="px-3 py-2 text-xs text-destructive">{item.transfer_error}</p>
+          [...grouped.entries()].map(([key, group]) => {
+            const fromDetails = relatedRecord(group.consignment.from_details);
+            const toDetails = relatedRecord(group.consignment.to_details);
+            const firstShipment = relatedRecord(group.items[0]?.shipment);
+            const fromLocation =
+              fromDetails.place ||
+              firstShipment.dispatch_from_place ||
+              fromDetails.pincode ||
+              firstShipment.dispatch_from_pin_code ||
+              group.consignment.from_pin_code;
+            const toLocation =
+              toDetails.place ||
+              firstShipment.ship_to_place ||
+              firstShipment.recipient_place ||
+              toDetails.pincode ||
+              firstShipment.ship_to_pin_code ||
+              firstShipment.recipient_pin_code ||
+              group.consignment.to_pin_code;
+            return (
+              <article key={key} className="space-y-3 rounded-xl border border-border bg-card p-4">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Consignment</Label>
+                    <p className="font-semibold">
+                      {show(
+                        group.consignment.consignment_number || group.items[0]?.consignment_number,
                       )}
-                      <div className="border-t border-border/70">
-                        <h4 className="px-3 pt-3 text-sm font-medium">Goods</h4>
-                        <GoodsTable items={shipment.shipment_items ?? []} />
-                      </div>
-                    </section>
-                  );
-                })}
-              </div>
-            </article>
-          ))
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Branch</Label>
+                    <p>
+                      {show(
+                        relatedRecord(group.consignment.branch).branch_name ||
+                          relatedRecord(manifest.branch).branch_name,
+                      )}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">Type / Mode</Label>
+                    <p>
+                      {show(group.consignment.consignment_type)} /{" "}
+                      {show(group.consignment.movement_mode)}
+                    </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">From → To</Label>
+                    <p>
+                      {show(fromLocation)} → {show(toLocation)}
+                    </p>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  {group.items.map((item, index) => {
+                    const shipment = relatedRecord(item.shipment);
+                    return (
+                      <section
+                        key={item.id ?? index}
+                        className="overflow-hidden rounded-lg border border-border/70"
+                      >
+                        <div className="grid gap-2 bg-muted/30 p-3 text-xs sm:grid-cols-2 lg:grid-cols-7">
+                          <div>
+                            <Label className="text-[11px] text-muted-foreground">E-Way Bill</Label>
+                            <p className="font-semibold">
+                              {show(shipment.eway_bill_number || item.eway_bill_number)}
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-[11px] text-muted-foreground">Recipient</Label>
+                            <p>{show(shipment.recipient_trade_name)}</p>
+                          </div>
+                          <div>
+                            <Label className="text-[11px] text-muted-foreground">
+                              Recipient GSTIN
+                            </Label>
+                            <p>{show(shipment.recipient_gstin)}</p>
+                          </div>
+                          <div>
+                            <Label className="text-[11px] text-muted-foreground">Place</Label>
+                            <p>{show(shipment.recipient_place)}</p>
+                          </div>
+                          <div>
+                            <Label className="text-[11px] text-muted-foreground">Valid Until</Label>
+                            <p>
+                              {shipment.valid_until
+                                ? new Date(shipment.valid_until).toLocaleString("en-GB")
+                                : "—"}
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-[11px] text-muted-foreground">
+                              E-Way Bill Status
+                            </Label>
+                            <p>{show(shipment.eway_bill_status)}</p>
+                          </div>
+                          <div>
+                            <Label className="text-[11px] text-muted-foreground">
+                              Transfer Result
+                            </Label>
+                            <p>
+                              {item.transfer_status === "transferred" ? "Transferred" : "Failed"}
+                            </p>
+                          </div>
+                        </div>
+                        {item.transfer_error && (
+                          <p className="px-3 py-2 text-xs text-destructive">
+                            {item.transfer_error}
+                          </p>
+                        )}
+                        <div className="border-t border-border/70">
+                          <h4 className="px-3 pt-3 text-sm font-medium">Goods</h4>
+                          <GoodsTable items={shipment.shipment_items ?? []} />
+                        </div>
+                      </section>
+                    );
+                  })}
+                </div>
+              </article>
+            );
+          })
         ) : (
           <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
             No consignment details are linked to this manifest.
@@ -567,7 +590,7 @@ export function LtmsManifestList() {
     let manifestQuery = db
       .from("ltms_manifest_transfers")
       .select(
-        "id,branch_id,manifest_number,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(*),items:ltms_manifest_transfer_items(id,consignment_id,consignment_number,shipment_id,eway_bill_number,transfer_status,transfer_error,consignment:consignments(id,consignment_number,consignment_type,movement_mode,from_pin_code,to_pin_code,transporter_update_status,created_at,branch:branches(branch_name)),shipment:shipments(id,eway_bill_number,eway_bill_status,recipient_trade_name,recipient_gstin,recipient_place,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)))",
+        "id,branch_id,manifest_number,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(*),items:ltms_manifest_transfer_items(id,consignment_id,consignment_number,shipment_id,eway_bill_number,transfer_status,transfer_error,consignment:consignments(id,consignment_number,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_update_status,created_at,branch:branches(branch_name)),shipment:shipments(id,eway_bill_number,eway_bill_status,recipient_trade_name,recipient_gstin,recipient_place,recipient_pin_code,dispatch_from_place,dispatch_from_pin_code,ship_to_place,ship_to_pin_code,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)))",
       )
       .order("created_at", { ascending: false });
     if (allowedBranches !== null) {
