@@ -1084,8 +1084,10 @@ function ConsignmentForm(props: any) {
       </section>
       <section className="space-y-2 border border-border p-2">
         <h3 className="font-semibold">Transport Assignment</h3>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-          <div className={`space-y-1.5 ${type !== "own" ? "opacity-60" : ""}`}>
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-6 lg:grid-cols-12">
+          <div
+            className={`space-y-1.5 sm:col-span-2 lg:col-span-2 ${type !== "own" ? "opacity-60" : ""}`}
+          >
             <Label>Own Transport Option *</Label>
             <Select
               value={ownTransportMode}
@@ -1101,7 +1103,9 @@ function ConsignmentForm(props: any) {
               </SelectContent>
             </Select>
           </div>
-          <div className={`space-y-1.5 ${type !== "third_party" ? "opacity-60" : ""}`}>
+          <div
+            className={`space-y-1.5 sm:col-span-2 lg:col-span-2 ${type !== "third_party" ? "opacity-60" : ""}`}
+          >
             <Label>Movement *</Label>
             <Select value={movement} onValueChange={setMovement} disabled={type !== "third_party"}>
               <SelectTrigger disabled={type !== "third_party"}>
@@ -1113,20 +1117,22 @@ function ConsignmentForm(props: any) {
               </SelectContent>
             </Select>
           </div>
-          <SelectField
-            label="Vehicle *"
-            value={vehicleId}
-            onChange={setVehicleId}
-            options={vehicles}
-            placeholder="Select company vehicle"
-            disabled={!needsOwnVehicle}
-          />
-          <div className="space-y-1.5">
+          <div className="sm:col-span-2 lg:col-span-2">
+            <SelectField
+              label="Vehicle *"
+              value={vehicleId}
+              onChange={setVehicleId}
+              options={vehicles}
+              placeholder="Select company vehicle"
+              disabled={!needsOwnVehicle}
+            />
+          </div>
+          <div className="col-span-2 min-w-0 space-y-1.5 sm:col-span-3 lg:col-span-3">
             <Label>Rental *</Label>
-            <div className="flex gap-2">
+            <div className="flex min-w-0 gap-2">
               <div className="min-w-0 flex-1">
                 <Select value={rentalId} onValueChange={setRentalId} disabled={!needsRental}>
-                  <SelectTrigger disabled={!needsRental}>
+                  <SelectTrigger className="w-full min-w-0" disabled={!needsRental}>
                     <SelectValue placeholder="Select rental provider" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1143,21 +1149,22 @@ function ConsignmentForm(props: any) {
                 variant="outline"
                 onClick={() => openPartner("rental")}
                 disabled={!needsRental}
+                className="shrink-0 whitespace-nowrap px-2"
               >
                 Create New Rental
               </Button>
             </div>
           </div>
-          <div className="space-y-1.5">
+          <div className="col-span-2 min-w-0 space-y-1.5 sm:col-span-3 lg:col-span-3">
             <Label>Transporter *</Label>
-            <div className="flex gap-2">
+            <div className="flex min-w-0 gap-2">
               <div className="min-w-0 flex-1">
                 <Select
                   value={transporterId}
                   onValueChange={setTransporterId}
                   disabled={!needsTransporter}
                 >
-                  <SelectTrigger disabled={!needsTransporter}>
+                  <SelectTrigger className="w-full min-w-0" disabled={!needsTransporter}>
                     <SelectValue placeholder="Select transporter" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1174,6 +1181,7 @@ function ConsignmentForm(props: any) {
                 variant="outline"
                 onClick={() => openPartner("transporter")}
                 disabled={!needsTransporter}
+                className="shrink-0 whitespace-nowrap px-2"
               >
                 Create New
               </Button>
