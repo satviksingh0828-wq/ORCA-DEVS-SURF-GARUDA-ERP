@@ -35,6 +35,9 @@ type ShipmentDraft = {
   valid_until: string;
   document_number: string;
   document_date: string;
+  total_value: string;
+  total_taxable_value: string;
+  total_invoice_value: string;
   generation_mode: string;
   generation_mode_code: string;
   transaction_type: string;
@@ -238,6 +241,26 @@ function mapEway(raw: unknown): ShipmentDraft {
   const subSupplyCode = read(source, "subSupplyType") || read(source, "subType");
   const generationCode = read(source, "genMode") || read(source, "generatedBy") || "API";
   const itemList = findGoodsList(source);
+  const itemInvoiceTotal = itemList.reduce(
+    (total, item) =>
+      total +
+      numberValue(
+        readAny(
+          item,
+          "totalInvoiceValue",
+          "total_invoice_value",
+          "taxableAmount",
+          "taxable_amount",
+        ),
+      ),
+    0,
+  );
+  const totalInvoiceValue =
+    readAny(source, "totInvValue", "totalInvoiceValue", "total_invoice_value") ||
+    (itemInvoiceTotal ? String(itemInvoiceTotal) : "0");
+  const totalTaxableValue =
+    readAny(source, "totalTaxableValue", "total_taxable_value", "taxableValue", "taxable_value") ||
+    (itemInvoiceTotal ? String(itemInvoiceTotal) : "0");
   return {
     eway_bill_number: read(source, "ewbNo") || read(source, "ewayBillNo"),
     eway_bill_date: dateOnly(source.ewayBillDate || source.ewayBillDateStr),
@@ -246,6 +269,9 @@ function mapEway(raw: unknown): ShipmentDraft {
     document_number: read(source, "docNo"),
     document_date:
       dateOnly(source.docDate) || dateOnly(source.ewayBillDate || source.ewayBillDateStr),
+    total_value: readAny(source, "totalValue", "total_value", "valueOfGoods") || totalTaxableValue,
+    total_taxable_value: totalTaxableValue,
+    total_invoice_value: totalInvoiceValue,
     generation_mode_code: generationCode,
     generation_mode: humanLabel(generationModeLabel, generationCode, "API"),
     transaction_type_code: transactionCode,
