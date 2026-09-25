@@ -217,7 +217,7 @@ export const TRANSPORTER_CONFIG: MasterConfig = {
         { key: "city", label: "City" },
         { key: "state", label: "State" },
         { key: "country", label: "Country" },
-        { key: "pin_code", label: "PIN Code" },
+        { key: "pin_code", label: "PIN Code", required: true },
       ],
     },
     {
@@ -264,7 +264,9 @@ export const RENTAL_CONFIG: MasterConfig = {
     fields: section.fields.map((field) =>
       field.key === "transporter_name"
         ? { ...field, key: "rental_name", label: "Rental Name" }
-        : field,
+        : field.key === "pin_code"
+          ? { ...field, required: false }
+          : field,
     ),
   })) as any,
 };

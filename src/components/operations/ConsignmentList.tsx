@@ -477,6 +477,8 @@ export function ConsignmentList() {
       );
     if (!partnerForm.gstin.trim())
       return toast.error("GSTIN is mandatory for Transporters and Rentals");
+    if (partnerDialog === "transporter" && !partnerForm.pin.trim())
+      return toast.error("PIN Code is mandatory for Transporters");
     const payload = {
       [nameColumn]: partnerForm.name.trim(),
       legal_business_name: partnerForm.legalName,
@@ -887,6 +889,8 @@ function ConsignmentForm(props: any) {
             options={contracts}
             placeholder="Select source"
           />
+          <ReadonlyField label="Consignment From PIN" value={common?.supplier_pin_code} />
+          <ReadonlyField label="Consignment To PIN" value={common?.recipient_pin_code} />
           <div className="space-y-1.5">
             <Label>Type *</Label>
             <Select value={type} onValueChange={setType}>
@@ -1274,7 +1278,7 @@ function PartnerDialog({
           <div className="grid gap-3 md:grid-cols-3">
             {field("gstin", "GSTIN", "text", true)}
             {field("pan", "PAN")}
-            {field("pin", "PIN Code")}
+            {field("pin", "PIN Code", "text", kind === "transporter")}
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {field("address1", "Address Line 1")}
