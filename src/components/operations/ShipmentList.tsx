@@ -107,6 +107,7 @@ type Form = {
 
 type Shipment = Form & {
   id: string;
+  consignment_number?: string;
   total_taxable_value: number;
   total_invoice_value: number;
   item_count: number;
@@ -129,8 +130,10 @@ type PartBHistory = {
   updated_at: string;
 };
 
-const transportModeLabel = (mode: string) => ({ "1": "Road", "2": "Rail", "3": "Air", "4": "Ship" }[mode] ?? mode ?? "—");
-const vehicleTypeLabel = (type: string) => type === "O" ? "ODC" : type === "R" ? "Regular" : type || "—";
+const transportModeLabel = (mode: string) =>
+  ({ "1": "Road", "2": "Rail", "3": "Air", "4": "Ship" })[mode] ?? mode ?? "—";
+const vehicleTypeLabel = (type: string) =>
+  type === "O" ? "ODC" : type === "R" ? "Regular" : type || "—";
 
 const blankItem = (): Item => ({
   product_name: "",
@@ -217,7 +220,8 @@ const money = (v: number) =>
 function ewayDate(value: unknown): string {
   const text = String(value ?? "");
   const match = text.match(/^(\d{2})\/(\d{2})\/(\d{4})(?:\s+(\d{2}):(\d{2}))?/);
-  if (match) return `${match[3]}-${match[2]}-${match[1]}${match[4] ? `T${match[4]}:${match[5]}` : ""}`;
+  if (match)
+    return `${match[3]}-${match[2]}-${match[1]}${match[4] ? `T${match[4]}:${match[5]}` : ""}`;
   return text.slice(0, 10);
 }
 
@@ -271,7 +275,12 @@ function PartySection({
 }) {
   const get = (key: string) => form[`${prefix}_${key}` as keyof Form] as string;
   const set = (key: string, value: string) => setForm({ ...form, [`${prefix}_${key}`]: value });
-  const actualState = prefix === "supplier" ? form.actual_from_state_code : prefix === "recipient" ? form.actual_to_state_code : "";
+  const actualState =
+    prefix === "supplier"
+      ? form.actual_from_state_code
+      : prefix === "recipient"
+        ? form.actual_to_state_code
+        : "";
   return (
     <section className="space-y-3 rounded-xl border border-border p-4">
       <h3 className="font-semibold">{title}</h3>
@@ -301,19 +310,54 @@ function PartySection({
             readOnly={readOnly}
           />
         )}
-        <Field label="Address Line 1" value={get("address_line_1")} onChange={(v) => set("address_line_1", v)} readOnly={readOnly} />
-        <Field label="Address Line 2" value={get("address_line_2")} onChange={(v) => set("address_line_2", v)} readOnly={readOnly} />
+        <Field
+          label="Address Line 1"
+          value={get("address_line_1")}
+          onChange={(v) => set("address_line_1", v)}
+          readOnly={readOnly}
+        />
+        <Field
+          label="Address Line 2"
+          value={get("address_line_2")}
+          onChange={(v) => set("address_line_2", v)}
+          readOnly={readOnly}
+        />
         <div className="md:col-span-2">
-          <Field label="Combined Address" value={get("address")} onChange={(v) => set("address", v)} readOnly={readOnly} />
+          <Field
+            label="Combined Address"
+            value={get("address")}
+            onChange={(v) => set("address", v)}
+            readOnly={readOnly}
+          />
         </div>
-        <Field label="Place" value={get("place")} onChange={(v) => set("place", v)} readOnly={readOnly} />
-        <Field label="State" value={get("state")} onChange={(v) => set("state", v)} readOnly={readOnly} />
-        <Field label="PIN Code" value={get("pin_code")} onChange={(v) => set("pin_code", v)} readOnly={readOnly} />
+        <Field
+          label="Place"
+          value={get("place")}
+          onChange={(v) => set("place", v)}
+          readOnly={readOnly}
+        />
+        <Field
+          label="State"
+          value={get("state")}
+          onChange={(v) => set("state", v)}
+          readOnly={readOnly}
+        />
+        <Field
+          label="PIN Code"
+          value={get("pin_code")}
+          onChange={(v) => set("pin_code", v)}
+          readOnly={readOnly}
+        />
         {(prefix === "supplier" || prefix === "recipient") && (
           <Field
             label="Actual State Code"
             value={actualState}
-            onChange={(v) => setForm({ ...form, [prefix === "supplier" ? "actual_from_state_code" : "actual_to_state_code"]: v })}
+            onChange={(v) =>
+              setForm({
+                ...form,
+                [prefix === "supplier" ? "actual_from_state_code" : "actual_to_state_code"]: v,
+              })
+            }
             readOnly={readOnly}
           />
         )}
@@ -339,51 +383,229 @@ function ShipmentView({
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <div>
-          <button type="button" className="mb-2 text-sm text-muted-foreground hover:text-foreground" onClick={onBack}>← Back to Shipments</button>
+          <button
+            type="button"
+            className="mb-2 text-sm text-muted-foreground hover:text-foreground"
+            onClick={onBack}
+          >
+            ← Back to Shipments
+          </button>
           <h2 className="text-xl font-semibold">Shipment Details — {shipment.eway_bill_number}</h2>
           <p className="text-sm text-muted-foreground">E-Way Bill and shipment details</p>
         </div>
       </div>
       <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-3">
-        <Field label="E-Way Bill Number" value={shipment.eway_bill_number} onChange={() => {}} readOnly />
-        <Field label="E-Way Bill Date" value={shipment.eway_bill_date} onChange={() => {}} readOnly />
+        <Field
+          label="E-Way Bill Number"
+          value={shipment.eway_bill_number}
+          onChange={() => {}}
+          readOnly
+        />
+        <Field
+          label="E-Way Bill Date"
+          value={shipment.eway_bill_date}
+          onChange={() => {}}
+          readOnly
+        />
         <Field label="Status" value={shipment.eway_bill_status} onChange={() => {}} readOnly />
         <Field label="Supply Type" value={shipment.supply_type} onChange={() => {}} readOnly />
         <Field label="Sub-Supply Type" value={shipment.sub_type} onChange={() => {}} readOnly />
-        <Field label="Sub-Supply Description" value={shipment.sub_supply_desc} onChange={() => {}} readOnly />
+        <Field
+          label="Sub-Supply Description"
+          value={shipment.sub_supply_desc}
+          onChange={() => {}}
+          readOnly
+        />
         <Field label="Document Type" value={shipment.document_type} onChange={() => {}} readOnly />
-        <Field label="Document Number" value={shipment.document_number} onChange={() => {}} readOnly />
+        <Field
+          label="Document Number"
+          value={shipment.document_number}
+          onChange={() => {}}
+          readOnly
+        />
         <Field label="Document Date" value={shipment.document_date} onChange={() => {}} readOnly />
+        <Field
+          label="Consignment Number"
+          value={shipment.consignment_number ?? ""}
+          onChange={() => {}}
+          readOnly
+        />
         <Field label="Branch" value={branchName(shipment.branch_id)} onChange={() => {}} readOnly />
       </div>
       <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-3">
-        <Field label="Transaction Type" value={shipment.transaction_type} onChange={() => {}} readOnly />
-        <Field label="Value of Goods / Taxable Value" value={shipment.total_value} onChange={() => {}} readOnly />
-        <Field label="Total Invoice Value" value={shipment.total_invoice_value} onChange={() => {}} readOnly />
+        <Field
+          label="Transaction Type"
+          value={shipment.transaction_type}
+          onChange={() => {}}
+          readOnly
+        />
+        <Field
+          label="Value of Goods / Taxable Value"
+          value={shipment.total_value}
+          onChange={() => {}}
+          readOnly
+        />
+        <Field
+          label="Total Invoice Value"
+          value={shipment.total_invoice_value}
+          onChange={() => {}}
+          readOnly
+        />
         <Field label="CGST Value" value={shipment.cgst_value} onChange={() => {}} readOnly />
         <Field label="SGST Value" value={shipment.sgst_value} onChange={() => {}} readOnly />
         <Field label="IGST Value" value={shipment.igst_value} onChange={() => {}} readOnly />
         <Field label="Cess Value" value={shipment.cess_value} onChange={() => {}} readOnly />
-        <Field label="Cess Non-Advol Value" value={shipment.cess_non_advol_value} onChange={() => {}} readOnly />
-        <Field label="Other Value / Charges" value={shipment.other_value} onChange={() => {}} readOnly />
+        <Field
+          label="Cess Non-Advol Value"
+          value={shipment.cess_non_advol_value}
+          onChange={() => {}}
+          readOnly
+        />
+        <Field
+          label="Other Value / Charges"
+          value={shipment.other_value}
+          onChange={() => {}}
+          readOnly
+        />
       </div>
-      <PartySection title="Supplier / Consignor" prefix="supplier" form={shipment} setForm={() => {}} readOnly />
-      <PartySection title="Recipient / Consignee" prefix="recipient" form={shipment} setForm={() => {}} readOnly />
-      <PartySection title="Dispatch From" prefix="dispatch_from" form={shipment} setForm={() => {}} readOnly />
+      <PartySection
+        title="Supplier / Consignor"
+        prefix="supplier"
+        form={shipment}
+        setForm={() => {}}
+        readOnly
+      />
+      <PartySection
+        title="Recipient / Consignee"
+        prefix="recipient"
+        form={shipment}
+        setForm={() => {}}
+        readOnly
+      />
+      <PartySection
+        title="Dispatch From"
+        prefix="dispatch_from"
+        form={shipment}
+        setForm={() => {}}
+        readOnly
+      />
       <PartySection title="Ship To" prefix="ship_to" form={shipment} setForm={() => {}} readOnly />
       <div className="rounded-xl border border-border p-4">
         <h3 className="mb-3 font-semibold">Goods / Invoice Details</h3>
-        <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Product Name</th><th className="px-2 py-2">Description</th><th className="px-2 py-2">HSN</th><th className="px-2 py-2">Quantity / Unit</th><th className="px-2 py-2">Taxable</th><th className="px-2 py-2">CGST %</th><th className="px-2 py-2">SGST %</th><th className="px-2 py-2">IGST %</th><th className="px-2 py-2">Cess %</th><th className="px-2 py-2">Cess Non-Advol</th><th className="px-2 py-2 text-right">Invoice Value</th></tr></thead><tbody>{items.map((item, index) => <tr key={`${item.description}-${index}`} className="border-t border-border"><td className="px-2 py-2">{item.product_name || "—"}</td><td className="px-2 py-2">{item.description}</td><td className="px-2 py-2">{item.hsn_code}</td><td className="px-2 py-2">{item.quantity} {item.unit}</td><td className="px-2 py-2">{money(n(item.taxable_value))}</td><td className="px-2 py-2">{item.cgst_rate || "0"}</td><td className="px-2 py-2">{item.sgst_rate || "0"}</td><td className="px-2 py-2">{item.igst_rate || "0"}</td><td className="px-2 py-2">{item.cess_rate || "0"}</td><td className="px-2 py-2">{item.cess_nonadvol || "0"}</td><td className="px-2 py-2 text-right">{money(n(item.total_invoice_value))}</td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1100px] text-sm">
+            <thead className="text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-2 py-2">Product Name</th>
+                <th className="px-2 py-2">Description</th>
+                <th className="px-2 py-2">HSN</th>
+                <th className="px-2 py-2">Quantity / Unit</th>
+                <th className="px-2 py-2">Taxable</th>
+                <th className="px-2 py-2">CGST %</th>
+                <th className="px-2 py-2">SGST %</th>
+                <th className="px-2 py-2">IGST %</th>
+                <th className="px-2 py-2">Cess %</th>
+                <th className="px-2 py-2">Cess Non-Advol</th>
+                <th className="px-2 py-2 text-right">Invoice Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((item, index) => (
+                <tr key={`${item.description}-${index}`} className="border-t border-border">
+                  <td className="px-2 py-2">{item.product_name || "—"}</td>
+                  <td className="px-2 py-2">{item.description}</td>
+                  <td className="px-2 py-2">{item.hsn_code}</td>
+                  <td className="px-2 py-2">
+                    {item.quantity} {item.unit}
+                  </td>
+                  <td className="px-2 py-2">{money(n(item.taxable_value))}</td>
+                  <td className="px-2 py-2">{item.cgst_rate || "0"}</td>
+                  <td className="px-2 py-2">{item.sgst_rate || "0"}</td>
+                  <td className="px-2 py-2">{item.igst_rate || "0"}</td>
+                  <td className="px-2 py-2">{item.cess_rate || "0"}</td>
+                  <td className="px-2 py-2">{item.cess_nonadvol || "0"}</td>
+                  <td className="px-2 py-2 text-right">{money(n(item.total_invoice_value))}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
         <div className="flex flex-wrap justify-end gap-5 border-t border-border pt-3 text-sm">
-          <span>Taxable total: <strong>{money(items.reduce((sum, item) => sum + n(item.taxable_value), 0))}</strong></span>
-          <span>Invoice total: <strong>{money(items.reduce((sum, item) => sum + n(item.total_invoice_value), 0))}</strong></span>
-          <span>Total quantity: <strong>{items.reduce((sum, item) => sum + n(item.quantity), 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</strong></span>
-          <span>Total Weight (in kg): <strong>{items.reduce((sum, item) => sum + n(item.weight_kg), 0).toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg</strong></span>
+          <span>
+            Taxable total:{" "}
+            <strong>{money(items.reduce((sum, item) => sum + n(item.taxable_value), 0))}</strong>
+          </span>
+          <span>
+            Invoice total:{" "}
+            <strong>
+              {money(items.reduce((sum, item) => sum + n(item.total_invoice_value), 0))}
+            </strong>
+          </span>
+          <span>
+            Total quantity:{" "}
+            <strong>
+              {items
+                .reduce((sum, item) => sum + n(item.quantity), 0)
+                .toLocaleString("en-IN", { maximumFractionDigits: 3 })}
+            </strong>
+          </span>
+          <span>
+            Total Weight (in kg):{" "}
+            <strong>
+              {items
+                .reduce((sum, item) => sum + n(item.weight_kg), 0)
+                .toLocaleString("en-IN", { maximumFractionDigits: 3 })}{" "}
+              kg
+            </strong>
+          </span>
         </div>
       </div>
       <div className="rounded-xl border border-border p-4">
         <h3 className="mb-3 font-semibold">Part-B Update History</h3>
-        {history.length === 0 ? <p className="text-sm text-muted-foreground">No Part-B updates have been stored for this shipment.</p> : <div className="overflow-x-auto"><table className="w-full min-w-[1250px] text-sm"><thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Updated</th><th className="px-2 py-2">Transport Mode</th><th className="px-2 py-2">Transporter ID</th><th className="px-2 py-2">Transporter Name</th><th className="px-2 py-2">Transport Document No.</th><th className="px-2 py-2">Document Date</th><th className="px-2 py-2">Vehicle Number</th><th className="px-2 py-2">Vehicle Type</th><th className="px-2 py-2">Distance (KM)</th><th className="px-2 py-2">From</th></tr></thead><tbody>{history.map((entry) => <tr key={entry.id} className="border-t border-border"><td className="px-2 py-2">{new Date(entry.updated_at).toLocaleString("en-IN")}</td><td className="px-2 py-2">{transportModeLabel(entry.trans_mode)}</td><td className="px-2 py-2">{entry.transporter_id || "—"}</td><td className="px-2 py-2">{entry.transporter_name || "—"}</td><td className="px-2 py-2">{entry.trans_doc_no || "—"}</td><td className="px-2 py-2">{entry.trans_doc_date || "—"}</td><td className="px-2 py-2">{entry.vehicle_no || "—"}</td><td className="px-2 py-2">{vehicleTypeLabel(entry.vehicle_type)}</td><td className="px-2 py-2">{entry.trans_distance || "—"}</td><td className="px-2 py-2">{entry.from_place || "—"} · {entry.from_state || "—"}</td></tr>)}</tbody></table></div>}
+        {history.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            No Part-B updates have been stored for this shipment.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1250px] text-sm">
+              <thead className="text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2">Updated</th>
+                  <th className="px-2 py-2">Transport Mode</th>
+                  <th className="px-2 py-2">Transporter ID</th>
+                  <th className="px-2 py-2">Transporter Name</th>
+                  <th className="px-2 py-2">Transport Document No.</th>
+                  <th className="px-2 py-2">Document Date</th>
+                  <th className="px-2 py-2">Vehicle Number</th>
+                  <th className="px-2 py-2">Vehicle Type</th>
+                  <th className="px-2 py-2">Distance (KM)</th>
+                  <th className="px-2 py-2">From</th>
+                </tr>
+              </thead>
+              <tbody>
+                {history.map((entry) => (
+                  <tr key={entry.id} className="border-t border-border">
+                    <td className="px-2 py-2">
+                      {new Date(entry.updated_at).toLocaleString("en-IN")}
+                    </td>
+                    <td className="px-2 py-2">{transportModeLabel(entry.trans_mode)}</td>
+                    <td className="px-2 py-2">{entry.transporter_id || "—"}</td>
+                    <td className="px-2 py-2">{entry.transporter_name || "—"}</td>
+                    <td className="px-2 py-2">{entry.trans_doc_no || "—"}</td>
+                    <td className="px-2 py-2">{entry.trans_doc_date || "—"}</td>
+                    <td className="px-2 py-2">{entry.vehicle_no || "—"}</td>
+                    <td className="px-2 py-2">{vehicleTypeLabel(entry.vehicle_type)}</td>
+                    <td className="px-2 py-2">{entry.trans_distance || "—"}</td>
+                    <td className="px-2 py-2">
+                      {entry.from_place || "—"} · {entry.from_state || "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -415,6 +637,9 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [search, setSearch] = useState("");
   const [fetchingEwb, setFetchingEwb] = useState(false);
+  const [hasMore, setHasMore] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const PAGE_SIZE = 30;
 
   const visibleBranches = useMemo(
     () => (allowed === null ? branches : branches.filter((b) => allowed.includes(b.id))),
@@ -422,32 +647,38 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   );
   const branchName = (id: string) => branches.find((b) => b.id === id)?.branch_name ?? "—";
 
-  async function load() {
-    setLoading(true);
+  async function load(reset = true) {
+    if (reset) setLoading(true);
+    else setLoadingMore(true);
     try {
+      const offset = reset ? 0 : shipments.length;
       let q = db
         .from("shipments")
-        .select("*, shipment_items(count)")
-        .order("eway_bill_date", { ascending: false });
+        .select("*, shipment_items(count), consignment:consignments(consignment_number)")
+        .order("created_at", { ascending: false })
+        .range(offset, offset + PAGE_SIZE - 1);
       if (allowed !== null)
         q = q.in("branch_id", allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"]);
       const { data, error } = await q;
       if (error) throw error;
-      setShipments(
-        ((data ?? []) as Array<Record<string, unknown>>).map(
-          (row) =>
-            ({
-              ...row,
-              item_count: Number(
-                (row.shipment_items as Array<{ count?: number }> | undefined)?.[0]?.count ?? 0,
-              ),
-            }) as Shipment,
-        ),
+      const page = ((data ?? []) as Array<Record<string, unknown>>).map(
+        (row) =>
+          ({
+            ...row,
+            consignment_number:
+              (row.consignment as { consignment_number?: string } | null)?.consignment_number ?? "",
+            item_count: Number(
+              (row.shipment_items as Array<{ count?: number }> | undefined)?.[0]?.count ?? 0,
+            ),
+          }) as Shipment,
       );
+      setShipments((current) => (reset ? page : [...current, ...page]));
+      setHasMore(page.length === PAGE_SIZE);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load shipments");
     }
     setLoading(false);
+    setLoadingMore(false);
   }
   useEffect(() => {
     void load();
@@ -470,15 +701,16 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     setEditingShipmentId(null);
   }
   async function openView(shipment: Shipment) {
-    const [{ data }, { data: history, error: historyError }] = await Promise.all([db
-      .from("shipment_items")
-      .select("*")
-      .eq("shipment_id", shipment.id)
-      .order("item_no"), db
-      .from("shipment_part_b_history")
-      .select("id,eway_bill_number,from_place,from_state,transporter_id,transporter_name,vehicle_no,vehicle_type,trans_mode,trans_distance,trans_doc_no,trans_doc_date,reason_rem,updated_at")
-      .eq("shipment_id", shipment.id)
-      .order("updated_at", { ascending: false })]);
+    const [{ data }, { data: history, error: historyError }] = await Promise.all([
+      db.from("shipment_items").select("*").eq("shipment_id", shipment.id).order("item_no"),
+      db
+        .from("shipment_part_b_history")
+        .select(
+          "id,eway_bill_number,from_place,from_state,transporter_id,transporter_name,vehicle_no,vehicle_type,trans_mode,trans_distance,trans_doc_no,trans_doc_date,reason_rem,updated_at",
+        )
+        .eq("shipment_id", shipment.id)
+        .order("updated_at", { ascending: false }),
+    ]);
     if (historyError) return toast.error(historyError.message);
     setViewingItems(
       ((data ?? []) as Array<Record<string, unknown>>).map((item) => ({
@@ -508,12 +740,17 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   }
   async function fetchEwayBillDetails() {
     if (!form.branch_id) return toast.error("Select a branch first");
-    if (!/^\d{12}$/.test(form.eway_bill_number)) return toast.error("Enter a valid 12-digit E-Way Bill number");
+    if (!/^\d{12}$/.test(form.eway_bill_number))
+      return toast.error("Enter a valid 12-digit E-Way Bill number");
     if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
     setFetchingEwb(true);
     try {
       const raw = await serverFetchEwayBillDetails({
-        data: { token: user.sessionToken, branchId: form.branch_id, ewayBillNumber: form.eway_bill_number },
+        data: {
+          token: user.sessionToken,
+          branchId: form.branch_id,
+          ewayBillNumber: form.eway_bill_number,
+        },
       });
       const source = ((raw as Record<string, unknown>)?.data ?? raw) as Record<string, unknown>;
       const text = (key: string) => String(source[key] ?? "");
@@ -526,17 +763,25 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
       const fromAddress = [fromAddressLine1, fromAddressLine2].filter(Boolean).join(", ");
       const toAddress = [toAddressLine1, toAddressLine2].filter(Boolean).join(", ");
       const shipToAddress = [shipToAddressLine1, shipToAddressLine2].filter(Boolean).join(", ");
-      const itemList = Array.isArray(source.itemList) ? source.itemList as Array<Record<string, unknown>> : [];
+      const itemList = Array.isArray(source.itemList)
+        ? (source.itemList as Array<Record<string, unknown>>)
+        : [];
       setForm({
         ...form,
         eway_bill_number: text("ewayBillNo") || form.eway_bill_number,
         eway_bill_date: ewayDate(source.ewayBillDate) || form.eway_bill_date,
         valid_from: ewayDate(source.ewayBillDate),
         valid_until: ewayDate(source.validUpto),
-        supply_type: text("supplyType") === "I" ? "Inward" : text("supplyType") === "O" ? "Outward" : form.supply_type,
+        supply_type:
+          text("supplyType") === "I"
+            ? "Inward"
+            : text("supplyType") === "O"
+              ? "Outward"
+              : form.supply_type,
         sub_type: text("subSupplyType") || form.sub_type,
         sub_supply_desc: text("subSupplyDesc"),
-        document_type: text("docType") === "INV" ? "Tax Invoice" : text("docType") || form.document_type,
+        document_type:
+          text("docType") === "INV" ? "Tax Invoice" : text("docType") || form.document_type,
         document_number: text("docNo"),
         document_date: ewayDate(source.docDate),
         supplier_gstin: text("fromGstin") || form.supplier_gstin,
@@ -582,27 +827,31 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         total_invoice_value: text("totInvValue"),
       });
       if (itemList.length) {
-        setItems(itemList.map((item) => ({
-          product_name: String(item.productName ?? ""),
-          description: String(item.productDesc ?? item.productName ?? ""),
-          hsn_code: String(item.hsnCode ?? ""),
-          quantity: String(item.quantity ?? ""),
-          weight_kg: String(item.quantity ?? ""),
-          unit: String(item.qtyUnit ?? "NOS"),
-          taxable_value: String(item.taxableAmount ?? ""),
-          cgst_rate: String(item.cgstRate ?? ""),
-          sgst_rate: String(item.sgstRate ?? ""),
-          igst_rate: String(item.igstRate ?? ""),
-          cess_rate: String(item.cessRate ?? ""),
-          cess_nonadvol: String(item.cessNonadvol ?? ""),
-          gst_rate: String(Number(item.cgstRate ?? 0) + Number(item.sgstRate ?? 0) + Number(item.igstRate ?? 0)),
-          cgst: String(item.cgstValue ?? ""),
-          sgst_utgst: String(item.sgstValue ?? ""),
-          igst: String(item.igstValue ?? ""),
-          cess: String(item.cessValue ?? ""),
-          other_tax_charges: String(item.cessNonadvol ?? ""),
-          total_invoice_value: String(item.taxableAmount ?? ""),
-        })));
+        setItems(
+          itemList.map((item) => ({
+            product_name: String(item.productName ?? ""),
+            description: String(item.productDesc ?? item.productName ?? ""),
+            hsn_code: String(item.hsnCode ?? ""),
+            quantity: String(item.quantity ?? ""),
+            weight_kg: String(item.quantity ?? ""),
+            unit: String(item.qtyUnit ?? "NOS"),
+            taxable_value: String(item.taxableAmount ?? ""),
+            cgst_rate: String(item.cgstRate ?? ""),
+            sgst_rate: String(item.sgstRate ?? ""),
+            igst_rate: String(item.igstRate ?? ""),
+            cess_rate: String(item.cessRate ?? ""),
+            cess_nonadvol: String(item.cessNonadvol ?? ""),
+            gst_rate: String(
+              Number(item.cgstRate ?? 0) + Number(item.sgstRate ?? 0) + Number(item.igstRate ?? 0),
+            ),
+            cgst: String(item.cgstValue ?? ""),
+            sgst_utgst: String(item.sgstValue ?? ""),
+            igst: String(item.igstValue ?? ""),
+            cess: String(item.cessValue ?? ""),
+            other_tax_charges: String(item.cessNonadvol ?? ""),
+            total_invoice_value: String(item.taxableAmount ?? ""),
+          })),
+        );
       }
       toast.success("E-Way Bill details fetched and form filled");
     } catch (error) {
@@ -612,7 +861,15 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   }
 
   if (viewingShipment)
-    return <ShipmentView shipment={viewingShipment} items={viewingItems} history={viewingHistory} branchName={branchName} onBack={() => setViewingShipment(null)} />;
+    return (
+      <ShipmentView
+        shipment={viewingShipment}
+        items={viewingItems}
+        history={viewingHistory}
+        branchName={branchName}
+        onBack={() => setViewingShipment(null)}
+      />
+    );
   const setItem = (index: number, key: keyof Item, value: string) =>
     setItems(items.map((item, i) => (i === index ? { ...item, [key]: value } : item)));
   const totalTaxable = items.reduce((sum, item) => sum + n(item.taxable_value), 0);
@@ -642,11 +899,19 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         created_by: user?.id ?? null,
       };
       const { data: shipment, error } = editingShipmentId
-        ? await db.from("shipments").update(payload).eq("id", editingShipmentId).select("id").single()
+        ? await db
+            .from("shipments")
+            .update(payload)
+            .eq("id", editingShipmentId)
+            .select("id")
+            .single()
         : await db.from("shipments").insert(payload).select("id").single();
       if (error || !shipment) throw error ?? new Error("Could not create shipment");
       if (editingShipmentId) {
-        const { error: deleteError } = await db.from("shipment_items").delete().eq("shipment_id", editingShipmentId);
+        const { error: deleteError } = await db
+          .from("shipment_items")
+          .delete()
+          .eq("shipment_id", editingShipmentId);
         if (deleteError) throw deleteError;
       }
       const { error: itemError } = await db.from("shipment_items").insert(
@@ -686,7 +951,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         <>
           <div className="flex flex-wrap items-end justify-between gap-3">
             <div>
-        <h2 className="text-lg font-semibold">Shipments</h2>
+              <h2 className="text-lg font-semibold">Shipments</h2>
               <p className="text-sm text-muted-foreground">
                 One shipment is one E-Way Bill. Part A details are stored with nested goods items.
               </p>
@@ -750,6 +1015,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                 <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-4 py-3">Shipment / E-Way Bill No.</th>
+                    <th className="px-4 py-3">Consignment No.</th>
                     <th className="px-4 py-3">Branch</th>
                     <th className="px-4 py-3">E-Way Bill Date</th>
                     <th className="px-4 py-3">Supply</th>
@@ -764,6 +1030,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                   {filtered.map((s) => (
                     <tr key={s.id} className="border-t border-border hover:bg-muted/20">
                       <td className="px-4 py-3 font-medium">{s.eway_bill_number}</td>
+                      <td className="px-4 py-3">{s.consignment_number || "—"}</td>
                       <td className="px-4 py-3">{branchName(s.branch_id)}</td>
                       <td className="px-4 py-3">{s.eway_bill_date}</td>
                       <td className="px-4 py-3">
@@ -792,6 +1059,13 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
               </table>
             </div>
           )}
+          {!loading && filtered.length > 0 && hasMore && (
+            <div className="flex justify-center pt-3">
+              <Button variant="outline" onClick={() => void load(false)} disabled={loadingMore}>
+                {loadingMore ? "Loading…" : "Load More"}
+              </Button>
+            </div>
+          )}
         </>
       )}
       {showCreate ? (
@@ -809,7 +1083,9 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                 ← Back to Shipments
               </button>
               <h2 className="text-xl font-semibold">
-                {editingShipmentId ? "Edit Shipment — Part A" : "Create Shipment from E-Way Bill — Part A"}
+                {editingShipmentId
+                  ? "Edit Shipment — Part A"
+                  : "Create Shipment from E-Way Bill — Part A"}
               </h2>
               <p className="text-sm text-muted-foreground">
                 Create one shipment for one E-Way Bill.
@@ -843,10 +1119,21 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                   <div className="flex gap-2">
                     <Input
                       value={form.eway_bill_number}
-                      onChange={(e) => setForm({ ...form, eway_bill_number: e.target.value.replace(/\D/g, "").slice(0, 12) })}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          eway_bill_number: e.target.value.replace(/\D/g, "").slice(0, 12),
+                        })
+                      }
                       placeholder="12 digits"
                     />
-                    <Button type="button" variant="outline" onClick={() => void fetchEwayBillDetails()} disabled={fetchingEwb} className="shrink-0">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => void fetchEwayBillDetails()}
+                      disabled={fetchingEwb}
+                      className="shrink-0"
+                    >
                       {fetchingEwb ? "Fetching…" : "Fetch details"}
                     </Button>
                   </div>
@@ -957,15 +1244,59 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
             <section className="space-y-3 rounded-xl border border-border p-4">
               <h3 className="font-semibold">Transaction and Tax Summary</h3>
               <div className="grid gap-3 md:grid-cols-3">
-                <Field label="Transaction Type" value={form.transaction_type} onChange={(v) => setForm({ ...form, transaction_type: v })} />
-                <Field label="Value of Goods / Taxable Value" type="number" value={form.total_value} onChange={(v) => setForm({ ...form, total_value: v })} />
-                <Field label="Total Invoice Value" type="number" value={form.total_invoice_value} onChange={(v) => setForm({ ...form, total_invoice_value: v })} />
-                <Field label="CGST Value" type="number" value={form.cgst_value} onChange={(v) => setForm({ ...form, cgst_value: v })} />
-                <Field label="SGST Value" type="number" value={form.sgst_value} onChange={(v) => setForm({ ...form, sgst_value: v })} />
-                <Field label="IGST Value" type="number" value={form.igst_value} onChange={(v) => setForm({ ...form, igst_value: v })} />
-                <Field label="Cess Value" type="number" value={form.cess_value} onChange={(v) => setForm({ ...form, cess_value: v })} />
-                <Field label="Cess Non-Advol Value" type="number" value={form.cess_non_advol_value} onChange={(v) => setForm({ ...form, cess_non_advol_value: v })} />
-                <Field label="Other Value / Charges" type="number" value={form.other_value} onChange={(v) => setForm({ ...form, other_value: v })} />
+                <Field
+                  label="Transaction Type"
+                  value={form.transaction_type}
+                  onChange={(v) => setForm({ ...form, transaction_type: v })}
+                />
+                <Field
+                  label="Value of Goods / Taxable Value"
+                  type="number"
+                  value={form.total_value}
+                  onChange={(v) => setForm({ ...form, total_value: v })}
+                />
+                <Field
+                  label="Total Invoice Value"
+                  type="number"
+                  value={form.total_invoice_value}
+                  onChange={(v) => setForm({ ...form, total_invoice_value: v })}
+                />
+                <Field
+                  label="CGST Value"
+                  type="number"
+                  value={form.cgst_value}
+                  onChange={(v) => setForm({ ...form, cgst_value: v })}
+                />
+                <Field
+                  label="SGST Value"
+                  type="number"
+                  value={form.sgst_value}
+                  onChange={(v) => setForm({ ...form, sgst_value: v })}
+                />
+                <Field
+                  label="IGST Value"
+                  type="number"
+                  value={form.igst_value}
+                  onChange={(v) => setForm({ ...form, igst_value: v })}
+                />
+                <Field
+                  label="Cess Value"
+                  type="number"
+                  value={form.cess_value}
+                  onChange={(v) => setForm({ ...form, cess_value: v })}
+                />
+                <Field
+                  label="Cess Non-Advol Value"
+                  type="number"
+                  value={form.cess_non_advol_value}
+                  onChange={(v) => setForm({ ...form, cess_non_advol_value: v })}
+                />
+                <Field
+                  label="Other Value / Charges"
+                  type="number"
+                  value={form.other_value}
+                  onChange={(v) => setForm({ ...form, other_value: v })}
+                />
               </div>
             </section>
             <PartySection
@@ -1042,8 +1373,12 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                           {item.description || `Item ${index + 1}`}
                         </td>
                         <td className="px-3 py-2">{item.hsn_code || "—"}</td>
-                        <td className="px-3 py-2 text-right">{n(item.quantity)} {item.unit}</td>
-                        <td className="px-3 py-2 text-right">{n(item.weight_kg).toLocaleString("en-IN", { maximumFractionDigits: 3 })}</td>
+                        <td className="px-3 py-2 text-right">
+                          {n(item.quantity)} {item.unit}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {n(item.weight_kg).toLocaleString("en-IN", { maximumFractionDigits: 3 })}
+                        </td>
                         <td className="px-3 py-2 text-right">
                           {money(n(item.total_invoice_value))}
                         </td>
@@ -1070,10 +1405,16 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                   Invoice total: <strong>{money(totalInvoice)}</strong>
                 </span>
                 <span>
-                  Total quantity: <strong>{totalQuantity.toLocaleString("en-IN", { maximumFractionDigits: 3 })}</strong>
+                  Total quantity:{" "}
+                  <strong>
+                    {totalQuantity.toLocaleString("en-IN", { maximumFractionDigits: 3 })}
+                  </strong>
                 </span>
                 <span>
-                  Total Weight (in kg): <strong>{totalWeight.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg</strong>
+                  Total Weight (in kg):{" "}
+                  <strong>
+                    {totalWeight.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg
+                  </strong>
                 </span>
               </div>
             </section>
@@ -1154,11 +1495,36 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                 value={selectedItem.gst_rate}
                 onChange={(v) => setItem(selectedItemIndex, "gst_rate", v)}
               />
-              <Field label="CGST Rate %" type="number" value={selectedItem.cgst_rate} onChange={(v) => setItem(selectedItemIndex, "cgst_rate", v)} />
-              <Field label="SGST Rate %" type="number" value={selectedItem.sgst_rate} onChange={(v) => setItem(selectedItemIndex, "sgst_rate", v)} />
-              <Field label="IGST Rate %" type="number" value={selectedItem.igst_rate} onChange={(v) => setItem(selectedItemIndex, "igst_rate", v)} />
-              <Field label="Cess Rate %" type="number" value={selectedItem.cess_rate} onChange={(v) => setItem(selectedItemIndex, "cess_rate", v)} />
-              <Field label="Cess Non-Advol" type="number" value={selectedItem.cess_nonadvol} onChange={(v) => setItem(selectedItemIndex, "cess_nonadvol", v)} />
+              <Field
+                label="CGST Rate %"
+                type="number"
+                value={selectedItem.cgst_rate}
+                onChange={(v) => setItem(selectedItemIndex, "cgst_rate", v)}
+              />
+              <Field
+                label="SGST Rate %"
+                type="number"
+                value={selectedItem.sgst_rate}
+                onChange={(v) => setItem(selectedItemIndex, "sgst_rate", v)}
+              />
+              <Field
+                label="IGST Rate %"
+                type="number"
+                value={selectedItem.igst_rate}
+                onChange={(v) => setItem(selectedItemIndex, "igst_rate", v)}
+              />
+              <Field
+                label="Cess Rate %"
+                type="number"
+                value={selectedItem.cess_rate}
+                onChange={(v) => setItem(selectedItemIndex, "cess_rate", v)}
+              />
+              <Field
+                label="Cess Non-Advol"
+                type="number"
+                value={selectedItem.cess_nonadvol}
+                onChange={(v) => setItem(selectedItemIndex, "cess_nonadvol", v)}
+              />
               <Field
                 label="CGST"
                 type="number"
@@ -1216,32 +1582,97 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={viewingShipment !== null} onOpenChange={(open) => !open && setViewingShipment(null)}>
+      <Dialog
+        open={viewingShipment !== null}
+        onOpenChange={(open) => !open && setViewingShipment(null)}
+      >
         <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>
-              Shipment Details — {viewingShipment?.eway_bill_number}
-            </DialogTitle>
+            <DialogTitle>Shipment Details — {viewingShipment?.eway_bill_number}</DialogTitle>
           </DialogHeader>
           {viewingShipment && (
             <div className="space-y-4 py-2">
               <div className="grid gap-3 md:grid-cols-3">
-                <Field label="E-Way Bill Number" value={viewingShipment.eway_bill_number} onChange={() => {}} />
-                <Field label="E-Way Bill Date" value={viewingShipment.eway_bill_date} onChange={() => {}} />
-                <Field label="Status" value={viewingShipment.eway_bill_status} onChange={() => {}} />
-                <Field label="Document" value={`${viewingShipment.document_type} · ${viewingShipment.document_number}`} onChange={() => {}} />
-                <Field label="Branch" value={branchName(viewingShipment.branch_id)} onChange={() => {}} />
+                <Field
+                  label="E-Way Bill Number"
+                  value={viewingShipment.eway_bill_number}
+                  onChange={() => {}}
+                />
+                <Field
+                  label="E-Way Bill Date"
+                  value={viewingShipment.eway_bill_date}
+                  onChange={() => {}}
+                />
+                <Field
+                  label="Status"
+                  value={viewingShipment.eway_bill_status}
+                  onChange={() => {}}
+                />
+                <Field
+                  label="Document"
+                  value={`${viewingShipment.document_type} · ${viewingShipment.document_number}`}
+                  onChange={() => {}}
+                />
+                <Field
+                  label="Branch"
+                  value={branchName(viewingShipment.branch_id)}
+                  onChange={() => {}}
+                />
               </div>
-              <PartySection title="Supplier / Consignor" prefix="supplier" form={viewingShipment} setForm={() => {}} readOnly />
-              <PartySection title="Recipient / Consignee" prefix="recipient" form={viewingShipment} setForm={() => {}} readOnly />
-              <PartySection title="Dispatch From" prefix="dispatch_from" form={viewingShipment} setForm={() => {}} readOnly />
-              <PartySection title="Ship To" prefix="ship_to" form={viewingShipment} setForm={() => {}} readOnly />
+              <PartySection
+                title="Supplier / Consignor"
+                prefix="supplier"
+                form={viewingShipment}
+                setForm={() => {}}
+                readOnly
+              />
+              <PartySection
+                title="Recipient / Consignee"
+                prefix="recipient"
+                form={viewingShipment}
+                setForm={() => {}}
+                readOnly
+              />
+              <PartySection
+                title="Dispatch From"
+                prefix="dispatch_from"
+                form={viewingShipment}
+                setForm={() => {}}
+                readOnly
+              />
+              <PartySection
+                title="Ship To"
+                prefix="ship_to"
+                form={viewingShipment}
+                setForm={() => {}}
+                readOnly
+              />
               <div className="rounded-xl border border-border p-4">
                 <h3 className="mb-3 font-semibold">Goods / Invoice Details</h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
-                    <thead className="text-left text-xs text-muted-foreground"><tr><th className="px-2 py-2">Item</th><th className="px-2 py-2">HSN</th><th className="px-2 py-2">Quantity</th><th className="px-2 py-2 text-right">Value</th></tr></thead>
-                    <tbody>{viewingItems.map((item, index) => <tr key={`${item.description}-${index}`} className="border-t border-border"><td className="px-2 py-2">{item.description}</td><td className="px-2 py-2">{item.hsn_code}</td><td className="px-2 py-2">{item.quantity} {item.unit}</td><td className="px-2 py-2 text-right">{money(n(item.total_invoice_value))}</td></tr>)}</tbody>
+                    <thead className="text-left text-xs text-muted-foreground">
+                      <tr>
+                        <th className="px-2 py-2">Item</th>
+                        <th className="px-2 py-2">HSN</th>
+                        <th className="px-2 py-2">Quantity</th>
+                        <th className="px-2 py-2 text-right">Value</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {viewingItems.map((item, index) => (
+                        <tr key={`${item.description}-${index}`} className="border-t border-border">
+                          <td className="px-2 py-2">{item.description}</td>
+                          <td className="px-2 py-2">{item.hsn_code}</td>
+                          <td className="px-2 py-2">
+                            {item.quantity} {item.unit}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            {money(n(item.total_invoice_value))}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
                   </table>
                 </div>
               </div>

@@ -1308,6 +1308,19 @@ function ConsignmentView({
     ...shipment,
     items: shipment.shipment_items ?? [],
   })) as ShipmentDraft[];
+  const totalWeight = drafts.reduce(
+    (total, draft) =>
+      total + draft.items.reduce((sum, item) => sum + Number(item.weight_kg || 0), 0),
+    0,
+  );
+  const totalQuantity = drafts.reduce(
+    (total, draft) =>
+      total + draft.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+    0,
+  );
+  const isThirdPartyDrop = row.consignment_type === "third_party" && row.movement_mode === "drop";
+  const fromDetails = row.from_details ?? {};
+  const toDetails = row.to_details ?? {};
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -1338,6 +1351,30 @@ function ConsignmentView({
         <ReadonlyField label="To Pincode" value={row.to_pin_code} />
       </div>
       {shipments.length > 0 && <GoodsTable drafts={drafts} />}
+      <section className="space-y-3 rounded-xl border border-border p-4">
+        <h3 className="font-semibold">Details</h3>
+        <div className="grid gap-3 md:grid-cols-3">
+          <ReadonlyField label="Consignment Number" value={row.consignment_number} />
+          <ReadonlyField label="Total Weight" value={`${totalWeight.toLocaleString("en-IN")} kg`} />
+          <ReadonlyField label="Total Quantity" value={totalQuantity.toLocaleString("en-IN")} />
+          <ReadonlyField
+            label="Consignment From"
+            value={`${fromDetails.trade_name || fromDetails.legal_name || row.from_gstin || "—"} · ${row.from_pin_code || "—"}`}
+          />
+          <ReadonlyField
+            label="Consignment To"
+            value={`${toDetails.trade_name || toDetails.legal_name || row.to_gstin || "—"} · ${row.to_pin_code || "—"}`}
+          />
+          <ReadonlyField
+            label="Transporter From"
+            value={isThirdPartyDrop ? row.branch?.branch_name || "—" : "—"}
+          />
+          <ReadonlyField
+            label="Transporter To"
+            value={isThirdPartyDrop ? row.transporter?.transporter_name || "—" : "—"}
+          />
+        </div>
+      </section>
     </div>
   );
 }
