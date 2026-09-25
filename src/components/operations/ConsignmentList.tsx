@@ -289,6 +289,7 @@ export function ConsignmentList() {
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
+  const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [branchId, setBranchId] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [type, setType] = useState("own");
@@ -320,10 +321,11 @@ export function ConsignmentList() {
         (row) =>
           (branchFilter === "all" || row.branch_id === branchFilter) &&
           (typeFilter === "all" || row.consignment_type === typeFilter) &&
+          (monthFilter === "all" || String(row.created_at ?? "").startsWith(monthFilter)) &&
           (!search.trim() ||
             String(row.consignment_number).toLowerCase().includes(search.trim().toLowerCase())),
       ),
-    [rows, search, branchFilter, typeFilter],
+    [rows, search, branchFilter, typeFilter, monthFilter],
   );
 
   async function loadRows() {
@@ -701,6 +703,14 @@ export function ConsignmentList() {
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="ABC202600001"
+          />
+        </div>
+        <div className="min-w-[180px] space-y-1.5">
+          <Label>Consignment month</Label>
+          <Input
+            type="month"
+            value={monthFilter === "all" ? "" : monthFilter}
+            onChange={(event) => setMonthFilter(event.target.value || "all")}
           />
         </div>
         <div className="min-w-[180px] space-y-1.5">
