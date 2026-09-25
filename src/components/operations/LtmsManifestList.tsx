@@ -376,23 +376,24 @@ function ManifestDetailView({
             const fromDetails = relatedRecord(group.consignment.from_details);
             const toDetails = relatedRecord(group.consignment.to_details);
             const firstShipment = relatedRecord(group.items[0]?.shipment);
-            const fromLocation =
-              fromDetails.place ||
-              firstShipment.dispatch_from_place ||
+            const fromPin =
               fromDetails.pincode ||
               firstShipment.dispatch_from_pin_code ||
               group.consignment.from_pin_code;
-            const toLocation =
-              toDetails.place ||
-              firstShipment.ship_to_place ||
-              firstShipment.recipient_place ||
+            const toPin =
               toDetails.pincode ||
               firstShipment.ship_to_pin_code ||
               firstShipment.recipient_pin_code ||
               group.consignment.to_pin_code;
+            const fromLocation = fromDetails.place || firstShipment.dispatch_from_place || fromPin;
+            const toLocation =
+              toDetails.place ||
+              firstShipment.ship_to_place ||
+              firstShipment.recipient_place ||
+              toPin;
             return (
               <article key={key} className="space-y-3 rounded-xl border border-border bg-card p-4">
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
                   <div>
                     <Label className="text-xs text-muted-foreground">Consignment</Label>
                     <p className="font-semibold">
@@ -422,6 +423,14 @@ function ManifestDetailView({
                     <p>
                       {show(fromLocation)} → {show(toLocation)}
                     </p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">From PIN</Label>
+                    <p>{show(fromPin)}</p>
+                  </div>
+                  <div>
+                    <Label className="text-xs text-muted-foreground">To PIN</Label>
+                    <p>{show(toPin)}</p>
                   </div>
                 </div>
                 <div className="space-y-3">
@@ -502,7 +511,11 @@ function ManifestDetailView({
   );
 }
 
-export function LtmsManifestList() {
+export function LtmsManifestList({
+  onSidebarVisibilityChange,
+}: {
+  onSidebarVisibilityChange?: (visible: boolean) => void;
+}) {
   const { user } = useSession();
   const role = user?.role;
   const branchIdsKey = (user?.branchIds ?? []).join(",");
@@ -755,6 +768,7 @@ export function LtmsManifestList() {
         toast.error(`${failed.length} shipment(s) have no valid E-Way Bill and were not sent`);
       await loadData();
       setIsCreating(false);
+      onSidebarVisibilityChange?.(true);
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Transfer failed; no success was recorded",
@@ -766,7 +780,13 @@ export function LtmsManifestList() {
 
   if (selectedManifest) {
     return (
-      <ManifestDetailView manifest={selectedManifest} onBack={() => setSelectedManifest(null)} />
+      <ManifestDetailView
+        manifest={selectedManifest}
+        onBack={() => {
+          setSelectedManifest(null);
+          onSidebarVisibilityChange?.(true);
+        }}
+      />
     );
   }
 
@@ -787,6 +807,7 @@ export function LtmsManifestList() {
               setProfile(EMPTY_TRANSPORTER);
               setStatusFilter("pending");
               setIsCreating(true);
+              onSidebarVisibilityChange?.(false);
             }}
           >
             <Plus className="mr-2 size-4" />
@@ -865,7 +886,14 @@ export function LtmsManifestList() {
                       {row.created_at ? new Date(row.created_at).toLocaleString("en-GB") : "—"}
                     </td>
                     <td className="px-3 py-2">
-                      <Button variant="outline" size="sm" onClick={() => setSelectedManifest(row)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setSelectedManifest(row);
+                          onSidebarVisibilityChange?.(false);
+                        }}
+                      >
                         View
                       </Button>
                     </td>
@@ -891,7 +919,10 @@ export function LtmsManifestList() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={() => setIsCreating(false)}
+          onClick={() => {
+            setIsCreating(false);
+            onSidebarVisibilityChange?.(true);
+          }}
           aria-label="Back to manifest history"
         >
           <ArrowLeft className="size-5" />

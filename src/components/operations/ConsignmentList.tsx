@@ -384,7 +384,11 @@ function SelectField({
   );
 }
 
-export function ConsignmentList() {
+export function ConsignmentList({
+  onSidebarVisibilityChange,
+}: {
+  onSidebarVisibilityChange?: (visible: boolean) => void;
+}) {
   const branches = useBranches();
   const { user } = useSession();
   const [rows, setRows] = useState<Record<string, any>[]>([]);
@@ -516,6 +520,7 @@ export function ConsignmentList() {
 
   function openCreate() {
     setScreen("create");
+    onSidebarVisibilityChange?.(false);
     setBranchId(branches.length === 1 ? branches[0].id : "");
     setSourceId("");
     setType("own");
@@ -700,6 +705,7 @@ export function ConsignmentList() {
       `Consignment ${data.consignment_number} created with ${data.shipment_count} Shipment(s)`,
     );
     setScreen("list");
+    onSidebarVisibilityChange?.(true);
     await loadRows();
   }
 
@@ -730,7 +736,14 @@ export function ConsignmentList() {
 
   if (screen === "view" && view)
     return (
-      <ConsignmentView row={view} shipments={viewShipments} onBack={() => setScreen("list")} />
+      <ConsignmentView
+        row={view}
+        shipments={viewShipments}
+        onBack={() => {
+          setScreen("list");
+          onSidebarVisibilityChange?.(true);
+        }}
+      />
     );
   if (screen === "create")
     return (
@@ -779,7 +792,10 @@ export function ConsignmentList() {
               setPartnerForm(emptyPartner());
               setPartnerDialog(kind);
             },
-            onBack: () => setScreen("list"),
+            onBack: () => {
+              setScreen("list");
+              onSidebarVisibilityChange?.(true);
+            },
           }}
         />
         {partnerDialog && (
@@ -868,7 +884,7 @@ export function ConsignmentList() {
             </tr>
           </thead>
           <tbody>
-                  {loading && (
+            {loading && (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center">
                   Loading…
@@ -903,7 +919,9 @@ export function ConsignmentList() {
                           ? "Partially Updated — Retry"
                           : "Transporter Update Pending"}
                     </Badge>
-                  ) : "—"}
+                  ) : (
+                    "—"
+                  )}
                 </td>
                 <td className="px-4 py-3">
                   {new Date(row.created_at).toLocaleDateString("en-IN")}
@@ -1433,7 +1451,7 @@ function PartnerDialog({
               Update Later
             </Button>
           )}
-          <Button onClick={onSave}>Save and Select</Button>
+          <Button onClick={() => onSave()}>Save and Select</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

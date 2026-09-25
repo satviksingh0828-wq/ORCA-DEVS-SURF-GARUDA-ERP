@@ -165,7 +165,11 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const isViewer = user?.role === "viewer";
 
   const TABS = ALL_TABS.filter((t) => {
-    const isLtmsTab = t.id === "shipments" || t.id === "consignment" || t.id === "eway-bill" || t.id === "ltms-manifest";
+    const isLtmsTab =
+      t.id === "shipments" ||
+      t.id === "consignment" ||
+      t.id === "eway-bill" ||
+      t.id === "ltms-manifest";
     if (mode === "ltms" && !isLtmsTab) return false;
     if (mode === "tms" && isLtmsTab) return false;
     if ("basicOnly" in t && t.basicOnly && user?.role !== "basic") return false;
@@ -272,7 +276,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           )}
           {safeTab === "consignment" && (
             <TabErrorBoundary label="Consignment">
-              <ConsignmentList />
+              <ConsignmentList onSidebarVisibilityChange={setNavOpen} />
             </TabErrorBoundary>
           )}
           {safeTab === "lr" && (
@@ -287,7 +291,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           )}
           {safeTab === "ltms-manifest" && (
             <TabErrorBoundary label="Manifest">
-              <LtmsManifestList />
+              <LtmsManifestList onSidebarVisibilityChange={setNavOpen} />
             </TabErrorBoundary>
           )}
           {safeTab === "eway-bill" && (
