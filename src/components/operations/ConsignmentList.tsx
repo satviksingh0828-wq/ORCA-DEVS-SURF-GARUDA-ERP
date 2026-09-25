@@ -521,8 +521,7 @@ export function ConsignmentList() {
     const needsTransporter = type === "third_party";
     if (!branchId || !sourceId || drafts.length < 1)
       return toast.error("Branch, Source and at least one E-Way Bill are required");
-    if (needsOwnVehicle && (!vehicleId || !driverId))
-      return toast.error("Vehicle and Driver are required for this movement");
+    if (needsOwnVehicle && !vehicleId) return toast.error("Vehicle is required for this movement");
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
     if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
     if (movement === "drop" && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
@@ -959,7 +958,7 @@ function ConsignmentForm(props: any) {
                 placeholder="Select company vehicle"
               />
               <SelectField
-                label="Driver *"
+                label="Driver"
                 value={driverId}
                 onChange={setDriverId}
                 options={drivers}
