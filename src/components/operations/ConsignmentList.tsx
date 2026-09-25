@@ -118,6 +118,8 @@ const emptyPartner = (): PartnerForm => ({
 });
 
 const read = (source: Record<string, unknown>, key: string) => String(source[key] ?? "");
+const readAny = (source: Record<string, unknown>, ...keys: string[]) =>
+  keys.map((key) => read(source, key)).find(Boolean) ?? "";
 const dateOnly = (value: unknown) => {
   const text = String(value ?? "").trim();
   const indianDate = text.match(/^(\d{2})[/-](\d{2})[/-](\d{4})/);
@@ -163,8 +165,67 @@ function humanLabel(map: Record<string, string>, value: string, fallback = "Not 
   return (map[value] ?? value) || fallback;
 }
 
+function findGoodsList(value: unknown, depth = 0): Array<Record<string, unknown>> {
+  if (depth > 5 || value === null || typeof value !== "object") return [];
+  if (Array.isArray(value)) {
+    if (
+      value.some(
+        (item) =>
+          item &&
+          typeof item === "object" &&
+          Object.keys(item).some((key) =>
+            /product|itemName|hsn|taxable|quantity|qtyUnit/i.test(key),
+          ),
+      )
+    )
+      return value as Array<Record<string, unknown>>;
+    for (const item of value) {
+      const found = findGoodsList(item, depth + 1);
+      if (found.length) return found;
+    }
+    return [];
+  }
+  const object = value as Record<string, unknown>;
+  if (Object.keys(object).some((key) => /product|itemName|hsn|taxable|quantity|qtyUnit/i.test(key)))
+    return [object];
+  for (const [key, child] of Object.entries(object)) {
+    if (/item|goods|product/i.test(key)) {
+      const found = findGoodsList(child, depth + 1);
+      if (found.length) return found;
+    }
+  }
+  for (const child of Object.values(value)) {
+    const found = findGoodsList(child, depth + 1);
+    if (found.length) return found;
+  }
+  return [];
+}
+
+function findEwaySource(value: unknown, depth = 0): Record<string, unknown> {
+  if (depth > 6 || value === null) return {};
+  if (typeof value === "string") {
+    try {
+      return findEwaySource(JSON.parse(value), depth + 1);
+    } catch {
+      return {};
+    }
+  }
+  if (typeof value !== "object" || Array.isArray(value)) return {};
+  const object = value as Record<string, unknown>;
+  if (object.ewbNo || object.ewayBillNo || object.fromGstin || object.itemList) return object;
+  for (const key of ["data", "result", "response", "ewayBill", "ewayBillDetails", "details"]) {
+    const found = findEwaySource(object[key], depth + 1);
+    if (Object.keys(found).length) return found;
+  }
+  for (const child of Object.values(object)) {
+    const found = findEwaySource(child, depth + 1);
+    if (Object.keys(found).length) return found;
+  }
+  return {};
+}
+
 function mapEway(raw: unknown): ShipmentDraft {
-  const source = ((raw as Record<string, unknown>)?.data ?? raw) as Record<string, unknown>;
+  const source = findEwaySource(raw);
   const from1 = read(source, "fromAddr1");
   const from2 = read(source, "fromAddr2");
   const to1 = read(source, "toAddr1");
@@ -175,27 +236,7 @@ function mapEway(raw: unknown): ShipmentDraft {
   const supplyCode = read(source, "supplyType");
   const subSupplyCode = read(source, "subSupplyType") || read(source, "subType");
   const generationCode = read(source, "genMode") || read(source, "generatedBy") || "API";
-  const itemContainer =
-    source.itemList ??
-    source.items ??
-    source.goodsDetails ??
-    source.goods ??
-    source.itemDetails ??
-    source.ItemList;
-  const nestedItems =
-    itemContainer && typeof itemContainer === "object" && !Array.isArray(itemContainer)
-      ? ((itemContainer as Record<string, unknown>).items ??
-        (itemContainer as Record<string, unknown>).itemList)
-      : null;
-  const itemList = Array.isArray(itemContainer)
-    ? (itemContainer as Array<Record<string, unknown>>)
-    : Array.isArray(nestedItems)
-      ? (nestedItems as Array<Record<string, unknown>>)
-      : ["productName", "productDesc", "hsnCode", "quantity", "taxableAmount"].some(
-            (key) => source[key] !== undefined,
-          )
-        ? [source]
-        : [];
+  const itemList = findGoodsList(source);
   return {
     eway_bill_number: read(source, "ewbNo") || read(source, "ewayBillNo"),
     eway_bill_date: dateOnly(source.ewayBillDate || source.ewayBillDateStr),
@@ -229,31 +270,44 @@ function mapEway(raw: unknown): ShipmentDraft {
     dispatch_from_pin_code: read(source, "fromPincode"),
     ship_to_pin_code: read(source, "shipToPincode") || read(source, "toPincode"),
     items: itemList.map((item) => ({
-      product_name: read(item, "productName") || read(item, "itemName"),
-      description:
-        read(item, "productDesc") || read(item, "itemDescription") || read(item, "productName"),
-      hsn_code: read(item, "hsnCode") || read(item, "hsn"),
-      quantity: read(item, "quantity") || read(item, "qty"),
-      unit: read(item, "qtyUnit") || read(item, "unit") || "NOS",
-      weight_kg:
-        read(item, "itemWeight") ||
-        read(item, "weight") ||
-        read(item, "weightKg") ||
-        read(item, "quantity"),
-      taxable_value: read(item, "taxableAmount"),
-      cgst_rate: read(item, "cgstRate"),
-      sgst_rate: read(item, "sgstRate"),
-      igst_rate: read(item, "igstRate"),
-      cess_rate: read(item, "cessRate"),
-      cess_nonadvol: read(item, "cessNonadvol"),
+      product_name: readAny(item, "productName", "product_name", "itemName", "item_name"),
+      description: readAny(
+        item,
+        "productDesc",
+        "product_desc",
+        "itemDescription",
+        "item_description",
+        "productName",
+        "product_name",
+      ),
+      hsn_code: readAny(item, "hsnCode", "hsn_code", "hsn"),
+      quantity: readAny(item, "quantity", "qty"),
+      unit: readAny(item, "qtyUnit", "qty_unit", "unit") || "NOS",
+      weight_kg: readAny(
+        item,
+        "itemWeight",
+        "item_weight",
+        "weight",
+        "weightKg",
+        "weight_kg",
+        "quantity",
+      ),
+      taxable_value: readAny(item, "taxableAmount", "taxable_amount"),
+      cgst_rate: readAny(item, "cgstRate", "cgst_rate"),
+      sgst_rate: readAny(item, "sgstRate", "sgst_rate"),
+      igst_rate: readAny(item, "igstRate", "igst_rate"),
+      cess_rate: readAny(item, "cessRate", "cess_rate"),
+      cess_nonadvol: readAny(item, "cessNonadvol", "cess_nonadvol"),
       gst_rate:
-        numberValue(item.cgstRate) + numberValue(item.sgstRate) + numberValue(item.igstRate),
-      cgst: read(item, "cgstValue"),
-      sgst_utgst: read(item, "sgstValue"),
-      igst: read(item, "igstValue"),
-      cess: read(item, "cessValue"),
-      other_tax_charges: read(item, "cessNonadvol"),
-      total_invoice_value: read(item, "taxableAmount"),
+        numberValue(readAny(item, "cgstRate", "cgst_rate")) +
+        numberValue(readAny(item, "sgstRate", "sgst_rate")) +
+        numberValue(readAny(item, "igstRate", "igst_rate")),
+      cgst: readAny(item, "cgstValue", "cgst_value"),
+      sgst_utgst: readAny(item, "sgstValue", "sgst_value"),
+      igst: readAny(item, "igstValue", "igst_value"),
+      cess: readAny(item, "cessValue", "cess_value"),
+      other_tax_charges: readAny(item, "cessNonadvol", "cess_nonadvol"),
+      total_invoice_value: readAny(item, "taxableAmount", "taxable_amount"),
     })),
   };
 }
