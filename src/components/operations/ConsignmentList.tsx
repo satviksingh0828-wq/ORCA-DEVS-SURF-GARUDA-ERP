@@ -175,9 +175,27 @@ function mapEway(raw: unknown): ShipmentDraft {
   const supplyCode = read(source, "supplyType");
   const subSupplyCode = read(source, "subSupplyType") || read(source, "subType");
   const generationCode = read(source, "genMode") || read(source, "generatedBy") || "API";
-  const itemList = Array.isArray(source.itemList)
-    ? (source.itemList as Array<Record<string, unknown>>)
-    : [];
+  const itemContainer =
+    source.itemList ??
+    source.items ??
+    source.goodsDetails ??
+    source.goods ??
+    source.itemDetails ??
+    source.ItemList;
+  const nestedItems =
+    itemContainer && typeof itemContainer === "object" && !Array.isArray(itemContainer)
+      ? ((itemContainer as Record<string, unknown>).items ??
+        (itemContainer as Record<string, unknown>).itemList)
+      : null;
+  const itemList = Array.isArray(itemContainer)
+    ? (itemContainer as Array<Record<string, unknown>>)
+    : Array.isArray(nestedItems)
+      ? (nestedItems as Array<Record<string, unknown>>)
+      : ["productName", "productDesc", "hsnCode", "quantity", "taxableAmount"].some(
+            (key) => source[key] !== undefined,
+          )
+        ? [source]
+        : [];
   return {
     eway_bill_number: read(source, "ewbNo") || read(source, "ewayBillNo"),
     eway_bill_date: dateOnly(source.ewayBillDate || source.ewayBillDateStr),
@@ -211,12 +229,17 @@ function mapEway(raw: unknown): ShipmentDraft {
     dispatch_from_pin_code: read(source, "fromPincode"),
     ship_to_pin_code: read(source, "shipToPincode") || read(source, "toPincode"),
     items: itemList.map((item) => ({
-      product_name: read(item, "productName"),
-      description: read(item, "productDesc") || read(item, "productName"),
-      hsn_code: read(item, "hsnCode"),
-      quantity: read(item, "quantity"),
-      unit: read(item, "qtyUnit") || "NOS",
-      weight_kg: read(item, "quantity"),
+      product_name: read(item, "productName") || read(item, "itemName"),
+      description:
+        read(item, "productDesc") || read(item, "itemDescription") || read(item, "productName"),
+      hsn_code: read(item, "hsnCode") || read(item, "hsn"),
+      quantity: read(item, "quantity") || read(item, "qty"),
+      unit: read(item, "qtyUnit") || read(item, "unit") || "NOS",
+      weight_kg:
+        read(item, "itemWeight") ||
+        read(item, "weight") ||
+        read(item, "weightKg") ||
+        read(item, "quantity"),
       taxable_value: read(item, "taxableAmount"),
       cgst_rate: read(item, "cgstRate"),
       sgst_rate: read(item, "sgstRate"),
