@@ -752,6 +752,28 @@ export function ConsignmentList({
         if (partyError) throw partyError;
       }
       if (!draft.items.length) throw new Error("The E-Way Bill has no goods details");
+      for (const item of draft.items) {
+        const productName = item.product_name.trim();
+        if (!productName) continue;
+        const product = {
+          product_name: productName,
+          description: item.description || productName,
+          hsn_code: item.hsn_code || "",
+          unit: item.unit || "NOS",
+          default_quantity: numberValue(item.quantity) || 1,
+          default_weight_kg: numberValue(item.weight_kg),
+        };
+        const existingProduct = await db
+          .from("products")
+          .select("id")
+          .eq("product_name", productName)
+          .maybeSingle();
+        if (existingProduct.error) throw existingProduct.error;
+        const productResult = existingProduct.data
+          ? await db.from("products").update(product).eq("id", existingProduct.data.id)
+          : await db.from("products").insert(product);
+        if (productResult.error) throw productResult.error;
+      }
       if (drafts.length) {
         const first = drafts[0];
         const mismatch =
@@ -1196,7 +1218,10 @@ function ConsignmentForm(props: any) {
   const needsTransporter = type === "third_party";
 
   function openManualShipment(number = drafts.length ? "" : ewayNo) {
-    setManualDraft(emptyManualShipment(number));
+    setManualDraft({
+      ...emptyManualShipment(number),
+      transporter_id: branch?.gstin ?? "",
+    });
     setManualOpen(true);
   }
 
@@ -1214,8 +1239,6 @@ function ConsignmentForm(props: any) {
       String(item.description || item.product_name || "").trim(),
     );
     if (!items.length) return toast.error("Add at least one product with a description");
-    if (items.some((item) => !String(item.hsn_code || "").trim()))
-      return toast.error("Enter an HSN Code for every product");
 
     setManualSaving(true);
     try {
@@ -1658,6 +1681,34 @@ function ManualShipmentDialog({
         itemIndex === index ? { ...item, [key]: value } : item,
       ),
     }));
+  useEffect(() => {
+    const items = draft.items;
+    const totalTaxable = items.reduce((sum, item) => sum + numberValue(item.taxable_value), 0);
+    const totalInvoice = items.reduce(
+      (sum, item) => sum + numberValue(item.total_invoice_value),
+      0,
+    );
+    const taxTotal = (key: string) => items.reduce((sum, item) => sum + numberValue(item[key]), 0);
+    setDraft((current) => ({
+      ...current,
+      total_value: String(
+        totalTaxable +
+          taxTotal("cgst") +
+          taxTotal("sgst_utgst") +
+          taxTotal("igst") +
+          taxTotal("cess") +
+          taxTotal("other_tax_charges"),
+      ),
+      total_taxable_value: String(totalTaxable),
+      total_invoice_value: String(totalInvoice),
+      cgst_value: String(taxTotal("cgst")),
+      sgst_value: String(taxTotal("sgst_utgst")),
+      igst_value: String(taxTotal("igst")),
+      cess_value: String(taxTotal("cess")),
+      cess_non_advol_value: String(taxTotal("cess_nonadvol")),
+      other_value: String(taxTotal("other_tax_charges")),
+    }));
+  }, [draft.items, setDraft]);
   const field = (key: EditableShipmentField, label: string, type = "text", required = false) => (
     <div className="min-w-0 space-y-1">
       <Label className="text-xs font-semibold">
