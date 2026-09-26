@@ -717,6 +717,40 @@ export function ConsignmentList({
       });
       const draft = mapEway(raw);
       if (!draft.eway_bill_number) draft.eway_bill_number = number;
+      const partyRows = [
+        {
+          party_type: "consignor",
+          gstin: draft.supplier_gstin.toUpperCase(),
+          trade_name: draft.supplier_trade_name,
+          legal_name: draft.supplier_legal_name,
+          address_1: draft.supplier_address_line_1,
+          address_2: draft.supplier_address_line_2,
+          place: draft.supplier_place,
+          pincode: draft.supplier_pin_code,
+          state: draft.supplier_state,
+          branch_id: branchId,
+          source: "eway_bill",
+        },
+        {
+          party_type: "consignee",
+          gstin: draft.recipient_gstin.toUpperCase(),
+          trade_name: draft.recipient_trade_name,
+          legal_name: draft.recipient_legal_name,
+          address_1: draft.recipient_address_line_1,
+          address_2: draft.recipient_address_line_2,
+          place: draft.recipient_place,
+          pincode: draft.recipient_pin_code,
+          state: draft.recipient_state,
+          branch_id: branchId,
+          source: "eway_bill",
+        },
+      ].filter((party) => party.gstin && party.gstin !== "URP");
+      if (partyRows.length) {
+        const { error: partyError } = await db
+          .from("party_masters")
+          .upsert(partyRows, { onConflict: "party_type,gstin" });
+        if (partyError) throw partyError;
+      }
       if (!draft.items.length) throw new Error("The E-Way Bill has no goods details");
       if (drafts.length) {
         const first = drafts[0];
@@ -1600,6 +1634,20 @@ function ManualShipmentDialog({
   onClose: () => void;
   onSave: () => void;
 }) {
+  const [partyLoading, setPartyLoading] = useState<"consignor" | "consignee" | null>(null);
+  const [productPickerOpen, setProductPickerOpen] = useState(false);
+  const [productPickerIndex, setProductPickerIndex] = useState(0);
+  const [productCreateOpen, setProductCreateOpen] = useState(false);
+  const [products, setProducts] = useState<Array<Record<string, any>>>([]);
+  const [productSearch, setProductSearch] = useState("");
+  const [newProduct, setNewProduct] = useState({
+    product_name: "",
+    description: "",
+    hsn_code: "",
+    unit: "NOS",
+    default_quantity: "1",
+    default_weight_kg: "",
+  });
   const setField = (key: EditableShipmentField, value: string) =>
     setDraft((current) => ({ ...current, [key]: value }));
   const setItem = (index: number, key: string, value: string) =>
@@ -1624,6 +1672,126 @@ function ManualShipmentDialog({
       />
     </div>
   );
+  async function fetchParty(kind: "consignor" | "consignee") {
+    const gstinKey = kind === "consignor" ? "supplier_gstin" : "recipient_gstin";
+    const gstin = draft[gstinKey].trim().toUpperCase();
+    if (!gstin) return toast.error("Enter a GSTIN first");
+    setPartyLoading(kind);
+    const { data, error } = await db
+      .from("party_masters")
+      .select("*")
+      .eq("party_type", kind)
+      .eq("gstin", gstin)
+      .maybeSingle();
+    setPartyLoading(null);
+    if (error) return toast.error(error.message);
+    if (!data) return toast.info(`No ${kind} master found for ${gstin}. Create it from Masters.`);
+    const prefix = kind === "consignor" ? "supplier" : "recipient";
+    const updates: Record<string, string> = {
+      [`${prefix}_gstin`]: data.gstin ?? gstin,
+      [`${prefix}_trade_name`]: data.trade_name ?? "",
+      [`${prefix}_legal_name`]: data.legal_name ?? "",
+      [`${prefix}_address_line_1`]: data.address_1 ?? "",
+      [`${prefix}_address_line_2`]: data.address_2 ?? "",
+      [`${prefix}_place`]: data.place ?? "",
+      [`${prefix}_state`]: data.state ?? "",
+      [`${prefix}_pin_code`]: data.pincode ?? "",
+    };
+    if (kind === "consignor")
+      Object.assign(updates, {
+        dispatch_from_address_line_1: data.address_1 ?? "",
+        dispatch_from_address_line_2: data.address_2 ?? "",
+        dispatch_from_place: data.place ?? "",
+        dispatch_from_state: data.state ?? "",
+        dispatch_from_pin_code: data.pincode ?? "",
+      });
+    else
+      Object.assign(updates, {
+        ship_to_address_line_1: data.address_1 ?? "",
+        ship_to_address_line_2: data.address_2 ?? "",
+        ship_to_place: data.place ?? "",
+        ship_to_state: data.state ?? "",
+        ship_to_pin_code: data.pincode ?? "",
+      });
+    setDraft((current) => ({ ...current, ...updates }));
+    toast.success(`${kind === "consignor" ? "Consignor" : "Consignee"} details fetched`);
+  }
+  async function openProductPicker(index = 0) {
+    const { data, error } = await db.from("products").select("*").order("product_name").limit(200);
+    if (error) return toast.error(error.message);
+    setProducts(data ?? []);
+    setProductPickerIndex(index);
+    setProductPickerOpen(true);
+  }
+  function chooseProduct(product: Record<string, any>, index: number) {
+    setDraft((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              product_name: product.product_name ?? "",
+              description: product.description || product.product_name || "",
+              hsn_code: product.hsn_code ?? "",
+              unit: product.unit || "NOS",
+              quantity: String(product.default_quantity ?? 1),
+              weight_kg: String(product.default_weight_kg ?? ""),
+            }
+          : item,
+      ),
+    }));
+    setProductPickerOpen(false);
+  }
+  async function createProduct() {
+    if (!newProduct.product_name.trim()) return toast.error("Product name is required");
+    const { data, error } = await db
+      .from("products")
+      .insert({
+        ...newProduct,
+        default_quantity: Number(newProduct.default_quantity || 1),
+        default_weight_kg: Number(newProduct.default_weight_kg || 0),
+      })
+      .select("*")
+      .single();
+    if (error) return toast.error(error.message);
+    setProducts((current) => [...current, data]);
+    setNewProduct({
+      product_name: "",
+      description: "",
+      hsn_code: "",
+      unit: "NOS",
+      default_quantity: "1",
+      default_weight_kg: "",
+    });
+    setProductCreateOpen(false);
+    toast.success("Product created");
+  }
+  const partyField = (kind: "consignor" | "consignee") => {
+    const key = kind === "consignor" ? "supplier_gstin" : "recipient_gstin";
+    return (
+      <div className="min-w-0 space-y-1">
+        <Label className="text-xs font-semibold">
+          {kind === "consignor" ? "Consignor" : "Consignee"} GSTIN
+        </Label>
+        <div className="flex gap-1">
+          <Input
+            className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+            value={draft[key]}
+            onChange={(event) => setField(key, event.target.value.toUpperCase())}
+          />
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() => void fetchParty(kind)}
+            disabled={partyLoading !== null}
+          >
+            {partyLoading === kind ? "Fetching…" : "Fetch"}
+          </Button>
+        </div>
+      </div>
+    );
+  };
   const itemField = (
     index: number,
     key: string,
@@ -1649,156 +1817,254 @@ function ManualShipmentDialog({
   );
 
   return (
-    <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
-      <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Add Shipment Manually</DialogTitle>
-          <p className="text-sm text-muted-foreground">
-            Complete the bill, both parties and product lines. No E-Way Bill service call will be
-            made.
-          </p>
-        </DialogHeader>
-        <div className="space-y-5 py-1">
-          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
-            <h3 className="text-sm font-semibold text-sky-800">E-Way Bill and Document Details</h3>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-              {field("eway_bill_number", "E-Way Bill Number", "text", true)}
-              {field("eway_bill_date", "E-Way Bill Date", "date", true)}
-              {field("eway_bill_status", "E-Way Bill Status")}
-              {field("valid_from", "Valid From", "date")}
-              {field("valid_until", "Valid Until", "date")}
-              {field("document_type", "Document Type", "text", true)}
-              {field("document_number", "Document Number", "text", true)}
-              {field("document_date", "Document Date", "date", true)}
-              <ReadonlyField dense label="Generation Mode" value="Manual" />
-              {field("transaction_type", "Transaction Type")}
-              {field("supply_type", "Supply Type")}
-              {field("sub_type", "Sub-Supply Type")}
-              {field("total_value", "Total Value", "number")}
-              {field("total_taxable_value", "Total Taxable Value", "number")}
-              {field("total_invoice_value", "Total Invoice Value", "number")}
-              {field("cgst_value", "Total CGST", "number")}
-              {field("sgst_value", "Total SGST / UTGST", "number")}
-              {field("igst_value", "Total IGST", "number")}
-              {field("cess_value", "Total Cess", "number")}
-              {field("cess_non_advol_value", "Total Cess Non-Advol", "number")}
-              {field("other_value", "Other Charges", "number")}
-              {field("transporter_id", "Transporter GSTIN / ID")}
-              {field("approximate_distance_km", "Approx. Distance (KM)", "number")}
-            </div>
-          </section>
-          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
-            <h3 className="text-sm font-semibold text-sky-800">Consignor / From Party</h3>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-              {field("supplier_gstin", "Consignor GSTIN")}
-              {field("supplier_trade_name", "Consignor Trade Name")}
-              {field("supplier_legal_name", "Consignor Legal Name")}
-              {field("supplier_address_line_1", "Consignor Address 1")}
-              {field("supplier_address_line_2", "Consignor Address 2")}
-              {field("supplier_place", "Consignor Place")}
-              {field("supplier_state", "Consignor State")}
-              {field("supplier_pin_code", "Consignor PIN Code")}
-            </div>
-          </section>
-          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
-            <h3 className="text-sm font-semibold text-sky-800">Consignee / To Party</h3>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-              {field("recipient_gstin", "Consignee GSTIN")}
-              {field("recipient_trade_name", "Consignee Trade Name")}
-              {field("recipient_legal_name", "Consignee Legal Name")}
-              {field("recipient_address_line_1", "Consignee Address 1")}
-              {field("recipient_address_line_2", "Consignee Address 2")}
-              {field("recipient_place", "Consignee Place")}
-              {field("recipient_state", "Consignee State")}
-              {field("recipient_pin_code", "Consignee PIN Code")}
-            </div>
-          </section>
-          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
-            <h3 className="text-sm font-semibold text-sky-800">Dispatch From / Ship To</h3>
-            <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-              {field("dispatch_from_address_line_1", "Dispatch From Address 1")}
-              {field("dispatch_from_address_line_2", "Dispatch From Address 2")}
-              {field("dispatch_from_place", "Dispatch From Place")}
-              {field("dispatch_from_state", "Dispatch From State")}
-              {field("dispatch_from_pin_code", "Dispatch From PIN")}
-              {field("ship_to_address_line_1", "Ship To Address 1")}
-              {field("ship_to_address_line_2", "Ship To Address 2")}
-              {field("ship_to_place", "Ship To Place")}
-              {field("ship_to_state", "Ship To State")}
-              {field("ship_to_pin_code", "Ship To PIN")}
-            </div>
-          </section>
-          <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <h3 className="text-sm font-semibold text-sky-800">Products / Goods</h3>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() =>
-                  setDraft((current) => ({
-                    ...current,
-                    items: [...current.items, emptyShipmentItem()],
-                  }))
-                }
-              >
-                <Plus className="mr-1 size-4" /> Add Product
-              </Button>
-            </div>
-            {draft.items.map((item, index) => (
-              <div key={index} className="space-y-3 border border-border p-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-xs font-bold uppercase tracking-wide">Product {index + 1}</h4>
-                  {draft.items.length > 1 && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() =>
-                        setDraft((current) => ({
-                          ...current,
-                          items: current.items.filter((_, itemIndex) => itemIndex !== index),
-                        }))
-                      }
-                      aria-label={`Remove product ${index + 1}`}
-                    >
-                      <Trash2 className="size-4" />
-                    </Button>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-                  {itemField(index, "product_name", "Product Name")}
-                  {itemField(index, "description", "Description", "text", true)}
-                  {itemField(index, "hsn_code", "HSN Code", "text", true)}
-                  {itemField(index, "quantity", "Quantity", "number")}
-                  {itemField(index, "unit", "Unit")}
-                  {itemField(index, "weight_kg", "Weight (KG)", "number")}
-                  {itemField(index, "taxable_value", "Taxable Value", "number")}
-                  {itemField(index, "cgst_rate", "CGST %", "number")}
-                  {itemField(index, "sgst_rate", "SGST %", "number")}
-                  {itemField(index, "igst_rate", "IGST %", "number")}
-                  {itemField(index, "cess_rate", "Cess %", "number")}
-                  {itemField(index, "cess_nonadvol", "Cess Non-Advol", "number")}
-                  {itemField(index, "cgst", "CGST Amount", "number")}
-                  {itemField(index, "sgst_utgst", "SGST Amount", "number")}
-                  {itemField(index, "igst", "IGST Amount", "number")}
-                  {itemField(index, "cess", "Cess Amount", "number")}
-                  {itemField(index, "other_tax_charges", "Other Tax Charges", "number")}
-                  {itemField(index, "total_invoice_value", "Invoice Value", "number")}
+    <>
+      <Dialog open={open} onOpenChange={(value) => !value && onClose()}>
+        <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Shipment Manually</DialogTitle>
+            <p className="text-sm text-muted-foreground">
+              Complete the bill, both parties and product lines. No E-Way Bill service call will be
+              made.
+            </p>
+          </DialogHeader>
+          <div className="space-y-5 py-1">
+            <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+              <h3 className="text-sm font-semibold text-sky-800">
+                E-Way Bill and Document Details
+              </h3>
+              <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+                {field("eway_bill_number", "E-Way Bill Number", "text", true)}
+                {field("eway_bill_date", "E-Way Bill Date", "date", true)}
+                {field("eway_bill_status", "E-Way Bill Status")}
+                {field("valid_from", "Valid From", "date")}
+                {field("valid_until", "Valid Until", "date")}
+                {field("document_type", "Document Type", "text", true)}
+                {field("document_number", "Document Number", "text", true)}
+                {field("document_date", "Document Date", "date", true)}
+                <ReadonlyField dense label="Generation Mode" value="Manual" />
+                {field("transaction_type", "Transaction Type")}
+                {field("supply_type", "Supply Type")}
+                {field("sub_type", "Sub-Supply Type")}
+                {field("total_value", "Total Value", "number")}
+                {field("total_taxable_value", "Total Taxable Value", "number")}
+                {field("total_invoice_value", "Total Invoice Value", "number")}
+                {field("cgst_value", "Total CGST", "number")}
+                {field("sgst_value", "Total SGST / UTGST", "number")}
+                {field("igst_value", "Total IGST", "number")}
+                {field("cess_value", "Total Cess", "number")}
+                {field("cess_non_advol_value", "Total Cess Non-Advol", "number")}
+                {field("other_value", "Other Charges", "number")}
+                {field("transporter_id", "Transporter GSTIN / ID")}
+                {field("approximate_distance_km", "Approx. Distance (KM)", "number")}
+              </div>
+            </section>
+            <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+              <h3 className="text-sm font-semibold text-sky-800">Consignor / From Party</h3>
+              <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+                {partyField("consignor")}
+                {field("supplier_trade_name", "Consignor Trade Name")}
+                {field("supplier_legal_name", "Consignor Legal Name")}
+                {field("supplier_address_line_1", "Consignor Address 1")}
+                {field("supplier_address_line_2", "Consignor Address 2")}
+                {field("supplier_place", "Consignor Place")}
+                {field("supplier_state", "Consignor State")}
+                {field("supplier_pin_code", "Consignor PIN Code")}
+              </div>
+            </section>
+            <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+              <h3 className="text-sm font-semibold text-sky-800">Consignee / To Party</h3>
+              <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+                {partyField("consignee")}
+                {field("recipient_trade_name", "Consignee Trade Name")}
+                {field("recipient_legal_name", "Consignee Legal Name")}
+                {field("recipient_address_line_1", "Consignee Address 1")}
+                {field("recipient_address_line_2", "Consignee Address 2")}
+                {field("recipient_place", "Consignee Place")}
+                {field("recipient_state", "Consignee State")}
+                {field("recipient_pin_code", "Consignee PIN Code")}
+              </div>
+            </section>
+            <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+              <h3 className="text-sm font-semibold text-sky-800">Dispatch From / Ship To</h3>
+              <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+                {field("dispatch_from_address_line_1", "Dispatch From Address 1")}
+                {field("dispatch_from_address_line_2", "Dispatch From Address 2")}
+                {field("dispatch_from_place", "Dispatch From Place")}
+                {field("dispatch_from_state", "Dispatch From State")}
+                {field("dispatch_from_pin_code", "Dispatch From PIN")}
+                {field("ship_to_address_line_1", "Ship To Address 1")}
+                {field("ship_to_address_line_2", "Ship To Address 2")}
+                {field("ship_to_place", "Ship To Place")}
+                {field("ship_to_state", "Ship To State")}
+                {field("ship_to_pin_code", "Ship To PIN")}
+              </div>
+            </section>
+            <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h3 className="text-sm font-semibold text-sky-800">Products / Goods</h3>
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => void openProductPicker(0)}>
+                    <Search className="mr-1 size-4" /> Products / Goods List
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setProductCreateOpen(true)}
+                  >
+                    Create Product
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setDraft((current) => ({
+                        ...current,
+                        items: [...current.items, emptyShipmentItem()],
+                      }))
+                    }
+                  >
+                    <Plus className="mr-1 size-4" /> Add Product
+                  </Button>
                 </div>
               </div>
+              {draft.items.map((item, index) => (
+                <div key={index} className="space-y-3 border border-border p-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold uppercase tracking-wide">
+                      Product {index + 1}
+                    </h4>
+                    {draft.items.length > 1 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          setDraft((current) => ({
+                            ...current,
+                            items: current.items.filter((_, itemIndex) => itemIndex !== index),
+                          }))
+                        }
+                        aria-label={`Remove product ${index + 1}`}
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="flex items-end gap-1">
+                      <div className="min-w-0 flex-1">
+                        {itemField(index, "product_name", "Product Name")}
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => void openProductPicker(index)}
+                      >
+                        List
+                      </Button>
+                    </div>
+                    {itemField(index, "description", "Description", "text", true)}
+                    {itemField(index, "hsn_code", "HSN Code", "text", true)}
+                    {itemField(index, "quantity", "Quantity", "number")}
+                    {itemField(index, "unit", "Unit")}
+                    {itemField(index, "weight_kg", "Weight (KG)", "number")}
+                    {itemField(index, "taxable_value", "Taxable Value", "number")}
+                    {itemField(index, "cgst_rate", "CGST %", "number")}
+                    {itemField(index, "sgst_rate", "SGST %", "number")}
+                    {itemField(index, "igst_rate", "IGST %", "number")}
+                    {itemField(index, "cess_rate", "Cess %", "number")}
+                    {itemField(index, "cess_nonadvol", "Cess Non-Advol", "number")}
+                    {itemField(index, "cgst", "CGST Amount", "number")}
+                    {itemField(index, "sgst_utgst", "SGST Amount", "number")}
+                    {itemField(index, "igst", "IGST Amount", "number")}
+                    {itemField(index, "cess", "Cess Amount", "number")}
+                    {itemField(index, "other_tax_charges", "Other Tax Charges", "number")}
+                    {itemField(index, "total_invoice_value", "Invoice Value", "number")}
+                  </div>
+                </div>
+              ))}
+            </section>
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
+              Cancel
+            </Button>
+            <Button type="button" onClick={onSave} disabled={saving}>
+              {saving ? "Adding…" : "Add Manual Shipment"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={productPickerOpen} onOpenChange={setProductPickerOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Products / Goods</DialogTitle>
+          </DialogHeader>
+          <Input
+            placeholder="Search products"
+            value={productSearch}
+            onChange={(e) => setProductSearch(e.target.value)}
+          />
+          <div className="max-h-[50vh] overflow-y-auto rounded border">
+            {products
+              .filter(
+                (p) =>
+                  !productSearch ||
+                  String(p.product_name).toLowerCase().includes(productSearch.toLowerCase()) ||
+                  String(p.hsn_code).includes(productSearch),
+              )
+              .map((product) => (
+                <button
+                  type="button"
+                  key={product.id}
+                  className="flex w-full items-center justify-between border-b p-3 text-left hover:bg-muted"
+                  onClick={() => chooseProduct(product, productPickerIndex)}
+                >
+                  <span className="font-medium">{product.product_name}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {product.hsn_code || "No HSN"} · {product.unit}
+                  </span>
+                </button>
+              ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={productCreateOpen} onOpenChange={setProductCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Product</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {(
+              [
+                ["product_name", "Product Name"],
+                ["description", "Description"],
+                ["hsn_code", "HSN Code"],
+                ["unit", "Unit"],
+                ["default_quantity", "Default Quantity"],
+                ["default_weight_kg", "Default Weight (KG)"],
+              ] as const
+            ).map(([key, label]) => (
+              <div key={key} className="space-y-1.5">
+                <Label>{label}</Label>
+                <Input
+                  type={key.includes("quantity") || key.includes("weight") ? "number" : "text"}
+                  value={newProduct[key]}
+                  onChange={(e) => setNewProduct({ ...newProduct, [key]: e.target.value })}
+                />
+              </div>
             ))}
-          </section>
-        </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
-          <Button type="button" onClick={onSave} disabled={saving}>
-            {saving ? "Adding…" : "Add Manual Shipment"}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setProductCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void createProduct()}>Create Product</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 

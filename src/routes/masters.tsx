@@ -17,6 +17,7 @@ import { MasterList } from "@/components/masters/MasterList";
 import { Contracts } from "@/components/masters/Contracts";
 import { VehicleInsuranceSection } from "@/components/masters/VehicleInsuranceSection";
 import { VehicleRoadTaxSection } from "@/components/masters/VehicleRoadTaxSection";
+import { PartyMaster } from "@/components/masters/PartyMaster";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 import {
@@ -91,6 +92,20 @@ const ALL_TABS = [
     adminOnly: true,
   },
   { id: "contract", label: "Sources", desc: "Rates & slabs", icon: FileText, adminOnly: true },
+  {
+    id: "consignor",
+    label: "Consignor",
+    desc: "From-party GSTIN master",
+    icon: Building2,
+    adminOnly: false,
+  },
+  {
+    id: "consignee",
+    label: "Consignee",
+    desc: "To-party GSTIN master",
+    icon: Building2,
+    adminOnly: false,
+  },
 ] as const;
 
 type TabId = (typeof ALL_TABS)[number]["id"];
@@ -225,6 +240,8 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
           {safeTab === "delivery-partner" ? <MasterList config={DELIVERY_PARTNER_CONFIG} /> : null}
           {safeTab === "location" ? <MasterList config={LOCATION_CONFIG} /> : null}
           {safeTab === "contract" ? <Contracts /> : null}
+          {safeTab === "consignor" ? <PartyMaster partyType="consignor" /> : null}
+          {safeTab === "consignee" ? <PartyMaster partyType="consignee" /> : null}
         </div>
       </div>
     </AppShell>
