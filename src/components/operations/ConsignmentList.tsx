@@ -26,6 +26,7 @@ import {
 
 type Item = Record<string, string | number>;
 type Master = { id: string; label: string; pin_code?: string | null; gstin?: string | null };
+type DriverMasterRow = { id: string; full_name: string | null; driver_code: string | null };
 
 type ShipmentDraft = {
   eway_bill_number: string;
@@ -508,6 +509,7 @@ function SelectField({
   options,
   placeholder,
   disabled = false,
+  allowClear = false,
 }: {
   label: string;
   value: string;
@@ -515,11 +517,16 @@ function SelectField({
   options: Master[];
   placeholder: string;
   disabled?: boolean;
+  allowClear?: boolean;
 }) {
   return (
     <div className="min-w-0 space-y-1">
       <Label className="text-xs font-semibold">{label}</Label>
-      <Select value={value} onValueChange={onChange} disabled={disabled}>
+      <Select
+        value={allowClear && !value ? "__none__" : value}
+        onValueChange={(selected) => onChange(selected === "__none__" ? "" : selected)}
+        disabled={disabled}
+      >
         <SelectTrigger
           className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs"
           disabled={disabled}
@@ -527,6 +534,7 @@ function SelectField({
           <SelectValue placeholder={placeholder} />
         </SelectTrigger>
         <SelectContent>
+          {allowClear && <SelectItem value="__none__">Not assigned</SelectItem>}
           {options.map((option) => (
             <SelectItem key={option.id} value={option.id}>
               {option.label}
@@ -563,6 +571,7 @@ export function ConsignmentList({
   const [movement, setMovement] = useState("pickup");
   const [transportMode, setTransportMode] = useState("Road");
   const [vehicleId, setVehicleId] = useState("");
+  const [driverId, setDriverId] = useState("");
   const [rentalId, setRentalId] = useState("");
   const [transporterId, setTransporterId] = useState("");
   const [fromPin, setFromPin] = useState("");
@@ -573,6 +582,7 @@ export function ConsignmentList({
   const [drafts, setDrafts] = useState<ShipmentDraft[]>([]);
   const [contracts, setContracts] = useState<Master[]>([]);
   const [vehicles, setVehicles] = useState<Master[]>([]);
+  const [drivers, setDrivers] = useState<Master[]>([]);
   const [rentals, setRentals] = useState<Master[]>([]);
   const [transporters, setTransporters] = useState<Master[]>([]);
   const [partnerDialog, setPartnerDialog] = useState<"rental" | "transporter" | null>(null);
@@ -599,7 +609,7 @@ export function ConsignmentList({
     const { data, error } = await db
       .from("consignments")
       .select(
-        "*, branch:branches(branch_name), source:contracts(contract_name), vehicle:vehicles(registration_number,nickname), rental:rentals(rental_name), transporter:ltms_transporters(transporter_name,gstin,pin_code)",
+        "*, branch:branches(branch_name), source:contracts(contract_name), vehicle:vehicles(registration_number,nickname), driver:drivers(full_name,driver_code), rental:rentals(rental_name), transporter:ltms_transporters(transporter_name,gstin,pin_code)",
       )
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
@@ -608,15 +618,21 @@ export function ConsignmentList({
   }
 
   async function loadMasters() {
-    const [sourceResult, vehicleResult, rentalResult, transporterResult] = await Promise.all([
-      db.from("contracts").select("id,contract_name").eq("status", "active").order("contract_name"),
-      db.from("vehicles").select("id,registration_number").order("registration_number"),
-      db.from("rentals").select("id,rental_name,pin_code,gstin").order("rental_name"),
-      db
-        .from("ltms_transporters")
-        .select("id,transporter_name,pin_code,gstin")
-        .order("transporter_name"),
-    ]);
+    const [sourceResult, vehicleResult, driverResult, rentalResult, transporterResult] =
+      await Promise.all([
+        db
+          .from("contracts")
+          .select("id,contract_name")
+          .eq("status", "active")
+          .order("contract_name"),
+        db.from("vehicles").select("id,registration_number").order("registration_number"),
+        db.from("drivers").select("id,full_name,driver_code").order("full_name"),
+        db.from("rentals").select("id,rental_name,pin_code,gstin").order("rental_name"),
+        db
+          .from("ltms_transporters")
+          .select("id,transporter_name,pin_code,gstin")
+          .order("transporter_name"),
+      ]);
     setContracts(
       (sourceResult.data ?? []).map((row: any) => ({ id: row.id, label: row.contract_name })),
     );
@@ -624,6 +640,12 @@ export function ConsignmentList({
       (vehicleResult.data ?? []).map((row: any) => ({
         id: row.id,
         label: row.registration_number,
+      })),
+    );
+    setDrivers(
+      ((driverResult.data ?? []) as DriverMasterRow[]).map((row) => ({
+        id: row.id,
+        label: `${row.full_name}${row.driver_code ? ` (${row.driver_code})` : ""}`,
       })),
     );
     setRentals(
@@ -685,6 +707,7 @@ export function ConsignmentList({
     setMovement("pickup");
     setTransportMode("Road");
     setVehicleId("");
+    setDriverId("");
     setRentalId("");
     setTransporterId("");
     setFromPin("");
@@ -854,7 +877,6 @@ export function ConsignmentList({
     const needsTransporter = type === "third_party";
     if (!branchId || !sourceId || drafts.length < 1)
       return toast.error("Branch, Source and at least one E-Way Bill are required");
-    if (needsOwnVehicle && !vehicleId) return toast.error("Vehicle is required for this movement");
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
     if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
     if (movement === "drop" && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
@@ -866,7 +888,8 @@ export function ConsignmentList({
       consignment_type: type,
       movement_mode: movement,
       transport_mode: transportMode,
-      vehicle_id: needsOwnVehicle ? vehicleId : "",
+      vehicle_id: needsOwnVehicle ? vehicleId || null : null,
+      driver_id: type === "own" || movement === "drop" ? driverId || null : null,
       transporter_id: needsTransporter ? transporterId : "",
       from_pin_code: fromPin,
       to_pin_code: toPin,
@@ -989,6 +1012,9 @@ export function ConsignmentList({
             vehicles,
             vehicleId,
             setVehicleId,
+            drivers,
+            driverId,
+            setDriverId,
             rentals,
             rentalId,
             setRentalId,
@@ -1185,6 +1211,9 @@ function ConsignmentForm(props: any) {
     vehicles,
     vehicleId,
     setVehicleId,
+    drivers,
+    driverId,
+    setDriverId,
     rentals,
     rentalId,
     setRentalId,
@@ -1491,12 +1520,24 @@ function ConsignmentForm(props: any) {
             </div>
             <div className="min-w-0">
               <SelectField
-                label="Vehicle *"
+                label="Vehicle (Optional)"
                 value={vehicleId}
                 onChange={setVehicleId}
                 options={vehicles}
-                placeholder="Select company vehicle"
+                placeholder="Select company vehicle (optional)"
                 disabled={!needsOwnVehicle}
+                allowClear
+              />
+            </div>
+            <div className="min-w-0">
+              <SelectField
+                label="Driver (Optional)"
+                value={driverId}
+                onChange={setDriverId}
+                options={drivers}
+                placeholder="Select driver (optional)"
+                disabled={type !== "own" && movement !== "drop"}
+                allowClear
               />
             </div>
             <div className="col-span-1 min-w-0 space-y-1 sm:col-span-2 xl:col-span-2">
@@ -2499,6 +2540,10 @@ function ConsignmentView({
                     .join(" · ")
                 : "—"
             }
+          />
+          <ReadonlyField
+            label="Driver"
+            value={row.driver?.full_name || row.driver?.driver_code || "—"}
           />
           <ReadonlyField
             label="Rental"
