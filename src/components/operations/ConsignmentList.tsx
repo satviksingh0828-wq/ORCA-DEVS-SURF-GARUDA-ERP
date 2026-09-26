@@ -1637,6 +1637,7 @@ function ManualShipmentDialog({
   const [partyLoading, setPartyLoading] = useState<"consignor" | "consignee" | null>(null);
   const [productPickerOpen, setProductPickerOpen] = useState(false);
   const [productPickerIndex, setProductPickerIndex] = useState(0);
+  const [expandedItems, setExpandedItems] = useState<Set<number>>(() => new Set([0]));
   const [productCreateOpen, setProductCreateOpen] = useState(false);
   const [products, setProducts] = useState<Array<Record<string, any>>>([]);
   const [productSearch, setProductSearch] = useState("");
@@ -1916,74 +1917,106 @@ function ManualShipmentDialog({
                   <Button
                     type="button"
                     variant="outline"
-                    onClick={() =>
+                    onClick={() => {
                       setDraft((current) => ({
                         ...current,
                         items: [...current.items, emptyShipmentItem()],
-                      }))
-                    }
+                      }));
+                      setExpandedItems((current) => new Set([...current, draft.items.length]));
+                    }}
                   >
                     <Plus className="mr-1 size-4" /> Add Product
                   </Button>
                 </div>
               </div>
-              {draft.items.map((item, index) => (
-                <div key={index} className="space-y-3 border border-border p-3">
-                  <div className="flex items-center justify-between">
-                    <h4 className="text-xs font-bold uppercase tracking-wide">
-                      Product {index + 1}
-                    </h4>
-                    {draft.items.length > 1 && (
-                      <Button
+              {draft.items.map((item, index) => {
+                const expanded = expandedItems.has(index);
+                return (
+                  <div key={index} className="overflow-hidden rounded-lg border border-border">
+                    <div className="flex items-center gap-2 bg-muted/30 p-2">
+                      <button
                         type="button"
-                        size="sm"
-                        variant="ghost"
+                        className="flex min-w-0 flex-1 items-center justify-between gap-3 rounded px-2 py-2 text-left hover:bg-muted"
                         onClick={() =>
-                          setDraft((current) => ({
-                            ...current,
-                            items: current.items.filter((_, itemIndex) => itemIndex !== index),
-                          }))
+                          setExpandedItems((current) => {
+                            const next = new Set(current);
+                            if (next.has(index)) next.delete(index);
+                            else next.add(index);
+                            return next;
+                          })
                         }
-                        aria-label={`Remove product ${index + 1}`}
+                        aria-expanded={expanded}
                       >
-                        <Trash2 className="size-4" />
-                      </Button>
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="text-xs font-bold uppercase tracking-wide text-sky-800">
+                            Product {index + 1}
+                          </span>
+                          <span className="truncate text-sm font-medium">
+                            {String(item.product_name || item.description || "Unnamed product")}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-sm font-semibold">
+                          Invoice Value: ₹
+                          {numberValue(item.total_invoice_value).toLocaleString("en-IN", {
+                            minimumFractionDigits: 2,
+                          })}
+                          <span className="ml-2 text-muted-foreground">{expanded ? "▲" : "▼"}</span>
+                        </span>
+                      </button>
+                      {draft.items.length > 1 && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setDraft((current) => ({
+                              ...current,
+                              items: current.items.filter((_, itemIndex) => itemIndex !== index),
+                            }))
+                          }
+                          aria-label={`Remove product ${index + 1}`}
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      )}
+                    </div>
+                    {expanded && (
+                      <div className="grid grid-cols-1 gap-x-4 gap-y-3 border-t border-border p-3 sm:grid-cols-2 xl:grid-cols-4">
+                        <div className="flex items-end gap-1">
+                          <div className="min-w-0 flex-1">
+                            {itemField(index, "product_name", "Product Name")}
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            onClick={() => void openProductPicker(index)}
+                          >
+                            List
+                          </Button>
+                        </div>
+                        {itemField(index, "description", "Description", "text", true)}
+                        {itemField(index, "hsn_code", "HSN Code", "text", true)}
+                        {itemField(index, "quantity", "Quantity", "number")}
+                        {itemField(index, "unit", "Unit")}
+                        {itemField(index, "weight_kg", "Weight (KG)", "number")}
+                        {itemField(index, "taxable_value", "Taxable Value", "number")}
+                        {itemField(index, "cgst_rate", "CGST %", "number")}
+                        {itemField(index, "sgst_rate", "SGST %", "number")}
+                        {itemField(index, "igst_rate", "IGST %", "number")}
+                        {itemField(index, "cess_rate", "Cess %", "number")}
+                        {itemField(index, "cess_nonadvol", "Cess Non-Advol", "number")}
+                        {itemField(index, "cgst", "CGST Amount", "number")}
+                        {itemField(index, "sgst_utgst", "SGST Amount", "number")}
+                        {itemField(index, "igst", "IGST Amount", "number")}
+                        {itemField(index, "cess", "Cess Amount", "number")}
+                        {itemField(index, "other_tax_charges", "Other Tax Charges", "number")}
+                        {itemField(index, "total_invoice_value", "Invoice Value", "number")}
+                      </div>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-                    <div className="flex items-end gap-1">
-                      <div className="min-w-0 flex-1">
-                        {itemField(index, "product_name", "Product Name")}
-                      </div>
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        onClick={() => void openProductPicker(index)}
-                      >
-                        List
-                      </Button>
-                    </div>
-                    {itemField(index, "description", "Description", "text", true)}
-                    {itemField(index, "hsn_code", "HSN Code", "text", true)}
-                    {itemField(index, "quantity", "Quantity", "number")}
-                    {itemField(index, "unit", "Unit")}
-                    {itemField(index, "weight_kg", "Weight (KG)", "number")}
-                    {itemField(index, "taxable_value", "Taxable Value", "number")}
-                    {itemField(index, "cgst_rate", "CGST %", "number")}
-                    {itemField(index, "sgst_rate", "SGST %", "number")}
-                    {itemField(index, "igst_rate", "IGST %", "number")}
-                    {itemField(index, "cess_rate", "Cess %", "number")}
-                    {itemField(index, "cess_nonadvol", "Cess Non-Advol", "number")}
-                    {itemField(index, "cgst", "CGST Amount", "number")}
-                    {itemField(index, "sgst_utgst", "SGST Amount", "number")}
-                    {itemField(index, "igst", "IGST Amount", "number")}
-                    {itemField(index, "cess", "Cess Amount", "number")}
-                    {itemField(index, "other_tax_charges", "Other Tax Charges", "number")}
-                    {itemField(index, "total_invoice_value", "Invoice Value", "number")}
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </section>
           </div>
           <DialogFooter>
