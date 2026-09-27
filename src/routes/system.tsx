@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   ScrollText,
   Wrench,
+  Zap,
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -20,6 +21,7 @@ import { SecurityPanel } from "@/components/system/SecurityPanel";
 import { CorrectionPanel } from "@/components/system/CorrectionPanel";
 import { LogsPanel } from "@/components/users/LogsPanel";
 import { useSession } from "@/lib/session";
+import { TemporaryEwayBillPanel } from "@/components/system/TemporaryEwayBillPanel";
 
 export const Route = createFileRoute("/system")({
   head: () => ({
@@ -52,6 +54,12 @@ const TABS = [
     icon: AlertTriangle,
   },
   {
+    id: "temporary-eway",
+    label: "Temporary E-Way Bill",
+    desc: "Generate an E-Way Bill from JSON for testing",
+    icon: Zap,
+  },
+  {
     id: "db",
     label: "Database Stats",
     desc: "PostgreSQL system stats & storage",
@@ -81,7 +89,8 @@ function SystemPage() {
 
   // Admin-equivalent guard; Settings and Users remain separate Admin-only routes.
   useEffect(() => {
-    if (user && user.role !== "admin" && user.role !== "semi_admin") navigate({ to: "/home", replace: true });
+    if (user && user.role !== "admin" && user.role !== "semi_admin")
+      navigate({ to: "/home", replace: true });
   }, [user, navigate]);
 
   if (user?.role !== "admin" && user?.role !== "semi_admin") return null;
@@ -167,6 +176,7 @@ function SystemPage() {
           </header>
 
           {tab === "errors" && <ErrorPanel />}
+          {tab === "temporary-eway" && <TemporaryEwayBillPanel />}
           {tab === "corrections" && <CorrectionPanel />}
           {tab === "db" && <DatabaseStats />}
           {tab === "security" && <SecurityPanel />}
