@@ -583,6 +583,7 @@ export function ConsignmentList({
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [branchId, setBranchId] = useState("");
   const [sourceId, setSourceId] = useState("");
+  const [consignmentDate, setConsignmentDate] = useState(new Date().toISOString().slice(0, 10));
   const [type, setType] = useState("own");
   const [ownTransportMode, setOwnTransportMode] = useState("own_vehicle");
   const [movement, setMovement] = useState("pickup");
@@ -740,6 +741,7 @@ export function ConsignmentList({
     onCreateModeChange?.(true);
     setBranchId(branches.length === 1 ? branches[0].id : "");
     setSourceId("");
+    setConsignmentDate(new Date().toISOString().slice(0, 10));
     setType("own");
     setOwnTransportMode("own_vehicle");
     setMovement("pickup");
@@ -918,8 +920,8 @@ export function ConsignmentList({
       type === "third_party" ? movement === "drop" : ownTransportMode === "own_vehicle";
     const needsRental = type === "own" && ownTransportMode === "rental";
     const needsTransporter = type === "third_party";
-    if (!branchId || !sourceId || drafts.length < 1)
-      return toast.error("Branch, Consignment Data and at least one E-Way Bill are required");
+    if (!branchId || !consignmentDate || drafts.length < 1)
+      return toast.error("Branch, Consignment Date and at least one E-Way Bill are required");
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
     if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
     if (movement === "drop" && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
@@ -935,7 +937,8 @@ export function ConsignmentList({
       );
     const payload = {
       branch_id: branchId,
-      source_id: sourceId,
+      source_id: sourceId || null,
+      consignment_date: consignmentDate,
       consignment_type: type,
       movement_mode: movement,
       transport_mode: transportMode,
@@ -991,6 +994,7 @@ export function ConsignmentList({
     const { error: updateError } = await db
       .from("consignments")
       .update({
+        consignment_date: consignmentDate,
         own_transport_mode: type === "own" ? ownTransportMode : "own_vehicle",
         rental_id: needsRental ? rentalId : null,
       })
@@ -1096,6 +1100,8 @@ export function ConsignmentList({
             contracts,
             sourceId,
             setSourceId,
+            consignmentDate,
+            setConsignmentDate,
             type,
             setType,
             ownTransportMode,
@@ -1323,6 +1329,8 @@ function ConsignmentForm(props: any) {
     contracts,
     sourceId,
     setSourceId,
+    consignmentDate,
+    setConsignmentDate,
     type,
     setType,
     ownTransportMode,
@@ -1553,13 +1561,15 @@ function ConsignmentForm(props: any) {
               }))}
               placeholder="Select branch"
             />
-            <SelectField
-              label="Consignment Data *"
-              value={sourceId}
-              onChange={setSourceId}
-              options={contracts}
-              placeholder="Select consignment data manually"
-            />
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">Consignment Date *</Label>
+              <Input
+                type="date"
+                value={consignmentDate}
+                onChange={(event) => setConsignmentDate(event.target.value)}
+                className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+              />
+            </div>
             <ReadonlyField dense label="Consignment From PIN" value={common?.supplier_pin_code} />
             <ReadonlyField dense label="Consignment To PIN" value={common?.recipient_pin_code} />
             <div className="min-w-0 space-y-1">
@@ -2842,6 +2852,7 @@ function ConsignmentView({
         <ReadonlyField label="Document Type" value="Consignment" />
         <ReadonlyField label="Consignment No." value={row.consignment_number} />
         <ReadonlyField label="Branch" value={row.branch?.branch_name} />
+        <ReadonlyField label="Consignment Date" value={row.consignment_date} />
         <ReadonlyField
           label="Source / Contract"
           value={row.source?.contract_name || row.source_id}

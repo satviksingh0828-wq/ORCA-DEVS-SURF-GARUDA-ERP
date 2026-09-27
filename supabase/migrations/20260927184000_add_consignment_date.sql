@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE public.consignments
+  ADD COLUMN IF NOT EXISTS consignment_date DATE NOT NULL DEFAULT CURRENT_DATE;
+
+COMMIT;
