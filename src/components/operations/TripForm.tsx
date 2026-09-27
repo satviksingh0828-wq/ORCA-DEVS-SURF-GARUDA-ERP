@@ -1482,11 +1482,24 @@ function MovementTab({
           reasonCode: form.reasonCode as "1" | "2" | "3" | "4",
           reasonRem: form.reasonRem,
         },
-      })) as { updated: number; failed: number };
-      toast[result.failed ? "warning" : "success"](
-        `${result.updated} E-Way Bill(s) updated${result.failed ? `; ${result.failed} failed` : ""}. Trip is locked after any success.`,
-      );
-      onPartBUpdated?.();
+      })) as {
+        updated: number;
+        failed: number;
+        results?: Array<{ ewayBillNumber: string; ok: boolean; error?: string | null }>;
+      };
+      const failures = (result.results ?? [])
+        .filter((item) => !item.ok)
+        .map(
+          (item) => `${item.ewayBillNumber}: ${item.error || "E-Way Bill API rejected the update"}`,
+        );
+      if (result.failed) {
+        toast.error(
+          `${result.updated} E-Way Bill(s) updated; ${result.failed} failed${failures.length ? ` — ${failures.join(" | ")}` : ""}`,
+        );
+      } else {
+        toast.success(`${result.updated} E-Way Bill(s) updated. Trip is locked after success.`);
+      }
+      if (result.updated) onPartBUpdated?.();
       setUpdating(null);
       await load();
     } catch (error) {
@@ -1690,7 +1703,7 @@ function MovementTab({
                 }
               />
               <div className="space-y-1.5">
-                <Label>Reason Code</Label>
+                <Label>Reason Code *</Label>
                 <Select
                   value={form.reasonCode}
                   onValueChange={(v) => setForm((f) => ({ ...f, reasonCode: v }))}
@@ -1711,9 +1724,15 @@ function MovementTab({
                       ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">
+                  First update: code 4 — First Time. Later updates are allowed only after changing
+                  the vehicle and must use code 1 (Vehicle breakdown), 2 (Trans-shipment), or 3
+                  (Other reason).
+                </p>
               </div>
               <Field
-                label="Reason Remarks"
+                label="Reason Remarks *"
+                required
                 value={form.reasonRem}
                 onChange={(v) => setForm((f) => ({ ...f, reasonRem: v }))}
               />
