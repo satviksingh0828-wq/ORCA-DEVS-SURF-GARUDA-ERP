@@ -55,7 +55,7 @@ const SAMPLE_PAYLOAD = {
   transMode: "1",
   transDistance: "0",
   transDocDate: "",
-  vehicleNo: "",
+  vehicleNo: "RJ14AB1234",
   vehicleType: "R",
   itemList: [
     {
@@ -95,6 +95,26 @@ export function TemporaryEwayBillPanel() {
       if (!parsed || Array.isArray(parsed) || typeof parsed !== "object")
         throw new Error("JSON must be an object");
       payload = parsed as Record<string, unknown>;
+      const itemList = payload.itemList;
+      if (!Array.isArray(itemList) || itemList.length === 0) {
+        throw new Error("itemList must contain at least one item");
+      }
+      if (String(payload.transMode ?? "") === "1" && !String(payload.vehicleNo ?? "").trim()) {
+        throw new Error("vehicleNo is required when transMode is Road (1)");
+      }
+      // The GST E-Way Bill master uses PAC (Packs); PKT is not a valid UQC.
+      payload = {
+        ...payload,
+        itemList: itemList.map((item) => {
+          if (!item || typeof item !== "object" || Array.isArray(item)) return item;
+          const row = item as Record<string, unknown>;
+          return String(row.qtyUnit ?? "")
+            .trim()
+            .toUpperCase() === "PKT"
+            ? { ...row, qtyUnit: "PAC" }
+            : row;
+        }),
+      };
     } catch (error) {
       return toast.error(
         error instanceof Error ? `Invalid JSON: ${error.message}` : "Invalid JSON",
