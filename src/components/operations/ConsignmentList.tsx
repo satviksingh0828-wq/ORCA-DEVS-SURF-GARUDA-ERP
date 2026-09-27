@@ -591,6 +591,9 @@ export function ConsignmentList({
   const [driverId, setDriverId] = useState("");
   const [rentalId, setRentalId] = useState("");
   const [transporterId, setTransporterId] = useState("");
+  const [transporterLrNumber, setTransporterLrNumber] = useState("");
+  const [transporterLrDate, setTransporterLrDate] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState("");
   const [fromPin, setFromPin] = useState("");
   const [toPin, setToPin] = useState("");
   const [previewNumber, setPreviewNumber] = useState("");
@@ -745,6 +748,9 @@ export function ConsignmentList({
     setDriverId("");
     setRentalId("");
     setTransporterId("");
+    setTransporterLrNumber("");
+    setTransporterLrDate("");
+    setDeliveryDate("");
     setFromPin("");
     setToPin("");
     setPreviewNumber("");
@@ -913,7 +919,7 @@ export function ConsignmentList({
     const needsRental = type === "own" && ownTransportMode === "rental";
     const needsTransporter = type === "third_party";
     if (!branchId || !sourceId || drafts.length < 1)
-      return toast.error("Branch, Source and at least one E-Way Bill are required");
+      return toast.error("Branch, Consignment Data and at least one E-Way Bill are required");
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
     if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
     if (movement === "drop" && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
@@ -936,6 +942,9 @@ export function ConsignmentList({
       vehicle_id: needsOwnVehicle ? vehicleId || null : null,
       driver_id: type === "own" || movement === "drop" ? driverId || null : null,
       transporter_id: needsTransporter ? transporterId : "",
+      transporter_lr_number: transporterLrNumber.trim() || null,
+      transporter_lr_date: transporterLrDate || null,
+      delivery_date: deliveryDate || null,
       from_pin_code: fromPin,
       to_pin_code:
         type === "third_party" && movement === "drop" ? toPin : common.recipient_pin_code,
@@ -1107,6 +1116,12 @@ export function ConsignmentList({
             transporters,
             transporterId,
             setTransporterId,
+            transporterLrNumber,
+            setTransporterLrNumber,
+            transporterLrDate,
+            setTransporterLrDate,
+            deliveryDate,
+            setDeliveryDate,
             fromPin,
             setFromPin,
             toPin,
@@ -1328,6 +1343,12 @@ function ConsignmentForm(props: any) {
     transporters,
     transporterId,
     setTransporterId,
+    transporterLrNumber,
+    setTransporterLrNumber,
+    transporterLrDate,
+    setTransporterLrDate,
+    deliveryDate,
+    setDeliveryDate,
     fromPin,
     setFromPin,
     toPin,
@@ -1533,11 +1554,11 @@ function ConsignmentForm(props: any) {
               placeholder="Select branch"
             />
             <SelectField
-              label="Source *"
+              label="Consignment Data *"
               value={sourceId}
               onChange={setSourceId}
               options={contracts}
-              placeholder="Select source"
+              placeholder="Select consignment data manually"
             />
             <ReadonlyField dense label="Consignment From PIN" value={common?.supplier_pin_code} />
             <ReadonlyField dense label="Consignment To PIN" value={common?.recipient_pin_code} />
@@ -1710,6 +1731,41 @@ function ConsignmentForm(props: any) {
                   Create New
                 </Button>
               </div>
+            </div>
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">
+                {type === "third_party"
+                  ? "Transporter LR Number (Not Current Transporter)"
+                  : "Transporter LR Number"}
+              </Label>
+              <Input
+                value={transporterLrNumber}
+                onChange={(event) => setTransporterLrNumber(event.target.value)}
+                placeholder="Optional LR number"
+                className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+              />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">
+                {type === "third_party"
+                  ? "Transporter LR Date (Not Current Transporter)"
+                  : "Transporter LR Date"}
+              </Label>
+              <Input
+                type="date"
+                value={transporterLrDate}
+                onChange={(event) => setTransporterLrDate(event.target.value)}
+                className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+              />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">Delivery Date (Optional)</Label>
+              <Input
+                type="date"
+                value={deliveryDate}
+                onChange={(event) => setDeliveryDate(event.target.value)}
+                className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+              />
             </div>
           </div>
         </section>
@@ -2842,6 +2898,23 @@ function ConsignmentView({
           <ReadonlyField label="Transporter" value={row.transporter?.transporter_name} />
           <ReadonlyField label="Transporter GSTIN" value={row.transporter?.gstin} />
           <ReadonlyField label="Transporter PIN Code" value={row.transporter?.pin_code} />
+          <ReadonlyField
+            label={
+              row.consignment_type === "third_party"
+                ? "Transporter LR Number (Not Current Transporter)"
+                : "Transporter LR Number"
+            }
+            value={row.transporter_lr_number}
+          />
+          <ReadonlyField
+            label={
+              row.consignment_type === "third_party"
+                ? "Transporter LR Date (Not Current Transporter)"
+                : "Transporter LR Date"
+            }
+            value={row.transporter_lr_date}
+          />
+          <ReadonlyField label="Delivery Date" value={row.delivery_date} />
           {row.consignment_type === "third_party" && (
             <ReadonlyField
               label="Transporter Update Status"

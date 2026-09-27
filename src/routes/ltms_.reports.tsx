@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ChevronRight, FileBarChart } from "lucide-react";
+import { ChevronRight, FileBarChart, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
@@ -29,61 +29,93 @@ export const Route = createFileRoute("/ltms_/reports")({
   }),
   component: () => (
     <RequireAuth>
-      <AppShell
-        breadcrumb={
-          <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Link to="/home" className="hover:text-foreground">
-              Workspace
-            </Link>
-            <ChevronRight className="size-3.5" />
-            <Link to="/ltms" className="hover:text-foreground">
-              LTMS
-            </Link>
-            <ChevronRight className="size-3.5" />
-            <span className="text-foreground">Reports</span>
-          </span>
-        }
-      >
-        <ReportsTabs />
-      </AppShell>
+      <ReportsPage />
     </RequireAuth>
   ),
 });
 
 export default Route;
 
-function ReportsTabs() {
+function ReportsPage() {
   const [tab, setTab] = useState<TabId>("admin-mis");
+  const [navOpen, setNavOpen] = useState(true);
   const active = TABS.find((item) => item.id === tab) ?? TABS[0];
 
   return (
-    <div className="space-y-6">
-      <header>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
-          LTMS / Reports
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight">{active.label}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
-      </header>
-      <MobileTabDropdown tabs={TABS} activeId={tab} label="Reports" onChange={setTab} />
-      <div className="hidden gap-2 rounded-xl border border-border bg-muted/30 p-2 lg:flex">
-        {TABS.map((item) => {
-          const Icon = item.icon;
-          const selected = item.id === tab;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              onClick={() => setTab(item.id)}
-              className={`flex items-center gap-2 rounded-lg px-4 py-2.5 text-left text-sm transition-colors ${selected ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-            >
-              <Icon className="size-4" />
-              {item.label}
-            </button>
-          );
-        })}
+    <AppShell
+      breadcrumb={
+        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <Link to="/home" className="hover:text-foreground">
+            Workspace
+          </Link>
+          <ChevronRight className="size-3.5" />
+          <Link to="/ltms" className="hover:text-foreground">
+            LTMS
+          </Link>
+          <ChevronRight className="size-3.5" />
+          <span className="text-foreground">Reports</span>
+        </span>
+      }
+      headerEnd={
+        <button
+          type="button"
+          onClick={() => setNavOpen((value) => !value)}
+          title={navOpen ? "Hide sidebar" : "Show sidebar"}
+          className="hidden items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex"
+        >
+          {navOpen ? (
+            <>
+              <PanelLeftClose className="size-3.5" />
+              <span>Hide sidebar</span>
+            </>
+          ) : (
+            <>
+              <PanelLeftOpen className="size-3.5" />
+              <span>Show sidebar</span>
+            </>
+          )}
+        </button>
+      }
+    >
+      <div className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}>
+        {navOpen && (
+          <nav className="app-sidebar-scroll hidden lg:fixed lg:left-[max(1.5rem,calc((100vw-1280px)/2+1.5rem))] lg:top-20 lg:block lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+            <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              Reports
+            </p>
+            <ul className="space-y-1">
+              {TABS.map((item) => {
+                const Icon = item.icon;
+                const selected = item.id === tab;
+                return (
+                  <li key={item.id}>
+                    <button
+                      type="button"
+                      onClick={() => setTab(item.id)}
+                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 ${selected ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+                    >
+                      <Icon className={`size-4 shrink-0 ${selected ? "text-primary" : ""}`} />
+                      <span className="min-w-0 leading-tight">
+                        <span className="block truncate text-sm font-medium">{item.label}</span>
+                        <span className="block truncate text-[11px] opacity-70">{item.desc}</span>
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </nav>
+        )}
+
+        <MobileTabDropdown tabs={TABS} activeId={tab} label="Reports" onChange={setTab} />
+        <div className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>
+          <header className="mb-6">
+            <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
+            <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
+          </header>
+          {tab === "admin-mis" && <MonthlyMISReport />}
+        </div>
       </div>
-      <MonthlyMISReport />
-    </div>
+    </AppShell>
   );
 }
