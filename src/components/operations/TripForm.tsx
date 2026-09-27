@@ -1412,8 +1412,8 @@ function MovementTab({
               ? "4"
               : "1"),
       vehicleType: m.part_b_vehicle_type || "R",
-      transDocNo: m.part_b_trans_doc_no || "",
-      transDocDate: apiDate(m.part_b_trans_doc_date),
+      transDocNo: m.part_b_trans_doc_no || m.consignment_number || "",
+      transDocDate: apiDate(m.part_b_trans_doc_date || m.created_at),
       reasonCode: first ? "4" : "1",
       reasonRem: first ? "First Part-B update" : "Vehicle details updated",
     });
