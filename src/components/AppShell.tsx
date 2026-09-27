@@ -114,6 +114,13 @@ export function AppShell({
     void video.play().catch(() => undefined);
   }, [backgroundVideoEnabled, backgroundVideoUrl]);
 
+  useEffect(() => {
+    return () => {
+      if (sharedBackgroundVideo) sharedBackgroundVideo.style.display = "none";
+      if (sharedBackgroundVeil) sharedBackgroundVeil.style.display = "none";
+    };
+  }, []);
+
   return (
     <div
       data-video-background={backgroundVideoEnabled ? "on" : "off"}
