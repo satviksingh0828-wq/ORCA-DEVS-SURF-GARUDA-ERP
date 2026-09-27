@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Package, Pencil, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Package, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
@@ -16,123 +16,166 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type Entry = {
+type PackageType = {
   id: string;
   branch_id: string;
   package_type: string;
   basis: "quantity" | "weight";
   charge_mode: "fixed" | "rate";
+};
+type Slab = {
+  id: string;
+  package_rate_type_id: string;
   from_value: number;
   to_value: number | null;
   amount: number;
 };
-const blank = {
-  id: "",
-  branch_id: "",
-  package_type: "",
-  basis: "quantity",
-  charge_mode: "rate",
-  from_value: "0",
-  to_value: "",
-  amount: "",
-};
+const blankSlab = { id: "", from_value: "0", to_value: "", amount: "" };
+
 export function PackageRates() {
   const { user } = useSession();
   const branches = useBranches();
-  const [rows, setRows] = useState<Entry[]>([]);
-  const [form, setForm] = useState(blank);
+  const [types, setTypes] = useState<PackageType[]>([]);
+  const [slabs, setSlabs] = useState<Slab[]>([]);
+  const [branchId, setBranchId] = useState("");
+  const [selectedTypeId, setSelectedTypeId] = useState("");
+  const [typeForm, setTypeForm] = useState({
+    package_type: "",
+    basis: "quantity",
+    charge_mode: "rate",
+  });
+  const [slabForm, setSlabForm] = useState(blankSlab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const admin = isAdminLike(user?.role);
   const allowed = user?.role === "basic" ? (user.branchIds ?? []) : null;
-  const branchName = (id: string) => branches.find((b) => b.id === id)?.branch_name ?? "—";
+  const db = supabase as any;
+  const branchTypes = useMemo(
+    () => types.filter((t) => t.branch_id === branchId),
+    [types, branchId],
+  );
+  const selectedType = types.find((t) => t.id === selectedTypeId) ?? null;
+  const selectedSlabs = useMemo(
+    () => slabs.filter((s) => s.package_rate_type_id === selectedTypeId),
+    [slabs, selectedTypeId],
+  );
+
   async function load() {
     setLoading(true);
-    let query = (supabase as any)
+    let typeQuery = db.from("package_rate_types").select("*").order("package_type");
+    let slabQuery = db
       .from("package_rate_entries")
-      .select("*")
-      .order("branch_id")
-      .order("package_type")
-      .order("basis")
+      .select("id,package_rate_type_id,from_value,to_value,amount")
+      .not("package_rate_type_id", "is", null)
       .order("from_value");
-    if (allowed !== null)
-      query = query.in(
-        "branch_id",
-        allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"],
-      );
-    const { data, error } = await query;
-    if (error) toast.error(error.message);
-    else setRows((data ?? []) as Entry[]);
+    if (allowed !== null) {
+      const ids = allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"];
+      typeQuery = typeQuery.in("branch_id", ids);
+    }
+    const [{ data: typeData, error: typeError }, { data: slabData, error: slabError }] =
+      await Promise.all([typeQuery, slabQuery]);
+    if (typeError) toast.error(typeError.message);
+    else setTypes((typeData ?? []) as PackageType[]);
+    if (slabError) toast.error(slabError.message);
+    else setSlabs((slabData ?? []) as Slab[]);
     setLoading(false);
   }
   useEffect(() => {
     void load();
   }, [user?.id, branches.length]);
-  const packageTypes = useMemo(
-    () => Array.from(new Set(rows.map((r) => r.package_type))).sort(),
-    [rows],
-  );
-  function edit(row: Entry) {
-    setForm({
+  useEffect(() => {
+    if (branchId && !branchTypes.some((t) => t.id === selectedTypeId)) setSelectedTypeId("");
+  }, [branchId, branchTypes, selectedTypeId]);
+
+  async function createType(e: React.FormEvent) {
+    e.preventDefault();
+    if (!admin) return toast.error("Only administrators can manage Package Rates");
+    if (!branchId) return toast.error("Select a branch first");
+    if (!typeForm.package_type.trim()) return toast.error("Package type is required");
+    setSaving(true);
+    const { data, error } = await db
+      .from("package_rate_types")
+      .insert({
+        branch_id: branchId,
+        package_type: typeForm.package_type.trim(),
+        basis: typeForm.basis,
+        charge_mode: typeForm.charge_mode,
+      })
+      .select()
+      .single();
+    setSaving(false);
+    if (error) return toast.error(error.message);
+    setTypes((current) => [...current, data as PackageType]);
+    setSelectedTypeId(data.id);
+    setTypeForm({ package_type: "", basis: "quantity", charge_mode: "rate" });
+    toast.success("Package type created. Add its slabs below.");
+  }
+  function editSlab(row: Slab) {
+    setSlabForm({
       id: row.id,
-      branch_id: row.branch_id,
-      package_type: row.package_type,
-      basis: row.basis,
-      charge_mode: row.charge_mode,
       from_value: String(row.from_value),
       to_value: row.to_value == null ? "" : String(row.to_value),
       amount: String(row.amount),
     });
   }
-  async function save(e: React.FormEvent) {
+  async function saveSlab(e: React.FormEvent) {
     e.preventDefault();
-    if (!admin) return toast.error("Only administrators can manage Package Rates");
+    if (!admin || !selectedType) return;
+    if (slabForm.from_value === "" || slabForm.amount === "")
+      return toast.error("From value and rate/amount are required");
+    const from = Number(slabForm.from_value);
+    const to = slabForm.to_value === "" ? null : Number(slabForm.to_value);
+    const amount = Number(slabForm.amount);
     if (
-      !form.branch_id ||
-      !form.package_type.trim() ||
-      form.amount === "" ||
-      form.from_value === ""
-    )
-      return toast.error("Branch, package type, From value and amount are required");
-    const payload = {
-      branch_id: form.branch_id,
-      package_type: form.package_type.trim(),
-      basis: form.basis,
-      charge_mode: form.charge_mode,
-      from_value: Number(form.from_value),
-      to_value: form.to_value === "" ? null : Number(form.to_value),
-      amount: Number(form.amount),
-      updated_at: new Date().toISOString(),
-    };
-    if (
-      !Number.isFinite(payload.from_value) ||
-      !Number.isFinite(payload.amount) ||
-      payload.from_value < 0 ||
-      payload.amount < 0 ||
-      (payload.to_value !== null &&
-        (!Number.isFinite(payload.to_value) || payload.to_value < payload.from_value))
+      !Number.isFinite(from) ||
+      !Number.isFinite(amount) ||
+      from < 0 ||
+      amount < 0 ||
+      (to !== null && (!Number.isFinite(to) || to < from))
     )
       return toast.error("Enter a valid slab range and amount");
     setSaving(true);
-    const db = supabase as any;
-    const result = form.id
-      ? await db.from("package_rate_entries").update(payload).eq("id", form.id)
+    const payload = {
+      package_rate_type_id: selectedType.id,
+      branch_id: selectedType.branch_id,
+      package_type: selectedType.package_type,
+      basis: selectedType.basis,
+      charge_mode: selectedType.charge_mode,
+      from_value: from,
+      to_value: to,
+      amount,
+      updated_at: new Date().toISOString(),
+    };
+    const result = slabForm.id
+      ? await db.from("package_rate_entries").update(payload).eq("id", slabForm.id)
       : await db.from("package_rate_entries").insert(payload);
     setSaving(false);
     if (result.error) return toast.error(result.error.message);
-    toast.success(form.id ? "Package Rate updated" : "Package Rate slab added");
-    setForm(blank);
+    setSlabForm(blankSlab);
+    toast.success(slabForm.id ? "Slab updated" : "Slab added");
     await load();
   }
-  async function remove(id: string) {
-    if (!admin || !window.confirm("Delete this Package Rate slab?")) return;
-    const { error } = await (supabase as any).from("package_rate_entries").delete().eq("id", id);
+  async function removeSlab(id: string) {
+    if (!admin || !window.confirm("Delete this slab?")) return;
+    const { error } = await db.from("package_rate_entries").delete().eq("id", id);
     if (error) toast.error(error.message);
     else {
       toast.success("Slab deleted");
       await load();
     }
   }
+  async function removeType(type: PackageType) {
+    if (!admin || !window.confirm(`Delete package type ${type.package_type} and all its slabs?`))
+      return;
+    const { error } = await db.from("package_rate_types").delete().eq("id", type.id);
+    if (error) toast.error(error.message);
+    else {
+      setSelectedTypeId("");
+      toast.success("Package type deleted");
+      await load();
+    }
+  }
+
   return (
     <div className="space-y-5">
       <div className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-4">
@@ -140,183 +183,246 @@ export function PackageRates() {
         <div>
           <h3 className="font-semibold">Package Rate</h3>
           <p className="text-sm text-muted-foreground">
-            Create a package type and define branch-wise quantity or weight slabs. Fixed means a
-            flat charge; Rate × multiplies the amount by the selected quantity or weight.
+            Select a branch first. Create package types inside that branch, then open a package type
+            to add multiple slabs.
           </p>
         </div>
       </div>
-      {admin && (
-        <form
-          onSubmit={save}
-          className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-4"
-        >
-          <div className="space-y-1.5">
-            <Label>Branch *</Label>
-            <Select
-              value={form.branch_id}
-              onValueChange={(v) => setForm((f) => ({ ...f, branch_id: v }))}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select branch" />
-              </SelectTrigger>
-              <SelectContent>
-                {branches.map((b) => (
+      <section className="space-y-4 rounded-xl border border-border p-4">
+        <div className="max-w-md space-y-1.5">
+          <Label>1. Select Branch *</Label>
+          <Select value={branchId} onValueChange={setBranchId}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select branch first" />
+            </SelectTrigger>
+            <SelectContent>
+              {branches
+                .filter((b) => allowed === null || allowed.includes(b.id))
+                .map((b) => (
                   <SelectItem key={b.id} value={b.id}>
                     {b.branch_name}
                   </SelectItem>
                 ))}
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Package Type *</Label>
-            <Input
-              list="package-types"
-              value={form.package_type}
-              onChange={(e) => setForm((f) => ({ ...f, package_type: e.target.value }))}
-              placeholder="Box, Bag, Pallet…"
-            />
-            <datalist id="package-types">
-              {packageTypes.map((x) => (
-                <option key={x} value={x} />
-              ))}
-            </datalist>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Method</Label>
-            <Select value={form.basis} onValueChange={(v) => setForm((f) => ({ ...f, basis: v }))}>
-              <SelectTrigger />
-              <SelectContent>
-                <SelectItem value="quantity">Quantity-wise</SelectItem>
-                <SelectItem value="weight">Weight-wise (KG)</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Charge Type</Label>
-            <Select
-              value={form.charge_mode}
-              onValueChange={(v) => setForm((f) => ({ ...f, charge_mode: v }))}
-            >
-              <SelectTrigger />
-              <SelectContent>
-                <SelectItem value="fixed">Fixed ₹</SelectItem>
-                <SelectItem value="rate">Rate × units</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="space-y-1.5">
-            <Label>From (inclusive) *</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.001"
-              value={form.from_value}
-              onChange={(e) => setForm((f) => ({ ...f, from_value: e.target.value }))}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>To (inclusive)</Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.001"
-              value={form.to_value}
-              onChange={(e) => setForm((f) => ({ ...f, to_value: e.target.value }))}
-              placeholder="Blank = open ended"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label>
-              {form.charge_mode === "fixed" ? "Fixed Amount (₹)" : "Rate per unit (₹)"} *
-            </Label>
-            <Input
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.amount}
-              onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
-            />
-          </div>
-          <div className="flex items-end gap-2">
-            <Button type="submit" disabled={saving}>
-              {form.id ? <Pencil className="size-4" /> : <Plus className="size-4" />}
-              {saving ? "Saving…" : form.id ? "Update slab" : "Add slab"}
-            </Button>
-            {form.id && (
-              <Button type="button" variant="outline" onClick={() => setForm(blank)}>
-                Cancel
-              </Button>
-            )}
-          </div>
-        </form>
-      )}
-      {loading ? (
-        <p className="p-6 text-center text-sm text-muted-foreground">Loading Package Rates…</p>
-      ) : (
-        <div className="overflow-x-auto rounded-xl border border-border">
-          <table className="w-full text-sm">
-            <thead className="bg-muted/50 text-left">
-              <tr>
-                {[
-                  "Branch",
-                  "Package Type",
-                  "Method",
-                  "Charge",
-                  "From",
-                  "To",
-                  "Amount",
-                  "Actions",
-                ].map((h) => (
-                  <th key={h} className="px-3 py-2">
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
-                    No Package Rate slabs created.
-                  </td>
-                </tr>
-              ) : (
-                rows.map((r) => (
-                  <tr key={r.id} className="border-t border-border">
-                    <td className="px-3 py-2">{branchName(r.branch_id)}</td>
-                    <td className="px-3 py-2 font-medium">{r.package_type}</td>
-                    <td className="px-3 py-2">
-                      {r.basis === "weight" ? "Weight-wise" : "Quantity-wise"}
-                    </td>
-                    <td className="px-3 py-2">
-                      {r.charge_mode === "fixed" ? "Fixed ₹" : "Rate × units"}
-                    </td>
-                    <td className="px-3 py-2">{r.from_value}</td>
-                    <td className="px-3 py-2">{r.to_value ?? "∞"}</td>
-                    <td className="px-3 py-2">
-                      ₹{Number(r.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-3 py-2">
-                      <div className="flex gap-1">
-                        {admin && (
-                          <>
-                            <Button variant="ghost" size="sm" onClick={() => edit(r)}>
-                              <Pencil className="size-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" onClick={() => void remove(r.id)}>
-                              <Trash2 className="size-4" />
-                            </Button>
-                          </>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+            </SelectContent>
+          </Select>
         </div>
+        {admin && branchId && (
+          <form
+            onSubmit={createType}
+            className="grid gap-3 border-t border-border pt-4 md:grid-cols-4"
+          >
+            <div className="space-y-1.5">
+              <Label>2. Create Package Type *</Label>
+              <Input
+                value={typeForm.package_type}
+                onChange={(e) => setTypeForm((f) => ({ ...f, package_type: e.target.value }))}
+                placeholder="Box, Bag, Pallet…"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Method</Label>
+              <Select
+                value={typeForm.basis}
+                onValueChange={(v) => setTypeForm((f) => ({ ...f, basis: v }))}
+              >
+                <SelectTrigger />
+                <SelectContent>
+                  <SelectItem value="quantity">Quantity-wise</SelectItem>
+                  <SelectItem value="weight">Weight-wise (KG)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Charge Type</Label>
+              <Select
+                value={typeForm.charge_mode}
+                onValueChange={(v) => setTypeForm((f) => ({ ...f, charge_mode: v }))}
+              >
+                <SelectTrigger />
+                <SelectContent>
+                  <SelectItem value="fixed">Fixed ₹</SelectItem>
+                  <SelectItem value="rate">Rate × units</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-end">
+              <Button type="submit" disabled={saving}>
+                <Plus className="size-4" />
+                Create Package Type
+              </Button>
+            </div>
+          </form>
+        )}
+      </section>
+      {branchId && (
+        <section className="space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="font-semibold">Package types in selected branch</h4>
+            <span className="text-xs text-muted-foreground">{branchTypes.length} type(s)</span>
+          </div>
+          {loading ? (
+            <p className="p-6 text-center text-sm text-muted-foreground">Loading…</p>
+          ) : branchTypes.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+              No package types in this branch yet.
+            </div>
+          ) : (
+            <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+              {branchTypes.map((type) => (
+                <div
+                  key={type.id}
+                  className={`rounded-xl border p-4 ${selectedTypeId === type.id ? "border-primary bg-primary/5" : "border-border"}`}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <h5 className="font-semibold">{type.package_type}</h5>
+                      <p className="text-xs text-muted-foreground">
+                        {type.basis === "weight" ? "Weight-wise (KG)" : "Quantity-wise"} ·{" "}
+                        {type.charge_mode === "fixed" ? "Fixed ₹" : "Rate × units"}
+                      </p>
+                    </div>
+                    {admin && (
+                      <Button variant="ghost" size="sm" onClick={() => void removeType(type)}>
+                        <Trash2 className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                  <Button
+                    className="mt-3 w-full"
+                    variant={selectedTypeId === type.id ? "default" : "outline"}
+                    onClick={() => {
+                      setSelectedTypeId(type.id);
+                      setSlabForm(blankSlab);
+                    }}
+                  >
+                    {selectedTypeId === type.id ? "Package Type Open" : "Open Package Type"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+      {selectedType && (
+        <section className="space-y-4 rounded-xl border border-primary/30 bg-primary/[0.02] p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <Button variant="ghost" size="sm" onClick={() => setSelectedTypeId("")}>
+                <ArrowLeft className="size-4" />
+                Back to package types
+              </Button>
+              <h4 className="mt-2 text-lg font-semibold">{selectedType.package_type}</h4>
+              <p className="text-sm text-muted-foreground">
+                {selectedType.basis === "weight" ? "Weight-wise (KG)" : "Quantity-wise"} ·{" "}
+                {selectedType.charge_mode === "fixed" ? "Fixed ₹" : "Rate per unit (₹)"}
+              </p>
+            </div>
+          </div>
+          {admin && (
+            <form
+              onSubmit={saveSlab}
+              className="grid gap-3 border-y border-border py-4 md:grid-cols-4"
+            >
+              <div className="space-y-1.5">
+                <Label>From (inclusive) *</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={slabForm.from_value}
+                  onChange={(e) => setSlabForm((f) => ({ ...f, from_value: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>To (inclusive)</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.001"
+                  value={slabForm.to_value}
+                  onChange={(e) => setSlabForm((f) => ({ ...f, to_value: e.target.value }))}
+                  placeholder="Blank = open ended"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>
+                  {selectedType.charge_mode === "fixed"
+                    ? "Fixed Amount (₹) *"
+                    : "Rate per unit (₹) *"}
+                </Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={slabForm.amount}
+                  onChange={(e) => setSlabForm((f) => ({ ...f, amount: e.target.value }))}
+                />
+              </div>
+              <div className="flex items-end gap-2">
+                <Button type="submit" disabled={saving}>
+                  {slabForm.id ? <Pencil className="size-4" /> : <Plus className="size-4" />}
+                  {slabForm.id ? "Update Slab" : "Add Slab"}
+                </Button>
+                {slabForm.id && (
+                  <Button type="button" variant="outline" onClick={() => setSlabForm(blankSlab)}>
+                    Cancel
+                  </Button>
+                )}
+              </div>
+            </form>
+          )}
+          {selectedSlabs.length === 0 ? (
+            <p className="py-6 text-center text-sm text-muted-foreground">
+              No slabs yet. Add the first slab above.
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-left">
+                  <tr>
+                    {[
+                      "From (inclusive)",
+                      "To (inclusive)",
+                      selectedType.charge_mode === "fixed"
+                        ? "Fixed Amount (₹)"
+                        : "Rate per unit (₹)",
+                      "Actions",
+                    ].map((h) => (
+                      <th key={h} className="px-3 py-2">
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedSlabs.map((slab) => (
+                    <tr key={slab.id} className="border-t border-border">
+                      <td className="px-3 py-2">{slab.from_value}</td>
+                      <td className="px-3 py-2">{slab.to_value ?? "∞"}</td>
+                      <td className="px-3 py-2">
+                        ₹{Number(slab.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => editSlab(slab)}>
+                            <Pencil className="size-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => void removeSlab(slab.id)}
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
