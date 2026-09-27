@@ -150,7 +150,7 @@ const ADMIN_VIEWER_MODULES = [
     key: "ltms",
     label: "LTMS",
     desc: "Logistics finance, income & expenditure",
-    icon: Landmark,
+    icon: Truck,
     active: true,
     to: "/ltms" as const,
     roles: ["admin", "semi_admin", "viewer"] as const,
