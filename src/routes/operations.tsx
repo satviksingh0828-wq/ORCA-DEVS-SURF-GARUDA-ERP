@@ -38,6 +38,7 @@ import { MovementList } from "@/components/operations/MovementList";
 import { EwayBillList } from "@/components/operations/EwayBillList";
 import { ManifestList } from "@/components/operations/ManifestList";
 import { LtmsManifestList } from "@/components/operations/LtmsManifestList";
+import { MonthlyMIS } from "@/components/operations/MonthlyMIS";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -122,6 +123,14 @@ const ALL_TABS = [
     dividerBefore: false,
   },
   {
+    id: "monthly-mis",
+    label: "Monthly MIS",
+    desc: "Branch-wise date-wise MIS submission calendar",
+    icon: ClipboardList,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
     id: "eway-bill",
     label: "E-Way Bill",
     desc: "Saved daily assigned-EWB snapshots",
@@ -189,6 +198,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       t.id === "movements" ||
       t.id === "eway-bill" ||
       t.id === "ltms-manifest" ||
+      t.id === "monthly-mis" ||
       t.id === "fastag-report" ||
       t.id === "transporter-advance";
     if (mode === "ltms" && !isLtmsTab) return false;
@@ -336,6 +346,11 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           {safeTab === "ltms-manifest" && (
             <TabErrorBoundary label="Manifest">
               <LtmsManifestList onSidebarVisibilityChange={setNavOpen} />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "monthly-mis" && (
+            <TabErrorBoundary label="Monthly MIS">
+              <MonthlyMIS />
             </TabErrorBoundary>
           )}
           {safeTab === "eway-bill" && (

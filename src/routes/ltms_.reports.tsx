@@ -1,19 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ChevronRight, ClipboardList, FileBarChart } from "lucide-react";
+import { ChevronRight, FileBarChart } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
-import { MonthlyMIS } from "@/components/operations/MonthlyMIS";
 import { MonthlyMISReport } from "@/components/reports/MonthlyMISReport";
 
 const TABS = [
-  {
-    id: "monthly-mis",
-    label: "Monthly MIS",
-    desc: "Branch-wise date-wise MIS submission calendar",
-    icon: ClipboardList,
-  },
   {
     id: "admin-mis",
     label: "ADMIN MIS",
@@ -39,9 +32,13 @@ export const Route = createFileRoute("/ltms_/reports")({
       <AppShell
         breadcrumb={
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-            <Link to="/home" className="hover:text-foreground">Workspace</Link>
+            <Link to="/home" className="hover:text-foreground">
+              Workspace
+            </Link>
             <ChevronRight className="size-3.5" />
-            <Link to="/ltms" className="hover:text-foreground">LTMS</Link>
+            <Link to="/ltms" className="hover:text-foreground">
+              LTMS
+            </Link>
             <ChevronRight className="size-3.5" />
             <span className="text-foreground">Reports</span>
           </span>
@@ -56,13 +53,15 @@ export const Route = createFileRoute("/ltms_/reports")({
 export default Route;
 
 function ReportsTabs() {
-  const [tab, setTab] = useState<TabId>("monthly-mis");
+  const [tab, setTab] = useState<TabId>("admin-mis");
   const active = TABS.find((item) => item.id === tab) ?? TABS[0];
 
   return (
     <div className="space-y-6">
       <header>
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">LTMS / Reports</p>
+        <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
+          LTMS / Reports
+        </p>
         <h1 className="mt-2 text-2xl font-semibold tracking-tight">{active.label}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
       </header>
@@ -84,7 +83,7 @@ function ReportsTabs() {
           );
         })}
       </div>
-      {tab === "monthly-mis" ? <MonthlyMIS /> : <MonthlyMISReport />}
+      <MonthlyMISReport />
     </div>
   );
 }
