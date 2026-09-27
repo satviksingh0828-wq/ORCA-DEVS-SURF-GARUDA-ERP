@@ -992,8 +992,8 @@ export function ConsignmentList({
           package_rate_type_id: entry.package_rate_type_id,
           package_type: entry.package_type,
           basis: entry.basis,
-          quantity: entry.basis === "quantity" ? Number(entry.quantity) : null,
-          weight_kg: entry.basis === "weight" ? Number(entry.weight_kg) : null,
+          quantity: Number(entry.quantity),
+          weight_kg: Number(entry.weight_kg),
         })),
       );
       if (packageError) return toast.error(packageError.message);
@@ -1773,8 +1773,8 @@ function ConsignmentForm(props: any) {
             <div>
               <h3 className="text-sm font-semibold text-sky-800">Update Package Information</h3>
               <p className="text-xs text-muted-foreground">
-                Select a package type and enter either quantity or weight. One entry cannot contain
-                both.
+                Select a package type and enter both quantity and weight. Both values are mandatory
+                for each package entry.
               </p>
             </div>
             <Button
@@ -1853,34 +1853,38 @@ function ConsignmentForm(props: any) {
                       </Select>
                     </div>
                     <div className="space-y-1.5">
-                      <Label>{selected?.basis === "weight" ? "Weight (KG) *" : "Quantity *"}</Label>
+                      <Label>Quantity *</Label>
                       <Input
                         type="number"
                         min="0.001"
                         step="0.001"
-                        value={selected?.basis === "weight" ? entry.weight_kg : entry.quantity}
+                        value={entry.quantity}
                         disabled={!selected}
                         onChange={(event) =>
                           setPackageEntries(
                             packageEntries.map((current, i) =>
-                              i === index
-                                ? {
-                                    ...current,
-                                    quantity:
-                                      selected?.basis === "weight" ? "" : event.target.value,
-                                    weight_kg:
-                                      selected?.basis === "weight" ? event.target.value : "",
-                                  }
-                                : current,
+                              i === index ? { ...current, quantity: event.target.value } : current,
                             ),
                           )
                         }
                       />
                     </div>
-                    <div className="flex items-end">
-                      <span className="rounded-md bg-muted px-2 py-2 text-xs text-muted-foreground">
-                        {selected?.basis === "weight" ? "Weight-wise" : "Quantity-wise"}
-                      </span>
+                    <div className="space-y-1.5">
+                      <Label>Weight (KG) *</Label>
+                      <Input
+                        type="number"
+                        min="0.001"
+                        step="0.001"
+                        value={entry.weight_kg}
+                        disabled={!selected}
+                        onChange={(event) =>
+                          setPackageEntries(
+                            packageEntries.map((current, i) =>
+                              i === index ? { ...current, weight_kg: event.target.value } : current,
+                            ),
+                          )
+                        }
+                      />
                     </div>
                     <div className="flex items-end">
                       <Button

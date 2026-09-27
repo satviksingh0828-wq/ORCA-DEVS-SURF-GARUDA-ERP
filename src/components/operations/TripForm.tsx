@@ -1260,7 +1260,18 @@ type MovementOption = {
     place?: string;
     pincode?: string;
   } | null;
-  shipments?: Array<{ id: string; eway_bill_number?: string | null }> | null;
+  to_details?: {
+    trade_name?: string;
+    legal_name?: string;
+    place?: string;
+    pincode?: string;
+  } | null;
+  shipments?: Array<{
+    id: string;
+    eway_bill_number?: string | null;
+    dispatch_from_pin_code?: string | null;
+    ship_to_pin_code?: string | null;
+  }> | null;
 };
 const PART_B_REASONS = {
   "1": "Vehicle breakdown",
@@ -1340,7 +1351,7 @@ function MovementTab({
     const { data, error } = await (supabase as any)
       .from("consignments")
       .select(
-        "id,consignment_number,vehicle_id,driver_id,trip_id,from_pin_code,to_pin_code,movement_mode,consignment_type,own_transport_mode,transport_mode,created_at,part_b_updated_at,part_b_vehicle_no,part_b_from_pin_code,part_b_from_state,part_b_from_place,part_b_transport_mode,part_b_vehicle_type,part_b_trans_doc_no,part_b_trans_doc_date,part_b_reason_code,from_details,branch:branches(branch_name,pin_code),vehicle:vehicles(registration_number),driver:drivers(full_name),trip:trips(trip_code),shipments(id,eway_bill_number)",
+        "id,consignment_number,vehicle_id,driver_id,trip_id,from_pin_code,to_pin_code,movement_mode,consignment_type,own_transport_mode,transport_mode,created_at,part_b_updated_at,part_b_vehicle_no,part_b_from_pin_code,part_b_from_state,part_b_from_place,part_b_transport_mode,part_b_vehicle_type,part_b_trans_doc_no,part_b_trans_doc_date,part_b_reason_code,from_details,to_details,branch:branches(branch_name,pin_code),vehicle:vehicles(registration_number),driver:drivers(full_name),trip:trips(trip_code),shipments(id,eway_bill_number,dispatch_from_pin_code,ship_to_pin_code)",
       )
       .eq("branch_id", branchId)
       .order("created_at", { ascending: false });
@@ -1468,6 +1479,10 @@ function MovementTab({
     }
     setSaving(false);
   }
+  const pinFrom = (m: MovementOption) =>
+    m.from_pin_code || m.from_details?.pincode || m.shipments?.[0]?.dispatch_from_pin_code || "";
+  const pinTo = (m: MovementOption) =>
+    m.to_pin_code || m.to_details?.pincode || m.shipments?.[0]?.ship_to_pin_code || "";
   const visible = rows.filter(
     (m) =>
       (!search.trim() ||
@@ -1551,7 +1566,7 @@ function MovementTab({
               <span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-4">
                 <strong>{m.consignment_number}</strong>
                 <span>
-                  {m.from_pin_code || "—"} → {m.to_pin_code || "—"}
+                  {pinFrom(m) || "—"} → {pinTo(m) || "—"}
                 </span>
                 <span>
                   {m.vehicle?.registration_number || "No vehicle"} ·{" "}
