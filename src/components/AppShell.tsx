@@ -10,6 +10,44 @@ import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
 import { useTheme } from "@/lib/theme";
 
+let sharedBackgroundVideo: HTMLVideoElement | null = null;
+let sharedBackgroundVeil: HTMLDivElement | null = null;
+let sharedBackgroundVideoUrl = "";
+let sharedBackgroundVideoReady = false;
+
+function ensureSharedBackgroundVideo() {
+  if (sharedBackgroundVideo && sharedBackgroundVeil) {
+    if (!document.body.contains(sharedBackgroundVideo))
+      document.body.appendChild(sharedBackgroundVideo);
+    if (!document.body.contains(sharedBackgroundVeil))
+      document.body.appendChild(sharedBackgroundVeil);
+    return { video: sharedBackgroundVideo, veil: sharedBackgroundVeil };
+  }
+
+  const video = document.createElement("video");
+  video.className = "background-video-layer";
+  video.autoplay = true;
+  video.loop = true;
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = "auto";
+  video.poster = "/garuda-banner.webp";
+  video.setAttribute("aria-hidden", "true");
+  video.addEventListener("canplay", () => {
+    sharedBackgroundVideoReady = true;
+    video.classList.add("background-video-ready");
+  });
+
+  const veil = document.createElement("div");
+  veil.className = "video-background-veil background-video-veil-layer";
+  veil.setAttribute("aria-hidden", "true");
+
+  document.body.append(video, veil);
+  sharedBackgroundVideo = video;
+  sharedBackgroundVeil = veil;
+  return { video, veil };
+}
+
 export function AppShell({
   children,
   breadcrumb,
@@ -59,6 +97,23 @@ export function AppShell({
     };
   }, [backgroundVideoEnabled, videoGlassAppearance]);
 
+  useEffect(() => {
+    const { video, veil } = ensureSharedBackgroundVideo();
+    video.style.display = backgroundVideoEnabled ? "block" : "none";
+    veil.style.display = backgroundVideoEnabled ? "block" : "none";
+
+    if (!backgroundVideoEnabled) return;
+    if (sharedBackgroundVideoUrl !== backgroundVideoUrl) {
+      sharedBackgroundVideoUrl = backgroundVideoUrl;
+      sharedBackgroundVideoReady = false;
+      video.classList.remove("background-video-ready");
+      video.src = backgroundVideoUrl;
+      video.load();
+    }
+    if (sharedBackgroundVideoReady) video.classList.add("background-video-ready");
+    void video.play().catch(() => undefined);
+  }, [backgroundVideoEnabled, backgroundVideoUrl]);
+
   return (
     <div
       data-video-background={backgroundVideoEnabled ? "on" : "off"}
@@ -75,27 +130,6 @@ export function AppShell({
         isAdmin && open ? "lg:mr-[360px]" : "",
       )}
     >
-      {backgroundVideoEnabled ? (
-        <>
-          <video
-            key={backgroundVideoUrl}
-            className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover"
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="metadata"
-            poster="/garuda-banner.webp"
-            aria-hidden="true"
-          >
-            <source src={backgroundVideoUrl} />
-          </video>
-          <div
-            className="video-background-veil pointer-events-none fixed inset-0 z-[1]"
-            aria-hidden="true"
-          />
-        </>
-      ) : null}
       <header className="relative sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
           <Link to="/home" className="shrink-0">

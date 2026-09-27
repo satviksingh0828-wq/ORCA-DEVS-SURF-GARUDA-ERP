@@ -1549,7 +1549,7 @@ function ConsignmentForm(props: any) {
         </div>
         <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
           <h3 className="text-sm font-semibold text-sky-800">Consignment Details</h3>
-          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="consignment-overview-grid grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-6">
             <ReadonlyField dense label="Document Type" value="Consignment" />
             <div className="min-w-0 space-y-1">
               <Label className="text-xs font-semibold">Type *</Label>
@@ -1649,7 +1649,7 @@ function ConsignmentForm(props: any) {
         <CommonEwayDetails draft={common} />
         <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
           <h3 className="text-sm font-semibold text-sky-800">Transport Assignment</h3>
-          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="consignment-transport-grid grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-6">
             <div className={`min-w-0 space-y-1 ${type !== "own" ? "opacity-60" : ""}`}>
               <Label className="text-xs font-semibold">Own Transport Option *</Label>
               <Select

@@ -960,3 +960,49 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Background video is a shared DOM layer so route changes do not restart it. */
+.background-video-layer,
+.background-video-veil-layer {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+}
+.background-video-layer {
+  z-index: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+.background-video-layer.background-video-ready {
+  opacity: 1;
+}
+.background-video-veil-layer {
+  z-index: 1;
+}
+
+/* Use up to six fields per row when the Consignment form has enough width. */
+.consignment-entry .consignment-overview-grid,
+.consignment-entry .consignment-transport-grid {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+@media (max-width: 1280px) {
+  .consignment-entry .consignment-overview-grid,
+  .consignment-entry .consignment-transport-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+@media (max-width: 768px) {
+  .consignment-entry .consignment-overview-grid,
+  .consignment-entry .consignment-transport-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 640px) {
+  .consignment-entry .consignment-overview-grid,
+  .consignment-entry .consignment-transport-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
