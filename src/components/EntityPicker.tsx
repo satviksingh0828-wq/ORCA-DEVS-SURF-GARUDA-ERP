@@ -24,6 +24,7 @@ export function EntityPicker({
   onAdd,
   addLabel,
   full,
+  disabled = false,
 }: {
   label: string;
   placeholder?: string;
@@ -33,6 +34,7 @@ export function EntityPicker({
   onAdd?: () => void;
   addLabel?: string;
   full?: boolean;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find((o) => o.id === value);
@@ -48,6 +50,7 @@ export function EntityPicker({
             role="combobox"
             aria-expanded={open}
             className="h-10 w-full justify-between font-normal"
+            disabled={disabled}
           >
             <span className="flex min-w-0 items-center gap-2 truncate">
               <Search className="size-4 shrink-0 text-muted-foreground" />
@@ -87,9 +90,7 @@ export function EntityPicker({
                       setOpen(false);
                     }}
                   >
-                    <Check
-                      className={cn("size-4", value === o.id ? "opacity-100" : "opacity-0")}
-                    />
+                    <Check className={cn("size-4", value === o.id ? "opacity-100" : "opacity-0")} />
                     <span className="truncate">{o.label}</span>
                     {o.sub ? (
                       <span className="ml-auto text-xs text-muted-foreground">{o.sub}</span>

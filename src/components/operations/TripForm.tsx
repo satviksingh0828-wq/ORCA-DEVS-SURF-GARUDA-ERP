@@ -4,6 +4,7 @@ import QRCode from "qrcode";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -36,6 +37,7 @@ import { serverSaveTripLines } from "@/lib/trip-actions";
 import { serverUpdateEwayBillPartB } from "@/lib/ewaybill-partb";
 import { logAction } from "@/lib/log-actions";
 import { ensureLocationForPin, ensureLocationsForPins } from "@/lib/ensure-location";
+import { lookupIndiaPin } from "@/lib/india-post";
 import {
   findEntry,
   inr,
@@ -76,6 +78,8 @@ export type TripRow = {
   notes?: string | null;
   created_at?: string;
   reopened_at?: string | null;
+  part_b_locked_at?: string | null;
+  part_b_locked_by?: string | null;
 };
 
 export type ManifestRow = {
@@ -202,7 +206,7 @@ export function TripForm({
   const TABS = isBasic ? TABS_BASIC : TABS_ALL;
   const basicStartDateBounds = getBasicStartDateBounds();
 
-  const [trip, setTrip] = useState<TripRow>({ mode: "ROAD", ...initial });
+  const [trip, setTrip] = useState<TripRow>({ ...initial, mode: initial.mode ?? "ROAD" });
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [tab, setTab] = useState<TabId>("movement");
@@ -957,6 +961,7 @@ export function TripForm({
               <EntityPicker
                 label="Vehicle (required)"
                 value={trip.vehicle_id}
+                disabled={Boolean(trip.part_b_locked_at)}
                 options={vehicleOpts}
                 onChange={(id) => patch({ vehicle_id: id })}
               />
@@ -989,6 +994,7 @@ export function TripForm({
           <EntityPicker
             label="Branch (required)"
             value={trip.branch_id}
+            disabled={Boolean(trip.part_b_locked_at)}
             options={branchOpts}
             onChange={(id) => {
               const prefix = allBranches.find((b) => b.id === id)?.trip_series_prefix ?? null;
@@ -1103,6 +1109,10 @@ export function TripForm({
               vehicleId={trip.vehicle_id}
               driverId={trip.driver_id}
               requireTripId={requireTripId}
+              tripLocked={Boolean(trip.part_b_locked_at)}
+              onPartBUpdated={() =>
+                setTrip((current) => ({ ...current, part_b_locked_at: new Date().toISOString() }))
+              }
               isViewer={isViewer}
             />
           ) : null}
@@ -1185,6 +1195,7 @@ function Field({
   min,
   max,
   required = false,
+  disabled,
 }: {
   label: string;
   value: string;
@@ -1193,6 +1204,7 @@ function Field({
   min?: string;
   max?: string;
   required?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <div className="space-y-1.5">
@@ -1208,6 +1220,7 @@ function Field({
         max={max}
         required={required}
         aria-required={required}
+        disabled={disabled}
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
@@ -1229,28 +1242,54 @@ type MovementOption = {
   movement_mode?: string | null;
   consignment_type?: string | null;
   own_transport_mode?: string | null;
+  transport_mode?: string | null;
   created_at?: string | null;
+  part_b_updated_at?: string | null;
+  part_b_vehicle_no?: string | null;
+  part_b_from_pin_code?: string | null;
+  part_b_from_state?: number | null;
+  part_b_from_place?: string | null;
+  part_b_transport_mode?: string | null;
+  part_b_vehicle_type?: string | null;
+  part_b_trans_doc_no?: string | null;
+  part_b_trans_doc_date?: string | null;
+  part_b_reason_code?: string | null;
   from_details?: {
     trade_name?: string;
     legal_name?: string;
     place?: string;
     pincode?: string;
   } | null;
-  to_details?: {
-    trade_name?: string;
-    legal_name?: string;
-    place?: string;
-    pincode?: string;
-  } | null;
-  shipments?: Array<{
-    supplier_trade_name?: string | null;
-    recipient_trade_name?: string | null;
-    supplier_place?: string | null;
-    recipient_place?: string | null;
-    supplier_pin_code?: string | null;
-    recipient_pin_code?: string | null;
-  }> | null;
+  shipments?: Array<{ id: string; eway_bill_number?: string | null }> | null;
 };
+const PART_B_REASONS = {
+  "1": "Vehicle breakdown",
+  "2": "Trans-shipment",
+  "3": "Other reason",
+  "4": "First Time",
+};
+const PIN_STATE_CODES: Record<string, number> = {
+  RAJASTHAN: 8,
+  KARNATAKA: 29,
+  GUJARAT: 24,
+  MAHARASHTRA: 27,
+  DELHI: 7,
+  HARYANA: 6,
+  "UTTAR PRADESH": 9,
+  "MADHYA PRADESH": 23,
+  TELANGANA: 36,
+  "TAMIL NADU": 33,
+  KERALA: 32,
+  ODISHA: 21,
+  BIHAR: 10,
+  ASSAM: 18,
+  "WEST BENGAL": 19,
+  PUNJAB: 3,
+  "ANDHRA PRADESH": 37,
+};
+function apiDate(value: string | null | undefined) {
+  return value ? value.slice(0, 10).split("-").reverse().join("/") : "";
+}
 function MovementTab({
   tripId,
   branchId,
@@ -1258,6 +1297,8 @@ function MovementTab({
   driverId,
   requireTripId,
   isViewer = false,
+  tripLocked = false,
+  onPartBUpdated,
 }: {
   tripId: string | null;
   branchId: string | null;
@@ -1265,44 +1306,53 @@ function MovementTab({
   driverId: string | null;
   requireTripId: () => Promise<string | null>;
   isViewer?: boolean;
+  tripLocked?: boolean;
+  onPartBUpdated?: () => void;
 }) {
+  const { user } = useSession();
   const [rows, setRows] = useState<MovementOption[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [movementDate, setMovementDate] = useState("");
+  const [updating, setUpdating] = useState<MovementOption | null>(null);
+  const [form, setForm] = useState({
+    vehicleNo: "",
+    fromPin: "",
+    fromPlace: "",
+    stateCode: "",
+    transMode: "1",
+    vehicleType: "R",
+    transDocNo: "",
+    transDocDate: "",
+    reasonCode: "4",
+    reasonRem: "First Part-B update",
+  });
   const load = async () => {
-    if (!tripId) {
-      setRows([]);
-      setSelected([]);
-      setLoading(false);
-      return;
-    }
-    if (!branchId) {
+    if (!tripId || !branchId) {
       setRows([]);
       setSelected([]);
       setLoading(false);
       return;
     }
     setLoading(true);
-    const db = supabase as any;
-    const { data, error } = await db
+    const { data, error } = await (supabase as any)
       .from("consignments")
       .select(
-        "id,consignment_number,vehicle_id,driver_id,trip_id,from_pin_code,to_pin_code,movement_mode,consignment_type,own_transport_mode,created_at,from_details,to_details,branch:branches(branch_name,pin_code),transporter:ltms_transporters(transporter_name,pin_code),vehicle:vehicles(registration_number),driver:drivers(full_name),trip:trips(trip_code),shipments(supplier_trade_name,recipient_trade_name,supplier_place,recipient_place,supplier_pin_code,recipient_pin_code)",
+        "id,consignment_number,vehicle_id,driver_id,trip_id,from_pin_code,to_pin_code,movement_mode,consignment_type,own_transport_mode,transport_mode,created_at,part_b_updated_at,part_b_vehicle_no,part_b_from_pin_code,part_b_from_state,part_b_from_place,part_b_transport_mode,part_b_vehicle_type,part_b_trans_doc_no,part_b_trans_doc_date,part_b_reason_code,from_details,branch:branches(branch_name,pin_code),vehicle:vehicles(registration_number),driver:drivers(full_name),trip:trips(trip_code),shipments(id,eway_bill_number)",
       )
       .eq("branch_id", branchId)
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
     const all = (data ?? []) as MovementOption[];
-    const available = all.filter((m) => {
-      const validMovement =
-        (m.consignment_type === "own" && m.movement_mode === "pickup") ||
-        (m.consignment_type === "third_party" && m.movement_mode === "drop");
-      const vehicleMatches = !vehicleId || !m.vehicle_id || m.vehicle_id === vehicleId;
-      return validMovement && (m.trip_id === tripId || (!m.trip_id && vehicleMatches));
-    });
+    const available = all.filter(
+      (m) =>
+        ((m.consignment_type === "own" && m.movement_mode === "pickup") ||
+          (m.consignment_type === "third_party" && m.movement_mode === "drop")) &&
+        (m.trip_id === tripId ||
+          (!m.trip_id && (!vehicleId || !m.vehicle_id || m.vehicle_id === vehicleId))),
+    );
     setRows(available);
     setSelected(available.filter((m) => m.trip_id === tripId).map((m) => m.id));
     setLoading(false);
@@ -1314,62 +1364,118 @@ function MovementTab({
     const id = await requireTripId();
     if (!id) return;
     setSaving(true);
-    const db = supabase as any;
     const currentIds = rows.filter((m) => m.trip_id === id).map((m) => m.id);
     const removed = currentIds.filter((movementId) => !selected.includes(movementId));
+    if (tripLocked && removed.length) {
+      setSaving(false);
+      return toast.error("Movements cannot be unlinked after Part-B update");
+    }
     const selectedRows = rows.filter((m) => selected.includes(m.id));
-    const updates = [
+    const results = await Promise.all([
       ...selectedRows.map((m) =>
-        db
+        (supabase as any)
           .from("consignments")
           .update({ trip_id: id, vehicle_id: vehicleId, driver_id: driverId })
           .eq("id", m.id),
       ),
       ...removed.map((movementId) =>
-        db.from("consignments").update({ trip_id: null }).eq("id", movementId),
+        (supabase as any).from("consignments").update({ trip_id: null }).eq("id", movementId),
       ),
-    ];
-    const results = await Promise.all(updates);
+    ]);
     const error = results.find((r) => r.error)?.error;
     setSaving(false);
     if (error) return toast.error(error.message);
     toast.success("Trip movements updated");
     await load();
   }
-  const visible = rows.filter((m) => {
-    const needleMatch =
-      !search.trim() ||
-      `${m.consignment_number} ${m.trip?.trip_code ?? ""}`
-        .toLowerCase()
-        .includes(search.trim().toLowerCase());
-    const dateMatch = !movementDate || String(m.created_at ?? "").slice(0, 10) === movementDate;
-    return needleMatch && dateMatch;
-  });
-  const route = (m: MovementOption) => {
-    const thirdPartyDrop = m.consignment_type === "third_party" && m.movement_mode === "drop";
-    const shipment = m.shipments?.[0];
-    const from = thirdPartyDrop
-      ? "Branch"
-      : shipment?.supplier_trade_name ||
+  function openPartB(m: MovementOption) {
+    const first = !m.part_b_updated_at;
+    const pin = m.part_b_from_pin_code || m.from_pin_code || "";
+    setUpdating(m);
+    setForm({
+      vehicleNo: m.part_b_vehicle_no || m.vehicle?.registration_number || "",
+      fromPin: pin,
+      fromPlace:
+        m.part_b_from_place ||
+        m.from_details?.place ||
         m.from_details?.trade_name ||
         m.from_details?.legal_name ||
-        m.from_details?.place ||
-        "—";
-    const to = thirdPartyDrop
-      ? "Transporter"
-      : shipment?.recipient_trade_name ||
-        m.to_details?.trade_name ||
-        m.to_details?.legal_name ||
-        m.to_details?.place ||
-        "—";
-    const fromPin = thirdPartyDrop
-      ? m.from_pin_code
-      : shipment?.supplier_pin_code || m.from_details?.pincode || m.from_pin_code;
-    const toPin = thirdPartyDrop
-      ? m.to_pin_code
-      : shipment?.recipient_pin_code || m.to_details?.pincode || m.to_pin_code;
-    return { from, to, fromPin, toPin };
-  };
+        "",
+      stateCode: m.part_b_from_state ? String(m.part_b_from_state).padStart(2, "0") : "",
+      transMode:
+        m.part_b_transport_mode ||
+        (m.transport_mode === "Rail"
+          ? "2"
+          : m.transport_mode === "Air"
+            ? "3"
+            : m.transport_mode === "Ship"
+              ? "4"
+              : "1"),
+      vehicleType: m.part_b_vehicle_type || "R",
+      transDocNo: m.part_b_trans_doc_no || "",
+      transDocDate: apiDate(m.part_b_trans_doc_date),
+      reasonCode: first ? "4" : "1",
+      reasonRem: first ? "First Part-B update" : "Vehicle details updated",
+    });
+  }
+  async function lookupPin(pin: string) {
+    setForm((f) => ({ ...f, fromPin: pin, stateCode: "" }));
+    if (!/^\d{6}$/.test(pin)) return;
+    const result = await lookupIndiaPin(pin);
+    if (!result) return toast.error("PIN not found; enter a valid Indian PIN");
+    const code = PIN_STATE_CODES[result.state.toUpperCase()];
+    if (!code) return toast.error(`State code is not configured for ${result.state}`);
+    setForm((f) => ({
+      ...f,
+      fromPin: pin,
+      fromPlace: f.fromPlace || result.district,
+      stateCode: String(code).padStart(2, "0"),
+    }));
+  }
+  async function submitPartB() {
+    if (!updating || !user?.sessionToken) return;
+    if (!form.fromPlace.trim() || !form.fromPin || !form.stateCode || !form.vehicleNo.trim())
+      return toast.error("Vehicle, From Place, From PIN, and State Code are required");
+    if (form.transMode !== "1" && !form.transDocNo.trim())
+      return toast.error("Transport Document No. is required for non-road movement");
+    if (!window.confirm(`Update Part-B for all E-Way Bills of ${updating.consignment_number}?`))
+      return;
+    setSaving(true);
+    try {
+      const result = (await serverUpdateEwayBillPartB({
+        data: {
+          token: user.sessionToken,
+          movementId: updating.id,
+          fromPinCode: form.fromPin,
+          fromPlace: form.fromPlace,
+          vehicleNo: form.vehicleNo,
+          vehicleType: form.vehicleType as "R" | "O",
+          transMode: form.transMode as "1" | "2" | "3" | "4",
+          transDocNo: form.transDocNo,
+          transDocDate: form.transDocDate,
+          reasonCode: form.reasonCode as "1" | "2" | "3" | "4",
+          reasonRem: form.reasonRem,
+        },
+      })) as { updated: number; failed: number };
+      toast[result.failed ? "warning" : "success"](
+        `${result.updated} E-Way Bill(s) updated${result.failed ? `; ${result.failed} failed` : ""}. Trip is locked after any success.`,
+      );
+      onPartBUpdated?.();
+      setUpdating(null);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update Part-B");
+    }
+    setSaving(false);
+  }
+  const visible = rows.filter(
+    (m) =>
+      (!search.trim() ||
+        `${m.consignment_number} ${m.trip?.trip_code ?? ""}`
+          .toLowerCase()
+          .includes(search.trim().toLowerCase())) &&
+      (!movementDate || String(m.created_at ?? "").slice(0, 10) === movementDate),
+  );
   return (
     <div className="space-y-4">
       {!tripId && (
@@ -1382,7 +1488,6 @@ function MovementTab({
           <h3 className="text-sm font-semibold tracking-tight">Trip movements</h3>
           <p className="text-xs text-muted-foreground">
             Only unassigned movements and movements already assigned to this trip are shown.
-            Assigned movements from another trip are hidden until manually unassigned.
           </p>
         </div>
         {!isViewer && (
@@ -1397,6 +1502,11 @@ function MovementTab({
           </Button>
         )}
       </div>
+      {tripLocked && (
+        <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-900">
+          Part-B has been updated. This trip is locked: movements cannot be unlinked.
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
         <div className="relative min-w-[240px] flex-1">
           <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
@@ -1417,420 +1527,177 @@ function MovementTab({
       </div>
       {loading ? (
         <p className="p-5 text-center text-sm text-muted-foreground">Loading movements…</p>
-      ) : visible.length === 0 ? (
+      ) : !visible.length ? (
         <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-          No unassigned movements match this trip vehicle.
+          No movements match this trip.
         </p>
       ) : (
         <div className="space-y-2">
           {visible.map((m) => (
-            <label
+            <div
               key={m.id}
               className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3"
             >
               <input
                 type="checkbox"
                 checked={selected.includes(m.id)}
-                disabled={isViewer}
+                disabled={isViewer || tripLocked}
                 onChange={(e) =>
                   setSelected((old) =>
                     e.target.checked ? [...old, m.id] : old.filter((id) => id !== m.id),
                   )
                 }
               />
-              <span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-5">
+              <span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-4">
                 <strong>{m.consignment_number}</strong>
                 <span>
-                  {route(m).from} ({route(m).fromPin || "—"}) → {route(m).to} (
-                  {route(m).toPin || "—"})
+                  {m.from_pin_code || "—"} → {m.to_pin_code || "—"}
                 </span>
-                <span>{m.vehicle?.registration_number || "No vehicle"}</span>
-                <span>{m.driver?.full_name || "No driver"}</span>
+                <span>
+                  {m.vehicle?.registration_number || "No vehicle"} ·{" "}
+                  {m.driver?.full_name || "No driver"}
+                </span>
                 <span className="text-muted-foreground">
                   {m.trip?.trip_code ? `Trip: ${m.trip.trip_code}` : "Unassigned"}
                 </span>
               </span>
-            </label>
+              {m.trip_id === tripId && !isViewer && (
+                <Button type="button" variant="outline" size="sm" onClick={() => openPartB(m)}>
+                  {m.part_b_updated_at ? "Update Part-B" : "Update Part-B"}
+                </Button>
+              )}
+              {m.part_b_updated_at && (
+                <Badge variant="outline" className="border-emerald-300 text-emerald-700">
+                  Part-B updated
+                </Badge>
+              )}
+            </div>
           ))}
         </div>
       )}
-    </div>
-  );
-}
-/* ---------------- LR tab ---------------- */
-
-type LrOption = {
-  id: string;
-  lr_number: string;
-  mode?: "ROAD" | "RAIL" | "AIR" | "SHIP";
-  source?: { contract_name?: string } | null;
-  transporter?: { transporter_name?: string } | null;
-  calculated_income?: number | string | null;
-  linked_trip_id?: string | null;
-  linked_trip_code?: string | null;
-  linked_manifest_number?: string | null;
-  created_at?: string | null;
-  part_b_updated_at?: string | null;
-};
-
-function LrTab({
-  tripId,
-  branchId,
-  tripCode,
-  startPlace,
-  startLocationId,
-  startStateCode,
-  vehicleNumber,
-  requireTripId,
-  selectedIds,
-  onSaved,
-  isViewer = false,
-}: {
-  tripId: string | null;
-  branchId: string | null;
-  tripCode: string;
-  startPlace: string;
-  startLocationId: string | null;
-  startStateCode: string;
-  vehicleNumber: string;
-  requireTripId: () => Promise<string | null>;
-  selectedIds: string[];
-  onSaved: (ids: string[]) => void;
-  isViewer?: boolean;
-}) {
-  const { user } = useSession();
-  const [rows, setRows] = useState<LrOption[]>([]);
-  const [selected, setSelected] = useState<string[]>(selectedIds);
-  const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
-  const [date, setDate] = useState("");
-  const [assignment, setAssignment] = useState("all");
-  const [partBUpdating, setPartBUpdating] = useState<string | null>(null);
-  useEffect(() => setSelected(selectedIds), [selectedIds]);
-  useEffect(() => {
-    void (async () => {
-      const db = supabase as any;
-      const [
-        { data, error },
-        { data: links, error: linkError },
-        { data: manifestLinks, error: manifestLinkError },
-      ] = await Promise.all([
-        db
-          .from("lorry_receipts")
-          .select(
-            "id,branch_id,lr_number,created_at,part_b_updated_at,mode,calculated_income,source:contracts(contract_name),transporter:transporters(transporter_name)",
-          )
-          .eq("branch_id", branchId)
-          .order("created_at", { ascending: false }),
-        db.from("trip_lorry_receipts").select("lr_id,trip_id,trip:trips(trip_code)"),
-        db
-          .from("delivery_manifest_lorry_receipts")
-          .select("lr_id,manifest:delivery_manifests(manifest_number)"),
-      ]);
-      if (error || linkError || manifestLinkError) {
-        toast.error(
-          error?.message ??
-            linkError?.message ??
-            manifestLinkError?.message ??
-            "Could not load LR links",
-        );
-        return;
-      }
-      const linkByLr = new Map(
-        (
-          (links ?? []) as Array<{
-            lr_id: string;
-            trip_id: string;
-            trip?: { trip_code?: string } | null;
-          }>
-        ).map((link) => [
-          link.lr_id,
-          { tripId: link.trip_id, tripCode: link.trip?.trip_code ?? link.trip_id },
-        ]),
-      );
-      const firstRelation = (value: any) => (Array.isArray(value) ? value[0] : value);
-      const manifestByLr = new Map(
-        (manifestLinks ?? []).map((link: any) => [
-          link.lr_id,
-          firstRelation(link.manifest)?.manifest_number ?? null,
-        ]),
-      );
-      setRows(
-        ((data ?? []) as LrOption[]).map((row) => ({
-          ...row,
-          linked_trip_id: linkByLr.get(row.id)?.tripId ?? null,
-          linked_trip_code: linkByLr.get(row.id)?.tripCode ?? null,
-          linked_manifest_number: manifestByLr.get(row.id) ?? null,
-        })),
-      );
-    })();
-  }, [branchId]);
-  async function save() {
-    const id = await requireTripId();
-    if (!id) return;
-    setSaving(true);
-    const db = supabase as any;
-    const { error: deleteError } = await db.from("trip_lorry_receipts").delete().eq("trip_id", id);
-    if (!deleteError && selected.length) {
-      const { error } = await db
-        .from("trip_lorry_receipts")
-        .insert(selected.map((lrId) => ({ trip_id: id, lr_id: lrId })));
-      if (error) toast.error(error.message);
-      else {
-        onSaved(selected);
-        toast.success("LR linked to trip");
-      }
-    } else if (deleteError) toast.error(deleteError.message);
-    else {
-      onSaved([]);
-      toast.success("Trip LR links updated");
-    }
-    setSaving(false);
-  }
-  async function updatePartB(row: LrOption) {
-    if (!branchId) return toast.error("Select a trip branch first");
-    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
-    if (!/^\d+$/.test(startStateCode) || Number(startStateCode) < 1)
-      return toast.error("Set a valid branch state code before updating Part-B");
-    if (!vehicleNumber.trim())
-      return toast.error("Set the trip vehicle number before updating Part-B");
-    setPartBUpdating(row.id);
-    try {
-      const db = supabase as any;
-      let resolvedStartPlace = startPlace.trim();
-      if (!resolvedStartPlace && startLocationId) {
-        const { data: location, error: locationError } = await db
-          .from("locations")
-          .select("location_name,city")
-          .eq("id", startLocationId)
-          .maybeSingle();
-        if (locationError) throw locationError;
-        resolvedStartPlace = String(location?.city || location?.location_name || "").trim();
-      }
-      if (!resolvedStartPlace)
-        throw new Error("Set the trip starting location before updating Part-B");
-      const { data: linked, error } = await db
-        .from("lr_shipments")
-        .select("shipment_id, shipment:shipments(eway_bill_number)")
-        .eq("lr_id", row.id);
-      if (error) throw error;
-      const ewayBillNumbers = (
-        (linked ?? []) as Array<{ shipment?: { eway_bill_number?: string } | null }>
-      )
-        .map((item) => String(item.shipment?.eway_bill_number ?? ""))
-        .filter((number) => /^\d{12}$/.test(number));
-      if (!ewayBillNumbers.length) throw new Error("No valid E-Way Bills are linked to this LR");
-      const created = new Date(row.created_at ?? "");
-      const transDocDate = Number.isNaN(created.getTime())
-        ? ""
-        : `${String(created.getDate()).padStart(2, "0")}/${String(created.getMonth() + 1).padStart(2, "0")}/${created.getFullYear()}`;
-      if (!transDocDate) throw new Error("LR date is missing");
-      const result = await serverUpdateEwayBillPartB({
-        data: {
-          token: user.sessionToken,
-          branchId,
-          ewayBillNumbers,
-          fromPlace: resolvedStartPlace,
-          fromState: Number(startStateCode),
-          vehicleNo: vehicleNumber.trim().toUpperCase(),
-          vehicleType: "R",
-          transMode: "1",
-          transDocNo: row.lr_number,
-          transDocDate,
-          reasonCode: "1",
-          reasonRem: "Vehicle details updated",
-        },
-      });
-      const [day, month, year] = transDocDate.split("/");
-      const responseByEwb = new Map(
-        result.results.map((item) => [item.ewayBillNumber, item.data ?? null]),
-      );
-      const { error: historyError } = await db.from("shipment_part_b_history").insert(
-        (
-          (linked ?? []) as Array<{
-            shipment_id: string;
-            shipment?: { eway_bill_number?: string } | null;
-          }>
-        )
-          .map((item) => String(item.shipment?.eway_bill_number ?? ""))
-          .filter((number) => responseByEwb.has(number))
-          .map((number) => ({
-            shipment_id: (
-              linked as Array<{
-                shipment_id: string;
-                shipment?: { eway_bill_number?: string } | null;
-              }>
-            ).find((item) => String(item.shipment?.eway_bill_number ?? "") === number)?.shipment_id,
-            lr_id: row.id,
-            trip_id: tripId,
-            eway_bill_number: number,
-            from_place: resolvedStartPlace,
-            from_state: Number(startStateCode),
-            vehicle_no: vehicleNumber.trim().toUpperCase(),
-            vehicle_type: "R",
-            trans_mode: "1",
-            trans_doc_no: row.lr_number,
-            trans_doc_date: `${year}-${month}-${day}`,
-            reason_code: "1",
-            reason_rem: "Vehicle details updated",
-            updated_by: user.id,
-            response_data: responseByEwb.get(number),
-          })),
-      );
-      if (historyError) throw historyError;
-      const { error: markError } = await db
-        .from("lorry_receipts")
-        .update({ part_b_updated_at: new Date().toISOString() })
-        .eq("id", row.id);
-      if (markError) throw markError;
-      setRows((current) =>
-        current.map((item) =>
-          item.id === row.id ? { ...item, part_b_updated_at: new Date().toISOString() } : item,
-        ),
-      );
-      toast.success(
-        `Part-B updated for ${result.updated} E-Way Bill${result.updated === 1 ? "" : "s"}`,
-      );
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not update Part-B");
-    }
-    setPartBUpdating(null);
-  }
-  const total = rows
-    .filter((row) => selected.includes(row.id))
-    .reduce((sum, row) => sum + num(row.calculated_income), 0);
-  return (
-    <div className="space-y-4">
-      <div className="flex items-center gap-2">
-        <div>
-          <h3 className="text-sm font-semibold tracking-tight">Linked LR</h3>
-          <p className="text-xs text-muted-foreground">
-            Select an LR to link it to this trip. Source, transporter, mode and calculated income
-            come from the LR.
-          </p>
-        </div>
-        {!isViewer && (
-          <Button
-            type="button"
-            size="sm"
-            onClick={() => void save()}
-            disabled={saving}
-            className="ml-auto"
-          >
-            <Link2 className="size-4" />
-            {saving ? "Saving…" : "Save links"}
-          </Button>
-        )}
-      </div>
-      <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-card p-3">
-        <div className="relative min-w-56 flex-1">
-          <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
-          <Input
-            className="pl-9"
-            placeholder="Search LR number"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Input
-          className="w-44"
-          type="date"
-          value={date}
-          onChange={(e) => setDate(e.target.value)}
-          aria-label="LR date"
-        />
-        <Select value={assignment} onValueChange={setAssignment}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Assignment" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All LR</SelectItem>
-            <SelectItem value="assigned">Assigned</SelectItem>
-            <SelectItem value="unsigned">Unsigned</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-      <div className="space-y-2">
-        {rows.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-            No LR records found for this branch.
-          </p>
-        ) : (
-          rows
-            .filter(
-              (row) =>
-                (!search.trim() ||
-                  row.lr_number.toLowerCase().includes(search.trim().toLowerCase())) &&
-                (!date || String((row as any).created_at ?? "").slice(0, 10) === date) &&
-                (assignment === "all" ||
-                  (assignment === "assigned" ? Boolean(row.linked_trip_id) : !row.linked_trip_id)),
-            )
-            .map((row) => {
-              const linkedToAnotherTrip = Boolean(
-                (row.linked_trip_id || row.linked_manifest_number) && !selected.includes(row.id),
-              );
-              return (
-                <div
-                  key={row.id}
-                  className={`flex items-center gap-3 rounded-xl border border-border bg-muted/30 p-3 ${linkedToAnotherTrip ? "opacity-60" : ""}`}
+      <Dialog open={Boolean(updating)} onOpenChange={(open) => !open && setUpdating(null)}>
+        <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Update Part-B — {updating?.consignment_number}</DialogTitle>
+          </DialogHeader>
+          {updating && (
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="sm:col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+                This updates all valid E-Way Bills in this movement. Values are auto-filled; you may
+                change them before submitting. State Code is always derived from the From PIN.
+              </div>
+              <Field
+                label="Vehicle Number"
+                value={form.vehicleNo}
+                onChange={(v) => setForm((f) => ({ ...f, vehicleNo: v }))}
+              />
+              <Field
+                label="From Place"
+                value={form.fromPlace}
+                onChange={(v) => setForm((f) => ({ ...f, fromPlace: v }))}
+              />
+              <Field
+                label="From PIN Code"
+                value={form.fromPin}
+                onChange={(v) => void lookupPin(v)}
+              />
+              <Field
+                label="From State Code (auto)"
+                value={form.stateCode}
+                onChange={() => {}}
+                disabled
+              />
+              <div className="space-y-1.5">
+                <Label>Transport Mode</Label>
+                <Select
+                  value={form.transMode}
+                  onValueChange={(v) => setForm((f) => ({ ...f, transMode: v }))}
                 >
-                  <label
-                    className={`flex min-w-0 flex-1 items-center gap-3 ${linkedToAnotherTrip ? "cursor-not-allowed" : "cursor-pointer"}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selected.includes(row.id)}
-                      disabled={isViewer || linkedToAnotherTrip}
-                      onChange={(event) =>
-                        setSelected((old) =>
-                          event.target.checked
-                            ? [...old, row.id]
-                            : old.filter((id) => id !== row.id),
-                        )
-                      }
-                    />
-                    <span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-6">
-                      <strong>{row.lr_number}</strong>
-                      <span>{row.source?.contract_name ?? "—"}</span>
-                      <span>{row.transporter?.transporter_name ?? "—"}</span>
-                      <span>{row.mode ?? "ROAD"}</span>
-                      <span className="text-right font-medium">
-                        {inr(num(row.calculated_income))}
-                      </span>
-                      <span className="text-right text-muted-foreground">
-                        {row.linked_manifest_number
-                          ? `Manifest: ${row.linked_manifest_number}`
-                          : `Trip: ${row.linked_trip_code ?? "Not linked"}`}
-                      </span>
-                    </span>
-                  </label>
-                  {selected.includes(row.id) ? (
-                    row.part_b_updated_at ? (
-                      <span className="shrink-0 text-xs text-emerald-600">Part-B updated</span>
-                    ) : (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        disabled={isViewer || linkedToAnotherTrip || partBUpdating === row.id}
-                        onClick={() => void updatePartB(row)}
-                      >
-                        {partBUpdating === row.id ? "Updating…" : "Update Part-B"}
-                      </Button>
-                    )
-                  ) : null}
-                </div>
-              );
-            })
-        )}
-      </div>
-      <div className="flex justify-end border-t border-border pt-3 text-sm font-semibold">
-        Linked LR income: {inr(total)}
-      </div>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="1">Road</SelectItem>
+                    <SelectItem value="2">Rail</SelectItem>
+                    <SelectItem value="3">Air</SelectItem>
+                    <SelectItem value="4">Ship</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Vehicle Type</Label>
+                <Select
+                  value={form.vehicleType}
+                  onValueChange={(v) => setForm((f) => ({ ...f, vehicleType: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="R">Regular</SelectItem>
+                    <SelectItem value="O">ODC</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <Field
+                label="Transport Document No."
+                value={form.transDocNo}
+                onChange={(v) => setForm((f) => ({ ...f, transDocNo: v }))}
+              />
+              <Field
+                label="Transport Document Date"
+                type="date"
+                value={form.transDocDate ? form.transDocDate.split("/").reverse().join("-") : ""}
+                onChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    transDocDate: v ? v.split("-").reverse().join("/") : "",
+                  }))
+                }
+              />
+              <div className="space-y-1.5">
+                <Label>Reason Code</Label>
+                <Select
+                  value={form.reasonCode}
+                  onValueChange={(v) => setForm((f) => ({ ...f, reasonCode: v }))}
+                  disabled={!updating.part_b_updated_at}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(PART_B_REASONS)
+                      .filter(([code]) =>
+                        updating.part_b_updated_at ? code !== "4" : code === "4",
+                      )
+                      .map(([code, label]) => (
+                        <SelectItem key={code} value={code}>
+                          {code} — {label}
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <Field
+                label="Reason Remarks"
+                value={form.reasonRem}
+                onChange={(v) => setForm((f) => ({ ...f, reasonRem: v }))}
+              />
+              <div className="flex justify-end gap-2 sm:col-span-2">
+                <Button type="button" variant="outline" onClick={() => setUpdating(null)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={() => void submitPartB()} disabled={saving}>
+                  {saving ? "Updating…" : "Update all E-Way Bills"}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
-
 /* ---------------- Manifest tab ---------------- */
 
 type Line = {

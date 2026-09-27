@@ -225,12 +225,23 @@ export function Trips({
               {isAdmin && t.id ? (
                 <ItemLogsButton entityType="trip" entityId={t.id} entityLabel={t.trip_code} />
               ) : null}
+              {t.part_b_locked_at ? (
+                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+                  Part-B locked
+                </span>
+              ) : null}
               <DriverTripActions trip={t} />
               {!isViewer && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => remove(t)}
+                  disabled={Boolean(t.part_b_locked_at)}
+                  title={
+                    t.part_b_locked_at
+                      ? "Trip cannot be deleted after Part-B update"
+                      : "Delete trip"
+                  }
                   aria-label="Delete trip"
                 >
                   <Trash2 className="size-4" />

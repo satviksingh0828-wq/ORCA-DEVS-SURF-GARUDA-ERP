@@ -88,6 +88,15 @@ export const serverDeleteTrip = createServerFn({ method: "POST" })
       throw new Error("Only active administrators can delete trips.");
     }
 
+    const { data: lockedTrip, error: lockedTripError } = await db
+      .from("trips")
+      .select("part_b_locked_at")
+      .eq("id", data.tripId)
+      .maybeSingle();
+    if (lockedTripError) throw new Error(lockedTripError.message);
+    if (!lockedTrip) throw new Error("Trip not found");
+    if (lockedTrip.part_b_locked_at)
+      throw new Error("This trip cannot be deleted because Part-B has been updated.");
     const { error: approvalError } = await db
       .from("approval_charge_advances")
       .delete()
