@@ -1,5 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Link2, Loader2, Plus, Printer, Save, Search, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  Clock3,
+  Link2,
+  Loader2,
+  Plus,
+  Printer,
+  Save,
+  Search,
+  Trash2,
+} from "lucide-react";
 import QRCode from "qrcode";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -1328,6 +1338,8 @@ function MovementTab({
   const [saving, setSaving] = useState(false);
   const [movementDate, setMovementDate] = useState("");
   const [updating, setUpdating] = useState<MovementOption | null>(null);
+  const [partBHistory, setPartBHistory] = useState<Array<Record<string, any>>>([]);
+  const [bulkUpdating, setBulkUpdating] = useState(false);
   const [form, setForm] = useState({
     vehicleNo: "",
     fromPin: "",
@@ -1399,7 +1411,24 @@ function MovementTab({
     toast.success("Trip movements updated");
     await load();
   }
+  async function loadPartBHistory(m: MovementOption) {
+    const shipmentIds = (m.shipments ?? []).map((shipment) => shipment.id).filter(Boolean);
+    if (!shipmentIds.length) {
+      setPartBHistory([]);
+      return;
+    }
+    const { data, error } = await (supabase as any)
+      .from("shipment_part_b_history")
+      .select(
+        "id,shipment_id,eway_bill_number,from_place,from_state,vehicle_no,vehicle_type,trans_mode,trans_doc_no,trans_doc_date,reason_code,reason_rem,updated_at",
+      )
+      .in("shipment_id", shipmentIds)
+      .order("updated_at", { ascending: false });
+    if (error) toast.error(`Could not load Part-B history: ${error.message}`);
+    setPartBHistory((data ?? []) as Array<Record<string, any>>);
+  }
   function openPartB(m: MovementOption) {
+    void loadPartBHistory(m);
     const first = !m.part_b_updated_at;
     const pin = m.part_b_from_pin_code || m.from_pin_code || "";
     setUpdating(m);
@@ -1443,6 +1472,92 @@ function MovementTab({
       stateCode: String(code).padStart(2, "0"),
     }));
   }
+  async function updateAllAssignedPartB() {
+    if (!user?.sessionToken || !tripId) return toast.error("Save the trip before updating Part-B");
+    const assigned = rows.filter((m) => m.trip_id === tripId);
+    if (!assigned.length) return toast.error("No movements are assigned to this trip");
+    if (!window.confirm(`Update Part-B for all ${assigned.length} assigned movement(s)?`)) return;
+    setBulkUpdating(true);
+    let updated = 0;
+    let failed = 0;
+    const messages: string[] = [];
+    try {
+      for (const m of assigned) {
+        const fromPin = (
+          m.part_b_from_pin_code ||
+          m.from_pin_code ||
+          m.from_details?.pincode ||
+          m.shipments?.[0]?.dispatch_from_pin_code ||
+          ""
+        ).trim();
+        const fromPlace = (
+          m.part_b_from_place ||
+          m.from_details?.place ||
+          m.from_details?.trade_name ||
+          m.from_details?.legal_name ||
+          ""
+        ).trim();
+        const vehicleNo = (m.vehicle?.registration_number || m.part_b_vehicle_no || "").trim();
+        if (!vehicleNo || !fromPlace || !/^\d{6}$/.test(fromPin)) {
+          failed++;
+          messages.push(`${m.consignment_number}: missing Vehicle, From Place or From PIN`);
+          continue;
+        }
+        const state = await lookupIndiaPin(fromPin);
+        const stateCode = state ? PIN_STATE_CODES[state.state.toUpperCase()] : undefined;
+        if (!stateCode) {
+          failed++;
+          messages.push(`${m.consignment_number}: could not derive State Code from PIN`);
+          continue;
+        }
+        const result = await serverUpdateEwayBillPartB({
+          data: {
+            token: user.sessionToken,
+            movementId: m.id,
+            fromPinCode: fromPin,
+            fromPlace,
+            vehicleNo,
+            vehicleType: (m.part_b_vehicle_type || "R") as "R" | "O",
+            transMode: (m.part_b_transport_mode ||
+              (m.transport_mode === "Rail"
+                ? "2"
+                : m.transport_mode === "Air"
+                  ? "3"
+                  : m.transport_mode === "Ship"
+                    ? "4"
+                    : "1")) as "1" | "2" | "3" | "4",
+            transDocNo: m.part_b_trans_doc_no || m.consignment_number,
+            transDocDate: m.part_b_trans_doc_date || apiDate(m.created_at),
+            reasonCode: (m.part_b_updated_at ? "1" : "4") as "1" | "2" | "3" | "4",
+            reasonRem: m.part_b_updated_at ? "Vehicle details updated" : "First Part-B update",
+          },
+        });
+        if (result.updated) updated += result.updated;
+        if (result.failed) {
+          failed += result.failed;
+          messages.push(
+            `${m.consignment_number}: ${(result.results ?? [])
+              .filter((item: { ok: boolean; error?: string | null }) => !item.ok)
+              .map(
+                (item: { ok: boolean; error?: string | null }) =>
+                  item.error || "API rejected update",
+              )
+              .join(", ")}`,
+          );
+        }
+      }
+      toast[failed ? "error" : "success"](
+        `${updated} E-Way Bill(s) updated; ${failed} failed${messages.length ? ` — ${messages.join(" | ")}` : ""}`,
+      );
+      if (updated) onPartBUpdated?.();
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update all Part-B records");
+    } finally {
+      setBulkUpdating(false);
+    }
+  }
+
   async function submitPartB() {
     if (!updating || !user?.sessionToken) return;
     const vehicleNo = form.vehicleNo.trim();
@@ -1488,7 +1603,7 @@ function MovementTab({
         results?: Array<{ ewayBillNumber: string; ok: boolean; error?: string | null }>;
       };
       const failures = (result.results ?? [])
-        .filter((item) => !item.ok)
+        .filter((item: { ok: boolean; error?: string | null }) => !item.ok)
         .map(
           (item) => `${item.ewayBillNumber}: ${item.error || "E-Way Bill API rejected the update"}`,
         );
@@ -1534,15 +1649,27 @@ function MovementTab({
           </p>
         </div>
         {!isViewer && (
-          <Button
-            type="button"
-            size="sm"
-            className="ml-auto"
-            onClick={() => void save()}
-            disabled={saving || !tripId}
-          >
-            {saving ? "Saving…" : "Save movements"}
-          </Button>
+          <>
+            <Button
+              type="button"
+              size="sm"
+              className="ml-auto"
+              onClick={() => void save()}
+              disabled={saving || !tripId}
+            >
+              {saving ? "Saving…" : "Save movements"}
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void updateAllAssignedPartB()}
+              disabled={bulkUpdating || !tripId || isViewer}
+            >
+              <Clock3 className="mr-1 size-4" />
+              {bulkUpdating ? "Updating Part-B…" : "Update all assigned Part-B"}
+            </Button>
+          </>
         )}
       </div>
       {tripLocked && (
@@ -1623,6 +1750,30 @@ function MovementTab({
           <DialogHeader>
             <DialogTitle>Update Part-B — {updating?.consignment_number}</DialogTitle>
           </DialogHeader>
+          {partBHistory.length > 0 && (
+            <div className="mb-4 rounded-lg border border-border bg-muted/20 p-3">
+              <h4 className="mb-2 text-sm font-semibold">Part-B update history</h4>
+              <div className="max-h-40 space-y-2 overflow-y-auto text-xs">
+                {partBHistory.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="grid gap-1 rounded border border-border bg-background p-2 sm:grid-cols-4"
+                  >
+                    <span>{new Date(entry.updated_at).toLocaleString("en-IN")}</span>
+                    <span>EWB: {entry.eway_bill_number || "—"}</span>
+                    <span>Vehicle: {entry.vehicle_no || "—"}</span>
+                    <span>
+                      Reason: {entry.reason_code || "—"} — {entry.reason_rem || "—"}
+                    </span>
+                    <span className="sm:col-span-4">
+                      From: {entry.from_place || "—"} · State {entry.from_state || "—"} · Doc{" "}
+                      {entry.trans_doc_no || "—"} ({entry.trans_doc_date || "—"})
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {updating && (
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="sm:col-span-2 rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">

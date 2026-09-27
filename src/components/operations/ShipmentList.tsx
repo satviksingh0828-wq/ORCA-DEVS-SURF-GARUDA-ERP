@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
+import { serverUpdateShipmentTransporter } from "@/lib/manifest-transfer";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -242,6 +243,7 @@ function Field({
   placeholder?: string;
   readOnly?: boolean;
 }) {
+  const dialogShipment = viewingShipment as Shipment | null;
   return (
     <div className="space-y-1.5">
       <Label>
@@ -658,6 +660,9 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   const [search, setSearch] = useState("");
   const [fetchingEwb, setFetchingEwb] = useState(false);
   const [fetchingPartB, setFetchingPartB] = useState(false);
+  const [transporterName, setTransporterName] = useState("");
+  const [transporterGstin, setTransporterGstin] = useState("");
+  const [updatingTransporter, setUpdatingTransporter] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const PAGE_SIZE = 30;
@@ -757,6 +762,8 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
       })),
     );
     setViewingHistory((history ?? []) as PartBHistory[]);
+    setTransporterName("");
+    setTransporterGstin(String((shipment as any).transporter_id ?? ""));
     setViewingShipment(shipment);
   }
   async function fetchPartBFromApi(shipment: Shipment) {
@@ -832,6 +839,54 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
       toast.error(error instanceof Error ? error.message : "Could not fetch Part-B details");
     }
     setFetchingPartB(false);
+  }
+
+  async function updateShipmentTransporter() {
+    if (!viewingShipment) return;
+    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+    if (!transporterName.trim()) return toast.error("Enter transporter name");
+    if (!/^\d{2}[0-9A-Z]{13}$/i.test(transporterGstin.trim()))
+      return toast.error("Enter a valid transporter GSTIN");
+    if (!window.confirm(`Update transporter for E-Way Bill ${viewingShipment.eway_bill_number}?`))
+      return;
+    setUpdatingTransporter(true);
+    try {
+      await serverUpdateShipmentTransporter({
+        data: {
+          sessionToken: user.sessionToken,
+          branchId: viewingShipment.branch_id,
+          shipmentId: viewingShipment.id,
+          transporterName: transporterName.trim(),
+          transporterGstin: transporterGstin.trim().toUpperCase(),
+        },
+      });
+      setViewingShipment((current) =>
+        current
+          ? {
+              ...current,
+              transporter_id: transporterGstin.trim().toUpperCase(),
+              transporter_update_status: "updated",
+              transporter_update_error: "",
+              transporter_updated_at: new Date().toISOString(),
+            }
+          : current,
+      );
+      setShipments((current) =>
+        current.map((item) =>
+          item.id === viewingShipment.id
+            ? {
+                ...item,
+                transporter_id: transporterGstin.trim().toUpperCase(),
+                transporter_update_status: "updated",
+              }
+            : item,
+        ),
+      );
+      toast.success("Transporter updated for this shipment");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update transporter");
+    }
+    setUpdatingTransporter(false);
   }
 
   async function fetchEwayBillDetails() {
@@ -1686,34 +1741,30 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
       >
         <DialogContent className="max-h-[88vh] max-w-5xl overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Shipment Details — {viewingShipment?.eway_bill_number}</DialogTitle>
+            <DialogTitle>Shipment Details — {dialogShipment?.eway_bill_number}</DialogTitle>
           </DialogHeader>
-          {viewingShipment && (
+          {dialogShipment && (
             <div className="space-y-4 py-2">
               <div className="grid gap-3 md:grid-cols-3">
                 <Field
                   label="E-Way Bill Number"
-                  value={viewingShipment.eway_bill_number}
+                  value={dialogShipment.eway_bill_number}
                   onChange={() => {}}
                 />
                 <Field
                   label="E-Way Bill Date"
-                  value={viewingShipment.eway_bill_date}
+                  value={dialogShipment.eway_bill_date}
                   onChange={() => {}}
                 />
-                <Field
-                  label="Status"
-                  value={viewingShipment.eway_bill_status}
-                  onChange={() => {}}
-                />
+                <Field label="Status" value={dialogShipment.eway_bill_status} onChange={() => {}} />
                 <Field
                   label="Document"
-                  value={`${viewingShipment.document_type} · ${viewingShipment.document_number}`}
+                  value={`${dialogShipment.document_type} · ${dialogShipment.document_number}`}
                   onChange={() => {}}
                 />
                 <Field
                   label="Branch"
-                  value={branchName(viewingShipment.branch_id)}
+                  value={branchName(dialogShipment.branch_id)}
                   onChange={() => {}}
                 />
               </div>
@@ -1745,6 +1796,52 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                 setForm={() => {}}
                 readOnly
               />
+              <div className="rounded-xl border border-border p-4">
+                <h3 className="mb-3 font-semibold">Transporter Update</h3>
+                <p className="mb-3 text-xs text-muted-foreground">
+                  Update the transporter for this shipment’s E-Way Bill. When this shipment is later
+                  included in an LTMS manifest, the saved transporter status will remain attached.
+                </p>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="space-y-1.5">
+                    <Label>Transporter Name</Label>
+                    <Input
+                      value={transporterName}
+                      onChange={(event) => setTransporterName(event.target.value)}
+                      placeholder="Transporter name"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Transporter GSTIN</Label>
+                    <Input
+                      value={transporterGstin}
+                      onChange={(event) => setTransporterGstin(event.target.value.toUpperCase())}
+                      placeholder="15-character GSTIN"
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <Button
+                      type="button"
+                      onClick={() => void updateShipmentTransporter()}
+                      disabled={updatingTransporter}
+                    >
+                      {updatingTransporter
+                        ? "Updating…"
+                        : dialogShipment.transporter_update_status === "updated"
+                          ? "Update Transporter Again"
+                          : "Update Transporter"}
+                    </Button>
+                  </div>
+                </div>
+                {dialogShipment.transporter_update_status && (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Status:{" "}
+                    {dialogShipment.transporter_update_status === "updated"
+                      ? "Transporter Updated"
+                      : dialogShipment.transporter_update_status}
+                  </p>
+                )}
+              </div>
               <div className="rounded-xl border border-border p-4">
                 <h3 className="mb-3 font-semibold">Goods / Invoice Details</h3>
                 <div className="overflow-x-auto">

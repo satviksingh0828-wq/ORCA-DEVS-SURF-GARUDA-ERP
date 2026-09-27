@@ -215,3 +215,112 @@ export const serverRecordLtmsManifestTransfer = createServerFn({ method: "POST" 
       transferStatus: String(result.transfer_status),
     };
   });
+
+const shipmentTransporterInputSchema = z.object({
+  sessionToken: z.string().min(1),
+  branchId: z.string().uuid(),
+  shipmentId: z.string().uuid(),
+  transporterGstin: z
+    .string()
+    .trim()
+    .regex(/^\d{2}[0-9A-Z]{13}$/i),
+  transporterName: z.string().trim().min(1).max(200),
+});
+
+export const serverUpdateShipmentTransporter = createServerFn({ method: "POST" })
+  .validator(shipmentTransporterInputSchema)
+  .handler(async ({ data }) => {
+    const session = await verifyAppToken(data.sessionToken);
+    if (!session) throw new Error("Your session has expired. Please sign in again.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    if (session.role === "basic") {
+      const { data: assignment, error } = await supabaseAdmin
+        .from("user_branch_access")
+        .select("branch_id")
+        .eq("user_id", session.uid)
+        .eq("branch_id", data.branchId)
+        .maybeSingle();
+      if (error || !assignment) throw new Error("You do not have access to this branch");
+    }
+    const db = supabaseAdmin as any;
+    const { data: shipment, error: shipmentError } = await db
+      .from("shipments")
+      .select("id,consignment_id,branch_id,eway_bill_number,generation_mode")
+      .eq("id", data.shipmentId)
+      .eq("branch_id", data.branchId)
+      .single();
+    if (shipmentError || !shipment)
+      throw new Error("Shipment was not found in the selected branch");
+    if (!/^\d{12}$/.test(String(shipment.eway_bill_number ?? "")))
+      throw new Error("This shipment does not have a valid 12-digit E-Way Bill number");
+    if (isManualEwayBill(shipment))
+      throw new Error(
+        "Manual E-Way Bills must be updated in-app and cannot be sent to the E-Way Bill API",
+      );
+    const baseUrl = process.env.EWB_RENDER_URL?.trim().replace(/\/$/, "");
+    const apiKey = process.env.EWB_RENDER_API_KEY?.trim();
+    if (!baseUrl || !apiKey)
+      throw new Error("E-Way Bill service is not configured on the ORCA server");
+    const response = await fetch(
+      `${baseUrl}/v1/branches/${encodeURIComponent(data.branchId)}/ewaybills/update-transporter`,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "X-API-Key": apiKey,
+        },
+        body: JSON.stringify({
+          ewbNo: Number(shipment.eway_bill_number),
+          transporterId: data.transporterGstin.toUpperCase(),
+        }),
+      },
+    );
+    const text = await response.text();
+    let body: any = null;
+    try {
+      body = text ? JSON.parse(text) : null;
+    } catch {
+      body = null;
+    }
+    const status = findStatusObject(body);
+    const rejected =
+      !response.ok ||
+      body === null ||
+      body?.ok === false ||
+      String(status.status_cd ?? "") === "0" ||
+      String(status.status ?? "") === "0";
+    if (rejected)
+      throw new Error(
+        responseError(body, status, response.statusText, String(shipment.eway_bill_number)),
+      );
+    const { error: updateError } = await db
+      .from("shipments")
+      .update({
+        transporter_id: data.transporterGstin.toUpperCase(),
+        transporter_update_status: "updated",
+        transporter_update_error: "",
+        transporter_updated_at: new Date().toISOString(),
+      })
+      .eq("id", data.shipmentId);
+    if (updateError)
+      throw new Error(
+        `E-Way Bill updated but local status could not be saved: ${updateError.message}`,
+      );
+    if (shipment.consignment_id) {
+      await db
+        .from("consignments")
+        .update({
+          transporter_update_status: "updated",
+          transporter_update_error: "",
+          transporter_updated_at: new Date().toISOString(),
+        })
+        .eq("id", shipment.consignment_id)
+        .eq("branch_id", data.branchId);
+    }
+    return {
+      ok: true,
+      ewayBillNumber: String(shipment.eway_bill_number),
+      transporterName: data.transporterName,
+    };
+  });
