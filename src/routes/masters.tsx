@@ -5,6 +5,7 @@ import {
   ChevronRight,
   FileText,
   MapPin,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
   Truck,
@@ -18,6 +19,7 @@ import { Contracts } from "@/components/masters/Contracts";
 import { VehicleInsuranceSection } from "@/components/masters/VehicleInsuranceSection";
 import { VehicleRoadTaxSection } from "@/components/masters/VehicleRoadTaxSection";
 import { PartyMaster } from "@/components/masters/PartyMaster";
+import { PackageRates } from "@/components/masters/PackageRates";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 import {
@@ -92,6 +94,13 @@ const ALL_TABS = [
     adminOnly: true,
   },
   { id: "contract", label: "Sources", desc: "Rates & slabs", icon: FileText, adminOnly: true },
+  {
+    id: "package-rate",
+    label: "Package Rate",
+    desc: "Branch package slabs",
+    icon: Package,
+    adminOnly: true,
+  },
   {
     id: "consignor",
     label: "Consignor",
@@ -240,6 +249,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
           {safeTab === "delivery-partner" ? <MasterList config={DELIVERY_PARTNER_CONFIG} /> : null}
           {safeTab === "location" ? <MasterList config={LOCATION_CONFIG} /> : null}
           {safeTab === "contract" ? <Contracts /> : null}
+          {safeTab === "package-rate" ? <PackageRates /> : null}
           {safeTab === "consignor" ? <PartyMaster partyType="consignor" /> : null}
           {safeTab === "consignee" ? <PartyMaster partyType="consignee" /> : null}
         </div>

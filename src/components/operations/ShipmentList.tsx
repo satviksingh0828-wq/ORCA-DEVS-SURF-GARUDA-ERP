@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, Plus, Search, Truck, X } from "lucide-react";
+import { Eye, Loader2, Plus, RefreshCw, Search, Truck, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
@@ -372,12 +372,16 @@ function ShipmentView({
   history,
   branchName,
   onBack,
+  onFetchPartB,
+  fetchingPartB,
 }: {
   shipment: Shipment;
   items: Item[];
   history: PartBHistory[];
   branchName: (id: string) => string;
   onBack: () => void;
+  onFetchPartB: () => void;
+  fetchingPartB: boolean;
 }) {
   return (
     <div className="space-y-5">
@@ -563,9 +567,25 @@ function ShipmentView({
       <div className="rounded-xl border border-border p-4">
         <h3 className="mb-3 font-semibold">Part-B Update History</h3>
         {history.length === 0 ? (
-          <p className="text-sm text-muted-foreground">
-            No Part-B updates have been stored for this shipment.
-          </p>
+          <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-dashed border-border p-4">
+            <p className="text-sm text-muted-foreground">
+              No Part-B history is stored. Fetch the current Part-B details from the E-Way Bill API.
+            </p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={onFetchPartB}
+              disabled={fetchingPartB}
+            >
+              {fetchingPartB ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="size-4" />
+              )}
+              {fetchingPartB ? "Fetching…" : "Fetch from E-Way Bill API"}
+            </Button>
+          </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1250px] text-sm">
@@ -637,6 +657,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [search, setSearch] = useState("");
   const [fetchingEwb, setFetchingEwb] = useState(false);
+  const [fetchingPartB, setFetchingPartB] = useState(false);
   const [hasMore, setHasMore] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const PAGE_SIZE = 30;
@@ -738,6 +759,81 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     setViewingHistory((history ?? []) as PartBHistory[]);
     setViewingShipment(shipment);
   }
+  async function fetchPartBFromApi(shipment: Shipment) {
+    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+    setFetchingPartB(true);
+    try {
+      const raw = await serverFetchEwayBillDetails({
+        data: {
+          token: user.sessionToken,
+          branchId: shipment.branch_id,
+          ewayBillNumber: shipment.eway_bill_number,
+        },
+      });
+      const source = ((raw as Record<string, unknown>)?.data ?? raw) as Record<string, unknown>;
+      const read = (...keys: string[]) => {
+        for (const key of keys) {
+          const value = source[key];
+          if (value !== undefined && value !== null && String(value).trim() !== "")
+            return String(value);
+        }
+        return "";
+      };
+      const vehicles = Array.isArray(source.vehicleListDetails)
+        ? (source.vehicleListDetails as Array<Record<string, unknown>>)
+        : [];
+      const vehicle =
+        read("vehicleNo", "vehicle_number") ||
+        String(vehicles[0]?.vehicleNo ?? vehicles[0]?.vehicleNumber ?? "");
+      const fromPlace = read("fromPlace", "from_place");
+      const fromState = Number(read("fromStateCode", "actFromStateCode", "from_state"));
+      const transMode = read("transMode", "trans_mode") || "1";
+      if (!vehicle || !fromPlace || !fromState)
+        return toast.error(
+          "The E-Way Bill API did not return complete Part-B details for this shipment.",
+        );
+      const transDocDateRaw = read("transDocDate", "trans_doc_date");
+      const transDocDate = ewayDate(transDocDateRaw).slice(0, 10) || null;
+      const transDocNo = read("transDocNo", "trans_doc_no") || null;
+      const row = {
+        shipment_id: shipment.id,
+        eway_bill_number: shipment.eway_bill_number,
+        from_place: fromPlace,
+        from_state: fromState,
+        vehicle_no: vehicle.toUpperCase(),
+        vehicle_type: read("vehicleType", "vehicle_type") || "R",
+        trans_mode: transMode,
+        trans_doc_no: transDocNo,
+        trans_doc_date: transDocDate,
+        reason_code: read("reasonCode", "reason_code") || null,
+        reason_rem: read("reasonRem", "reason_rem") || "Fetched from E-Way Bill API",
+        updated_by: user.id,
+        response_data: source,
+      };
+      const { error: historyError } = await db.from("shipment_part_b_history").insert(row);
+      if (historyError) throw historyError;
+      await db
+        .from("shipments")
+        .update({ part_b_fetched_at: new Date().toISOString() })
+        .eq("id", shipment.id);
+      setViewingHistory((current) => [
+        {
+          ...row,
+          id: crypto.randomUUID(),
+          updated_at: new Date().toISOString(),
+          transporter_id: null,
+          transporter_name: null,
+          trans_distance: null,
+        } as PartBHistory,
+        ...current,
+      ]);
+      toast.success("Part-B details fetched and saved from the E-Way Bill API");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not fetch Part-B details");
+    }
+    setFetchingPartB(false);
+  }
+
   async function fetchEwayBillDetails() {
     if (!form.branch_id) return toast.error("Select a branch first");
     if (!/^\d{12}$/.test(form.eway_bill_number))
@@ -868,6 +964,8 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         history={viewingHistory}
         branchName={branchName}
         onBack={() => setViewingShipment(null)}
+        onFetchPartB={() => void fetchPartBFromApi(viewingShipment)}
+        fetchingPartB={fetchingPartB}
       />
     );
   const setItem = (index: number, key: keyof Item, value: string) =>

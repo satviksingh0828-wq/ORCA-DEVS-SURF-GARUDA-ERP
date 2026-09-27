@@ -153,6 +153,8 @@ const dateOnly = (value: unknown) => {
   return text.slice(0, 10);
 };
 const numberValue = (value: unknown) => Number(value || 0);
+const money = (value: number) =>
+  `₹${value.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 const generationModeLabel: Record<string, string> = {
   API: "API",
@@ -2341,62 +2343,97 @@ function CommonEwayDetails({ draft }: { draft?: ShipmentDraft }) {
 }
 
 function GoodsTable({ drafts }: { drafts: ShipmentDraft[] }) {
+  const totalQuantity = drafts.reduce(
+    (sum, draft) =>
+      sum + draft.items.reduce((inner, item) => inner + numberValue(item.quantity), 0),
+    0,
+  );
+  const totalWeight = drafts.reduce(
+    (sum, draft) =>
+      sum + draft.items.reduce((inner, item) => inner + numberValue(item.weight_kg), 0),
+    0,
+  );
+  const totalInvoice = drafts.reduce(
+    (sum, draft) =>
+      sum + draft.items.reduce((inner, item) => inner + numberValue(item.total_invoice_value), 0),
+    0,
+  );
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full min-w-[1100px] text-xs">
-        <thead className="bg-sky-800 text-left text-white">
-          <tr>
-            {[
-              "EWB No.",
-              "Product",
-              "Description",
-              "HSN",
-              "Quantity",
-              "Unit",
-              "Weight",
-              "Taxable Value",
-              "CGST",
-              "SGST",
-              "IGST",
-              "Cess",
-              "Total",
-            ].map((heading) => (
-              <th key={heading} className="px-2 py-2">
-                {heading}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {drafts.length === 0 ? (
+    <div className="space-y-3">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Total Quantity</p>
+          <p className="text-lg font-semibold">
+            {totalQuantity.toLocaleString("en-IN", { maximumFractionDigits: 3 })}
+          </p>
+        </div>
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Total Weight</p>
+          <p className="text-lg font-semibold">
+            {totalWeight.toLocaleString("en-IN", { maximumFractionDigits: 3 })} kg
+          </p>
+        </div>
+        <div className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2">
+          <p className="text-xs text-muted-foreground">Total Invoice Value</p>
+          <p className="text-lg font-semibold">{money(totalInvoice)}</p>
+        </div>
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full min-w-[1100px] text-xs">
+          <thead className="bg-sky-800 text-left text-white">
             <tr>
-              <td colSpan={13} className="px-3 py-8 text-center text-muted-foreground">
-                Goods will appear here after an E-Way Bill is added.
-              </td>
+              {[
+                "EWB No.",
+                "Product",
+                "Description",
+                "HSN",
+                "Quantity",
+                "Unit",
+                "Weight",
+                "Taxable Value",
+                "CGST",
+                "SGST",
+                "IGST",
+                "Cess",
+                "Total",
+              ].map((heading) => (
+                <th key={heading} className="px-2 py-2">
+                  {heading}
+                </th>
+              ))}
             </tr>
-          ) : (
-            drafts.flatMap((draft) =>
-              draft.items.map((item, index) => (
-                <tr key={`${draft.eway_bill_number}-${index}`} className="border-t border-border">
-                  <td className="px-2 py-2">{draft.eway_bill_number}</td>
-                  <td className="px-2 py-2">{item.product_name || "—"}</td>
-                  <td className="px-2 py-2">{item.description || "—"}</td>
-                  <td className="px-2 py-2">{item.hsn_code || "—"}</td>
-                  <td className="px-2 py-2">{item.quantity || "—"}</td>
-                  <td className="px-2 py-2">{item.unit || "—"}</td>
-                  <td className="px-2 py-2">{item.weight_kg || "—"}</td>
-                  <td className="px-2 py-2">{item.taxable_value || "—"}</td>
-                  <td className="px-2 py-2">{item.cgst || "—"}</td>
-                  <td className="px-2 py-2">{item.sgst_utgst || "—"}</td>
-                  <td className="px-2 py-2">{item.igst || "—"}</td>
-                  <td className="px-2 py-2">{item.cess || "—"}</td>
-                  <td className="px-2 py-2">{item.total_invoice_value || "—"}</td>
-                </tr>
-              )),
-            )
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {drafts.length === 0 ? (
+              <tr>
+                <td colSpan={13} className="px-3 py-8 text-center text-muted-foreground">
+                  Goods will appear here after an E-Way Bill is added.
+                </td>
+              </tr>
+            ) : (
+              drafts.flatMap((draft) =>
+                draft.items.map((item, index) => (
+                  <tr key={`${draft.eway_bill_number}-${index}`} className="border-t border-border">
+                    <td className="px-2 py-2">{draft.eway_bill_number}</td>
+                    <td className="px-2 py-2">{item.product_name || "—"}</td>
+                    <td className="px-2 py-2">{item.description || "—"}</td>
+                    <td className="px-2 py-2">{item.hsn_code || "—"}</td>
+                    <td className="px-2 py-2">{item.quantity || "—"}</td>
+                    <td className="px-2 py-2">{item.unit || "—"}</td>
+                    <td className="px-2 py-2">{item.weight_kg || "—"}</td>
+                    <td className="px-2 py-2">{item.taxable_value || "—"}</td>
+                    <td className="px-2 py-2">{item.cgst || "—"}</td>
+                    <td className="px-2 py-2">{item.sgst_utgst || "—"}</td>
+                    <td className="px-2 py-2">{item.igst || "—"}</td>
+                    <td className="px-2 py-2">{item.cess || "—"}</td>
+                    <td className="px-2 py-2">{item.total_invoice_value || "—"}</td>
+                  </tr>
+                )),
+              )
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
