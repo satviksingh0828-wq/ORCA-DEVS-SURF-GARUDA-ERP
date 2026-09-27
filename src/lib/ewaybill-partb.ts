@@ -71,21 +71,39 @@ function findStatusObject(value: unknown): { status_cd?: string; status?: string
     return record as { status_cd?: string; status?: string };
   return findStatusObject(record.data);
 }
-function errorText(body: Record<string, unknown> | null, fallback: string) {
-  const upstream =
-    body?.data && typeof body.data === "object" && !Array.isArray(body.data)
-      ? (body.data as Record<string, unknown>)
-      : (body ?? {});
-  const error =
-    body?.error && typeof body.error === "object" ? (body.error as Record<string, unknown>) : {};
-  return String(
-    error.message ??
-      error.errorCodes ??
-      upstream.status_desc ??
-      upstream.statusDesc ??
-      body?.message ??
-      fallback,
-  );
+function errorText(body: unknown, fallback: string, httpStatus?: number) {
+  const found: string[] = [];
+  const visit = (value: unknown, depth = 0) => {
+    if (depth > 5 || value == null) return;
+    if (typeof value === "string" || typeof value === "number") {
+      const text = String(value).trim();
+      if (text && !found.includes(text)) found.push(text);
+      return;
+    }
+    if (Array.isArray(value)) return value.forEach((item) => visit(item, depth + 1));
+    if (typeof value !== "object") return;
+    const record = value as Record<string, unknown>;
+    for (const key of [
+      "message",
+      "errorMessage",
+      "error_message",
+      "errorCodes",
+      "error_code",
+      "status_desc",
+      "statusDesc",
+      "error_description",
+      "reason",
+      "description",
+    ]) {
+      if (record[key] != null) visit(record[key], depth + 1);
+    }
+    for (const key of ["error", "errors", "data", "response", "result"]) {
+      if (record[key] != null) visit(record[key], depth + 1);
+    }
+  };
+  visit(body);
+  if (found.length) return found.slice(0, 4).join("; ");
+  return httpStatus ? `${fallback} (HTTP ${httpStatus})` : fallback;
 }
 function apiDateToDb(value: string) {
   if (!value) return null;
@@ -173,7 +191,13 @@ export const serverUpdateEwayBillPartB = createServerFn({ method: "POST" })
           }),
         },
       );
-      const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+      const responseText = await response.text();
+      let body: Record<string, unknown> | null = null;
+      try {
+        body = responseText ? (JSON.parse(responseText) as Record<string, unknown>) : null;
+      } catch {
+        body = responseText ? { message: responseText } : null;
+      }
       const upstream = findStatusObject(body?.data ?? body);
       const ok =
         response.ok && body?.ok !== false && upstream.status_cd !== "0" && upstream.status !== "0";
@@ -183,7 +207,7 @@ export const serverUpdateEwayBillPartB = createServerFn({ method: "POST" })
           : {
               ewayBillNumber,
               ok: false,
-              error: errorText(body, "E-Way Bill Part-B update failed"),
+              error: errorText(body, "E-Way Bill Part-B update failed", response.status),
             },
       );
     }

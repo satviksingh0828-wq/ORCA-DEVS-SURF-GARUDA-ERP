@@ -231,17 +231,12 @@ export function Trips({
                 </span>
               ) : null}
               <DriverTripActions trip={t} />
-              {!isViewer && (
+              {!isViewer && !t.part_b_locked_at && (
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={() => remove(t)}
-                  disabled={Boolean(t.part_b_locked_at)}
-                  title={
-                    t.part_b_locked_at
-                      ? "Trip cannot be deleted after Part-B update"
-                      : "Delete trip"
-                  }
+                  title="Delete trip"
                   aria-label="Delete trip"
                 >
                   <Trash2 className="size-4" />
