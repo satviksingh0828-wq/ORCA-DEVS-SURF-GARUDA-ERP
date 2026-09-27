@@ -13,18 +13,24 @@ export type Database = {
           id: string;
           theme: string;
           login_ui: string;
+          background_video_enabled: boolean;
+          background_video_url: string;
           updated_at: string;
         };
         Insert: {
           id?: string;
           theme?: string;
           login_ui?: string;
+          background_video_enabled?: boolean;
+          background_video_url?: string;
           updated_at?: string;
         };
         Update: {
           id?: string;
           theme?: string;
           login_ui?: string;
+          background_video_enabled?: boolean;
+          background_video_url?: string;
           updated_at?: string;
         };
         Relationships: [];

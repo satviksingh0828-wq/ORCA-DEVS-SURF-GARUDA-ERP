@@ -8,6 +8,7 @@ import { OrcaAITrigger } from "@/components/OrcaAI";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
+import { useTheme } from "@/lib/theme";
 
 export function AppShell({
   children,
@@ -24,32 +25,39 @@ export function AppShell({
   const { signOut, user } = useSession();
   const navigate = useNavigate();
   const { open } = useOrcaAI();
+  const { backgroundVideoEnabled, backgroundVideoUrl } = useTheme();
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
 
   return (
     <div
       className={cn(
-        "relative min-h-screen overflow-hidden bg-transparent transition-all duration-300",
+        "relative min-h-screen overflow-hidden transition-all duration-300",
+        backgroundVideoEnabled ? "bg-transparent" : "bg-background",
         isAdmin && open ? "lg:mr-[360px]" : "",
       )}
     >
-      <video
-        className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover"
-        autoPlay
-        loop
-        muted
-        playsInline
-        preload="metadata"
-        poster="/garuda-banner.webp"
-        aria-hidden="true"
-      >
-        <source src="https://cdn.pixabay.com/video/2024/04/29/209883_large.mp4" type="video/mp4" />
-      </video>
-      <div
-        className="pointer-events-none fixed inset-0 z-[1] bg-background/75"
-        aria-hidden="true"
-      />
+      {backgroundVideoEnabled ? (
+        <>
+          <video
+            key={backgroundVideoUrl}
+            className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover"
+            autoPlay
+            loop
+            muted
+            playsInline
+            preload="metadata"
+            poster="/garuda-banner.webp"
+            aria-hidden="true"
+          >
+            <source src={backgroundVideoUrl} />
+          </video>
+          <div
+            className="pointer-events-none fixed inset-0 z-[1] bg-background/75"
+            aria-hidden="true"
+          />
+        </>
+      ) : null}
       <header className="relative sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
           <Link to="/home" className="shrink-0">

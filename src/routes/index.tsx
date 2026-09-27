@@ -385,8 +385,38 @@ function LoginPage() {
     </AlertDialog>
 
     <div className="grid min-h-[100dvh] overflow-x-hidden lg:grid-cols-[1.05fr_1fr]">
-      {/* Banner — switches between plain gradient and image based on Settings */}
-      {loginUi === "image" ? (
+        {/* Banner — switches between the configured sign-in styles */}
+        {loginUi === "workspace" ? (
+          <aside
+            className="relative hidden min-h-[100dvh] items-center justify-center overflow-hidden px-12 lg:flex"
+            style={{
+              backgroundImage: "linear-gradient(145deg, #0878b9 0%, #159fe3 54%, #65c8ed 100%)",
+            }}
+          >
+            <div className="pointer-events-none absolute -left-24 -top-24 size-96 rounded-full bg-white/10 blur-3xl" />
+            <div className="pointer-events-none absolute -bottom-32 -right-16 size-[26rem] rounded-full bg-sky-100/20 blur-3xl" />
+            <div className="relative w-full max-w-lg animate-fade-up text-white">
+              <div className="inline-flex rounded-xl bg-white px-4 py-2.5 shadow-lg">
+                <img
+                  src="/garuda-logo.png"
+                  alt="Garuda Logistics Solution"
+                  className="h-10 w-auto"
+                />
+              </div>
+              <p className="mt-12 text-xs font-semibold uppercase tracking-[0.24em] text-white/75">
+                GARUDA · LOGISTICS WORKSPACE
+              </p>
+              <h1 className="mt-4 text-4xl font-semibold tracking-tight xl:text-5xl">
+                Everything moving, in one place.
+              </h1>
+              <p className="mt-5 max-w-md text-base leading-relaxed text-white/85">
+                Secure access to transport operations, shipments, and the tools your team uses every
+                day.
+              </p>
+            </div>
+            <LiveClock />
+          </aside>
+        ) : loginUi === "image" ? (
         <aside className="relative hidden min-h-[100dvh] overflow-hidden lg:block">
           <picture className="absolute inset-0 block">
             <source srcSet="/garuda-banner.webp" type="image/webp" />

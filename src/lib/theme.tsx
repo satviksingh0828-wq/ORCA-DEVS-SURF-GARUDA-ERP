@@ -5,6 +5,13 @@ import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 export const THEMES = [
   /* ── Light accent themes ── */
   { id: "sky", label: "Azure Sky", swatch: "#2f7ed8", hint: "Calm corporate blue", dark: false },
+  {
+    id: "workspace",
+    label: "Workspace Blue",
+    swatch: "#159fe3",
+    hint: "Bright, modern portal",
+    dark: false,
+  },
   { id: "emerald", label: "Emerald", swatch: "#12926f", hint: "Logistics green", dark: false },
   { id: "violet", label: "Deep Violet", swatch: "#6d4bd8", hint: "Modern & bold", dark: false },
   { id: "amber", label: "Warm Amber", swatch: "#d38b1b", hint: "Bright & energetic", dark: false },
@@ -71,7 +78,10 @@ export const THEMES = [
 ] as const;
 
 export type ThemeId = (typeof THEMES)[number]["id"];
-export type LoginUi = "plain" | "image";
+export type LoginUi = "plain" | "image" | "workspace";
+export const DEFAULT_BACKGROUND_VIDEO_URL =
+  "https://cdn.pixabay.com/video/2024/04/29/209883_large.mp4";
+export type BackgroundVideoSettings = { enabled?: boolean; url?: string };
 
 type ThemeValue = {
   theme: ThemeId;
@@ -79,11 +89,17 @@ type ThemeValue = {
   saving: boolean;
   loginUi: LoginUi;
   setLoginUi: (v: LoginUi) => Promise<void>;
+  backgroundVideoEnabled: boolean;
+  backgroundVideoUrl: string;
+  setBackgroundVideo: (settings: BackgroundVideoSettings) => Promise<void>;
+  videoSaving: boolean;
 };
 
 const ThemeContext = createContext<ThemeValue | null>(null);
 const THEME_CACHE_KEY = "garuda.theme";
+const VIDEO_CACHE_KEY = "garuda.background-video";
 const DEFAULT_THEME: ThemeId = "sky";
+const DEFAULT_VIDEO_SETTINGS = { enabled: true, url: DEFAULT_BACKGROUND_VIDEO_URL };
 const THEME_IDS = new Set<string>(THEMES.map(({ id }) => id));
 
 function validTheme(value: unknown): ThemeId {
@@ -107,13 +123,41 @@ function cacheTheme(theme: ThemeId) {
   }
 }
 
+function readCachedVideoSettings() {
+  if (typeof window === "undefined") return DEFAULT_VIDEO_SETTINGS;
+  try {
+    const stored = JSON.parse(window.localStorage.getItem(VIDEO_CACHE_KEY) ?? "null");
+    return {
+      enabled:
+        typeof stored?.enabled === "boolean" ? stored.enabled : DEFAULT_VIDEO_SETTINGS.enabled,
+      url:
+        typeof stored?.url === "string" && stored.url.trim()
+          ? stored.url
+          : DEFAULT_VIDEO_SETTINGS.url,
+    };
+  } catch {
+    return DEFAULT_VIDEO_SETTINGS;
+  }
+}
+
+function cacheVideoSettings(settings: { enabled: boolean; url: string }) {
+  try {
+    window.localStorage.setItem(VIDEO_CACHE_KEY, JSON.stringify(settings));
+  } catch {
+    // Storage can be disabled; the in-memory setting still works.
+  }
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   // Keep the server and first client render identical. Reading localStorage
   // here would make SSR render `sky` while the browser renders the cached
   // theme, which triggers React hydration error #418.
   const [theme, setThemeState] = useState<ThemeId>(DEFAULT_THEME);
   const [loginUi, setLoginUiState] = useState<LoginUi>("plain");
+  const [backgroundVideoEnabled, setBackgroundVideoEnabled] = useState(true);
+  const [backgroundVideoUrl, setBackgroundVideoUrl] = useState(DEFAULT_BACKGROUND_VIDEO_URL);
   const [saving, setSaving] = useState(false);
+  const [videoSaving, setVideoSaving] = useState(false);
 
   const apply = useCallback((t: ThemeId) => {
     document.documentElement.setAttribute("data-theme", t);
@@ -127,7 +171,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       if (!isSupabaseConfigured()) return;
       const request = supabase
         .from("app_settings")
-        .select("theme, login_ui")
+        .select("theme, login_ui, background_video_enabled, background_video_url")
         .limit(1)
         .maybeSingle();
       const { data, error } = await Promise.race([
@@ -138,19 +182,29 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       ]);
 
       if (error) {
-        // Only retry for the known pre-login_ui schema; avoid doubling every
-        // transient network failure during the first page load.
-        const missingLoginUi = error.code === "42703" || error.code === "PGRST204";
-        if (!missingLoginUi) return;
+        // Support projects that have not yet run the background-video migration.
         const { data: fallback } = await supabase
           .from("app_settings")
-          .select("theme")
+          .select("theme, login_ui")
           .limit(1)
           .maybeSingle();
-        const next = validTheme(fallback?.theme);
-        setThemeState(next);
-        apply(next);
-        cacheTheme(next);
+        if (fallback) {
+          const next = validTheme(fallback.theme);
+          setThemeState(next);
+          apply(next);
+          cacheTheme(next);
+          setLoginUiState((fallback.login_ui as LoginUi) ?? "plain");
+        } else {
+          const { data: legacy } = await supabase
+            .from("app_settings")
+            .select("theme")
+            .limit(1)
+            .maybeSingle();
+          const next = validTheme(legacy?.theme);
+          setThemeState(next);
+          apply(next);
+          cacheTheme(next);
+        }
         return;
       }
 
@@ -159,6 +213,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       apply(next);
       cacheTheme(next);
       setLoginUiState((data?.login_ui as LoginUi) ?? "plain");
+      const enabled = data?.background_video_enabled !== false;
+      const url =
+        typeof data?.background_video_url === "string" && data.background_video_url.trim()
+          ? data.background_video_url
+          : DEFAULT_BACKGROUND_VIDEO_URL;
+      setBackgroundVideoEnabled(enabled);
+      setBackgroundVideoUrl(url);
+      cacheVideoSettings({ enabled, url });
     } catch {
       // Supabase not configured yet — keep defaults.
     }
@@ -166,6 +228,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const cached = readCachedTheme();
+    const cachedVideo = readCachedVideoSettings();
+    setBackgroundVideoEnabled(cachedVideo.enabled);
+    setBackgroundVideoUrl(cachedVideo.url);
     if (cached !== DEFAULT_THEME) {
       setThemeState(cached);
       apply(cached);
@@ -205,6 +270,28 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           if (row.login_ui) {
             setLoginUiState(row.login_ui as LoginUi);
           }
+          if (typeof row.background_video_enabled === "boolean") {
+            setBackgroundVideoEnabled(row.background_video_enabled);
+          }
+          if (typeof row.background_video_url === "string" && row.background_video_url.trim()) {
+            setBackgroundVideoUrl(row.background_video_url);
+          }
+          if (
+            typeof row.background_video_enabled === "boolean" ||
+            typeof row.background_video_url === "string"
+          ) {
+            const cachedVideo = readCachedVideoSettings();
+            cacheVideoSettings({
+              enabled:
+                typeof row.background_video_enabled === "boolean"
+                  ? row.background_video_enabled
+                  : cachedVideo.enabled,
+              url:
+                typeof row.background_video_url === "string" && row.background_video_url.trim()
+                  ? row.background_video_url
+                  : cachedVideo.url,
+            });
+          }
         },
       )
       .subscribe();
@@ -217,15 +304,31 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Gets the existing row id first so we always UPDATE the same row, never
   // accumulate duplicate rows that would cause the wrong row to load later.
   const saveSettings = useCallback(
-    async (patch: Partial<{ theme: string; login_ui: string; updated_at: string }>) => {
-      const { data } = await supabase.from("app_settings").select("id").limit(1).maybeSingle();
+    async (
+      patch: Partial<{
+        theme: string;
+        login_ui: string;
+        background_video_enabled: boolean;
+        background_video_url: string;
+        updated_at: string;
+      }>,
+    ) => {
+      if (!isSupabaseConfigured()) return;
+      const { data, error: readError } = await supabase
+        .from("app_settings")
+        .select("id")
+        .limit(1)
+        .maybeSingle();
+      if (readError) throw readError;
       if (data?.id) {
-        await supabase
+        const { error } = await supabase
           .from("app_settings")
           .update(patch)
           .eq("id", data.id as string);
+        if (error) throw error;
       } else {
-        await supabase.from("app_settings").insert(patch);
+        const { error } = await supabase.from("app_settings").insert(patch);
+        if (error) throw error;
       }
     },
     [],
@@ -261,9 +364,49 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [saveSettings],
   );
 
+  const setBackgroundVideo = useCallback(
+    async (settings: BackgroundVideoSettings) => {
+      const enabled = settings.enabled ?? backgroundVideoEnabled;
+      const url = settings.url?.trim() || backgroundVideoUrl;
+      setBackgroundVideoEnabled(enabled);
+      setBackgroundVideoUrl(url);
+      cacheVideoSettings({ enabled, url });
+      setVideoSaving(true);
+      try {
+        await saveSettings({
+          background_video_enabled: enabled,
+          background_video_url: url,
+        });
+      } finally {
+        setVideoSaving(false);
+      }
+    },
+    [backgroundVideoEnabled, backgroundVideoUrl, saveSettings],
+  );
+
   const value = useMemo(
-    () => ({ theme, setTheme, saving, loginUi, setLoginUi }),
-    [theme, setTheme, saving, loginUi, setLoginUi],
+    () => ({
+      theme,
+      setTheme,
+      saving,
+      loginUi,
+      setLoginUi,
+      backgroundVideoEnabled,
+      backgroundVideoUrl,
+      setBackgroundVideo,
+      videoSaving,
+    }),
+    [
+      theme,
+      setTheme,
+      saving,
+      loginUi,
+      setLoginUi,
+      backgroundVideoEnabled,
+      backgroundVideoUrl,
+      setBackgroundVideo,
+      videoSaving,
+    ],
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }

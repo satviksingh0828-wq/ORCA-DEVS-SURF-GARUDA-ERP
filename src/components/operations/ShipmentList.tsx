@@ -113,6 +113,7 @@ type Shipment = Form & {
   total_invoice_value: number;
   item_count: number;
   created_at: string;
+  transporter_update_status?: string | null;
 };
 type PartBHistory = {
   id: string;
@@ -243,7 +244,6 @@ function Field({
   placeholder?: string;
   readOnly?: boolean;
 }) {
-  const dialogShipment = viewingShipment as Shipment | null;
   return (
     <div className="space-y-1.5">
       <Label>
@@ -649,6 +649,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   const [showCreate, setShowCreate] = useState(false);
   const [editingShipmentId, setEditingShipmentId] = useState<string | null>(null);
   const [viewingShipment, setViewingShipment] = useState<Shipment | null>(null);
+  const dialogShipment = viewingShipment;
   const [viewingItems, setViewingItems] = useState<Item[]>([]);
   const [viewingHistory, setViewingHistory] = useState<PartBHistory[]>([]);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);

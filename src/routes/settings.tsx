@@ -13,6 +13,7 @@ import {
   Wifi,
   MessageCircle,
   Mail,
+  Film,
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -20,8 +21,9 @@ import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { CompanySettings } from "@/components/settings/CompanySettings";
 import { BranchSettings } from "@/components/settings/BranchSettings";
 import { AttendanceModuleSettings } from "@/components/settings/AttendanceModuleSettings";
-import { THEMES, useTheme, type ThemeId } from "@/lib/theme";
+import { DEFAULT_BACKGROUND_VIDEO_URL, THEMES, useTheme, type ThemeId } from "@/lib/theme";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { useAppSettings, useUpdateAppSettings } from "@/lib/hooks";
 import { useSession } from "@/lib/session";
@@ -66,8 +68,18 @@ const TABS = [
   { id: "attendance", label: "Attendance Module", desc: "Device & service connection", icon: Wifi },
   { id: "whatsapp", label: "WhatsApp", desc: "HR PDF sending & connection", icon: MessageCircle },
   { id: "mail", label: "Mail", desc: "All email notifications", icon: Mail },
-  { id: "hrms-accounts", label: "HRMS Accounts", desc: "Payroll and HR ledger mappings", icon: Building2 },
-  { id: "tms-accounts", label: "TMS Accounts", desc: "Driver payroll ledger mappings", icon: Building2 },
+  {
+    id: "hrms-accounts",
+    label: "HRMS Accounts",
+    desc: "Payroll and HR ledger mappings",
+    icon: Building2,
+  },
+  {
+    id: "tms-accounts",
+    label: "TMS Accounts",
+    desc: "Driver payroll ledger mappings",
+    icon: Building2,
+  },
   {
     id: "passkey",
     label: "Passkey Security",
@@ -241,7 +253,52 @@ function PasskeySecurityPanel() {
 }
 
 function ThemePanel() {
-  const { theme, setTheme, saving, loginUi, setLoginUi } = useTheme();
+  const {
+    theme,
+    setTheme,
+    saving,
+    loginUi,
+    setLoginUi,
+    backgroundVideoEnabled,
+    backgroundVideoUrl,
+    setBackgroundVideo,
+    videoSaving,
+  } = useTheme();
+  const [videoUrlDraft, setVideoUrlDraft] = useState(backgroundVideoUrl);
+  useEffect(() => setVideoUrlDraft(backgroundVideoUrl), [backgroundVideoUrl]);
+
+  async function saveVideoUrl() {
+    let parsed: URL;
+    try {
+      parsed = new URL(videoUrlDraft.trim());
+    } catch {
+      toast.error("Enter a valid direct video URL.");
+      return;
+    }
+    if (parsed.protocol !== "https:" && parsed.protocol !== "http:") {
+      toast.error("Video URLs must start with https:// or http://.");
+      return;
+    }
+    try {
+      await setBackgroundVideo({ url: parsed.toString() });
+      toast.success("Background video URL saved.");
+    } catch {
+      toast.error(
+        "Could not sync the video URL. Run the supplied Supabase migration, then save again.",
+      );
+    }
+  }
+
+  async function toggleBackgroundVideo() {
+    try {
+      await setBackgroundVideo({ enabled: !backgroundVideoEnabled });
+      toast.success(`Background video ${backgroundVideoEnabled ? "disabled" : "enabled"}.`);
+    } catch {
+      toast.error(
+        "Could not sync video settings. Run the supplied Supabase migration, then try again.",
+      );
+    }
+  }
 
   return (
     <div className="animate-fade-up space-y-5">
@@ -280,14 +337,79 @@ function ThemePanel() {
         </div>
       </section>
 
+      <section className="surface-card p-6">
+        <div className="flex items-start gap-3">
+          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
+            <Film className="size-5" />
+          </span>
+          <div>
+            <h3 className="text-sm font-semibold tracking-tight">Workspace background video</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Choose whether the muted video appears behind workspace pages and set a direct
+              MP4/WebM URL. This preference is shared with all users.
+            </p>
+          </div>
+        </div>
+        <div className="mt-5 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-muted/30 p-4">
+          <div>
+            <p className="text-sm font-medium">Background video</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Current status:{" "}
+              <strong className="text-foreground">{backgroundVideoEnabled ? "On" : "Off"}</strong>
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant={backgroundVideoEnabled ? "outline" : "default"}
+            onClick={() => void toggleBackgroundVideo()}
+            disabled={videoSaving}
+          >
+            {videoSaving ? <Loader2 className="size-4 animate-spin" /> : null}
+            {backgroundVideoEnabled ? "Turn video off" : "Turn video on"}
+          </Button>
+        </div>
+        <div className="mt-4 space-y-3">
+          <label htmlFor="workspace-background-video" className="text-sm font-medium">
+            Video URL
+          </label>
+          <Input
+            id="workspace-background-video"
+            type="url"
+            value={videoUrlDraft}
+            onChange={(event) => setVideoUrlDraft(event.target.value)}
+            placeholder="https://example.com/background.mp4"
+          />
+          <p className="text-xs text-muted-foreground">
+            Use a direct video file URL; streaming pages such as YouTube links are not supported.
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => void saveVideoUrl()}
+              disabled={videoSaving || !videoUrlDraft.trim()}
+            >
+              {videoSaving ? <Loader2 className="size-4 animate-spin" /> : null}
+              Save video URL
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setVideoUrlDraft(DEFAULT_BACKGROUND_VIDEO_URL)}
+            >
+              Use current video
+            </Button>
+          </div>
+        </div>
+      </section>
+
       {/* ── Login page style ─────────────────────────────────────── */}
       <section className="surface-card p-6">
         <h3 className="text-sm font-semibold tracking-tight">Login page style</h3>
         <p className="mt-1 text-xs text-muted-foreground">
-          Choose how the left panel of the sign-in screen looks. Saved to the cloud and applies to
-          all users.
+          Choose the sign-in page appearance. The cloud workspace style is inspired by the supplied
+          Bitrix24 reference. Saved to the cloud and applied to all users.
         </p>
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {/* Plain UI */}
           <button
             type="button"
@@ -346,6 +468,32 @@ function ThemePanel() {
                 </span>
               </span>
               {loginUi === "image" ? <Check className="size-4 shrink-0 text-primary" /> : null}
+            </div>
+          </button>
+          {/* Workspace UI — clean blue auth inspiration */}
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => setLoginUi("workspace")}
+            className={`relative flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-200 hover:-translate-y-0.5 ${
+              loginUi === "workspace"
+                ? "border-primary bg-primary-soft"
+                : "border-border bg-card hover:border-primary/40"
+            }`}
+          >
+            <div className="flex h-28 w-full items-center justify-center bg-gradient-to-br from-sky-50 via-white to-blue-100">
+              <div className="rounded-lg border border-sky-100 bg-white px-5 py-2.5 text-[11px] font-semibold tracking-wide text-sky-700 shadow-sm">
+                GARUDA · WORKSPACE
+              </div>
+            </div>
+            <div className="flex items-center justify-between p-4">
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">Cloud Workspace</span>
+                <span className="block text-xs text-muted-foreground">
+                  Clean blue sign-in, inspired by the reference
+                </span>
+              </span>
+              {loginUi === "workspace" ? <Check className="size-4 shrink-0 text-primary" /> : null}
             </div>
           </button>
         </div>
