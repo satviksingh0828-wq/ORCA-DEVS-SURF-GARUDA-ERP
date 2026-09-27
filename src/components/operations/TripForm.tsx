@@ -1588,21 +1588,25 @@ function MovementTab({
               </div>
               <Field
                 label="Vehicle Number"
+                required
                 value={form.vehicleNo}
                 onChange={(v) => setForm((f) => ({ ...f, vehicleNo: v }))}
               />
               <Field
                 label="From Place"
+                required
                 value={form.fromPlace}
                 onChange={(v) => setForm((f) => ({ ...f, fromPlace: v }))}
               />
               <Field
                 label="From PIN Code"
+                required
                 value={form.fromPin}
                 onChange={(v) => void lookupPin(v)}
               />
               <Field
                 label="From State Code (auto)"
+                required
                 value={form.stateCode}
                 onChange={() => {}}
                 disabled

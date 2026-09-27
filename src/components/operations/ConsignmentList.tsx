@@ -26,6 +26,20 @@ import {
 
 type Item = Record<string, string | number>;
 type Master = { id: string; label: string; pin_code?: string | null; gstin?: string | null };
+type PackageTypeOption = {
+  id: string;
+  branch_id: string;
+  package_type: string;
+  basis: "quantity" | "weight";
+};
+type PackageEntry = {
+  id?: string;
+  package_rate_type_id: string;
+  package_type: string;
+  basis: "quantity" | "weight";
+  quantity: string;
+  weight_kg: string;
+};
 type DriverMasterRow = { id: string; full_name: string | null; driver_code: string | null };
 
 type ShipmentDraft = {
@@ -561,6 +575,7 @@ export function ConsignmentList({
   const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [view, setView] = useState<Record<string, any> | null>(null);
   const [viewShipments, setViewShipments] = useState<Record<string, any>[]>([]);
+  const [viewPackages, setViewPackages] = useState<PackageEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState("all");
@@ -582,6 +597,8 @@ export function ConsignmentList({
   const [ewayNo, setEwayNo] = useState("");
   const [fetching, setFetching] = useState(false);
   const [drafts, setDrafts] = useState<ShipmentDraft[]>([]);
+  const [packageTypes, setPackageTypes] = useState<PackageTypeOption[]>([]);
+  const [packageEntries, setPackageEntries] = useState<PackageEntry[]>([]);
   const [contracts, setContracts] = useState<Master[]>([]);
   const [vehicles, setVehicles] = useState<Master[]>([]);
   const [drivers, setDrivers] = useState<Master[]>([]);
@@ -691,6 +708,22 @@ export function ConsignmentList({
     }
   }, [branchId, branch?.pin_code]);
   useEffect(() => {
+    if (!branchId) {
+      setPackageTypes([]);
+      setPackageEntries([]);
+      return;
+    }
+    void db
+      .from("package_rate_types")
+      .select("id,branch_id,package_type,basis")
+      .eq("branch_id", branchId)
+      .order("package_type")
+      .then(({ data, error }: any) => {
+        if (error) toast.error(error.message);
+        else setPackageTypes((data ?? []) as PackageTypeOption[]);
+      });
+  }, [branchId]);
+  useEffect(() => {
     if (type === "third_party" && movement === "drop") {
       setToPin(selectedTransporter?.pin_code ?? "");
     } else {
@@ -717,6 +750,8 @@ export function ConsignmentList({
     setPreviewNumber("");
     setEwayNo("");
     setDrafts([]);
+    setPackageTypes([]);
+    setPackageEntries([]);
     void loadMasters();
   }
 
@@ -884,6 +919,12 @@ export function ConsignmentList({
     if (movement === "drop" && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
       return toast.error("Drop mode requires valid From and To Pincodes");
     if (!common) return toast.error("Add at least one E-Way Bill");
+    if (
+      packageEntries.some((entry) =>
+        entry.basis === "quantity" ? !(Number(entry.quantity) > 0) : !(Number(entry.weight_kg) > 0),
+      )
+    )
+      return toast.error("Every package entry must have a quantity or weight greater than zero");
     const payload = {
       branch_id: branchId,
       source_id: sourceId,
@@ -944,6 +985,19 @@ export function ConsignmentList({
       .eq("id", data.id);
     setLoading(false);
     if (updateError) return toast.error(updateError.message);
+    if (packageEntries.length) {
+      const { error: packageError } = await db.from("consignment_package_information").insert(
+        packageEntries.map((entry) => ({
+          consignment_id: data.id,
+          package_rate_type_id: entry.package_rate_type_id,
+          package_type: entry.package_type,
+          basis: entry.basis,
+          quantity: entry.basis === "quantity" ? Number(entry.quantity) : null,
+          weight_kg: entry.basis === "weight" ? Number(entry.weight_kg) : null,
+        })),
+      );
+      if (packageError) return toast.error(packageError.message);
+    }
     toast.success(
       `Consignment ${data.consignment_number} created with ${data.shipment_count} Shipment(s)`,
     );
@@ -954,14 +1008,29 @@ export function ConsignmentList({
   }
 
   async function openView(row: Record<string, any>) {
-    const { data, error } = await db
-      .from("shipments")
-      .select("*, shipment_items(*)")
-      .eq("consignment_id", row.id)
-      .order("eway_bill_date", { ascending: false });
+    const [{ data, error }, { data: packages, error: packageError }] = await Promise.all([
+      db
+        .from("shipments")
+        .select("*, shipment_items(*)")
+        .eq("consignment_id", row.id)
+        .order("eway_bill_date", { ascending: false }),
+      db
+        .from("consignment_package_information")
+        .select("id,package_rate_type_id,package_type,basis,quantity,weight_kg")
+        .eq("consignment_id", row.id)
+        .order("created_at"),
+    ]);
     if (error) return toast.error(error.message);
+    if (packageError) return toast.error(packageError.message);
     setView(row);
     setViewShipments((data ?? []) as Record<string, any>[]);
+    setViewPackages(
+      (packages ?? []).map((item: any) => ({
+        ...item,
+        quantity: item.quantity == null ? "" : String(item.quantity),
+        weight_kg: item.weight_kg == null ? "" : String(item.weight_kg),
+      })) as PackageEntry[],
+    );
     setScreen("view");
   }
 
@@ -994,6 +1063,7 @@ export function ConsignmentList({
       <ConsignmentView
         row={view}
         shipments={viewShipments}
+        packages={viewPackages}
         onBack={() => {
           setScreen("list");
           onSidebarVisibilityChange?.(true);
@@ -1045,6 +1115,9 @@ export function ConsignmentList({
             fetching,
             drafts,
             setDrafts,
+            packageTypes,
+            packageEntries,
+            setPackageEntries,
             save,
             loading,
             openPartner: (kind: "rental" | "transporter") => {
@@ -1263,6 +1336,9 @@ function ConsignmentForm(props: any) {
     fetching,
     drafts,
     setDrafts,
+    packageTypes,
+    packageEntries,
+    setPackageEntries,
     save,
     loading,
     openPartner,
@@ -1691,6 +1767,138 @@ function ConsignmentForm(props: any) {
         <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
           <h3 className="text-sm font-semibold text-sky-800">Goods from all E-Way Bills</h3>
           <GoodsTable drafts={drafts} />
+        </section>
+        <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-sky-800">Update Package Information</h3>
+              <p className="text-xs text-muted-foreground">
+                Select a package type and enter either quantity or weight. One entry cannot contain
+                both.
+              </p>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setPackageEntries([
+                  ...packageEntries,
+                  {
+                    package_rate_type_id: "",
+                    package_type: "",
+                    basis: "quantity",
+                    quantity: "",
+                    weight_kg: "",
+                  },
+                ])
+              }
+              disabled={!packageTypes.length}
+            >
+              <Plus className="mr-1 size-4" /> Add Package Entry
+            </Button>
+          </div>
+          {!packageTypes.length ? (
+            <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+              No Package Rate types are configured for this branch. Create one in Masters → Package
+              Rate first.
+            </p>
+          ) : packageEntries.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+              No package information added yet.
+            </p>
+          ) : (
+            <div className="space-y-2">
+              {packageEntries.map((entry, index) => {
+                const selected = packageTypes.find(
+                  (item) => item.id === entry.package_rate_type_id,
+                );
+                return (
+                  <div
+                    key={`${entry.package_rate_type_id}-${index}`}
+                    className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]"
+                  >
+                    <div className="space-y-1.5">
+                      <Label>Package Type *</Label>
+                      <Select
+                        value={entry.package_rate_type_id}
+                        onValueChange={(value) => {
+                          const type = packageTypes.find((item) => item.id === value);
+                          setPackageEntries(
+                            packageEntries.map((current, i) =>
+                              i === index
+                                ? {
+                                    ...current,
+                                    package_rate_type_id: value,
+                                    package_type: type?.package_type ?? "",
+                                    basis: type?.basis ?? "quantity",
+                                    quantity: "",
+                                    weight_kg: "",
+                                  }
+                                : current,
+                            ),
+                          );
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select package type" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {packageTypes.map((item) => (
+                            <SelectItem key={item.id} value={item.id}>
+                              {item.package_type} ·{" "}
+                              {item.basis === "weight" ? "Weight-wise" : "Quantity-wise"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>{selected?.basis === "weight" ? "Weight (KG) *" : "Quantity *"}</Label>
+                      <Input
+                        type="number"
+                        min="0.001"
+                        step="0.001"
+                        value={selected?.basis === "weight" ? entry.weight_kg : entry.quantity}
+                        disabled={!selected}
+                        onChange={(event) =>
+                          setPackageEntries(
+                            packageEntries.map((current, i) =>
+                              i === index
+                                ? {
+                                    ...current,
+                                    quantity:
+                                      selected?.basis === "weight" ? "" : event.target.value,
+                                    weight_kg:
+                                      selected?.basis === "weight" ? event.target.value : "",
+                                  }
+                                : current,
+                            ),
+                          )
+                        }
+                      />
+                    </div>
+                    <div className="flex items-end">
+                      <span className="rounded-md bg-muted px-2 py-2 text-xs text-muted-foreground">
+                        {selected?.basis === "weight" ? "Weight-wise" : "Quantity-wise"}
+                      </span>
+                    </div>
+                    <div className="flex items-end">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setPackageEntries(packageEntries.filter((_, i) => i !== index))
+                        }
+                      >
+                        <Trash2 className="size-4 text-destructive" />
+                      </Button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </section>
         <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
           <Button variant="outline" onClick={onBack}>
@@ -2525,10 +2733,12 @@ function PartnerDialog({
 function ConsignmentView({
   row,
   shipments,
+  packages,
   onBack,
 }: {
   row: Record<string, any>;
   shipments: Record<string, any>[];
+  packages: PackageEntry[];
   onBack: () => void;
 }) {
   const drafts = shipments.map((shipment) => ({
@@ -2651,6 +2861,37 @@ function ConsignmentView({
       <section className="space-y-3 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Goods from all E-Way Bills</h3>
         <GoodsTable drafts={drafts} />
+      </section>
+      <section className="space-y-3 rounded-xl border border-border p-4">
+        <h3 className="font-semibold">Package Information</h3>
+        {packages.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No package information added.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-2 py-2">Package Type</th>
+                  <th className="px-2 py-2">Method</th>
+                  <th className="px-2 py-2">Value</th>
+                </tr>
+              </thead>
+              <tbody>
+                {packages.map((entry, index) => (
+                  <tr key={entry.id ?? index} className="border-t border-border">
+                    <td className="px-2 py-2 font-medium">{entry.package_type}</td>
+                    <td className="px-2 py-2">
+                      {entry.basis === "weight" ? "Weight-wise" : "Quantity-wise"}
+                    </td>
+                    <td className="px-2 py-2">
+                      {entry.basis === "weight" ? `${entry.weight_kg} kg` : entry.quantity}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </section>
       <section className="space-y-3 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Details</h3>
