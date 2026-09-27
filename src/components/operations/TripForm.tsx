@@ -1445,7 +1445,22 @@ function MovementTab({
   }
   async function submitPartB() {
     if (!updating || !user?.sessionToken) return;
-    if (!form.fromPlace.trim() || !form.fromPin || !form.stateCode || !form.vehicleNo.trim())
+    const vehicleNo = form.vehicleNo.trim();
+    const fromPin = form.fromPin.trim();
+    let fromPlace = form.fromPlace.trim();
+    let stateCode = form.stateCode.trim();
+    // The state field is auto-filled and disabled, so hydrate it synchronously for this submit
+    // as well. This prevents a visible PIN/state value from being lost in a stale React update.
+    if (/^\d{6}$/.test(fromPin) && (!stateCode || !fromPlace)) {
+      const result = await lookupIndiaPin(fromPin);
+      if (result) {
+        fromPlace = fromPlace || result.district;
+        const code = PIN_STATE_CODES[result.state.toUpperCase()];
+        if (code) stateCode = String(code).padStart(2, "0");
+        setForm((current) => ({ ...current, fromPin, fromPlace, stateCode }));
+      }
+    }
+    if (!vehicleNo || !fromPlace || !/^\d{6}$/.test(fromPin) || !/^\d{2}$/.test(stateCode))
       return toast.error("Vehicle, From Place, From PIN, and State Code are required");
     if (form.transMode !== "1" && !form.transDocNo.trim())
       return toast.error("Transport Document No. is required for non-road movement");
@@ -1457,9 +1472,9 @@ function MovementTab({
         data: {
           token: user.sessionToken,
           movementId: updating.id,
-          fromPinCode: form.fromPin,
-          fromPlace: form.fromPlace,
-          vehicleNo: form.vehicleNo,
+          fromPinCode: fromPin,
+          fromPlace,
+          vehicleNo,
           vehicleType: form.vehicleType as "R" | "O",
           transMode: form.transMode as "1" | "2" | "3" | "4",
           transDocNo: form.transDocNo,
