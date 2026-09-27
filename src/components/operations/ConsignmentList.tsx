@@ -1589,6 +1589,15 @@ function ConsignmentForm(props: any) {
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
             </div>
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">Delivery Date (Optional)</Label>
+              <Input
+                type="date"
+                value={deliveryDate}
+                onChange={(event) => setDeliveryDate(event.target.value)}
+                className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+              />
+            </div>
             <ReadonlyField dense label="Consignment From PIN" value={common?.supplier_pin_code} />
             <ReadonlyField dense label="Consignment To PIN" value={common?.recipient_pin_code} />
             <div className="min-w-0 space-y-1">
@@ -1636,8 +1645,8 @@ function ConsignmentForm(props: any) {
               </div>
             </div>
           </div>
-          <CommonEwayDetails draft={common} />
         </section>
+        <CommonEwayDetails draft={common} />
         <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
           <h3 className="text-sm font-semibold text-sky-800">Transport Assignment</h3>
           <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -1787,20 +1796,8 @@ function ConsignmentForm(props: any) {
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
             </div>
-            <div className="min-w-0 space-y-1">
-              <Label className="text-xs font-semibold">Delivery Date (Optional)</Label>
-              <Input
-                type="date"
-                value={deliveryDate}
-                onChange={(event) => setDeliveryDate(event.target.value)}
-                className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
-              />
-            </div>
           </div>
-        </section>
-        <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
-          <h3 className="text-sm font-semibold text-sky-800">Pincodes</h3>
-          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
+          <div className="mt-3 grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
             <div className="min-w-0 space-y-1">
               <Label className="text-xs font-semibold">From Pincode</Label>
               <Input
@@ -2624,40 +2621,48 @@ function CommonEwayDetails({ draft }: { draft?: ShipmentDraft }) {
         <ReadonlyField dense label="Supply Type" value={draft?.supply_type} />
         <ReadonlyField dense label="Sub-Supply Type" value={draft?.sub_type} />
       </div>
-      <div className="space-y-3">
-        <h4 className="text-xs font-bold uppercase tracking-wide text-foreground">
-          Consignor / From Party
-        </h4>
-        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-          <ReadonlyField dense label="Consignor GSTIN" value={draft?.supplier_gstin} />
-          <ReadonlyField dense label="Consignor Trade Name" value={draft?.supplier_trade_name} />
-          <ReadonlyField dense label="Consignor Legal Name" value={draft?.supplier_legal_name} />
-          <ReadonlyField dense label="Consignor Address 1" value={draft?.supplier_address_line_1} />
-          <ReadonlyField dense label="Consignor Address 2" value={draft?.supplier_address_line_2} />
-          <ReadonlyField dense label="Consignor Place" value={draft?.supplier_place} />
-          <ReadonlyField dense label="Consignor Pincode" value={draft?.supplier_pin_code} />
-          <ReadonlyField dense label="Consignor State" value={draft?.supplier_state} />
+      <div className="consignment-party-grid">
+        <div className="consignment-party-panel">
+          <h4>Consignor / From Party</h4>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+            <ReadonlyField dense label="Consignor GSTIN" value={draft?.supplier_gstin} />
+            <ReadonlyField dense label="Consignor Trade Name" value={draft?.supplier_trade_name} />
+            <ReadonlyField dense label="Consignor Legal Name" value={draft?.supplier_legal_name} />
+            <ReadonlyField
+              dense
+              label="Consignor Address 1"
+              value={draft?.supplier_address_line_1}
+            />
+            <ReadonlyField
+              dense
+              label="Consignor Address 2"
+              value={draft?.supplier_address_line_2}
+            />
+            <ReadonlyField dense label="Consignor Place" value={draft?.supplier_place} />
+            <ReadonlyField dense label="Consignor Pincode" value={draft?.supplier_pin_code} />
+            <ReadonlyField dense label="Consignor State" value={draft?.supplier_state} />
+          </div>
         </div>
-        <h4 className="pt-1 text-xs font-bold uppercase tracking-wide text-foreground">
-          Consignee / To Party
-        </h4>
-        <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
-          <ReadonlyField dense label="Consignee GSTIN" value={draft?.recipient_gstin} />
-          <ReadonlyField dense label="Consignee Trade Name" value={draft?.recipient_trade_name} />
-          <ReadonlyField dense label="Consignee Legal Name" value={draft?.recipient_legal_name} />
-          <ReadonlyField
-            dense
-            label="Consignee Address 1"
-            value={draft?.recipient_address_line_1}
-          />
-          <ReadonlyField
-            dense
-            label="Consignee Address 2"
-            value={draft?.recipient_address_line_2}
-          />
-          <ReadonlyField dense label="Consignee Place" value={draft?.recipient_place} />
-          <ReadonlyField dense label="Consignee Pincode" value={draft?.recipient_pin_code} />
-          <ReadonlyField dense label="Consignee State" value={draft?.recipient_state} />
+        <div className="consignment-party-panel">
+          <h4>Consignee / To Party</h4>
+          <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
+            <ReadonlyField dense label="Consignee GSTIN" value={draft?.recipient_gstin} />
+            <ReadonlyField dense label="Consignee Trade Name" value={draft?.recipient_trade_name} />
+            <ReadonlyField dense label="Consignee Legal Name" value={draft?.recipient_legal_name} />
+            <ReadonlyField
+              dense
+              label="Consignee Address 1"
+              value={draft?.recipient_address_line_1}
+            />
+            <ReadonlyField
+              dense
+              label="Consignee Address 2"
+              value={draft?.recipient_address_line_2}
+            />
+            <ReadonlyField dense label="Consignee Place" value={draft?.recipient_place} />
+            <ReadonlyField dense label="Consignee Pincode" value={draft?.recipient_pin_code} />
+            <ReadonlyField dense label="Consignee State" value={draft?.recipient_state} />
+          </div>
         </div>
       </div>
     </section>

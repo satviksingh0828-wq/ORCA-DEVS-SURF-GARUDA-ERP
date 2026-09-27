@@ -176,7 +176,11 @@
   --sidebar-accent: oklch(0.94 0.04 225 / 0.66);
   --sidebar-accent-foreground: oklch(0.28 0.045 245);
   --gradient-brand: linear-gradient(140deg, oklch(0.54 0.16 245) 0%, oklch(0.72 0.12 215) 100%);
-  --gradient-surface: linear-gradient(145deg, oklch(0.99 0.02 235 / 0.76), oklch(0.94 0.035 245 / 0.38));
+  --gradient-surface: linear-gradient(
+    145deg,
+    oklch(0.99 0.02 235 / 0.76),
+    oklch(0.94 0.035 245 / 0.38)
+  );
   --shadow-soft: 0 10px 36px -14px oklch(0.22 0.05 250 / 0.22), inset 0 1px 0 oklch(1 0 0 / 0.62);
   --shadow-lift: 0 18px 46px -16px oklch(0.22 0.05 250 / 0.3), inset 0 1px 0 oklch(1 0 0 / 0.72);
 }
@@ -211,10 +215,10 @@
   --ring: oklch(0.35 0.015 255);
 }
 [data-theme="garuda"] {
-  --primary: oklch(0.40 0.17 18);
+  --primary: oklch(0.4 0.17 18);
   --primary-soft: oklch(0.965 0.018 18);
-  --primary-glow: oklch(0.70 0.16 65);
-  --ring: oklch(0.40 0.17 18);
+  --primary-glow: oklch(0.7 0.16 65);
+  --ring: oklch(0.4 0.17 18);
 }
 
 /* Ocean — Professional deep navy blue */
@@ -353,10 +357,10 @@
 /* Kraft — Cardboard / kraft paper packaging */
 [data-theme="kraft"] {
   --radius: 0.4rem;
-  --primary: oklch(0.40 0.09 48);
+  --primary: oklch(0.4 0.09 48);
   --primary-soft: oklch(0.92 0.04 68);
   --primary-glow: oklch(0.56 0.08 50);
-  --ring: oklch(0.40 0.09 48);
+  --ring: oklch(0.4 0.09 48);
   --background: oklch(0.935 0.032 78);
   --foreground: oklch(0.17 0.055 48);
   --card: oklch(0.955 0.024 76);
@@ -372,7 +376,7 @@
   --border: oklch(0.81 0.042 72);
   --input: oklch(0.81 0.042 72);
   --sidebar: oklch(0.945 0.028 78);
-  --sidebar-foreground: oklch(0.20 0.055 48);
+  --sidebar-foreground: oklch(0.2 0.055 48);
   --sidebar-border: oklch(0.81 0.042 72);
   --sidebar-accent: oklch(0.905 0.028 75);
   --sidebar-accent-foreground: oklch(0.28 0.05 50);
@@ -383,28 +387,28 @@
 /* Blueprint — Engineering draft paper, navy on cool white */
 [data-theme="blueprint"] {
   --radius: 0.3rem;
-  --primary: oklch(0.32 0.10 248);
+  --primary: oklch(0.32 0.1 248);
   --primary-soft: oklch(0.94 0.02 240);
   --primary-glow: oklch(0.48 0.09 250);
-  --ring: oklch(0.32 0.10 248);
+  --ring: oklch(0.32 0.1 248);
   --background: oklch(0.965 0.008 220);
   --foreground: oklch(0.14 0.05 240);
   --card: oklch(0.985 0.005 220);
   --card-foreground: oklch(0.14 0.05 240);
   --popover: oklch(0.985 0.005 220);
   --popover-foreground: oklch(0.14 0.05 240);
-  --muted: oklch(0.938 0.010 225);
+  --muted: oklch(0.938 0.01 225);
   --muted-foreground: oklch(0.46 0.04 240);
-  --secondary: oklch(0.938 0.010 225);
+  --secondary: oklch(0.938 0.01 225);
   --secondary-foreground: oklch(0.28 0.06 242);
-  --accent: oklch(0.938 0.010 225);
+  --accent: oklch(0.938 0.01 225);
   --accent-foreground: oklch(0.28 0.06 242);
   --border: oklch(0.875 0.018 230);
   --input: oklch(0.875 0.018 230);
   --sidebar: oklch(0.975 0.007 220);
   --sidebar-foreground: oklch(0.18 0.05 240);
   --sidebar-border: oklch(0.875 0.018 230);
-  --sidebar-accent: oklch(0.938 0.010 225);
+  --sidebar-accent: oklch(0.938 0.01 225);
   --sidebar-accent-foreground: oklch(0.28 0.06 242);
   --destructive: oklch(0.52 0.19 22);
   --shadow-soft: 0 1px 2px oklch(0.14 0.05 240 / 0.08), 0 5px 18px -8px oklch(0.14 0.05 240 / 0.15);
@@ -413,11 +417,11 @@
 /* Linen — Natural linen fabric, warm cream + burgundy */
 [data-theme="linen"] {
   --radius: 0.5rem;
-  --primary: oklch(0.36 0.10 18);
+  --primary: oklch(0.36 0.1 18);
   --primary-soft: oklch(0.94 0.025 30);
   --primary-glow: oklch(0.52 0.09 20);
-  --ring: oklch(0.36 0.10 18);
-  --background: oklch(0.960 0.020 78);
+  --ring: oklch(0.36 0.1 18);
+  --background: oklch(0.96 0.02 78);
   --foreground: oklch(0.16 0.04 30);
   --card: oklch(0.978 0.014 80);
   --card-foreground: oklch(0.16 0.04 30);
@@ -431,8 +435,8 @@
   --accent-foreground: oklch(0.28 0.04 28);
   --border: oklch(0.89 0.022 72);
   --input: oklch(0.89 0.022 72);
-  --sidebar: oklch(0.970 0.016 78);
-  --sidebar-foreground: oklch(0.20 0.04 30);
+  --sidebar: oklch(0.97 0.016 78);
+  --sidebar-foreground: oklch(0.2 0.04 30);
   --sidebar-border: oklch(0.89 0.022 72);
   --sidebar-accent: oklch(0.936 0.017 76);
   --sidebar-accent-foreground: oklch(0.28 0.04 28);
@@ -445,26 +449,26 @@
   --radius: 0.45rem;
   --primary: oklch(0.35 0.09 158);
   --primary-soft: oklch(0.93 0.025 148);
-  --primary-glow: oklch(0.50 0.08 155);
+  --primary-glow: oklch(0.5 0.08 155);
   --ring: oklch(0.35 0.09 158);
-  --background: oklch(0.970 0.010 90);
+  --background: oklch(0.97 0.01 90);
   --foreground: oklch(0.15 0.03 155);
   --card: oklch(0.988 0.006 90);
   --card-foreground: oklch(0.15 0.03 155);
   --popover: oklch(0.988 0.006 90);
   --popover-foreground: oklch(0.15 0.03 155);
-  --muted: oklch(0.948 0.010 88);
+  --muted: oklch(0.948 0.01 88);
   --muted-foreground: oklch(0.46 0.03 150);
-  --secondary: oklch(0.948 0.010 88);
+  --secondary: oklch(0.948 0.01 88);
   --secondary-foreground: oklch(0.28 0.04 155);
-  --accent: oklch(0.948 0.010 88);
+  --accent: oklch(0.948 0.01 88);
   --accent-foreground: oklch(0.28 0.04 155);
-  --border: oklch(0.900 0.014 85);
-  --input: oklch(0.900 0.014 85);
-  --sidebar: oklch(0.980 0.008 90);
+  --border: oklch(0.9 0.014 85);
+  --input: oklch(0.9 0.014 85);
+  --sidebar: oklch(0.98 0.008 90);
   --sidebar-foreground: oklch(0.18 0.03 155);
-  --sidebar-border: oklch(0.900 0.014 85);
-  --sidebar-accent: oklch(0.948 0.010 88);
+  --sidebar-border: oklch(0.9 0.014 85);
+  --sidebar-accent: oklch(0.948 0.01 88);
   --sidebar-accent-foreground: oklch(0.28 0.04 155);
   --destructive: oklch(0.52 0.19 22);
   --shadow-soft: 0 1px 2px oklch(0.15 0.03 155 / 0.07), 0 5px 16px -8px oklch(0.15 0.03 155 / 0.13);
@@ -474,8 +478,8 @@
 [data-theme="vellum"] {
   --radius: 0.5rem;
   --primary: oklch(0.34 0.04 258);
-  --primary-soft: oklch(0.95 0.010 255);
-  --primary-glow: oklch(0.50 0.04 258);
+  --primary-soft: oklch(0.95 0.01 255);
+  --primary-glow: oklch(0.5 0.04 258);
   --ring: oklch(0.34 0.04 258);
   --background: oklch(0.978 0.005 255);
   --foreground: oklch(0.15 0.02 265);
@@ -486,18 +490,18 @@
   --muted: oklch(0.956 0.006 258);
   --muted-foreground: oklch(0.48 0.02 260);
   --secondary: oklch(0.956 0.006 258);
-  --secondary-foreground: oklch(0.30 0.02 262);
+  --secondary-foreground: oklch(0.3 0.02 262);
   --accent: oklch(0.956 0.006 258);
-  --accent-foreground: oklch(0.30 0.02 262);
-  --border: oklch(0.912 0.010 258);
-  --input: oklch(0.912 0.010 258);
+  --accent-foreground: oklch(0.3 0.02 262);
+  --border: oklch(0.912 0.01 258);
+  --input: oklch(0.912 0.01 258);
   --sidebar: oklch(0.986 0.004 255);
   --sidebar-foreground: oklch(0.18 0.02 265);
-  --sidebar-border: oklch(0.912 0.010 258);
+  --sidebar-border: oklch(0.912 0.01 258);
   --sidebar-accent: oklch(0.956 0.006 258);
-  --sidebar-accent-foreground: oklch(0.30 0.02 262);
+  --sidebar-accent-foreground: oklch(0.3 0.02 262);
   --destructive: oklch(0.52 0.18 22);
-  --shadow-soft: 0 1px 2px oklch(0.15 0.02 265 / 0.06), 0 4px 14px -8px oklch(0.15 0.02 265 / 0.10);
+  --shadow-soft: 0 1px 2px oklch(0.15 0.02 265 / 0.06), 0 4px 14px -8px oklch(0.15 0.02 265 / 0.1);
 }
 
 /* Cork — Cork board tan background, teal primary */
@@ -509,25 +513,25 @@
   --ring: oklch(0.38 0.08 188);
   --background: oklch(0.948 0.028 74);
   --foreground: oklch(0.17 0.04 55);
-  --card: oklch(0.968 0.020 74);
+  --card: oklch(0.968 0.02 74);
   --card-foreground: oklch(0.17 0.04 55);
-  --popover: oklch(0.968 0.020 74);
+  --popover: oklch(0.968 0.02 74);
   --popover-foreground: oklch(0.17 0.04 55);
-  --muted: oklch(0.920 0.024 72);
+  --muted: oklch(0.92 0.024 72);
   --muted-foreground: oklch(0.45 0.035 60);
-  --secondary: oklch(0.920 0.024 72);
+  --secondary: oklch(0.92 0.024 72);
   --secondary-foreground: oklch(0.28 0.04 58);
-  --accent: oklch(0.920 0.024 72);
+  --accent: oklch(0.92 0.024 72);
   --accent-foreground: oklch(0.28 0.04 58);
   --border: oklch(0.862 0.032 68);
   --input: oklch(0.862 0.032 68);
   --sidebar: oklch(0.958 0.024 74);
-  --sidebar-foreground: oklch(0.20 0.04 55);
+  --sidebar-foreground: oklch(0.2 0.04 55);
   --sidebar-border: oklch(0.862 0.032 68);
-  --sidebar-accent: oklch(0.920 0.024 72);
+  --sidebar-accent: oklch(0.92 0.024 72);
   --sidebar-accent-foreground: oklch(0.28 0.04 58);
   --destructive: oklch(0.52 0.19 22);
-  --shadow-soft: 0 1px 3px oklch(0.14 0.04 55 / 0.10), 0 4px 16px -8px oklch(0.14 0.04 55 / 0.18);
+  --shadow-soft: 0 1px 3px oklch(0.14 0.04 55 / 0.1), 0 4px 16px -8px oklch(0.14 0.04 55 / 0.18);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -754,11 +758,7 @@
 [data-video-background="on"] main .rounded-xl.border,
 [data-video-background="on"] main .rounded-lg.border:not(.border-dashed) {
   border-color: color-mix(in oklch, var(--border) 78%, white 22%);
-  background-color: color-mix(
-    in oklch,
-    var(--card) var(--video-glass-opacity, 92%),
-    transparent
-  );
+  background-color: color-mix(in oklch, var(--card) var(--video-glass-opacity, 92%), transparent);
   background-color: oklch(from var(--card) l c h / var(--video-glass-opacity, 92%));
   -webkit-backdrop-filter: blur(16px) saturate(150%);
   backdrop-filter: blur(16px) saturate(150%);
@@ -766,27 +766,21 @@
 
 [data-video-background="on"] .surface-card,
 [data-video-background="on"] [data-slot="card"] {
-  box-shadow: var(--shadow-soft), inset 0 1px 0 oklch(1 0 0 / 0.3);
+  box-shadow:
+    var(--shadow-soft),
+    inset 0 1px 0 oklch(1 0 0 / 0.3);
 }
 
 [data-video-background="on"] header.sticky {
   border-color: color-mix(in oklch, var(--border) 78%, white 22%);
-  background-color: color-mix(
-    in oklch,
-    var(--card) var(--video-glass-opacity, 92%),
-    transparent
-  );
+  background-color: color-mix(in oklch, var(--card) var(--video-glass-opacity, 92%), transparent);
   background-color: oklch(from var(--card) l c h / var(--video-glass-opacity, 92%));
   -webkit-backdrop-filter: blur(22px) saturate(160%);
   backdrop-filter: blur(22px) saturate(160%);
 }
 
 [data-video-background="on"] :is(input, textarea, select, [role="combobox"]) {
-  background-color: color-mix(
-    in oklch,
-    var(--input) var(--video-glass-opacity, 92%),
-    transparent
-  );
+  background-color: color-mix(in oklch, var(--input) var(--video-glass-opacity, 92%), transparent);
   background-color: oklch(from var(--input) l c h / var(--video-glass-opacity, 92%));
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
@@ -794,11 +788,7 @@
 
 [data-video-background="on"] table thead,
 [data-video-background="on"] table tbody tr {
-  background-color: color-mix(
-    in oklch,
-    var(--card) var(--video-glass-opacity, 92%),
-    transparent
-  );
+  background-color: color-mix(in oklch, var(--card) var(--video-glass-opacity, 92%), transparent);
   background-color: oklch(from var(--card) l c h / var(--video-glass-opacity, 92%));
   -webkit-backdrop-filter: blur(12px) saturate(140%);
   backdrop-filter: blur(12px) saturate(140%);
@@ -884,4 +874,89 @@
 .app-sidebar-scroll:hover::-webkit-scrollbar-thumb,
 .app-sidebar-scroll:focus-within::-webkit-scrollbar-thumb {
   background: oklch(from var(--border) l c h / 0.7);
+}
+
+/* ── LTMS Consignment reference-style form layout ────────────────────────── */
+.consignment-entry {
+  background: var(--background);
+}
+.consignment-entry .consignment-section {
+  overflow: hidden;
+  margin-top: 0.75rem;
+  padding: 0 0.75rem 0.75rem !important;
+  border: 1px solid color-mix(in oklch, var(--primary) 24%, var(--border));
+  border-top-width: 1px;
+  border-radius: 0.65rem;
+  background: var(--card);
+  box-shadow: 0 1px 3px color-mix(in oklch, var(--primary) 9%, transparent);
+}
+.consignment-entry .consignment-section > h3:first-child,
+.consignment-entry .consignment-section > .flex:first-child {
+  margin: 0 -0.75rem 0.75rem !important;
+  padding: 0.55rem 0.75rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--primary) 18%, var(--border));
+  background: linear-gradient(
+    90deg,
+    color-mix(in oklch, var(--primary-soft) 82%, white),
+    color-mix(in oklch, var(--primary-soft) 34%, var(--card))
+  );
+  color: color-mix(in oklch, var(--primary) 78%, var(--foreground));
+}
+.consignment-entry .consignment-section > h3:first-child {
+  font-size: 0.9rem;
+  line-height: 1.25rem;
+}
+.consignment-entry .consignment-section > .flex:first-child h3 {
+  color: inherit;
+}
+.consignment-entry .consignment-section > p {
+  margin-top: -0.25rem;
+}
+.consignment-entry .consignment-section table thead {
+  background: var(--primary-soft);
+  color: color-mix(in oklch, var(--primary) 76%, var(--foreground));
+}
+.consignment-entry .consignment-section table thead th {
+  color: inherit;
+}
+.consignment-entry .consignment-section table tbody tr {
+  background: var(--card);
+}
+.consignment-entry .consignment-section table tbody tr:hover {
+  background: color-mix(in oklch, var(--primary-soft) 32%, var(--card));
+}
+.consignment-entry .consignment-section :is(input, [role="combobox"]) {
+  border-radius: 0.35rem;
+}
+.consignment-entry .consignment-section .rounded-lg.border,
+.consignment-entry .consignment-section .rounded-xl.border {
+  border-color: color-mix(in oklch, var(--primary) 17%, var(--border));
+}
+.consignment-entry .consignment-section h4 {
+  color: color-mix(in oklch, var(--primary) 76%, var(--foreground));
+}
+.consignment-entry .consignment-party-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+.consignment-entry .consignment-party-panel {
+  padding: 0.75rem;
+  border: 1px solid color-mix(in oklch, var(--primary) 16%, var(--border));
+  border-radius: 0.5rem;
+  background: color-mix(in oklch, var(--primary-soft) 18%, var(--card));
+}
+.consignment-entry .consignment-party-panel h4 {
+  margin: 0 0 0.65rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid color-mix(in oklch, var(--primary) 14%, var(--border));
+  font-size: 0.78rem;
+  font-weight: 800;
+  text-transform: none;
+  letter-spacing: 0;
+}
+@media (max-width: 768px) {
+  .consignment-entry .consignment-party-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
