@@ -19,7 +19,7 @@ export const serverSaveTripLines = createServerFn({ method: "POST" })
       approval: z
         .object({
           trip_code: z.string(),
-          transporter_id: z.string().uuid(),
+          rental_id: z.string().uuid(),
           advance: z.number(),
           balance: z.number(),
         })

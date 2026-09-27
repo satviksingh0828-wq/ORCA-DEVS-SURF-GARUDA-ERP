@@ -62,6 +62,7 @@ export type TripRow = {
   vehicle_id: string | null;
   driver_id: string | null;
   transporter_id: string | null;
+  rental_id: string | null;
   contract_id: string | null;
   start_location_id: string | null;
   end_location_id: string | null;
@@ -143,6 +144,7 @@ export function emptyTrip(): TripRow {
     vehicle_id: null,
     driver_id: null,
     transporter_id: null,
+    rental_id: null,
     contract_id: null,
     start_location_id: null,
     end_location_id: null,
@@ -163,7 +165,7 @@ const TABS_ALL = [
   { id: "expense", label: "Expenses" },
   { id: "vehicle", label: "Vehicle" },
   { id: "driver", label: "Driver" },
-  { id: "transporter", label: "Transporter" },
+  { id: "transporter", label: "Rental" },
   { id: "summary", label: "Summary" },
 ] as const;
 
@@ -174,7 +176,7 @@ const TABS_BASIC = [
   { id: "expense", label: "Expenses" },
   { id: "vehicle", label: "Vehicle" },
   { id: "driver", label: "Driver" },
-  { id: "transporter", label: "Transporter" },
+  { id: "transporter", label: "Rental" },
 ] as const;
 
 type TabId = (typeof TABS_ALL)[number]["id"];
@@ -208,6 +210,7 @@ export function TripForm({
   const [vehicles, setVehicles] = useState<AnyRow[]>([]);
   const [drivers, setDrivers] = useState<AnyRow[]>([]);
   const [transporters, setTransporters] = useState<AnyRow[]>([]);
+  const [rentals, setRentals] = useState<AnyRow[]>([]);
   const [contracts, setContracts] = useState<AnyRow[]>([]);
   const [allEntries, setAllEntries] = useState<EntryLite[]>([]);
   const [showTransporterForm, setShowTransporterForm] = useState(false);
@@ -221,7 +224,11 @@ export function TripForm({
   const defaultExpenseList =
     trip.ownership === "third_party" ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES;
   const [expenses, setExpenses] = useState<LineRow[]>(
-    ALL_EXPENSES.map((name) => ({ name, amount: "", note: "" })),
+    (trip.ownership === "third_party" ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES).map((name) => ({
+      name,
+      amount: "",
+      note: "",
+    })),
   );
 
   const { locations } = useLocations();
@@ -238,16 +245,18 @@ export function TripForm({
   const patch = (p: Partial<TripRow>) => setTrip((t) => ({ ...t, ...p }));
 
   async function loadMasters() {
-    const [v, d, t, c, e] = await Promise.all([
+    const [v, d, t, r, c, e] = await Promise.all([
       supabase.from("vehicles").select("*").order("registration_number"),
       supabase.from("drivers").select("*").order("full_name"),
       supabase.from("transporters").select("*").order("transporter_name"),
+      supabase.from("rentals").select("*").order("rental_name"),
       supabase.from("contracts").select("*").eq("status", "active").order("contract_name"),
       supabase.from("contract_entries").select("*"),
     ]);
     setVehicles((v.data as AnyRow[]) ?? []);
     setDrivers(((d.data as AnyRow[]) ?? []).filter(isDriverActive));
     setTransporters((t.data as AnyRow[]) ?? []);
+    setRentals((r.data as AnyRow[]) ?? []);
     setContracts((c.data as AnyRow[]) ?? []);
     setAllEntries((e.data as unknown as EntryLite[]) ?? []);
   }
@@ -338,8 +347,16 @@ export function TripForm({
         ? { advance: savedApprovalAdvance }
         : {}),
     }));
-    const ownDefList = ALL_EXPENSES;
-    setExpenses(exp.length > 0 ? exp : ownDefList.map((name) => ({ name, amount: "", note: "" })));
+    const allowedExpenses =
+      trip.ownership === "third_party" ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES;
+    const filteredExpenses = exp.filter(
+      (row) => trip.ownership === "third_party" || row.name.trim().toLowerCase() !== "hire charges",
+    );
+    setExpenses(
+      filteredExpenses.length > 0
+        ? filteredExpenses
+        : allowedExpenses.map((name) => ({ name, amount: "", note: "" })),
+    );
   }
   useEffect(() => {
     if (initial.id) loadChildren(initial.id);
@@ -348,6 +365,7 @@ export function TripForm({
   const vehicle = vehicles.find((v) => v.id === trip.vehicle_id);
   const driver = drivers.find((d) => d.id === trip.driver_id);
   const transporter = transporters.find((t) => t.id === trip.transporter_id);
+  const rental = rentals.find((r) => r.id === trip.rental_id);
 
   const isOwn = trip.ownership === "own";
   const isRented = trip.ownership === "third_party";
@@ -409,8 +427,8 @@ export function TripForm({
         return null;
       }
     }
-    if (isRented && !trip.transporter_id) {
-      toast.error("Transporter is required for rented trips — please select one before saving");
+    if (isRented && !trip.rental_id) {
+      toast.error("Rental is required for rented trips — please select one before saving");
       return null;
     }
 
@@ -516,10 +534,10 @@ export function TripForm({
         )
       : 0;
     const approval =
-      trip.transporter_id && (amount > 0 || advance > 0)
+      trip.rental_id && (amount > 0 || advance > 0)
         ? {
             trip_code: trip.trip_code,
-            transporter_id: trip.transporter_id,
+            rental_id: trip.rental_id,
             advance,
             balance: Math.max(amount - advance, 0),
           }
@@ -627,6 +645,13 @@ export function TripForm({
     id: d.id,
     label: String(d.full_name ?? ""),
     sub: String(d.mobile_number ?? "") || undefined,
+  }));
+  const rentalOpts: PickerOption[] = (
+    isBasic ? rentals.filter((r) => !trip.branch_id || r.branch_id === trip.branch_id) : rentals
+  ).map((r) => ({
+    id: r.id,
+    label: String(r.rental_name ?? ""),
+    sub: String(r.city ?? "") || undefined,
   }));
   const filteredTransporters = isBasic
     ? transporters.filter((t) => {
@@ -762,12 +787,12 @@ export function TripForm({
               licence_expiry_date: driver.licence_expiry_date,
             }
           : null,
-        transporter: transporter
+        transporter: rental
           ? {
-              transporter_name: transporter.transporter_name,
-              city: transporter.city,
-              pan_number: transporter.pan_number,
-              gst_number: transporter.gst_number,
+              transporter_name: rental.rental_name,
+              city: rental.city,
+              pan_number: rental.pan,
+              gst_number: rental.gstin,
             }
           : null,
         third_party_vehicle_number: trip.third_party_vehicle_number || null,
@@ -873,14 +898,26 @@ export function TripForm({
               onValueChange={(v) => {
                 const isThirdParty = v === "third_party";
                 const newDefaultExpenses = ALL_EXPENSES;
-                setExpenses(newDefaultExpenses.map((name) => ({ name, amount: "", note: "" })));
+                setExpenses(
+                  (isThirdParty ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES).map((name) => ({
+                    name,
+                    amount: "",
+                    note: "",
+                  })),
+                );
                 const newDefaultIncomes = DEFAULT_INCOMES;
                 setIncomes(newDefaultIncomes.map((name) => ({ name, amount: "", note: "" })));
                 patch({
                   ownership: v,
                   ...(v === "own"
-                    ? { transporter_id: null }
-                    : { vehicle_id: null, driver_id: null, odometer_start: "", odometer_end: "" }),
+                    ? { transporter_id: null, rental_id: null }
+                    : {
+                        vehicle_id: null,
+                        driver_id: null,
+                        odometer_start: "",
+                        odometer_end: "",
+                        transporter_id: null,
+                      }),
                 });
               }}
             >
@@ -931,16 +968,14 @@ export function TripForm({
             </>
           ) : null}
 
-          {/* Rented: transporter required; no vehicle/driver/odometer */}
+          {/* Rented: rental required; no vehicle/driver/odometer */}
           {isRented ? (
             <>
               <EntityPicker
-                label="Transporter (required for rented)"
-                value={trip.transporter_id}
-                options={transporterOpts}
-                onChange={(id) => patch({ transporter_id: id })}
-                onAdd={() => setShowTransporterForm(true)}
-                addLabel="Add new transporter"
+                label="Rental (required for rented)"
+                value={trip.rental_id}
+                options={rentalOpts}
+                onChange={(id) => patch({ rental_id: id })}
               />
               <Field
                 label="Vehicle Number (3rd party)"
@@ -1090,7 +1125,7 @@ export function TripForm({
               total={expenseTotal}
               onSave={() => saveLines("trip_expenses", expenses, "expense_name")}
               isViewer={isViewer}
-              showHireChargeFields={true}
+              showHireChargeFields={isRented}
             />
           ) : null}
           {activeTab === "vehicle" ? (
