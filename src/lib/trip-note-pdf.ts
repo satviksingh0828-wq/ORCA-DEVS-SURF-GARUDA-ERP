@@ -543,8 +543,6 @@ function buildBodyHtml(
       ${dr("Start Date", sv(trip.start_date) + (trip.start_time ? " " + sv(trip.start_time) : ""))}
       ${dr("End Date", sv(trip.end_date))}
       ${dr("Total Movements", String(movements.length))}
-      ${dr("Total Weight", totalWeight > 0 ? totalWeight.toFixed(3) + " kg" : "")}
-      ${dr("Total Packages", totalPkgs > 0 ? String(totalPkgs) : "")}
     </div>
   </div>
 
