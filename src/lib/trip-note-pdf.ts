@@ -387,10 +387,10 @@ function buildBodyHtml(
         <td class="tn-tc">${i + 1}</td>
         <td>${sv(m.consignment_number) || "—"}</td>
         <td>${[sv(m.consignment_type), sv(m.movement_mode), sv(m.transport_mode)].filter(Boolean).join(" · ") || "—"}</td>
-        <td class="tn-tc">${sv(m.from_location_name) || sv(m.from_pin_code) || "—"}</td>
-        <td class="tn-tc">${sv(m.to_location_name) || sv(m.to_pin_code) || "—"}</td>
-        <td class="tn-tc">${sv(m.vehicle_number) || "—"}</td>
-        <td class="tn-tc">${sv(m.driver_name) || "—"}</td>
+        <td class="tn-tc">${sv(m.from_location_name) || "—"}</td>
+        <td class="tn-tc">${sv(m.from_pin_code) || "—"}</td>
+        <td class="tn-tc">${sv(m.to_location_name) || "—"}</td>
+        <td class="tn-tc">${sv(m.to_pin_code) || "—"}</td>
       </tr>`,
     )
     .join("");
@@ -558,9 +558,9 @@ function buildBodyHtml(
         <th>Consignment No.</th>
         <th>Movement</th>
         <th class="tn-tc">From</th>
+        <th class="tn-tc">From PIN</th>
         <th class="tn-tc">To</th>
-        <th class="tn-tc">Vehicle</th>
-        <th class="tn-tc">Driver</th>
+        <th class="tn-tc">To PIN</th>
       </tr>
     </thead>
     <tbody>
