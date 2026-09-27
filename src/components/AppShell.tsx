@@ -25,12 +25,13 @@ export function AppShell({
   const { signOut, user } = useSession();
   const navigate = useNavigate();
   const { open } = useOrcaAI();
-  const { theme, backgroundVideoEnabled, backgroundVideoUrl } = useTheme();
+  const { backgroundVideoEnabled, backgroundVideoUrl } = useTheme();
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
 
   return (
     <div
+      data-video-background={backgroundVideoEnabled ? "on" : "off"}
       className={cn(
         "relative min-h-screen overflow-hidden transition-all duration-300",
         backgroundVideoEnabled ? "bg-transparent" : "bg-background",
@@ -53,10 +54,7 @@ export function AppShell({
             <source src={backgroundVideoUrl} />
           </video>
           <div
-            className={cn(
-              "pointer-events-none fixed inset-0 z-[1]",
-              theme === "glass" ? "bg-background/25" : "bg-background/75",
-            )}
+            className={cn("pointer-events-none fixed inset-0 z-[1]", "bg-background/35")}
             aria-hidden="true"
           />
         </>
