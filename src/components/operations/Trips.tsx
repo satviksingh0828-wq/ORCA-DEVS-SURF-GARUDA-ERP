@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Archive, Building2, Eye, Plus, RotateCcw, Search, Trash2, Truck } from "lucide-react";
+import { Building2, Plus, Search, Trash2, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -14,36 +14,19 @@ import {
 } from "@/components/ui/select";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
-import { serverReopenTrip } from "@/lib/reopen-trip";
 import { serverDeleteTrip } from "@/lib/trip-actions";
-import { inr } from "@/lib/trip-calc";
 import { fetchAll } from "@/lib/fetch-all";
 import { logAction } from "@/lib/log-actions";
 import { ItemLogsButton } from "@/components/shared/ItemLogsDrawer";
 import { TripForm, emptyTrip, type TripRow } from "./TripForm";
-import { ClosedTripDetail } from "./ClosedTripDetail";
 import { DriverTripActions } from "./DriverTripActions";
-
-type ClosedTrip = {
-  id: string;
-  trip_code: string;
-  branch_id: string | null;
-  branch_name: string | null;
-  start_date: string | null;
-  end_date: string | null;
-  net_income: number;
-  closed_at: string;
-};
 
 type BranchOption = { id: string; name: string };
 
 export function Trips() {
   const [trips, setTrips] = useState<TripRow[]>([]);
-  const [closed, setClosed] = useState<ClosedTrip[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<TripRow | null>(null);
-  const [viewingClosedId, setViewingClosedId] = useState<string | null>(null);
-  const [reopeningId, setReopeningId] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [branches, setBranches] = useState<BranchOption[]>([]);
@@ -54,48 +37,22 @@ export function Trips() {
   const isViewer = user?.role === "viewer";
   const allowedBranchIds = user?.role === "basic" ? (user?.branchIds ?? []) : null;
 
-  // Closed trips: load archived records in 15-day windows to avoid pulling all history at once.
-  const [closedDaysToLoad, setClosedDaysToLoad] = useState(15);
-
   async function load() {
     setLoading(true);
     try {
       // Basic user with no branches: show nothing
       if (allowedBranchIds !== null && allowedBranchIds.length === 0) {
         setTrips([]);
-        setClosed([]);
         setLoading(false);
         return;
       }
 
-      // Default: closed_trips last 15 days only; the list can extend in 15-day increments.
-      const closedSince = new Date(
-        Date.now() - closedDaysToLoad * 24 * 60 * 60 * 1000,
-      ).toISOString();
-
-      const [live, archived] = await Promise.all([
-        fetchAll<TripRow>(() => {
-          let q = supabase.from("trips").select("*").order("created_at", { ascending: false });
-          if (allowedBranchIds !== null) {
-            q = q.in("branch_id", allowedBranchIds) as typeof q;
-          }
-          return q;
-        }),
-        fetchAll<ClosedTrip>(() => {
-          let q = supabase
-            .from("closed_trips")
-            .select("id,trip_code,branch_id,branch_name,start_date,end_date,net_income,closed_at")
-            .order("closed_at", { ascending: false });
-          q = q.gte("closed_at", closedSince) as typeof q;
-          if (allowedBranchIds !== null) {
-            q = q.in("branch_id", allowedBranchIds) as typeof q;
-          }
-          return q;
-        }),
-      ]);
-
+      const live = await fetchAll<TripRow>(() => {
+        let q = supabase.from("trips").select("*").order("created_at", { ascending: false });
+        if (allowedBranchIds !== null) q = q.in("branch_id", allowedBranchIds) as typeof q;
+        return q;
+      });
       setTrips(live);
-      setClosed(archived);
     } catch {
       toast.error("Could not load trips");
     }
@@ -126,7 +83,7 @@ export function Trips() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id, closedDaysToLoad]);
+  }, [user?.id]);
 
   async function remove(trip: TripRow) {
     if (!window.confirm("Delete this trip? This cannot be undone.")) return;
@@ -142,36 +99,6 @@ export function Trips() {
     logAction("deleted", "trip", { entityId: trip.id, entityLabel: trip.trip_code });
     toast.success("Trip removed");
     load();
-  }
-
-  async function reopen(c: ClosedTrip) {
-    if (!isAdmin) {
-      toast.error("Only admins can reopen trips.");
-      return;
-    }
-    if (
-      !window.confirm(
-        "Reopen this trip? It moves back to live trips and current contract rates will apply.",
-      )
-    )
-      return;
-    setReopeningId(c.id);
-    try {
-      if (!user?.sessionToken)
-        throw new Error(
-          "Your session has expired. Please sign in again before reopening this trip.",
-        );
-      const newId = await serverReopenTrip({
-        data: { sessionToken: user.sessionToken, closedId: c.id },
-      });
-      logAction("reopened", "trip", { entityId: newId, entityLabel: c.trip_code });
-      toast.success("Trip reopened");
-      load();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Could not reopen trip");
-    } finally {
-      setReopeningId(null);
-    }
   }
 
   const normalizedSearch = searchTerm.trim().toLowerCase();
@@ -193,17 +120,6 @@ export function Trips() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [trips, normalizedSearch, branchFilter],
   );
-  const visibleClosed = useMemo(
-    () =>
-      closed.filter(
-        (c) =>
-          matchesTripSearch(c.id, c.trip_code) &&
-          (branchFilter === "all" || c.branch_id === branchFilter),
-      ),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [closed, normalizedSearch, branchFilter],
-  );
-
   // ── Inline detail views (replace the list) ────────────────────────────────
 
   if (editing)
@@ -215,21 +131,6 @@ export function Trips() {
           load();
         }}
         onSaved={load}
-      />
-    );
-
-  if (viewingClosedId)
-    return (
-      <ClosedTripDetail
-        closedId={viewingClosedId}
-        onBack={() => {
-          setViewingClosedId(null);
-          load();
-        }}
-        onReopened={() => {
-          setViewingClosedId(null);
-          load();
-        }}
       />
     );
 
@@ -334,82 +235,6 @@ export function Trips() {
           ))}
         </ul>
       )}
-
-      {!loading ? (
-        <section className="space-y-2 pt-4">
-          <h3 className="flex items-center gap-2 text-sm font-semibold tracking-tight">
-            <Archive className="size-4 text-muted-foreground" />
-            Closed trips
-            <span className="text-xs font-normal text-muted-foreground">
-              (last {closedDaysToLoad} days)
-            </span>
-          </h3>
-          <p className="text-xs text-muted-foreground">
-            Archived snapshots. Later changes to masters, contracts or rates never affect these.
-          </p>
-          {visibleClosed.length === 0 ? (
-            <p className="rounded-xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
-              {normalizedSearch
-                ? "No closed trips match your search in the loaded date range."
-                : "No closed trips found in the loaded date range."}
-            </p>
-          ) : (
-            <ul className="space-y-2">
-              {visibleClosed.map((c) => (
-                <li key={c.id} className="surface-card flex items-center gap-3 p-4">
-                  <Archive className="size-4 text-muted-foreground" />
-                  <button
-                    type="button"
-                    className="min-w-0 flex-1 text-left"
-                    onClick={() => setViewingClosedId(c.id)}
-                  >
-                    <span className="block text-sm font-medium">{c.trip_code}</span>
-                    <span className="block text-xs text-muted-foreground">
-                      {[c.branch_name, c.start_date, c.end_date].filter(Boolean).join(" · ") || "—"}
-                    </span>
-                  </button>
-                  {/* Net income shown to admins only */}
-                  {isAdmin ? (
-                    <span className="text-sm font-semibold">{inr(Number(c.net_income ?? 0))}</span>
-                  ) : null}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setViewingClosedId(c.id)}
-                    title="View full archived details"
-                  >
-                    <Eye className="size-4" />
-                    Details
-                  </Button>
-                  {/* Admin-only: reopen + delete closed trips */}
-                  {isAdmin ? (
-                    <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        disabled={reopeningId === c.id}
-                        onClick={() => reopen(c)}
-                        title="Move back to live trips (admin only)"
-                      >
-                        <RotateCcw className="size-4" />
-                        Reopen
-                      </Button>
-                    </>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-          {/* Load older closed trips in safe 15-day increments. */}
-          <button
-            type="button"
-            className="mt-2 w-full rounded-xl border border-dashed border-border py-2.5 text-xs text-muted-foreground transition-colors hover:border-primary/40 hover:text-foreground"
-            onClick={() => setClosedDaysToLoad((days) => days + 15)}
-          >
-            Load next 15 days
-          </button>
-        </section>
-      ) : null}
     </div>
   );
 }

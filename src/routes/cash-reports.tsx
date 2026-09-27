@@ -1,20 +1,10 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import {
-  ChevronRight,
-  HandCoins,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ReceiptIndianRupee,
-  Truck,
-  Wallet,
-} from "lucide-react";
+import { ChevronRight, PanelLeftClose, PanelLeftOpen, Truck, Wallet } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { CashLedger } from "@/components/reports/CashLedger";
-import { ApprovalChargeAdvanceReport } from "@/components/reports/ApprovalChargeAdvanceReport";
-import { ClosedTripReceiptReport } from "@/components/reports/ClosedTripReceiptReport";
 import { useSession } from "@/lib/session";
 import { ReportFiltersContext } from "@/lib/report-filters";
 import { useBranches } from "@/lib/use-branches";
@@ -39,24 +29,6 @@ const TABS = [
     label: "Cash Ledger",
     desc: "Received income and paid cash expenditure",
     icon: Wallet,
-  },
-  {
-    id: "transporter-advance",
-    label: "Transpoter Advance",
-    desc: "Paid Hire Charges and unpaid balance",
-    icon: Truck,
-  },
-  {
-    id: "freight-loading",
-    label: "FREIGHT/LOADING",
-    desc: "Mark closed-trip freight and loading received",
-    icon: HandCoins,
-  },
-  {
-    id: "approval-charge",
-    label: "Approval Charge",
-    desc: "Mark closed-trip approval charges received",
-    icon: ReceiptIndianRupee,
   },
 ] as const;
 type TabId = (typeof TABS)[number]["id"];
@@ -149,9 +121,6 @@ function CashReportsPage() {
               </div>
             )}
             {tab === "cash-ledger" && <CashLedger />}
-            {tab === "transporter-advance" && <ApprovalChargeAdvanceReport />}
-            {tab === "freight-loading" && <ClosedTripReceiptReport kind="freight_loading" />}
-            {tab === "approval-charge" && <ClosedTripReceiptReport kind="approval" />}
           </main>
         </ReportFiltersContext.Provider>
       </div>

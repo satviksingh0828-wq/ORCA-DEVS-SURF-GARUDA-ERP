@@ -4,7 +4,6 @@ import {
   BarChart3,
   Car,
   ChevronRight,
-  CreditCard,
   FileBarChart,
   PanelLeftClose,
   PanelLeftOpen,
@@ -16,7 +15,6 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { ProfitLossComparison } from "@/components/reports/ProfitLossComparison";
-import { FastagLedger } from "@/components/reports/FastagLedger";
 import { VehicleExpenseReport } from "@/components/reports/VehicleExpenseReport";
 import { DriverExpenseReport } from "@/components/reports/DriverExpenseReport";
 import { TransporterExpenseReport } from "@/components/reports/TransporterExpenseReport";
@@ -65,12 +63,6 @@ const TABS = [
     label: "P&L Comparison",
     desc: "Compare two periods side-by-side",
     icon: FileBarChart,
-  },
-  {
-    id: "fastag",
-    label: "Fastag Balance",
-    desc: "Vehicle-wise fastag balance & recharges",
-    icon: CreditCard,
   },
   {
     id: "vehicle-expenses",
@@ -233,7 +225,6 @@ function ReportsPage() {
             )}
             {tab === "pnl-compare" && <ProfitLossComparison />}
             {tab === "booking-report" && <TripDetailsPanel />}
-            {tab === "fastag" && <FastagLedger />}
             {tab === "vehicle-expenses" && <VehicleExpenseReport />}
             {tab === "driver-expenses" && <DriverExpenseReport />}
             {tab === "transporter-expenses" && <TransporterExpenseReport />}

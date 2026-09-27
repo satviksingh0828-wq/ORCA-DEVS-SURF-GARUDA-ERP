@@ -29,6 +29,7 @@ import { TripImport } from "@/components/import/TripImport";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 import { FastagLedger } from "@/components/reports/FastagLedger";
+import { ApprovalChargeAdvanceReport } from "@/components/reports/ApprovalChargeAdvanceReport";
 import { ReportFiltersContext } from "@/lib/report-filters";
 import { ShipmentList } from "@/components/operations/ShipmentList";
 import { ConsignmentList } from "@/components/operations/ConsignmentList";
@@ -147,11 +148,18 @@ const ALL_TABS = [
   },
   {
     id: "fastag-report",
-    label: "Fastag Report",
-    desc: "Branch vehicle balances & recharges",
+    label: "Fastag Balance",
+    desc: "Live vehicle balances & recharges",
     icon: CreditCard,
     adminOnly: false,
-    basicOnly: true,
+    dividerBefore: false,
+  },
+  {
+    id: "transporter-advance",
+    label: "Transporter Advance",
+    desc: "Live paid and outstanding balances",
+    icon: TrendingUp,
+    adminOnly: false,
     dividerBefore: false,
   },
   {
@@ -175,21 +183,24 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
 
   const TABS = ALL_TABS.filter((t) => {
     const isLtmsTab =
+      t.id === "trip" ||
       t.id === "shipments" ||
       t.id === "consignment" ||
       t.id === "movements" ||
       t.id === "eway-bill" ||
-      t.id === "ltms-manifest";
+      t.id === "ltms-manifest" ||
+      t.id === "fastag-report" ||
+      t.id === "transporter-advance";
     if (mode === "ltms" && !isLtmsTab) return false;
     if (mode === "tms" && isLtmsTab) return false;
     if ("basicOnly" in t && t.basicOnly && user?.role !== "basic") return false;
     return isViewer ? t.id !== "import-trips" : isAdmin || !t.adminOnly;
   });
-  const [tab, setTab] = useState<TabId>(mode === "ltms" ? "eway-bill" : "trip");
+  const [tab, setTab] = useState<TabId>(mode === "ltms" ? "trip" : "lr");
   const [navOpen, setNavOpen] = useState(true);
   const [consignmentCreateOpen, setConsignmentCreateOpen] = useState(false);
 
-  const defaultTab: TabId = mode === "ltms" ? "eway-bill" : "trip";
+  const defaultTab: TabId = mode === "ltms" ? "trip" : "lr";
   const safeTab: TabId = (TABS.find((t) => t.id === tab) ? tab : defaultTab) as TabId;
   const active = TABS.find((t) => t.id === safeTab) ?? TABS[0];
   const fullBleedConsignment = safeTab === "consignment" && consignmentCreateOpen;
@@ -336,11 +347,16 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
               <TripDetailsPanel />
             </TabErrorBoundary>
           )}
-          {safeTab === "fastag-report" && user?.role === "basic" && (
-            <TabErrorBoundary label="Fastag Report">
+          {safeTab === "fastag-report" && (
+            <TabErrorBoundary label="Fastag Balance">
               <ReportFiltersContext.Provider value={{ branchId: "all", financialYear: "none" }}>
                 <FastagLedger />
               </ReportFiltersContext.Provider>
+            </TabErrorBoundary>
+          )}
+          {safeTab === "transporter-advance" && (
+            <TabErrorBoundary label="Transporter Advance">
+              <ApprovalChargeAdvanceReport />
             </TabErrorBoundary>
           )}
           {safeTab === "import-trips" && isAdmin && (
