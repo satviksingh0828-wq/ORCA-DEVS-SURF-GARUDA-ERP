@@ -1,6 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
+import {
+  DEFAULT_VIDEO_GLASS_APPEARANCE,
+  normalizeVideoGlassAppearance,
+  type VideoGlassAppearance,
+} from "@/lib/video-glass";
 
 export const THEMES = [
   /* ── Light accent themes ── */
@@ -100,11 +105,15 @@ type ThemeValue = {
   backgroundVideoUrl: string;
   setBackgroundVideo: (settings: BackgroundVideoSettings) => Promise<void>;
   videoSaving: boolean;
+  videoGlassAppearance: VideoGlassAppearance;
+  setVideoGlassAppearance: (settings: VideoGlassAppearance) => Promise<void>;
+  glassSaving: boolean;
 };
 
 const ThemeContext = createContext<ThemeValue | null>(null);
 const THEME_CACHE_KEY = "garuda.theme";
 const VIDEO_CACHE_KEY = "garuda.background-video";
+const VIDEO_GLASS_CACHE_KEY = "garuda.video-glass";
 const DEFAULT_THEME: ThemeId = "sky";
 const DEFAULT_VIDEO_SETTINGS = { enabled: true, url: DEFAULT_BACKGROUND_VIDEO_URL };
 const THEME_IDS = new Set<string>(THEMES.map(({ id }) => id));
@@ -155,6 +164,25 @@ function cacheVideoSettings(settings: { enabled: boolean; url: string }) {
   }
 }
 
+function readCachedVideoGlassAppearance(): VideoGlassAppearance {
+  if (typeof window === "undefined") return DEFAULT_VIDEO_GLASS_APPEARANCE;
+  try {
+    return normalizeVideoGlassAppearance(
+      JSON.parse(window.localStorage.getItem(VIDEO_GLASS_CACHE_KEY) ?? "null"),
+    );
+  } catch {
+    return DEFAULT_VIDEO_GLASS_APPEARANCE;
+  }
+}
+
+function cacheVideoGlassAppearance(settings: VideoGlassAppearance) {
+  try {
+    window.localStorage.setItem(VIDEO_GLASS_CACHE_KEY, JSON.stringify(settings));
+  } catch {
+    // Storage can be disabled; the in-memory appearance still works.
+  }
+}
+
 export function ThemeProvider({ children }: { children: ReactNode }) {
   // Keep the server and first client render identical. Reading localStorage
   // here would make SSR render `sky` while the browser renders the cached
@@ -163,8 +191,12 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [loginUi, setLoginUiState] = useState<LoginUi>("plain");
   const [backgroundVideoEnabled, setBackgroundVideoEnabled] = useState(true);
   const [backgroundVideoUrl, setBackgroundVideoUrl] = useState(DEFAULT_BACKGROUND_VIDEO_URL);
+  const [videoGlassAppearance, setVideoGlassAppearanceState] = useState(
+    DEFAULT_VIDEO_GLASS_APPEARANCE,
+  );
   const [saving, setSaving] = useState(false);
   const [videoSaving, setVideoSaving] = useState(false);
+  const [glassSaving, setGlassSaving] = useState(false);
 
   const apply = useCallback((t: ThemeId) => {
     document.documentElement.setAttribute("data-theme", t);
@@ -178,7 +210,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       if (!isSupabaseConfigured()) return;
       const request = supabase
         .from("app_settings")
-        .select("theme, login_ui, background_video_enabled, background_video_url")
+        .select(
+          "theme, login_ui, background_video_enabled, background_video_url, glass_surface_opacity, glass_background_veil, glass_text_color",
+        )
         .limit(1)
         .maybeSingle();
       const { data, error } = await Promise.race([
@@ -189,7 +223,33 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       ]);
 
       if (error) {
-        // Support projects that have not yet run the background-video migration.
+        // Keep video settings working while the newer glass-controls migration is pending.
+        const { data: previousVideoSettings, error: previousVideoError } = await supabase
+          .from("app_settings")
+          .select("theme, login_ui, background_video_enabled, background_video_url")
+          .limit(1)
+          .maybeSingle();
+        if (!previousVideoError && previousVideoSettings) {
+          const next = validTheme(previousVideoSettings.theme);
+          setThemeState(next);
+          apply(next);
+          cacheTheme(next);
+          setLoginUiState((previousVideoSettings.login_ui as LoginUi) ?? "plain");
+          const enabled = previousVideoSettings.background_video_enabled !== false;
+          const url =
+            typeof previousVideoSettings.background_video_url === "string" &&
+            previousVideoSettings.background_video_url.trim()
+              ? previousVideoSettings.background_video_url
+              : DEFAULT_BACKGROUND_VIDEO_URL;
+          setBackgroundVideoEnabled(enabled);
+          setBackgroundVideoUrl(url);
+          cacheVideoSettings({ enabled, url });
+          const cachedGlass = readCachedVideoGlassAppearance();
+          setVideoGlassAppearanceState(cachedGlass);
+          return;
+        }
+
+        // Support older projects that have not yet run the background-video migration.
         const { data: fallback } = await supabase
           .from("app_settings")
           .select("theme, login_ui")
@@ -212,6 +272,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           apply(next);
           cacheTheme(next);
         }
+        const cachedGlass = readCachedVideoGlassAppearance();
+        setVideoGlassAppearanceState(cachedGlass);
         return;
       }
 
@@ -228,6 +290,13 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setBackgroundVideoEnabled(enabled);
       setBackgroundVideoUrl(url);
       cacheVideoSettings({ enabled, url });
+      const glassAppearance = normalizeVideoGlassAppearance({
+        surfaceOpacity: data?.glass_surface_opacity,
+        backgroundVeil: data?.glass_background_veil,
+        textColor: data?.glass_text_color,
+      });
+      setVideoGlassAppearanceState(glassAppearance);
+      cacheVideoGlassAppearance(glassAppearance);
     } catch {
       // Supabase not configured yet — keep defaults.
     }
@@ -236,8 +305,10 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const cached = readCachedTheme();
     const cachedVideo = readCachedVideoSettings();
+    const cachedGlass = readCachedVideoGlassAppearance();
     setBackgroundVideoEnabled(cachedVideo.enabled);
     setBackgroundVideoUrl(cachedVideo.url);
+    setVideoGlassAppearanceState(cachedGlass);
     if (cached !== DEFAULT_THEME) {
       setThemeState(cached);
       apply(cached);
@@ -299,6 +370,29 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
                   : cachedVideo.url,
             });
           }
+          if (
+            typeof row.glass_surface_opacity === "number" ||
+            typeof row.glass_background_veil === "number" ||
+            typeof row.glass_text_color === "string"
+          ) {
+            const cachedGlass = readCachedVideoGlassAppearance();
+            const nextGlass = normalizeVideoGlassAppearance({
+              surfaceOpacity:
+                typeof row.glass_surface_opacity === "number"
+                  ? row.glass_surface_opacity
+                  : cachedGlass.surfaceOpacity,
+              backgroundVeil:
+                typeof row.glass_background_veil === "number"
+                  ? row.glass_background_veil
+                  : cachedGlass.backgroundVeil,
+              textColor:
+                typeof row.glass_text_color === "string"
+                  ? row.glass_text_color
+                  : cachedGlass.textColor,
+            });
+            setVideoGlassAppearanceState(nextGlass);
+            cacheVideoGlassAppearance(nextGlass);
+          }
         },
       )
       .subscribe();
@@ -317,6 +411,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
         login_ui: string;
         background_video_enabled: boolean;
         background_video_url: string;
+        glass_surface_opacity: number;
+        glass_background_veil: number;
+        glass_text_color: string;
         updated_at: string;
       }>,
     ) => {
@@ -391,6 +488,25 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     [backgroundVideoEnabled, backgroundVideoUrl, saveSettings],
   );
 
+  const setVideoGlassAppearance = useCallback(
+    async (settings: VideoGlassAppearance) => {
+      const appearance = normalizeVideoGlassAppearance(settings);
+      setVideoGlassAppearanceState(appearance);
+      cacheVideoGlassAppearance(appearance);
+      setGlassSaving(true);
+      try {
+        await saveSettings({
+          glass_surface_opacity: appearance.surfaceOpacity,
+          glass_background_veil: appearance.backgroundVeil,
+          glass_text_color: appearance.textColor,
+        });
+      } finally {
+        setGlassSaving(false);
+      }
+    },
+    [saveSettings],
+  );
+
   const value = useMemo(
     () => ({
       theme,
@@ -402,6 +518,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       backgroundVideoUrl,
       setBackgroundVideo,
       videoSaving,
+      videoGlassAppearance,
+      setVideoGlassAppearance,
+      glassSaving,
     }),
     [
       theme,
@@ -413,6 +532,9 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       backgroundVideoUrl,
       setBackgroundVideo,
       videoSaving,
+      videoGlassAppearance,
+      setVideoGlassAppearance,
+      glassSaving,
     ],
   );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

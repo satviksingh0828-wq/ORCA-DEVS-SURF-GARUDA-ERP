@@ -131,6 +131,17 @@ type PartBHistory = {
   reason_rem: string | null;
   updated_at: string;
 };
+type TransporterUpdateHistory = {
+  id: string;
+  eway_bill_number: string;
+  transfer_status: string;
+  transfer_error: string;
+  created_at: string;
+  manifest_number: string;
+  transporter_name: string;
+  transporter_gstin: string;
+  manifest_status: string;
+};
 
 const transportModeLabel = (mode: string) =>
   ({ "1": "Road", "2": "Rail", "3": "Air", "4": "Ship" })[mode] ?? mode ?? "—";
@@ -372,6 +383,7 @@ function ShipmentView({
   shipment,
   items,
   history,
+  transporterHistory,
   branchName,
   onBack,
   onFetchPartB,
@@ -380,6 +392,7 @@ function ShipmentView({
   shipment: Shipment;
   items: Item[];
   history: PartBHistory[];
+  transporterHistory: TransporterUpdateHistory[];
   branchName: (id: string) => string;
   onBack: () => void;
   onFetchPartB: () => void;
@@ -387,7 +400,7 @@ function ShipmentView({
 }) {
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
+      <div className="surface-card flex flex-wrap items-center justify-between gap-3 p-4">
         <div>
           <button
             type="button"
@@ -629,6 +642,61 @@ function ShipmentView({
           </div>
         )}
       </div>
+      <div className="rounded-xl border border-border p-4">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="font-semibold">Transporter Update History</h3>
+          <span className="text-xs text-muted-foreground">
+            Saved LTMS manifest records for E-Way Bill {shipment.eway_bill_number}
+          </span>
+        </div>
+        {transporterHistory.length === 0 ? (
+          <p className="rounded-lg border border-dashed border-border p-4 text-sm text-muted-foreground">
+            No transporter updates have been recorded for this E-Way Bill in an LTMS manifest yet.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {transporterHistory.map((entry) => (
+              <div
+                key={entry.id}
+                className="grid gap-3 rounded-lg border border-border p-3 sm:grid-cols-2 xl:grid-cols-4"
+              >
+                <div>
+                  <p className="text-xs text-muted-foreground">Updated</p>
+                  <p className="mt-1 text-sm font-medium">
+                    {new Date(entry.created_at).toLocaleString("en-IN")}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">LTMS Manifest</p>
+                  <p className="mt-1 text-sm font-medium">{entry.manifest_number || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Transporter</p>
+                  <p className="mt-1 text-sm font-medium">{entry.transporter_name || "—"}</p>
+                  <p className="text-xs text-muted-foreground">{entry.transporter_gstin || "—"}</p>
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">E-Way Bill update</p>
+                  <Badge
+                    variant={entry.transfer_status === "transferred" ? "default" : "destructive"}
+                    className="mt-1"
+                  >
+                    {entry.transfer_status === "transferred" ? "Transferred" : "Failed"}
+                  </Badge>
+                  {entry.transfer_error ? (
+                    <p className="mt-1 text-xs text-destructive">{entry.transfer_error}</p>
+                  ) : null}
+                  {entry.manifest_status !== entry.transfer_status ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Manifest result: {entry.manifest_status || "—"}
+                    </p>
+                  ) : null}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -652,6 +720,9 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   const dialogShipment = viewingShipment;
   const [viewingItems, setViewingItems] = useState<Item[]>([]);
   const [viewingHistory, setViewingHistory] = useState<PartBHistory[]>([]);
+  const [viewingTransporterHistory, setViewingTransporterHistory] = useState<
+    TransporterUpdateHistory[]
+  >([]);
   const [selectedItemIndex, setSelectedItemIndex] = useState<number | null>(null);
   const [form, setForm] = useState<Form>(blankForm());
   const [items, setItems] = useState<Item[]>([blankItem()]);
@@ -728,7 +799,11 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     setEditingShipmentId(null);
   }
   async function openView(shipment: Shipment) {
-    const [{ data }, { data: history, error: historyError }] = await Promise.all([
+    const [
+      { data },
+      { data: history, error: historyError },
+      { data: transporterHistory, error: transporterHistoryError },
+    ] = await Promise.all([
       db.from("shipment_items").select("*").eq("shipment_id", shipment.id).order("item_no"),
       db
         .from("shipment_part_b_history")
@@ -737,8 +812,18 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         )
         .eq("shipment_id", shipment.id)
         .order("updated_at", { ascending: false }),
+      db
+        .from("ltms_manifest_transfer_items")
+        .select(
+          "id,eway_bill_number,transfer_status,transfer_error,created_at,manifest:ltms_manifest_transfers!inner(manifest_number,transporter_name,transporter_gstin,transfer_status,created_at)",
+        )
+        .eq("shipment_id", shipment.id)
+        .eq("eway_bill_number", shipment.eway_bill_number)
+        .order("created_at", { ascending: false }),
     ]);
     if (historyError) return toast.error(historyError.message);
+    if (transporterHistoryError)
+      toast.error(`Could not load transporter update history: ${transporterHistoryError.message}`);
     setViewingItems(
       ((data ?? []) as Array<Record<string, unknown>>).map((item) => ({
         product_name: String(item.product_name ?? ""),
@@ -763,8 +848,25 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
       })),
     );
     setViewingHistory((history ?? []) as PartBHistory[]);
+    setViewingTransporterHistory(
+      ((transporterHistory ?? []) as Array<Record<string, unknown>>).map((row) => {
+        const relatedManifest = Array.isArray(row.manifest) ? row.manifest[0] : row.manifest;
+        const manifest = (relatedManifest ?? {}) as Record<string, unknown>;
+        return {
+          id: String(row.id ?? ""),
+          eway_bill_number: String(row.eway_bill_number ?? shipment.eway_bill_number),
+          transfer_status: String(row.transfer_status ?? "failed"),
+          transfer_error: String(row.transfer_error ?? ""),
+          created_at: String(row.created_at ?? manifest.created_at ?? ""),
+          manifest_number: String(manifest.manifest_number ?? ""),
+          transporter_name: String(manifest.transporter_name ?? ""),
+          transporter_gstin: String(manifest.transporter_gstin ?? ""),
+          manifest_status: String(manifest.transfer_status ?? ""),
+        };
+      }),
+    );
     setTransporterName("");
-    setTransporterGstin(String((shipment as any).transporter_id ?? ""));
+    setTransporterGstin(String(shipment.transporter_id ?? ""));
     setViewingShipment(shipment);
   }
   async function fetchPartBFromApi(shipment: Shipment) {
@@ -1018,6 +1120,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         shipment={viewingShipment}
         items={viewingItems}
         history={viewingHistory}
+        transporterHistory={viewingTransporterHistory}
         branchName={branchName}
         onBack={() => setViewingShipment(null)}
         onFetchPartB={() => void fetchPartBFromApi(viewingShipment)}

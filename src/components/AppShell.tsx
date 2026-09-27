@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { LogOut, Server, ShieldCheck, User } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
 import { useOrcaAI } from "@/lib/orca-context";
 import { Button } from "@/components/ui/button";
@@ -25,13 +25,50 @@ export function AppShell({
   const { signOut, user } = useSession();
   const navigate = useNavigate();
   const { open } = useOrcaAI();
-  const { backgroundVideoEnabled, backgroundVideoUrl } = useTheme();
+  const { backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const previousAttribute = root.getAttribute("data-video-background");
+    const properties = [
+      "--video-glass-opacity",
+      "--video-background-veil",
+      "--video-glass-text-color",
+    ];
+    const previousStyles = properties.map((property) => ({
+      property,
+      value: root.style.getPropertyValue(property),
+      priority: root.style.getPropertyPriority(property),
+    }));
+
+    if (backgroundVideoEnabled) root.setAttribute("data-video-background", "on");
+    else root.removeAttribute("data-video-background");
+    root.style.setProperty("--video-glass-opacity", `${videoGlassAppearance.surfaceOpacity}%`);
+    root.style.setProperty("--video-background-veil", `${videoGlassAppearance.backgroundVeil}%`);
+    root.style.setProperty("--video-glass-text-color", videoGlassAppearance.textColor);
+
+    return () => {
+      if (previousAttribute === null) root.removeAttribute("data-video-background");
+      else root.setAttribute("data-video-background", previousAttribute);
+      previousStyles.forEach(({ property, value, priority }) => {
+        if (value) root.style.setProperty(property, value, priority);
+        else root.style.removeProperty(property);
+      });
+    };
+  }, [backgroundVideoEnabled, videoGlassAppearance]);
 
   return (
     <div
       data-video-background={backgroundVideoEnabled ? "on" : "off"}
+      style={
+        {
+          "--video-glass-opacity": `${videoGlassAppearance.surfaceOpacity}%`,
+          "--video-background-veil": `${videoGlassAppearance.backgroundVeil}%`,
+          "--video-glass-text-color": videoGlassAppearance.textColor,
+        } as CSSProperties
+      }
       className={cn(
         "relative min-h-screen overflow-hidden transition-all duration-300",
         backgroundVideoEnabled ? "bg-transparent" : "bg-background",
@@ -54,7 +91,7 @@ export function AppShell({
             <source src={backgroundVideoUrl} />
           </video>
           <div
-            className={cn("pointer-events-none fixed inset-0 z-[1]", "bg-background/35")}
+            className="video-background-veil pointer-events-none fixed inset-0 z-[1]"
             aria-hidden="true"
           />
         </>

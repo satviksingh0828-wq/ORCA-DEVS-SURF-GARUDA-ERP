@@ -22,6 +22,7 @@ import { CompanySettings } from "@/components/settings/CompanySettings";
 import { BranchSettings } from "@/components/settings/BranchSettings";
 import { AttendanceModuleSettings } from "@/components/settings/AttendanceModuleSettings";
 import { DEFAULT_BACKGROUND_VIDEO_URL, THEMES, useTheme, type ThemeId } from "@/lib/theme";
+import { DEFAULT_VIDEO_GLASS_APPEARANCE, type VideoGlassAppearance } from "@/lib/video-glass";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -263,9 +264,22 @@ function ThemePanel() {
     backgroundVideoUrl,
     setBackgroundVideo,
     videoSaving,
+    videoGlassAppearance,
+    setVideoGlassAppearance,
+    glassSaving,
   } = useTheme();
   const [videoUrlDraft, setVideoUrlDraft] = useState(backgroundVideoUrl);
+  const [glassOpacityDraft, setGlassOpacityDraft] = useState(videoGlassAppearance.surfaceOpacity);
+  const [backgroundVeilDraft, setBackgroundVeilDraft] = useState(
+    videoGlassAppearance.backgroundVeil,
+  );
+  const [glassTextColorDraft, setGlassTextColorDraft] = useState(videoGlassAppearance.textColor);
   useEffect(() => setVideoUrlDraft(backgroundVideoUrl), [backgroundVideoUrl]);
+  useEffect(() => {
+    setGlassOpacityDraft(videoGlassAppearance.surfaceOpacity);
+    setBackgroundVeilDraft(videoGlassAppearance.backgroundVeil);
+    setGlassTextColorDraft(videoGlassAppearance.textColor);
+  }, [videoGlassAppearance]);
 
   async function saveVideoUrl() {
     let parsed: URL;
@@ -296,6 +310,36 @@ function ThemePanel() {
     } catch {
       toast.error(
         "Could not sync video settings. Run the supplied Supabase migration, then try again.",
+      );
+    }
+  }
+
+  async function saveGlassAppearance() {
+    const appearance: VideoGlassAppearance = {
+      surfaceOpacity: glassOpacityDraft,
+      backgroundVeil: backgroundVeilDraft,
+      textColor: glassTextColorDraft,
+    };
+    try {
+      await setVideoGlassAppearance(appearance);
+      toast.success("Video glass readability settings saved for the workspace.");
+    } catch {
+      toast.error(
+        "Applied on this device, but cloud sync needs the glass-controls Supabase migration.",
+      );
+    }
+  }
+
+  async function resetGlassAppearance() {
+    setGlassOpacityDraft(DEFAULT_VIDEO_GLASS_APPEARANCE.surfaceOpacity);
+    setBackgroundVeilDraft(DEFAULT_VIDEO_GLASS_APPEARANCE.backgroundVeil);
+    setGlassTextColorDraft(DEFAULT_VIDEO_GLASS_APPEARANCE.textColor);
+    try {
+      await setVideoGlassAppearance(DEFAULT_VIDEO_GLASS_APPEARANCE);
+      toast.success("Glass readability settings reset to defaults.");
+    } catch {
+      toast.error(
+        "Defaults are applied on this device; cloud sync needs the glass-controls Supabase migration.",
       );
     }
   }
@@ -403,6 +447,117 @@ function ThemePanel() {
               Use current video
             </Button>
           </div>
+        </div>
+      </section>
+
+      <section className="surface-card space-y-5 p-6">
+        <div>
+          <h3 className="text-sm font-semibold tracking-tight">Video glass readability</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Tune the frosted panels and text shown while the background video is on. These controls
+            apply across every accent theme and sync to the whole workspace.
+          </p>
+        </div>
+
+        <div className="grid gap-5 md:grid-cols-2">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="video-glass-opacity" className="text-sm font-medium">
+                Glass surface opacity
+              </label>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {glassOpacityDraft}%
+              </span>
+            </div>
+            <input
+              id="video-glass-opacity"
+              type="range"
+              min={50}
+              max={98}
+              step={1}
+              value={glassOpacityDraft}
+              onChange={(event) => setGlassOpacityDraft(Number(event.target.value))}
+              className="w-full accent-primary"
+            />
+            <p className="text-xs text-muted-foreground">
+              Higher opacity makes detail panels brighter and easier to read; lower opacity shows
+              more of the video through them.
+            </p>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-3">
+              <label htmlFor="video-background-veil" className="text-sm font-medium">
+                Background veil
+              </label>
+              <span className="text-xs tabular-nums text-muted-foreground">
+                {backgroundVeilDraft}%
+              </span>
+            </div>
+            <input
+              id="video-background-veil"
+              type="range"
+              min={0}
+              max={70}
+              step={1}
+              value={backgroundVeilDraft}
+              onChange={(event) => setBackgroundVeilDraft(Number(event.target.value))}
+              className="w-full accent-primary"
+            />
+            <p className="text-xs text-muted-foreground">
+              Increase the veil to soften busy footage behind the glass; lower it to see more of the
+              video.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="space-y-2">
+            <label htmlFor="video-glass-text-color" className="text-sm font-medium">
+              Workspace text color
+            </label>
+            <div className="flex items-center gap-3">
+              <Input
+                id="video-glass-text-color"
+                type="color"
+                value={glassTextColorDraft}
+                onChange={(event) => setGlassTextColorDraft(event.target.value)}
+                className="h-10 w-16 cursor-pointer p-1"
+              />
+              <span className="font-mono text-xs uppercase text-muted-foreground">
+                {glassTextColorDraft}
+              </span>
+            </div>
+          </div>
+          <div
+            className="min-w-64 flex-1 rounded-xl border p-3 text-sm"
+            style={{
+              color: glassTextColorDraft,
+              backgroundColor: `color-mix(in oklch, var(--card) ${glassOpacityDraft}%, transparent)`,
+              backdropFilter: "blur(14px)",
+            }}
+          >
+            Preview: Shipment Details and field labels will use this text color.
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <Button type="button" onClick={() => void saveGlassAppearance()} disabled={glassSaving}>
+            {glassSaving ? <Loader2 className="size-4 animate-spin" /> : null}
+            Save glass settings
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void resetGlassAppearance()}
+            disabled={glassSaving}
+          >
+            Restore defaults
+          </Button>
+          <span className="text-xs text-muted-foreground">
+            Run the glass-controls Supabase migration once for workspace-wide sync; until then,
+            values remain saved in this browser.
+          </span>
         </div>
       </section>
 

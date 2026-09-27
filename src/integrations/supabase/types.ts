@@ -15,6 +15,9 @@ export type Database = {
           login_ui: string;
           background_video_enabled: boolean;
           background_video_url: string;
+          glass_surface_opacity: number;
+          glass_background_veil: number;
+          glass_text_color: string;
           updated_at: string;
         };
         Insert: {
@@ -23,6 +26,9 @@ export type Database = {
           login_ui?: string;
           background_video_enabled?: boolean;
           background_video_url?: string;
+          glass_surface_opacity?: number;
+          glass_background_veil?: number;
+          glass_text_color?: string;
           updated_at?: string;
         };
         Update: {
@@ -31,6 +37,9 @@ export type Database = {
           login_ui?: string;
           background_video_enabled?: boolean;
           background_video_url?: string;
+          glass_surface_opacity?: number;
+          glass_background_veil?: number;
+          glass_text_color?: string;
           updated_at?: string;
         };
         Relationships: [];

@@ -721,15 +721,45 @@
 
 /* Automatically frost app surfaces whenever the video backdrop is active,
    while each selected theme continues to supply its own colors and contrast. */
+[data-video-background="on"] {
+  --foreground: var(--video-glass-text-color, #172033);
+  --card-foreground: var(--video-glass-text-color, #172033);
+  --popover-foreground: var(--video-glass-text-color, #172033);
+  --secondary-foreground: var(--video-glass-text-color, #172033);
+  --accent-foreground: var(--video-glass-text-color, #172033);
+  --muted-foreground: color-mix(
+    in oklch,
+    var(--video-glass-text-color, #172033) 78%,
+    var(--card) 22%
+  );
+  --sidebar-foreground: var(--video-glass-text-color, #172033);
+  --sidebar-accent-foreground: var(--video-glass-text-color, #172033);
+}
+
+[data-video-background="on"] .video-background-veil {
+  background-color: color-mix(
+    in oklch,
+    var(--background) var(--video-background-veil, 25%),
+    transparent
+  );
+}
+
 [data-video-background="on"] .surface-card,
 [data-video-background="on"] .bg-card,
 [data-video-background="on"] .bg-popover,
 [data-video-background="on"] .bg-background,
 [data-video-background="on"] .bg-muted,
 [data-video-background="on"] .bg-secondary,
-[data-video-background="on"] [data-slot="card"] {
+[data-video-background="on"] [data-slot="card"],
+[data-video-background="on"] main .rounded-xl.border,
+[data-video-background="on"] main .rounded-lg.border:not(.border-dashed) {
   border-color: color-mix(in oklch, var(--border) 78%, white 22%);
-  background-color: color-mix(in oklch, var(--card) 88%, transparent);
+  background-color: color-mix(
+    in oklch,
+    var(--card) var(--video-glass-opacity, 92%),
+    transparent
+  );
+  background-color: oklch(from var(--card) l c h / var(--video-glass-opacity, 92%));
   -webkit-backdrop-filter: blur(16px) saturate(150%);
   backdrop-filter: blur(16px) saturate(150%);
 }
@@ -741,20 +771,35 @@
 
 [data-video-background="on"] header.sticky {
   border-color: color-mix(in oklch, var(--border) 78%, white 22%);
-  background-color: color-mix(in oklch, var(--card) 90%, transparent);
+  background-color: color-mix(
+    in oklch,
+    var(--card) var(--video-glass-opacity, 92%),
+    transparent
+  );
+  background-color: oklch(from var(--card) l c h / var(--video-glass-opacity, 92%));
   -webkit-backdrop-filter: blur(22px) saturate(160%);
   backdrop-filter: blur(22px) saturate(160%);
 }
 
 [data-video-background="on"] :is(input, textarea, select, [role="combobox"]) {
-  background-color: color-mix(in oklch, var(--input) 86%, transparent);
+  background-color: color-mix(
+    in oklch,
+    var(--input) var(--video-glass-opacity, 92%),
+    transparent
+  );
+  background-color: oklch(from var(--input) l c h / var(--video-glass-opacity, 92%));
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
 
 [data-video-background="on"] table thead,
 [data-video-background="on"] table tbody tr {
-  background-color: color-mix(in oklch, var(--card) 84%, transparent);
+  background-color: color-mix(
+    in oklch,
+    var(--card) var(--video-glass-opacity, 92%),
+    transparent
+  );
+  background-color: oklch(from var(--card) l c h / var(--video-glass-opacity, 92%));
   -webkit-backdrop-filter: blur(12px) saturate(140%);
   backdrop-filter: blur(12px) saturate(140%);
 }
