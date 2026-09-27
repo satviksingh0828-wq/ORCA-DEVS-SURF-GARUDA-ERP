@@ -83,10 +83,16 @@ function routeLabels(m: Movement) {
   return {
     from: thirdPartyDrop
       ? m.branch?.branch_name || "Our branch"
-      : m.from_details?.trade_name || m.from_details?.legal_name || "Consignment origin",
+      : m.from_details?.trade_name ||
+        m.from_details?.legal_name ||
+        m.from_details?.place ||
+        "Consignment origin",
     to: thirdPartyDrop
       ? m.transporter?.transporter_name || "Transporter"
-      : m.to_details?.trade_name || m.to_details?.legal_name || "Consignment destination",
+      : m.to_details?.trade_name ||
+        m.to_details?.legal_name ||
+        m.to_details?.place ||
+        "Consignment destination",
     fromPin: thirdPartyDrop
       ? m.branch?.pin_code || m.from_pin_code
       : m.shipments?.[0]?.supplier_pin_code || m.from_details?.pincode || m.from_pin_code,

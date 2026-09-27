@@ -23,7 +23,9 @@ import { DriverTripActions } from "./DriverTripActions";
 
 type BranchOption = { id: string; name: string };
 
-export function Trips() {
+export function Trips({
+  onSidebarVisibilityChange,
+}: { onSidebarVisibilityChange?: (visible: boolean) => void } = {}) {
   const [trips, setTrips] = useState<TripRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<TripRow | null>(null);
@@ -35,6 +37,9 @@ export function Trips() {
   const isAdmin = isAdminLike(user?.role);
   const isBasic = user?.role === "basic";
   const isViewer = user?.role === "viewer";
+  useEffect(() => {
+    onSidebarVisibilityChange?.(!editing);
+  }, [editing, onSidebarVisibilityChange]);
   const allowedBranchIds = user?.role === "basic" ? (user?.branchIds ?? []) : null;
 
   async function load() {

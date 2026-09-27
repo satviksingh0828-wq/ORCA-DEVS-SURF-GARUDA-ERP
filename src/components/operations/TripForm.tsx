@@ -1166,6 +1166,30 @@ type MovementOption = {
   trip?: { trip_code?: string | null } | null;
   from_pin_code?: string | null;
   to_pin_code?: string | null;
+  movement_mode?: string | null;
+  consignment_type?: string | null;
+  own_transport_mode?: string | null;
+  created_at?: string | null;
+  from_details?: {
+    trade_name?: string;
+    legal_name?: string;
+    place?: string;
+    pincode?: string;
+  } | null;
+  to_details?: {
+    trade_name?: string;
+    legal_name?: string;
+    place?: string;
+    pincode?: string;
+  } | null;
+  shipments?: Array<{
+    supplier_trade_name?: string | null;
+    recipient_trade_name?: string | null;
+    supplier_place?: string | null;
+    recipient_place?: string | null;
+    supplier_pin_code?: string | null;
+    recipient_pin_code?: string | null;
+  }> | null;
 };
 function MovementTab({
   tripId,
@@ -1187,7 +1211,14 @@ function MovementTab({
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [movementDate, setMovementDate] = useState("");
   const load = async () => {
+    if (!tripId) {
+      setRows([]);
+      setSelected([]);
+      setLoading(false);
+      return;
+    }
     if (!branchId) {
       setRows([]);
       setSelected([]);
@@ -1199,15 +1230,19 @@ function MovementTab({
     const { data, error } = await db
       .from("consignments")
       .select(
-        "id,consignment_number,vehicle_id,driver_id,trip_id,from_pin_code,to_pin_code,vehicle:vehicles(registration_number),driver:drivers(full_name),trip:trips(trip_code)",
+        "id,consignment_number,vehicle_id,driver_id,trip_id,from_pin_code,to_pin_code,movement_mode,consignment_type,own_transport_mode,created_at,from_details,to_details,branch:branches(branch_name,pin_code),transporter:ltms_transporters(transporter_name,pin_code),vehicle:vehicles(registration_number),driver:drivers(full_name),trip:trips(trip_code),shipments(supplier_trade_name,recipient_trade_name,supplier_place,recipient_place,supplier_pin_code,recipient_pin_code)",
       )
       .eq("branch_id", branchId)
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
     const all = (data ?? []) as MovementOption[];
-    const available = all.filter(
-      (m) => m.trip_id === tripId || (!m.trip_id && (!vehicleId || m.vehicle_id === vehicleId)),
-    );
+    const available = all.filter((m) => {
+      const validMovement =
+        (m.consignment_type === "own" && m.movement_mode === "pickup") ||
+        (m.consignment_type === "third_party" && m.movement_mode === "drop");
+      const vehicleMatches = !vehicleId || !m.vehicle_id || m.vehicle_id === vehicleId;
+      return validMovement && (m.trip_id === tripId || (!m.trip_id && vehicleMatches));
+    });
     setRows(available);
     setSelected(available.filter((m) => m.trip_id === tripId).map((m) => m.id));
     setLoading(false);
@@ -1241,15 +1276,47 @@ function MovementTab({
     toast.success("Trip movements updated");
     await load();
   }
-  const visible = rows.filter(
-    (m) =>
+  const visible = rows.filter((m) => {
+    const needleMatch =
       !search.trim() ||
       `${m.consignment_number} ${m.trip?.trip_code ?? ""}`
         .toLowerCase()
-        .includes(search.trim().toLowerCase()),
-  );
+        .includes(search.trim().toLowerCase());
+    const dateMatch = !movementDate || String(m.created_at ?? "").slice(0, 10) === movementDate;
+    return needleMatch && dateMatch;
+  });
+  const route = (m: MovementOption) => {
+    const thirdPartyDrop = m.consignment_type === "third_party" && m.movement_mode === "drop";
+    const shipment = m.shipments?.[0];
+    const from = thirdPartyDrop
+      ? "Branch"
+      : shipment?.supplier_trade_name ||
+        m.from_details?.trade_name ||
+        m.from_details?.legal_name ||
+        m.from_details?.place ||
+        "—";
+    const to = thirdPartyDrop
+      ? "Transporter"
+      : shipment?.recipient_trade_name ||
+        m.to_details?.trade_name ||
+        m.to_details?.legal_name ||
+        m.to_details?.place ||
+        "—";
+    const fromPin = thirdPartyDrop
+      ? m.from_pin_code
+      : shipment?.supplier_pin_code || m.from_details?.pincode || m.from_pin_code;
+    const toPin = thirdPartyDrop
+      ? m.to_pin_code
+      : shipment?.recipient_pin_code || m.to_details?.pincode || m.to_pin_code;
+    return { from, to, fromPin, toPin };
+  };
   return (
     <div className="space-y-4">
+      {!tripId && (
+        <p className="rounded-lg border border-dashed border-border bg-muted/30 p-4 text-sm text-muted-foreground">
+          Save the trip details first to load movements.
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <div>
           <h3 className="text-sm font-semibold tracking-tight">Trip movements</h3>
@@ -1270,13 +1337,22 @@ function MovementTab({
           </Button>
         )}
       </div>
-      <div className="relative">
-        <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+      <div className="flex flex-wrap gap-2">
+        <div className="relative min-w-[240px] flex-1">
+          <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+          <Input
+            className="pl-9"
+            placeholder="Search consignment or trip"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
         <Input
-          className="pl-9"
-          placeholder="Search consignment or trip"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
+          className="w-44"
+          type="date"
+          value={movementDate}
+          onChange={(e) => setMovementDate(e.target.value)}
+          aria-label="Movement date"
         />
       </div>
       {loading ? (
@@ -1305,7 +1381,8 @@ function MovementTab({
               <span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-5">
                 <strong>{m.consignment_number}</strong>
                 <span>
-                  From {m.from_pin_code || "—"} → To {m.to_pin_code || "—"}
+                  {route(m).from} ({route(m).fromPin || "—"}) → {route(m).to} (
+                  {route(m).toPin || "—"})
                 </span>
                 <span>{m.vehicle?.registration_number || "No vehicle"}</span>
                 <span>{m.driver?.full_name || "No driver"}</span>

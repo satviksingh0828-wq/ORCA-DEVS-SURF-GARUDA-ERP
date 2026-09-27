@@ -199,17 +199,18 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const [tab, setTab] = useState<TabId>(mode === "ltms" ? "trip" : "lr");
   const [navOpen, setNavOpen] = useState(true);
   const [consignmentCreateOpen, setConsignmentCreateOpen] = useState(false);
+  const [tripFormOpen, setTripFormOpen] = useState(false);
 
   const defaultTab: TabId = mode === "ltms" ? "trip" : "lr";
   const safeTab: TabId = (TABS.find((t) => t.id === tab) ? tab : defaultTab) as TabId;
   const active = TABS.find((t) => t.id === safeTab) ?? TABS[0];
   const fullBleedConsignment = safeTab === "consignment" && consignmentCreateOpen;
+  const fullBleedTrip = safeTab === "trip" && tripFormOpen;
+  const fullBleed = fullBleedConsignment || fullBleedTrip;
 
   return (
     <AppShell
-      mainClassName={
-        fullBleedConsignment ? "w-full max-w-none px-1 py-1 sm:px-1 sm:py-1" : undefined
-      }
+      mainClassName={fullBleed ? "w-full max-w-none px-1 py-1 sm:px-1 sm:py-1" : undefined}
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">
@@ -245,7 +246,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       }
     >
       <div
-        className={`grid items-start ${fullBleedConsignment ? "gap-0" : "gap-6"} ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}
+        className={`grid items-start ${fullBleed ? "gap-0" : "gap-6"} ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}
       >
         {/* Desktop left nav */}
         {navOpen && (
@@ -283,12 +284,12 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
         )}
 
         {/* Mobile dropdown navigation */}
-        {!fullBleedConsignment && (
+        {!fullBleed && (
           <MobileTabDropdown tabs={TABS} activeId={safeTab} label="Operations" onChange={setTab} />
         )}
 
         <div className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>
-          {!fullBleedConsignment && (
+          {!fullBleed && (
             <header className="mb-6">
               <h1 className="text-2xl font-semibold tracking-tight">{active?.label}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{active?.desc}</p>
@@ -296,7 +297,12 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           )}
           {safeTab === "trip" && (
             <TabErrorBoundary label="Trip">
-              <Trips />
+              <Trips
+                onSidebarVisibilityChange={(visible) => {
+                  setNavOpen(visible);
+                  setTripFormOpen(!visible);
+                }}
+              />
             </TabErrorBoundary>
           )}
           {safeTab === "shipments" && (
