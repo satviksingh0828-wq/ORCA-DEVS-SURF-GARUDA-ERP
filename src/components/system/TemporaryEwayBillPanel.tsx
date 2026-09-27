@@ -102,6 +102,17 @@ export function TemporaryEwayBillPanel() {
       if (String(payload.transMode ?? "") === "1" && !String(payload.vehicleNo ?? "").trim()) {
         throw new Error("vehicleNo is required when transMode is Road (1)");
       }
+      const branchGstin = String(selectedBranch?.gstin ?? "")
+        .trim()
+        .toUpperCase();
+      const payloadFromGstin = String(payload.fromGstin ?? "")
+        .trim()
+        .toUpperCase();
+      if (branchGstin && payloadFromGstin && branchGstin !== payloadFromGstin) {
+        throw new Error(
+          `fromGstin ${payloadFromGstin} does not match selected branch GSTIN ${branchGstin}`,
+        );
+      }
       // The GST E-Way Bill master uses PAC (Packs); PKT is not a valid UQC.
       payload = {
         ...payload,
