@@ -920,11 +920,13 @@ export function ConsignmentList({
       return toast.error("Drop mode requires valid From and To Pincodes");
     if (!common) return toast.error("Add at least one E-Way Bill");
     if (
-      packageEntries.some((entry) =>
-        entry.basis === "quantity" ? !(Number(entry.quantity) > 0) : !(Number(entry.weight_kg) > 0),
+      packageEntries.some(
+        (entry) => !(Number(entry.quantity) > 0) || !(Number(entry.weight_kg) > 0),
       )
     )
-      return toast.error("Every package entry must have a quantity or weight greater than zero");
+      return toast.error(
+        "Every package entry must have both quantity and weight greater than zero",
+      );
     const payload = {
       branch_id: branchId,
       source_id: sourceId,
@@ -935,7 +937,8 @@ export function ConsignmentList({
       driver_id: type === "own" || movement === "drop" ? driverId || null : null,
       transporter_id: needsTransporter ? transporterId : "",
       from_pin_code: fromPin,
-      to_pin_code: toPin,
+      to_pin_code:
+        type === "third_party" && movement === "drop" ? toPin : common.recipient_pin_code,
       from_gstin: common.supplier_gstin,
       to_gstin: common.recipient_gstin,
       generation_mode: common.generation_mode,
