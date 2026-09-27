@@ -1007,9 +1007,13 @@
   }
 }
 
-/* Keep the video itself clean; readable contrast comes from individual glass surfaces. */
+/* Apply one controlled veil directly over the shared video layer. */
 .background-video-veil-layer {
-  background: transparent !important;
+  background-color: color-mix(
+    in oklch,
+    var(--background) var(--video-background-veil, 0%),
+    transparent
+  ) !important;
 }
 [data-video-background="on"] main {
   background-color: transparent;

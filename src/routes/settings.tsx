@@ -487,15 +487,15 @@ function ThemePanel() {
 
           <div className="space-y-2">
             <div className="flex items-center justify-between gap-3">
-              <label htmlFor="video-background-veil" className="text-sm font-medium">
-                Background veil
+              <label htmlFor="video-veil" className="text-sm font-medium">
+                Video veil
               </label>
               <span className="text-xs tabular-nums text-muted-foreground">
                 {backgroundVeilDraft}%
               </span>
             </div>
             <input
-              id="video-background-veil"
+              id="video-veil"
               type="range"
               min={0}
               max={70}
@@ -505,8 +505,8 @@ function ThemePanel() {
               className="w-full accent-primary"
             />
             <p className="text-xs text-muted-foreground">
-              Increase the veil to soften busy footage behind the glass; lower it to see more of the
-              video.
+              Applied directly over the background video: increase it to soften busy footage, or
+              lower it to see more of the video.
             </p>
           </div>
         </div>
