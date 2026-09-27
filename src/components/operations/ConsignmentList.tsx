@@ -39,6 +39,8 @@ type PackageEntry = {
   basis: "quantity" | "weight";
   quantity: string;
   weight_kg: string;
+  eway_bill_number: string;
+  shipment?: { eway_bill_number?: string | null } | null;
 };
 type DriverMasterRow = { id: string; full_name: string | null; driver_code: string | null };
 
@@ -1002,16 +1004,31 @@ export function ConsignmentList({
     setLoading(false);
     if (updateError) return toast.error(updateError.message);
     if (packageEntries.length) {
-      const { error: packageError } = await db.from("consignment_package_information").insert(
-        packageEntries.map((entry) => ({
-          consignment_id: data.id,
-          package_rate_type_id: entry.package_rate_type_id,
-          package_type: entry.package_type,
-          basis: entry.basis,
-          quantity: Number(entry.quantity),
-          weight_kg: Number(entry.weight_kg),
-        })),
+      const { data: linkedShipments, error: shipmentLookupError } = await db
+        .from("shipments")
+        .select("id,eway_bill_number")
+        .eq("consignment_id", data.id);
+      if (shipmentLookupError) return toast.error(shipmentLookupError.message);
+      const shipmentIds = new Map(
+        (linkedShipments ?? []).map((shipment: { id: string; eway_bill_number: string }) => [
+          shipment.eway_bill_number,
+          shipment.id,
+        ]),
       );
+      const packageRows = packageEntries.map((entry) => ({
+        consignment_id: data.id,
+        shipment_id: shipmentIds.get(entry.eway_bill_number) ?? null,
+        package_rate_type_id: entry.package_rate_type_id,
+        package_type: entry.package_type,
+        basis: entry.basis,
+        quantity: Number(entry.quantity),
+        weight_kg: Number(entry.weight_kg),
+      }));
+      if (packageRows.some((entry) => !entry.shipment_id))
+        return toast.error("Select a valid E-Way Bill for every package entry");
+      const { error: packageError } = await db
+        .from("consignment_package_information")
+        .insert(packageRows);
       if (packageError) return toast.error(packageError.message);
     }
     toast.success(
@@ -1032,7 +1049,9 @@ export function ConsignmentList({
         .order("eway_bill_date", { ascending: false }),
       db
         .from("consignment_package_information")
-        .select("id,package_rate_type_id,package_type,basis,quantity,weight_kg")
+        .select(
+          "id,package_rate_type_id,package_type,basis,quantity,weight_kg,shipment:shipments(eway_bill_number)",
+        )
         .eq("consignment_id", row.id)
         .order("created_at"),
     ]);
@@ -1858,6 +1877,7 @@ function ConsignmentForm(props: any) {
                     basis: "quantity",
                     quantity: "",
                     weight_kg: "",
+                    eway_bill_number: drafts[0]?.eway_bill_number ?? "",
                   },
                 ])
               }
@@ -1884,7 +1904,7 @@ function ConsignmentForm(props: any) {
                 return (
                   <div
                     key={`${entry.package_rate_type_id}-${index}`}
-                    className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto]"
+                    className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
                   >
                     <div className="space-y-1.5">
                       <Label>Package Type *</Label>
@@ -1918,6 +1938,30 @@ function ConsignmentForm(props: any) {
                             <SelectItem key={item.id} value={item.id}>
                               {item.package_type} ·{" "}
                               {item.basis === "weight" ? "Weight-wise" : "Quantity-wise"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>E-Way Bill *</Label>
+                      <Select
+                        value={entry.eway_bill_number}
+                        onValueChange={(value) =>
+                          setPackageEntries(
+                            packageEntries.map((current: PackageEntry, i: number) =>
+                              i === index ? { ...current, eway_bill_number: value } : current,
+                            ),
+                          )
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select E-Way Bill" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {drafts.map((draft: ShipmentDraft) => (
+                            <SelectItem key={draft.eway_bill_number} value={draft.eway_bill_number}>
+                              {draft.eway_bill_number} · {draft.document_number || "No invoice"}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -2974,6 +3018,7 @@ function ConsignmentView({
               <thead className="text-left text-xs text-muted-foreground">
                 <tr>
                   <th className="px-2 py-2">Package Type</th>
+                  <th className="px-2 py-2">E-Way Bill</th>
                   <th className="px-2 py-2">Method</th>
                   <th className="px-2 py-2">Value</th>
                 </tr>
@@ -2982,6 +3027,9 @@ function ConsignmentView({
                 {packages.map((entry, index) => (
                   <tr key={entry.id ?? index} className="border-t border-border">
                     <td className="px-2 py-2 font-medium">{entry.package_type}</td>
+                    <td className="px-2 py-2">
+                      {entry.shipment?.eway_bill_number || entry.eway_bill_number || "—"}
+                    </td>
                     <td className="px-2 py-2">
                       {entry.basis === "weight" ? "Weight-wise" : "Quantity-wise"}
                     </td>
