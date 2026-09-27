@@ -90,7 +90,7 @@ export const THEMES = [
 ] as const;
 
 export type ThemeId = (typeof THEMES)[number]["id"];
-export type LoginUi = "plain" | "image" | "workspace";
+export type LoginUi = "plain" | "image" | "video" | "workspace";
 export const DEFAULT_BACKGROUND_VIDEO_URL =
   "https://cdn.pixabay.com/video/2024/04/29/209883_large.mp4";
 export type BackgroundVideoSettings = { enabled?: boolean; url?: string };

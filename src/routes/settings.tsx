@@ -568,7 +568,7 @@ function ThemePanel() {
           Choose the sign-in page appearance. The cloud workspace style is inspired by the supplied
           Bitrix24 reference. Saved to the cloud and applied to all users.
         </p>
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {/* Plain UI */}
           <button
             type="button"
@@ -627,6 +627,42 @@ function ThemePanel() {
                 </span>
               </span>
               {loginUi === "image" ? <Check className="size-4 shrink-0 text-primary" /> : null}
+            </div>
+          </button>
+          {/* Video UI — same banner treatment with the configured video */}
+          <button
+            type="button"
+            disabled={saving}
+            onClick={() => setLoginUi("video")}
+            className={`relative flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-200 hover:-translate-y-0.5 ${
+              loginUi === "video"
+                ? "border-primary bg-primary-soft"
+                : "border-border bg-card hover:border-primary/40"
+            }`}
+          >
+            <div className="relative h-28 w-full overflow-hidden bg-slate-900">
+              <video
+                className="h-full w-full object-cover"
+                autoPlay
+                loop
+                muted
+                playsInline
+                preload="metadata"
+                poster="/garuda-banner.webp"
+                aria-hidden="true"
+              >
+                <source src={backgroundVideoUrl} />
+              </video>
+              <div className="pointer-events-none absolute inset-0 bg-slate-950/20" />
+            </div>
+            <div className="flex items-center justify-between p-4">
+              <span className="min-w-0">
+                <span className="block text-sm font-medium">Video UI</span>
+                <span className="block text-xs text-muted-foreground">
+                  Same Garuda banner layout with the configured video
+                </span>
+              </span>
+              {loginUi === "video" ? <Check className="size-4 shrink-0 text-primary" /> : null}
             </div>
           </button>
           {/* Workspace UI — clean blue auth inspiration */}
