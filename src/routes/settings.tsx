@@ -653,7 +653,6 @@ function ThemePanel() {
               >
                 <source src={backgroundVideoUrl} />
               </video>
-              <div className="pointer-events-none absolute inset-0 bg-slate-950/20" />
             </div>
             <div className="flex items-center justify-between p-4">
               <span className="min-w-0">

@@ -512,20 +512,6 @@ function LoginPage() {
             >
               <source src={backgroundVideoUrl} />
             </video>
-            <div className="pointer-events-none absolute inset-0 bg-slate-950/20" />
-            <div className="absolute left-6 top-6 z-10 flex flex-col items-center">
-              <div className="rounded-xl bg-white/85 px-4 py-2.5 shadow-md backdrop-blur-sm">
-                <img
-                  src="/garuda-logo.png"
-                  alt="Garuda Logistics Solution"
-                  className="h-10 w-auto"
-                />
-              </div>
-              <p className="mt-1.5 rounded-lg bg-white/85 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-900 shadow-md backdrop-blur-sm">
-                ERP
-              </p>
-            </div>
-            <LiveClock dark />
           </aside>
         ) : (
           <aside

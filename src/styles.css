@@ -1006,3 +1006,11 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Keep the video itself clean; readable contrast comes from individual glass surfaces. */
+.background-video-veil-layer {
+  background: transparent !important;
+}
+[data-video-background="on"] main {
+  background-color: transparent;
+}
