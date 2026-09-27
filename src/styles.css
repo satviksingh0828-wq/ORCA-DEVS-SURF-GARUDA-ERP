@@ -150,6 +150,36 @@
   --sidebar: oklch(0.995 0.004 230);
   --sidebar-border: oklch(0.93 0.012 230);
 }
+[data-theme="glass"] {
+  --radius: 1rem;
+  --primary: oklch(0.57 0.15 235);
+  --primary-soft: oklch(0.93 0.045 230 / 0.78);
+  --primary-glow: oklch(0.76 0.12 220);
+  --ring: oklch(0.57 0.15 235);
+  --background: oklch(0.95 0.025 240);
+  --foreground: oklch(0.22 0.035 250);
+  --card: oklch(0.99 0.018 240 / 0.58);
+  --card-foreground: oklch(0.22 0.035 250);
+  --popover: oklch(0.99 0.018 240 / 0.86);
+  --popover-foreground: oklch(0.22 0.035 250);
+  --secondary: oklch(0.96 0.02 235 / 0.66);
+  --secondary-foreground: oklch(0.3 0.04 245);
+  --muted: oklch(0.91 0.03 240 / 0.62);
+  --muted-foreground: oklch(0.43 0.035 250);
+  --accent: oklch(0.94 0.04 225 / 0.74);
+  --accent-foreground: oklch(0.28 0.045 245);
+  --border: oklch(0.99 0.015 235 / 0.58);
+  --input: oklch(0.99 0.015 235 / 0.72);
+  --sidebar: oklch(0.97 0.025 240 / 0.38);
+  --sidebar-foreground: oklch(0.25 0.035 250);
+  --sidebar-border: oklch(0.99 0.015 235 / 0.36);
+  --sidebar-accent: oklch(0.94 0.04 225 / 0.66);
+  --sidebar-accent-foreground: oklch(0.28 0.045 245);
+  --gradient-brand: linear-gradient(140deg, oklch(0.54 0.16 245) 0%, oklch(0.72 0.12 215) 100%);
+  --gradient-surface: linear-gradient(145deg, oklch(0.99 0.02 235 / 0.76), oklch(0.94 0.035 245 / 0.38));
+  --shadow-soft: 0 10px 36px -14px oklch(0.22 0.05 250 / 0.22), inset 0 1px 0 oklch(1 0 0 / 0.62);
+  --shadow-lift: 0 18px 46px -16px oklch(0.22 0.05 250 / 0.3), inset 0 1px 0 oklch(1 0 0 / 0.72);
+}
 [data-theme="emerald"] {
   --primary: oklch(0.58 0.13 165);
   --primary-soft: oklch(0.955 0.03 165);
@@ -669,6 +699,24 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
   box-shadow: var(--shadow-soft);
+}
+
+[data-theme="glass"] .surface-card,
+[data-theme="glass"] .bg-card,
+[data-theme="glass"] .bg-popover,
+[data-theme="glass"] [data-slot="card"] {
+  border-color: var(--border);
+  background-color: var(--card);
+  box-shadow: var(--shadow-soft);
+  -webkit-backdrop-filter: blur(18px) saturate(155%);
+  backdrop-filter: blur(18px) saturate(155%);
+}
+
+[data-theme="glass"] header.sticky {
+  border-color: var(--border);
+  background-color: var(--card);
+  -webkit-backdrop-filter: blur(22px) saturate(165%);
+  backdrop-filter: blur(22px) saturate(165%);
 }
 
 @keyframes fade-up {

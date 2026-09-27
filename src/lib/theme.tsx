@@ -12,6 +12,13 @@ export const THEMES = [
     hint: "Bright, modern portal",
     dark: false,
   },
+  {
+    id: "glass",
+    label: "Video Glass",
+    swatch: "#8ccff0",
+    hint: "Frosted glass · pairs with background video",
+    dark: false,
+  },
   { id: "emerald", label: "Emerald", swatch: "#12926f", hint: "Logistics green", dark: false },
   { id: "violet", label: "Deep Violet", swatch: "#6d4bd8", hint: "Modern & bold", dark: false },
   { id: "amber", label: "Warm Amber", swatch: "#d38b1b", hint: "Bright & energetic", dark: false },

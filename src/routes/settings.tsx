@@ -307,6 +307,10 @@ function ThemePanel() {
         <p className="mt-1 text-xs text-muted-foreground">
           Applies across the whole workspace and is saved to the cloud.
         </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Video Glass is an optional frosted look that pairs especially well with the background
+          video; the video can still be used with any theme.
+        </p>
         <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {THEMES.map((t) => {
             const isActive = t.id === theme;
@@ -434,7 +438,7 @@ function ThemePanel() {
               <span className="min-w-0">
                 <span className="block text-sm font-medium">Plain UI</span>
                 <span className="block text-xs text-muted-foreground">
-                  Gradient with logo (default)
+                  Original sign-in layout, gradient with logo
                 </span>
               </span>
               {loginUi === "plain" ? <Check className="size-4 shrink-0 text-primary" /> : null}
