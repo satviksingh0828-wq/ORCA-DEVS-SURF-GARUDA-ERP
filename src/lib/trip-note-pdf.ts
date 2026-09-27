@@ -9,12 +9,17 @@ import { supabase } from "@/integrations/supabase/client";
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
-export type TripNoteManifest = {
-  manifest_number: string;
-  quantity?: string | null;
-  weight_kg?: string | null;
+export type TripNoteMovement = {
+  consignment_number: string;
+  movement_mode?: string | null;
+  consignment_type?: string | null;
+  transport_mode?: string | null;
+  vehicle_number?: string | null;
+  driver_name?: string | null;
   from_location_name?: string | null;
   to_location_name?: string | null;
+  from_pin_code?: string | null;
+  to_pin_code?: string | null;
 };
 
 export type TripNoteExpense = {
@@ -97,7 +102,7 @@ export type TripNoteData = {
     gst_number?: unknown;
   } | null;
   third_party_vehicle_number?: string | null;
-  manifests: TripNoteManifest[];
+  movements: TripNoteMovement[];
   /** Stable Trip QR Code image data URI; populated only for own-vehicle trips. */
   trip_qr_data_uri?: string | null;
 };
@@ -303,18 +308,18 @@ function buildTripNoteCSS(primaryHex: string): string {
 .tn-detail-value { font-size: 10px; font-weight: 600; text-align: right; line-height: 1.4; word-break: break-word; overflow-wrap: break-word; min-width: 0; }
 
 /* Manifest table */
-.tn-manifest-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-.tn-manifest-table thead tr { background: ${primaryHex}; color: #fff; }
-.tn-manifest-table th {
+.tn-movement-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
+.tn-movement-table thead tr { background: ${primaryHex}; color: #fff; }
+.tn-movement-table th {
   padding: 5px 7px; font-size: 9px; text-transform: uppercase;
   letter-spacing: 0.07em; font-weight: 700; border: 1px solid ${primaryBorder};
 }
-.tn-manifest-table td {
+.tn-movement-table td {
   padding: 4px 7px; border: 1px solid #ccc; font-size: 10px; vertical-align: middle;
 }
-.tn-manifest-table tbody tr:nth-child(even) { background: #fafafa; }
-.tn-manifest-table tfoot tr { background: #f0f0f0; font-weight: 700; }
-.tn-manifest-table tfoot td { border: 1px solid #bbb; padding: 4px 7px; }
+.tn-movement-table tbody tr:nth-child(even) { background: #fafafa; }
+.tn-movement-table tfoot tr { background: #f0f0f0; font-weight: 700; }
+.tn-movement-table tfoot td { border: 1px solid #bbb; padding: 4px 7px; }
 .tn-tc { text-align: center; }
 .tn-tr { text-align: right; }
 
@@ -346,7 +351,7 @@ function buildBodyHtml(
   documentTitle = "Trip Note",
   expenses: TripNoteExpense[] = [],
 ): string {
-  const { company, branch, trip, vehicle, driver, transporter, manifests } = data;
+  const { company, branch, trip, vehicle, driver, transporter, movements } = data;
 
   // Address — prefer branch address (trip's own branch), fall back to company
   const addr = branch ?? company;
@@ -363,10 +368,10 @@ function buildBodyHtml(
 
   // From / To
   const fromLoc =
-    sv(trip.from_location) || (manifests[0] ? sv(manifests[0].from_location_name) : "");
+    sv(trip.from_location) || (movements[0] ? sv(movements[0].from_location_name) : "");
   const toLoc =
     sv(trip.to_location) ||
-    (manifests.length > 0 ? sv(manifests[manifests.length - 1].to_location_name) : "");
+    (movements.length > 0 ? sv(movements[movements.length - 1].to_location_name) : "");
   const ownership =
     trip.ownership === "own"
       ? "Own Vehicle"
@@ -374,25 +379,21 @@ function buildBodyHtml(
         ? "Third Party"
         : sv(trip.ownership);
 
-  // Manifest totals
-  const totalPkgs = manifests.reduce((n, m) => n + parseFloat(sv(m.quantity) || "0"), 0);
-  const totalWeight = manifests.reduce((n, m) => n + parseFloat(sv(m.weight_kg) || "0"), 0);
-
-  // Manifest rows
-  const manifestRowsHtml = manifests
+  // Movement rows — movements are the source of truth for the trip.
+  const movementRowsHtml = movements
     .map(
       (m, i) => `
       <tr>
         <td class="tn-tc">${i + 1}</td>
-        <td>${sv(m.manifest_number) || "—"}</td>
-        <td class="tn-tc">${sv(m.from_location_name) || "—"}</td>
-        <td class="tn-tc">${sv(m.to_location_name) || "—"}</td>
-        <td class="tn-tr">${sv(m.weight_kg) || "—"}</td>
-        <td class="tn-tc">${sv(m.quantity) || "—"}</td>
+        <td>${sv(m.consignment_number) || "—"}</td>
+        <td>${[sv(m.consignment_type), sv(m.movement_mode), sv(m.transport_mode)].filter(Boolean).join(" · ") || "—"}</td>
+        <td class="tn-tc">${sv(m.from_location_name) || sv(m.from_pin_code) || "—"}</td>
+        <td class="tn-tc">${sv(m.to_location_name) || sv(m.to_pin_code) || "—"}</td>
+        <td class="tn-tc">${sv(m.vehicle_number) || "—"}</td>
+        <td class="tn-tc">${sv(m.driver_name) || "—"}</td>
       </tr>`,
     )
     .join("");
-
   // Vehicle block (own)
   const vehicleBlock = `
     <div class="tn-details-col">
@@ -541,7 +542,7 @@ function buildBodyHtml(
       ${dr("Ownership", ownership)}
       ${dr("Start Date", sv(trip.start_date) + (trip.start_time ? " " + sv(trip.start_time) : ""))}
       ${dr("End Date", sv(trip.end_date))}
-      ${dr("Total Manifests", String(manifests.length))}
+      ${dr("Total Movements", String(movements.length))}
       ${dr("Total Weight", totalWeight > 0 ? totalWeight.toFixed(3) + " kg" : "")}
       ${dr("Total Packages", totalPkgs > 0 ? String(totalPkgs) : "")}
     </div>
@@ -552,36 +553,25 @@ function buildBodyHtml(
     ${isOwn ? vehicleBlock + driverBlock : transporterBlock}
   </div>
 
-  <table class="tn-manifest-table">
+  <table class="tn-movement-table">
     <thead>
       <tr>
         <th class="tn-tc" style="width:36px">S.No.</th>
-        <th>LR Number</th>
+        <th>Consignment No.</th>
+        <th>Movement</th>
         <th class="tn-tc">From</th>
         <th class="tn-tc">To</th>
-        <th class="tn-tr" style="width:76px">Weight (kg)</th>
-        <th class="tn-tc" style="width:56px">Pkgs</th>
+        <th class="tn-tc">Vehicle</th>
+        <th class="tn-tc">Driver</th>
       </tr>
     </thead>
     <tbody>
       ${
-        manifests.length > 0
-          ? manifestRowsHtml
-          : `<tr><td colspan="6" class="tn-tc" style="padding:10px;color:#999">No manifests recorded for this trip.</td></tr>`
+        movements.length > 0
+          ? movementRowsHtml
+          : `<tr><td colspan="7" class="tn-tc" style="padding:10px;color:#999">No movements assigned to this trip.</td></tr>`
       }
     </tbody>
-    ${
-      manifests.length > 0
-        ? `<tfoot>
-          <tr>
-            <td colspan="2" class="tn-tr">Totals</td>
-            <td colspan="2"></td>
-            <td class="tn-tr">${totalWeight > 0 ? totalWeight.toFixed(3) : "—"}</td>
-            <td class="tn-tc">${totalPkgs || "—"}</td>
-          </tr>
-        </tfoot>`
-        : ""
-    }
   </table>
 
   ${expenseBlock}

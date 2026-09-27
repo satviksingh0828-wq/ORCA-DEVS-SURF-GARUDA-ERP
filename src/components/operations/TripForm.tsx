@@ -693,11 +693,23 @@ export function TripForm({
         }
       }
 
-      const [company, branch, locMap] = await Promise.all([
+      const [company, branch, movementResult] = await Promise.all([
         fetchCompany(),
         fetchBranch(trip.branch_id),
-        fetchLocationMap(),
+        trip.id
+          ? supabase
+              .from("consignments")
+              .select(
+                "consignment_number,movement_mode,consignment_type,transport_mode,from_pin_code,to_pin_code,from_details,to_details,vehicle:vehicles(registration_number),driver:drivers(full_name)",
+              )
+              .eq("trip_id", trip.id)
+              .order("created_at")
+          : Promise.resolve({ data: [], error: null }),
       ]);
+      if (movementResult.error) {
+        toast.error(`Could not load trip movements: ${movementResult.error.message}`);
+        return;
+      }
       if (!company) {
         toast.error("Company details not configured — add them in Settings first.");
         return;
@@ -760,13 +772,25 @@ export function TripForm({
           : null,
         third_party_vehicle_number: trip.third_party_vehicle_number || null,
         trip_qr_data_uri: tripQrDataUri,
-        manifests: manifests.map((m) => ({
-          manifest_number: m.manifest_number,
-          quantity: m.quantity,
-          weight_kg: m.weight_kg,
-          from_location_name: locMap.get(m.from_location_id ?? "") || m.from_pin_code || null,
-          to_location_name: locMap.get(m.to_location_id ?? "") || m.to_pin_code || null,
-        })),
+        movements: ((movementResult.data ?? []) as Array<Record<string, any>>).map((m) => {
+          const from = (m.from_details ?? {}) as Record<string, any>;
+          const to = (m.to_details ?? {}) as Record<string, any>;
+          const locationName = (details: Record<string, any>, pin: unknown) =>
+            details.trade_name || details.legal_name || details.place || pin || null;
+          return {
+            consignment_number: m.consignment_number,
+            movement_mode: m.movement_mode,
+            consignment_type: m.consignment_type,
+            transport_mode: m.transport_mode,
+            vehicle_number:
+              (m.vehicle as { registration_number?: string } | null)?.registration_number || null,
+            driver_name: (m.driver as { full_name?: string } | null)?.full_name || null,
+            from_location_name: locationName(from, m.from_pin_code),
+            to_location_name: locationName(to, m.to_pin_code),
+            from_pin_code: m.from_pin_code,
+            to_pin_code: m.to_pin_code,
+          };
+        }),
       };
       if (internal) {
         await printInternalNote(pdfData, expenses);
