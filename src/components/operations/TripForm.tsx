@@ -107,7 +107,7 @@ const DEFAULT_EXPENSES = [
   "Unloading",
 ];
 
-const THIRD_PARTY_EXPENSES = ["Hire Charges", "Toll Charges (paid in cash)"];
+const THIRD_PARTY_EXPENSES = ["Hire Charges"];
 const ALL_EXPENSES = ["Hire Charges", ...DEFAULT_EXPENSES];
 
 const DEFAULT_INCOMES = ["Approval Charge"];
@@ -349,8 +349,9 @@ export function TripForm({
     }));
     const allowedExpenses =
       trip.ownership === "third_party" ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES;
-    const filteredExpenses = exp.filter(
-      (row) => trip.ownership === "third_party" || row.name.trim().toLowerCase() !== "hire charges",
+    const allowedExpenseNames = new Set(allowedExpenses.map((name) => name.trim().toLowerCase()));
+    const filteredExpenses = exp.filter((row) =>
+      allowedExpenseNames.has(row.name.trim().toLowerCase()),
     );
     setExpenses(
       filteredExpenses.length > 0
