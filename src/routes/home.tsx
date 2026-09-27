@@ -147,15 +147,6 @@ const BASIC_MODULES = [
 
 const ADMIN_VIEWER_MODULES = [
   {
-    key: "tms",
-    label: "TMS",
-    desc: "Operations, masters, dashboards & reports",
-    icon: Truck,
-    active: true,
-    to: "/tms" as const,
-    roles: ["admin", "semi_admin", "viewer"] as const,
-  },
-  {
     key: "ltms",
     label: "LTMS",
     desc: "Logistics finance, income & expenditure",
