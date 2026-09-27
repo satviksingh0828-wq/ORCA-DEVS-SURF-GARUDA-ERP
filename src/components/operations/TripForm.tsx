@@ -1090,7 +1090,7 @@ export function TripForm({
               total={expenseTotal}
               onSave={() => saveLines("trip_expenses", expenses, "expense_name")}
               isViewer={isViewer}
-              showHireChargeFields={isRented}
+              showHireChargeFields={true}
             />
           ) : null}
           {activeTab === "vehicle" ? (

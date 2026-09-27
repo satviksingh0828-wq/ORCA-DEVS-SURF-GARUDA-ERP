@@ -964,6 +964,17 @@ export function ConsignmentList({
   }
 
   async function deleteRow(row: Record<string, any>) {
+    const deleteBlockedByTrip = Boolean(row.trip_id);
+    const deleteBlockedByTransporter = ["partial", "updated"].includes(
+      String(row.transporter_update_status ?? "pending"),
+    );
+    if (deleteBlockedByTrip || deleteBlockedByTransporter) {
+      return toast.error(
+        deleteBlockedByTrip
+          ? "This Consignment is assigned to a Trip and cannot be deleted. Unassign it from the Trip first."
+          : "This Consignment has a transporter update and cannot be deleted.",
+      );
+    }
     if (
       !window.confirm(
         `Delete Consignment ${row.consignment_number}? All generated Shipments will also be deleted.`,
@@ -1177,7 +1188,26 @@ export function ConsignmentList({
                   <Button variant="ghost" size="sm" onClick={() => void openView(row)}>
                     <Eye className="mr-1 size-4" /> View
                   </Button>
-                  <Button variant="ghost" size="sm" onClick={() => void deleteRow(row)}>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    disabled={
+                      Boolean(row.trip_id) ||
+                      ["partial", "updated"].includes(
+                        String(row.transporter_update_status ?? "pending"),
+                      )
+                    }
+                    title={
+                      row.trip_id
+                        ? "Assigned to a Trip — unassign it before deleting"
+                        : ["partial", "updated"].includes(
+                              String(row.transporter_update_status ?? "pending"),
+                            )
+                          ? "Transporter update exists — cannot delete"
+                          : "Delete Consignment"
+                    }
+                    onClick={() => void deleteRow(row)}
+                  >
                     <Trash2 className="mr-1 size-4 text-destructive" /> Delete
                   </Button>
                 </td>
