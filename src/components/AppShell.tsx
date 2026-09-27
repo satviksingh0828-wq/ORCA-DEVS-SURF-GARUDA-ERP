@@ -30,11 +30,27 @@ export function AppShell({
   return (
     <div
       className={cn(
-        "min-h-screen bg-background transition-all duration-300",
+        "relative min-h-screen overflow-hidden bg-transparent transition-all duration-300",
         isAdmin && open ? "lg:mr-[360px]" : "",
       )}
     >
-      <header className="sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur">
+      <video
+        className="pointer-events-none fixed inset-0 z-0 h-full w-full object-cover"
+        autoPlay
+        loop
+        muted
+        playsInline
+        preload="metadata"
+        poster="/garuda-banner.webp"
+        aria-hidden="true"
+      >
+        <source src="https://cdn.pixabay.com/video/2024/04/29/209883_large.mp4" type="video/mp4" />
+      </video>
+      <div
+        className="pointer-events-none fixed inset-0 z-[1] bg-background/75"
+        aria-hidden="true"
+      />
+      <header className="relative sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
           <Link to="/home" className="shrink-0">
             <img
@@ -94,6 +110,7 @@ export function AppShell({
       </header>
       <main
         className={cn(
+          "relative z-10",
           "mx-auto min-w-0 max-w-screen-xl overflow-x-hidden [overflow-anchor:none] px-3 py-5 sm:px-6 sm:py-8",
           mainClassName,
         )}
