@@ -205,8 +205,8 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const safeTab: TabId = (TABS.find((t) => t.id === tab) ? tab : defaultTab) as TabId;
   const active = TABS.find((t) => t.id === safeTab) ?? TABS[0];
   const fullBleedConsignment = safeTab === "consignment" && consignmentCreateOpen;
-  const fullBleedTrip = safeTab === "trip" && tripFormOpen;
-  const fullBleed = fullBleedConsignment || fullBleedTrip;
+  // Trip forms hide the sidebar but keep the standard page width and margins.
+  const fullBleed = fullBleedConsignment;
 
   return (
     <AppShell
