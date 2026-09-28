@@ -79,12 +79,7 @@ const EMPTY_TRANSPORTER: TransporterFields = {
 
 const TRANSPORTER_FIELDS: Array<{ label: string; key: keyof TransporterFields }> = [
   { label: "Transporter Name", key: "transporter_name" },
-  { label: "Legal Business Name", key: "legal_business_name" },
-  { label: "Transporter Type", key: "transporter_type" },
   { label: "Gstin", key: "gstin" },
-  { label: "Pan", key: "pan" },
-  { label: "Msme Udyam", key: "msme_udyam" },
-  { label: "Tan", key: "tan" },
   { label: "Address Line1", key: "address_line1" },
   { label: "Address Line2", key: "address_line2" },
   { label: "City", key: "city" },
@@ -291,6 +286,11 @@ function ShipmentDetails({ shipment }: { shipment: Shipment }) {
 function relatedRecord(value: unknown): Record<string, any> {
   if (Array.isArray(value)) return value[0] ?? {};
   return value && typeof value === "object" ? (value as Record<string, any>) : {};
+}
+
+function consignmentSource(row: Consignment): string {
+  const details = relatedRecord(row.from_details);
+  return String(details.place || details.city || row.from_pin_code || "").trim();
 }
 
 function ManifestDetailView({
@@ -529,6 +529,15 @@ export function LtmsManifestList({
   const [transporterId, setTransporterId] = useState("");
   const [profile, setProfile] = useState<TransporterFields>(EMPTY_TRANSPORTER);
   const [rows, setRows] = useState<Consignment[]>([]);
+  const [candidateRows, setCandidateRows] = useState<Consignment[]>([]);
+  const [candidateSelectedIds, setCandidateSelectedIds] = useState<string[]>([]);
+  const [consignmentPickerOpen, setConsignmentPickerOpen] = useState(false);
+  const [candidateSource, setCandidateSource] = useState("all");
+  const [candidateFromDate, setCandidateFromDate] = useState("");
+  const [candidateToDate, setCandidateToDate] = useState("");
+  const [candidateStatus, setCandidateStatus] = useState("pending");
+  const [candidateSearch, setCandidateSearch] = useState("");
+  const [candidateLoading, setCandidateLoading] = useState(false);
   const [history, setHistory] = useState<ManifestHistoryRow[]>([]);
   const [selectedManifest, setSelectedManifest] = useState<ManifestHistoryRow | null>(null);
   const [isCreating, setIsCreating] = useState(false);
@@ -536,34 +545,58 @@ export function LtmsManifestList({
   const [search, setSearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
   const [manifestDate, setManifestDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [statusFilter, setStatusFilter] = useState("pending");
   const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7));
   const [historyTransporterFilterId, setHistoryTransporterFilterId] = useState("");
   const [loading, setLoading] = useState(false);
   const [transferring, setTransferring] = useState(false);
 
+  const candidateVisibleRows = useMemo(
+    () =>
+      candidateRows.filter((row) => {
+        const rowStatus = row.transporter_update_status || "pending";
+        const source = consignmentSource(row);
+        const createdDate = String(row.created_at ?? "").slice(0, 10);
+        const statusMatch =
+          candidateStatus === "all" ||
+          (candidateStatus === "transferred" ? rowStatus === "updated" : rowStatus !== "updated");
+        const sourceMatch = candidateSource === "all" || source === candidateSource;
+        const fromMatch = !candidateFromDate || createdDate >= candidateFromDate;
+        const toMatch = !candidateToDate || createdDate <= candidateToDate;
+        const text = `${row.consignment_number} ${source} ${row.to_pin_code ?? ""}`.toLowerCase();
+        return (
+          statusMatch &&
+          sourceMatch &&
+          fromMatch &&
+          toMatch &&
+          (!candidateSearch.trim() || text.includes(candidateSearch.trim().toLowerCase()))
+        );
+      }),
+    [
+      candidateRows,
+      candidateStatus,
+      candidateSource,
+      candidateFromDate,
+      candidateToDate,
+      candidateSearch,
+    ],
+  );
+
+  const candidateSources = useMemo(
+    () =>
+      [...new Set(candidateRows.map((row) => consignmentSource(row)).filter(Boolean))].sort(
+        (a, b) => a.localeCompare(b),
+      ),
+    [candidateRows],
+  );
+
   const visibleRows = useMemo(
     () =>
       rows.filter((row) => {
-        const rowStatus = row.transporter_update_status || "pending";
-        const statusMatch =
-          statusFilter === "all" ||
-          (statusFilter === "transferred"
-            ? rowStatus === "updated"
-            : statusFilter === "pending"
-              ? rowStatus !== "updated"
-              : rowStatus === "partial");
-        const monthMatch = !month || String(row.created_at ?? "").slice(0, 7) === month;
         const text =
           `${row.consignment_number} ${row.from_pin_code} ${row.to_pin_code} ${row.branch?.branch_name ?? ""} ${row.shipments.map((item) => `${item.eway_bill_number} ${item.recipient_trade_name ?? ""} ${item.recipient_gstin ?? ""}`).join(" ")}`.toLowerCase();
-        return (
-          statusMatch &&
-          monthMatch &&
-          (!search.trim() || text.includes(search.trim().toLowerCase()))
-        );
+        return !search.trim() || text.includes(search.trim().toLowerCase());
       }),
-    [rows, statusFilter, month, search],
+    [rows, search],
   );
 
   const filteredHistory = useMemo(
@@ -618,32 +651,42 @@ export function LtmsManifestList({
         : ["00000000-0000-0000-0000-000000000000"];
       manifestQuery = manifestQuery.in("branch_id", ids);
     }
-    let consignmentPromise: Promise<any> = Promise.resolve({ data: [], error: null });
-    if (transporterId) {
-      let consignmentQuery = db
-        .from("consignments")
-        .select(
-          "id,consignment_number,branch_id,consignment_type,movement_mode,from_pin_code,to_pin_code,transporter_id,transporter_update_status,transporter_update_error,created_at,branch:branches(branch_name)",
-        )
-        .eq("transporter_id", transporterId)
-        .order("created_at", { ascending: false });
-      if (allowedBranches !== null) {
-        consignmentQuery = consignmentQuery.in(
-          "branch_id",
-          allowedBranches.length ? allowedBranches : ["00000000-0000-0000-0000-000000000000"],
-        );
-      }
-      consignmentPromise = consignmentQuery;
-    }
-    const [consignmentResult, historyResult] = await Promise.all([
-      consignmentPromise,
-      manifestQuery,
-    ]);
-    if (consignmentResult.error)
-      toast.error(`Could not load consignments: ${consignmentResult.error.message}`);
+    const historyResult = await manifestQuery;
     if (historyResult.error)
       toast.error(`Could not load manifest history: ${historyResult.error.message}`);
-    const consignments = (consignmentResult.data ?? []) as any[];
+    setHistory((historyResult.data ?? []) as ManifestHistoryRow[]);
+    setLoading(false);
+  }, [role, branchIds]);
+
+  const fetchConsignmentCandidates = useCallback(async () => {
+    if (!transporterId) {
+      toast.error("Select a transporter first.");
+      return;
+    }
+    setCandidateLoading(true);
+    setConsignmentPickerOpen(true);
+    const allowedBranches = role === "basic" ? branchIds : null;
+    let consignmentQuery = db
+      .from("consignments")
+      .select(
+        "id,consignment_number,branch_id,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_id,transporter_update_status,transporter_update_error,created_at,branch:branches(branch_name)",
+      )
+      .eq("transporter_id", transporterId)
+      .order("created_at", { ascending: false });
+    if (allowedBranches !== null) {
+      consignmentQuery = consignmentQuery.in(
+        "branch_id",
+        allowedBranches.length ? allowedBranches : ["00000000-0000-0000-0000-000000000000"],
+      );
+    }
+    const consignmentResult = await consignmentQuery;
+    if (consignmentResult.error) {
+      toast.error(`Could not load consignments: ${consignmentResult.error.message}`);
+      setCandidateRows([]);
+      setCandidateLoading(false);
+      return;
+    }
+    const consignments = (consignmentResult.data ?? []) as Consignment[];
     const ids = consignments.map((row) => row.id);
     const shipmentResult = ids.length
       ? await db
@@ -661,10 +704,11 @@ export function LtmsManifestList({
       list.push(shipment);
       byConsignment.set(shipment.consignment_id, list);
     }
-    setRows(consignments.map((row) => ({ ...row, shipments: byConsignment.get(row.id) ?? [] })));
-    setHistory((historyResult.data ?? []) as ManifestHistoryRow[]);
-    setSelectedIds([]);
-    setLoading(false);
+    setCandidateRows(
+      consignments.map((row) => ({ ...row, shipments: byConsignment.get(row.id) ?? [] })),
+    );
+    setCandidateSelectedIds([]);
+    setCandidateLoading(false);
   }, [role, branchIds, transporterId]);
 
   useEffect(() => {
@@ -686,6 +730,29 @@ export function LtmsManifestList({
     setSelectedIds((current) =>
       current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
     );
+  }
+
+  function toggleCandidate(id: string) {
+    setCandidateSelectedIds((current) =>
+      current.includes(id) ? current.filter((item) => item !== id) : [...current, id],
+    );
+  }
+
+  function addSelectedCandidates() {
+    const additions = candidateRows.filter((row) => candidateSelectedIds.includes(row.id));
+    if (!additions.length) {
+      toast.error("Select at least one consignment to add.");
+      return;
+    }
+    setRows((current) => {
+      const byId = new Map(current.map((row) => [row.id, row]));
+      additions.forEach((row) => byId.set(row.id, row));
+      return [...byId.values()];
+    });
+    setSelectedIds((current) => [...new Set([...current, ...candidateSelectedIds])]);
+    setCandidateSelectedIds([]);
+    setConsignmentPickerOpen(false);
+    toast.success(`${additions.length} consignment(s) added to the current Manifest.`);
   }
 
   async function updateTransporter() {
@@ -829,7 +896,6 @@ export function LtmsManifestList({
               setTransporterId("");
               setManifestDate(new Date().toISOString().slice(0, 10));
               setProfile(EMPTY_TRANSPORTER);
-              setStatusFilter("pending");
               setIsCreating(true);
               onSidebarVisibilityChange?.(false);
             }}
@@ -971,6 +1037,9 @@ export function LtmsManifestList({
                 setTransporterId(value);
                 setSelectedIds([]);
                 setRows([]);
+                setCandidateRows([]);
+                setCandidateSelectedIds([]);
+                setConsignmentPickerOpen(false);
               }}
             >
               <SelectTrigger>
@@ -1023,6 +1092,10 @@ export function LtmsManifestList({
         <>
           <section className="space-y-3 rounded-xl border border-border bg-card p-3">
             <div className="flex flex-wrap items-center gap-3">
+              <Button variant="outline" onClick={() => void fetchConsignmentCandidates()}>
+                <RefreshCw className="mr-2 size-4" />
+                Fetch Consignments
+              </Button>
               <div className="relative min-w-60 flex-1">
                 <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
                 <Input
@@ -1032,27 +1105,9 @@ export function LtmsManifestList({
                   onChange={(event) => setSearch(event.target.value)}
                 />
               </div>
-              <Input
-                className="w-44"
-                type="month"
-                aria-label="Manifest month"
-                value={month}
-                onChange={(event) => setMonth(event.target.value)}
-              />
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-48">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Transferred or pending</SelectItem>
-                  <SelectItem value="transferred">Transferred</SelectItem>
-                  <SelectItem value="pending">Not yet transferred</SelectItem>
-                  <SelectItem value="partial">Partially transferred</SelectItem>
-                </SelectContent>
-              </Select>
               <Button variant="outline" onClick={() => void loadData()} disabled={loading}>
                 <RefreshCw className={`mr-2 size-4 ${loading ? "animate-spin" : ""}`} />
-                Refresh
+                Refresh History
               </Button>
               <Button
                 onClick={() => void updateTransporter()}
@@ -1070,17 +1125,12 @@ export function LtmsManifestList({
 
           <section className="space-y-3">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Consignments ({visibleRows.length})</h3>
+              <h3 className="font-semibold">Current Consignments ({rows.length})</h3>
               <span className="text-xs text-muted-foreground">
-                The list remains visible while filters are changed.
+                Select Fetch Consignments to add records to this Manifest.
               </span>
             </div>
-            {loading ? (
-              <div className="flex items-center justify-center rounded-xl border border-border p-10 text-sm text-muted-foreground">
-                <Loader2 className="mr-2 size-4 animate-spin" />
-                Loading consignments…
-              </div>
-            ) : visibleRows.length ? (
+            {visibleRows.length ? (
               visibleRows.map((row) => (
                 <ConsignmentRow
                   key={row.id}
@@ -1091,10 +1141,120 @@ export function LtmsManifestList({
               ))
             ) : (
               <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
-                No consignments match the selected month, transporter, and status filters.
+                No consignments added yet. Use Fetch Consignments to choose records.
               </div>
             )}
           </section>
+
+          {consignmentPickerOpen ? (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-4">
+              <section className="flex max-h-[90dvh] w-full max-w-6xl flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl">
+                <header className="flex items-center justify-between gap-3 border-b border-border p-4">
+                  <div>
+                    <h3 className="font-semibold">Fetch Consignments</h3>
+                    <p className="text-xs text-muted-foreground">
+                      Choose consignments for{" "}
+                      {profile.transporter_name || "the selected transporter"}. Non-transferred
+                      consignments are shown by default.
+                    </p>
+                  </div>
+                  <Button variant="outline" onClick={() => setConsignmentPickerOpen(false)}>
+                    Close
+                  </Button>
+                </header>
+                <div className="grid gap-3 border-b border-border p-4 sm:grid-cols-2 lg:grid-cols-5">
+                  <div className="space-y-1.5">
+                    <Label>Source</Label>
+                    <Select value={candidateSource} onValueChange={setCandidateSource}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All sources</SelectItem>
+                        {candidateSources.map((source) => (
+                          <SelectItem key={source} value={source}>
+                            {source}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>From date</Label>
+                    <Input
+                      type="date"
+                      value={candidateFromDate}
+                      onChange={(event) => setCandidateFromDate(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>To date</Label>
+                    <Input
+                      type="date"
+                      value={candidateToDate}
+                      onChange={(event) => setCandidateToDate(event.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>Transfer status</Label>
+                    <Select value={candidateStatus} onValueChange={setCandidateStatus}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Not transferred</SelectItem>
+                        <SelectItem value="transferred">Transferred</SelectItem>
+                        <SelectItem value="all">Transferred or not transferred</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="relative space-y-1.5">
+                    <Label>Search</Label>
+                    <Search className="absolute left-3 top-9 size-4 text-muted-foreground" />
+                    <Input
+                      className="pl-9"
+                      placeholder="Consignment number"
+                      value={candidateSearch}
+                      onChange={(event) => setCandidateSearch(event.target.value)}
+                    />
+                  </div>
+                </div>
+                <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-4">
+                  {candidateLoading ? (
+                    <div className="flex items-center justify-center p-10 text-sm text-muted-foreground">
+                      <Loader2 className="mr-2 size-4 animate-spin" /> Loading consignments…
+                    </div>
+                  ) : candidateVisibleRows.length ? (
+                    candidateVisibleRows.map((row) => (
+                      <ConsignmentRow
+                        key={row.id}
+                        row={row}
+                        selected={candidateSelectedIds.includes(row.id)}
+                        onToggle={() => toggleCandidate(row.id)}
+                      />
+                    ))
+                  ) : (
+                    <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
+                      No consignments match these filters.
+                    </div>
+                  )}
+                </div>
+                <footer className="flex items-center justify-between gap-3 border-t border-border p-4">
+                  <span className="text-xs text-muted-foreground">
+                    {candidateVisibleRows.length} matching · {candidateSelectedIds.length} selected
+                  </span>
+                  <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setConsignmentPickerOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button onClick={addSelectedCandidates} disabled={!candidateSelectedIds.length}>
+                      <Plus className="mr-2 size-4" /> Add Selected Consignments
+                    </Button>
+                  </div>
+                </footer>
+              </section>
+            </div>
+          ) : null}
         </>
       ) : (
         <div className="rounded-xl border border-dashed border-border p-10 text-center text-sm text-muted-foreground">
