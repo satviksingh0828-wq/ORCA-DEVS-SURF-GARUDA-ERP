@@ -755,7 +755,12 @@ export function LtmsManifestList({
           };
         });
         if (!manifestItems.some((item) => item.transfer_status === "transferred")) {
-          toast.error("No Manifest created: all selected E-Way Bill transfers failed.");
+          const reasons = [
+            ...new Set(manifestItems.map((item) => item.transfer_error).filter(Boolean)),
+          ];
+          toast.error(
+            `No Manifest created: all selected E-Way Bill transfers failed.${reasons.length ? ` ${reasons.join("; ").slice(0, 500)}` : ""}`,
+          );
           continue;
         }
         const saved = await serverRecordLtmsManifestTransfer({

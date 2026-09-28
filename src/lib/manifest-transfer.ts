@@ -44,7 +44,11 @@ const recordInputSchema = z.object({
 function findStatusObject(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object") return {};
   const record = value as Record<string, unknown>;
-  if ("status_cd" in record || "status" in record || "error" in record) return record;
+  const error = record.error;
+  const hasMeaningfulError =
+    error != null &&
+    (typeof error !== "object" || Object.keys(error as Record<string, unknown>).length > 0);
+  if ("status_cd" in record || "status" in record || hasMeaningfulError) return record;
   for (const key of ["data", "result", "response"]) {
     const found = findStatusObject(record[key]);
     if (Object.keys(found).length) return found;
@@ -74,6 +78,13 @@ function responseError(
       status.message ??
       (statusText || undefined) ??
       `PeriOne rejected E-Way Bill ${ewayBillNumber}`,
+  );
+}
+
+function hasMeaningfulError(value: unknown): boolean {
+  return (
+    value != null &&
+    (typeof value !== "object" || Object.keys(value as Record<string, unknown>).length > 0)
   );
 }
 
@@ -154,7 +165,10 @@ export const serverTransferManifestLrs = createServerFn({ method: "POST" })
         const statusCode = String(status.status_cd ?? "");
         const statusValue = String(status.status ?? "");
         const explicitRejection =
-          record.ok === false || Boolean(record.error) || statusCode === "0" || statusValue === "0";
+          record.ok === false ||
+          hasMeaningfulError(record.error) ||
+          statusCode === "0" ||
+          statusValue === "0";
         const ok = response.ok && body !== null && !explicitRejection;
         results.push({
           ewayBillNumber,
