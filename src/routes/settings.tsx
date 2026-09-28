@@ -4,11 +4,13 @@ import {
   Building,
   Building2,
   Check,
+  ChevronLeft,
   ChevronRight,
   PanelLeftClose,
   PanelLeftOpen,
   Loader2,
   Palette,
+  Search,
   ShieldCheck,
   Wifi,
   MessageCircle,
@@ -268,7 +270,26 @@ function ThemePanel() {
     setVideoGlassAppearance,
     glassSaving,
   } = useTheme();
+  const { user } = useSession();
   const [videoUrlDraft, setVideoUrlDraft] = useState(backgroundVideoUrl);
+  const [pixabayQuery, setPixabayQuery] = useState(() => {
+    const defaults = ["nature", "ocean", "forest", "mountains", "city", "abstract"];
+    return defaults[Math.floor(Math.random() * defaults.length)];
+  });
+  const [pixabayPage, setPixabayPage] = useState(1);
+  const [pixabayVideos, setPixabayVideos] = useState<
+    Array<{
+      id: number;
+      pageURL: string;
+      duration: number;
+      videoUrl: string;
+      thumbnail: string;
+      width: number;
+      height: number;
+    }>
+  >([]);
+  const [pixabayLoading, setPixabayLoading] = useState(false);
+  const [pixabayError, setPixabayError] = useState("");
   const [glassOpacityDraft, setGlassOpacityDraft] = useState(videoGlassAppearance.surfaceOpacity);
   const [backgroundVeilDraft, setBackgroundVeilDraft] = useState(
     videoGlassAppearance.backgroundVeil,
@@ -280,6 +301,59 @@ function ThemePanel() {
     setBackgroundVeilDraft(videoGlassAppearance.backgroundVeil);
     setGlassTextColorDraft(videoGlassAppearance.textColor);
   }, [videoGlassAppearance]);
+
+  async function searchPixabay(nextPage = 1) {
+    const query = pixabayQuery.trim();
+    if (!query) {
+      toast.error("Enter a video search term.");
+      return;
+    }
+    if (!user?.sessionToken) {
+      toast.error("Your session has expired. Please sign in again.");
+      return;
+    }
+    setPixabayLoading(true);
+    setPixabayError("");
+    try {
+      const params = new URLSearchParams({ q: query, page: String(nextPage) });
+      const response = await fetch(`/api/pixabay-videos?${params.toString()}`, {
+        headers: { Authorization: `Bearer ${user.sessionToken}` },
+      });
+      const body = (await response.json().catch(() => null)) as {
+        error?: string;
+        videos?: typeof pixabayVideos;
+      } | null;
+      if (!response.ok) throw new Error(body?.error || "Pixabay search failed.");
+      setPixabayVideos(body?.videos ?? []);
+      setPixabayPage(nextPage);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Pixabay search failed.";
+      setPixabayError(message);
+      setPixabayVideos([]);
+    } finally {
+      setPixabayLoading(false);
+    }
+  }
+
+  async function selectPixabayVideo(url: string) {
+    try {
+      await setBackgroundVideo({ url });
+      setVideoUrlDraft(url);
+      toast.success("Pixabay video selected and saved as the workspace background.");
+    } catch {
+      toast.error(
+        "Could not save the selected video. Run the supplied Supabase migration, then try again.",
+      );
+    }
+  }
+
+  useEffect(() => {
+    if (user?.sessionToken && !pixabayVideos.length && !pixabayLoading && !pixabayError) {
+      void searchPixabay(1);
+    }
+    // Load the default ten results once per signed-in Settings session.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.sessionToken]);
 
   async function saveVideoUrl() {
     let parsed: URL;
@@ -447,6 +521,101 @@ function ThemePanel() {
               Use current video
             </Button>
           </div>
+        </div>
+        <div className="mt-6 space-y-4 rounded-xl border border-border bg-muted/20 p-4">
+          <div>
+            <h4 className="text-sm font-semibold">Search Pixabay videos</h4>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Browse 1920×1080 or larger desktop videos. Results use the large Pixabay rendition;
+              the API key stays on the server.
+            </p>
+          </div>
+          <form
+            className="flex flex-wrap gap-2"
+            onSubmit={(event) => {
+              event.preventDefault();
+              void searchPixabay(1);
+            }}
+          >
+            <div className="relative min-w-0 flex-1">
+              <Search className="pointer-events-none absolute left-3 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                value={pixabayQuery}
+                onChange={(event) => setPixabayQuery(event.target.value)}
+                placeholder="Search nature, city, ocean..."
+                aria-label="Search Pixabay videos"
+              />
+            </div>
+            <Button type="submit" disabled={pixabayLoading || !pixabayQuery.trim()}>
+              {pixabayLoading ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Search className="size-4" />
+              )}
+              Search
+            </Button>
+          </form>
+          {pixabayError ? (
+            <p className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-xs text-destructive">
+              {pixabayError}
+            </p>
+          ) : null}
+          {pixabayVideos.length ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+                {pixabayVideos.map((video) => (
+                  <article
+                    key={video.id}
+                    className="overflow-hidden rounded-xl border border-border bg-card"
+                  >
+                    <div className="aspect-video bg-slate-900">
+                      {video.thumbnail ? (
+                        <img
+                          src={video.thumbnail}
+                          alt="Pixabay video preview"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : null}
+                    </div>
+                    <div className="space-y-2 p-3">
+                      <p className="text-xs text-muted-foreground">
+                        {video.width}×{video.height} · {video.duration}s
+                      </p>
+                      <Button
+                        type="button"
+                        className="w-full"
+                        onClick={() => void selectPixabayVideo(video.videoUrl)}
+                      >
+                        Use this video
+                      </Button>
+                    </div>
+                  </article>
+                ))}
+              </div>
+              <div className="flex items-center justify-between gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pixabayLoading || pixabayPage <= 1}
+                  onClick={() => void searchPixabay(pixabayPage - 1)}
+                >
+                  <ChevronLeft className="size-4" /> Previous
+                </Button>
+                <span className="text-xs text-muted-foreground">
+                  Page {pixabayPage} · 10 videos
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={pixabayLoading || pixabayVideos.length < 10}
+                  onClick={() => void searchPixabay(pixabayPage + 1)}
+                >
+                  Next <ChevronRight className="size-4" />
+                </Button>
+              </div>
+            </>
+          ) : null}
         </div>
       </section>
 

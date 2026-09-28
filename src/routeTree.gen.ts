@@ -44,6 +44,7 @@ import { Route as ApiFetchEwayBillsRouteImport } from './routes/api/fetch-eway-b
 import { Route as ApiNotifyAdminRouteImport } from './routes/api/notify-admin'
 import { Route as ApiNotifyExpiryRouteImport } from './routes/api/notify-expiry'
 import { Route as ApiNotifyOpenTripsRouteImport } from './routes/api/notify-open-trips'
+import { Route as ApiPixabayVideosRouteImport } from './routes/api/pixabay-videos'
 import { Route as AttendanceIndexRouteImport } from './routes/attendance.index'
 import { Route as AttendanceAutomarkerRouteImport } from './routes/attendance.automarker'
 import { Route as AttendanceHistoryRouteImport } from './routes/attendance.history'
@@ -269,6 +270,11 @@ const ApiNotifyExpiryRoute = ApiNotifyExpiryRouteImport.update({
 const ApiNotifyOpenTripsRoute = ApiNotifyOpenTripsRouteImport.update({
   id: '/api/notify-open-trips',
   path: '/api/notify-open-trips',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPixabayVideosRoute = ApiPixabayVideosRouteImport.update({
+  id: '/api/pixabay-videos',
+  path: '/api/pixabay-videos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AttendanceIndexRoute = AttendanceIndexRouteImport.update({
@@ -571,6 +577,7 @@ export interface FileRoutesByFullPath {
   '/api/notify-admin': typeof ApiNotifyAdminRoute
   '/api/notify-expiry': typeof ApiNotifyExpiryRoute
   '/api/notify-open-trips': typeof ApiNotifyOpenTripsRoute
+  '/api/pixabay-videos': typeof ApiPixabayVideosRoute
   '/attendance/automarker': typeof AttendanceAutomarkerRoute
   '/attendance/history': typeof AttendanceHistoryRouteWithChildren
   '/attendance/holidays': typeof AttendanceHolidaysRoute
@@ -653,6 +660,7 @@ export interface FileRoutesByTo {
   '/api/notify-admin': typeof ApiNotifyAdminRoute
   '/api/notify-expiry': typeof ApiNotifyExpiryRoute
   '/api/notify-open-trips': typeof ApiNotifyOpenTripsRoute
+  '/api/pixabay-videos': typeof ApiPixabayVideosRoute
   '/attendance/automarker': typeof AttendanceAutomarkerRoute
   '/attendance/holidays': typeof AttendanceHolidaysRoute
   '/attendance/mark': typeof AttendanceMarkRoute
@@ -740,6 +748,7 @@ export interface FileRoutesById {
   '/api/notify-admin': typeof ApiNotifyAdminRoute
   '/api/notify-expiry': typeof ApiNotifyExpiryRoute
   '/api/notify-open-trips': typeof ApiNotifyOpenTripsRoute
+  '/api/pixabay-videos': typeof ApiPixabayVideosRoute
   '/attendance/automarker': typeof AttendanceAutomarkerRoute
   '/attendance/history': typeof AttendanceHistoryRouteWithChildren
   '/attendance/holidays': typeof AttendanceHolidaysRoute
@@ -830,6 +839,7 @@ export interface FileRouteTypes {
     | '/api/notify-admin'
     | '/api/notify-expiry'
     | '/api/notify-open-trips'
+    | '/api/pixabay-videos'
     | '/attendance/automarker'
     | '/attendance/history'
     | '/attendance/holidays'
@@ -912,6 +922,7 @@ export interface FileRouteTypes {
     | '/api/notify-admin'
     | '/api/notify-expiry'
     | '/api/notify-open-trips'
+    | '/api/pixabay-videos'
     | '/attendance/automarker'
     | '/attendance/holidays'
     | '/attendance/mark'
@@ -998,6 +1009,7 @@ export interface FileRouteTypes {
     | '/api/notify-admin'
     | '/api/notify-expiry'
     | '/api/notify-open-trips'
+    | '/api/pixabay-videos'
     | '/attendance/automarker'
     | '/attendance/history'
     | '/attendance/holidays'
@@ -1080,6 +1092,7 @@ export interface RootRouteChildren {
   ApiNotifyAdminRoute: typeof ApiNotifyAdminRoute
   ApiNotifyExpiryRoute: typeof ApiNotifyExpiryRoute
   ApiNotifyOpenTripsRoute: typeof ApiNotifyOpenTripsRoute
+  ApiPixabayVideosRoute: typeof ApiPixabayVideosRoute
   LtmsMastersRoute: typeof LtmsMastersRoute
   LtmsOperationsRoute: typeof LtmsOperationsRoute
   LtmsReportsRoute: typeof LtmsReportsRoute
@@ -1343,6 +1356,13 @@ declare module '@tanstack/react-router' {
       path: '/api/notify-open-trips'
       fullPath: '/api/notify-open-trips'
       preLoaderRoute: typeof ApiNotifyOpenTripsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/pixabay-videos': {
+      id: '/api/pixabay-videos'
+      path: '/api/pixabay-videos'
+      fullPath: '/api/pixabay-videos'
+      preLoaderRoute: typeof ApiPixabayVideosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/attendance/': {
@@ -1906,6 +1926,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiNotifyAdminRoute: ApiNotifyAdminRoute,
   ApiNotifyExpiryRoute: ApiNotifyExpiryRoute,
   ApiNotifyOpenTripsRoute: ApiNotifyOpenTripsRoute,
+  ApiPixabayVideosRoute: ApiPixabayVideosRoute,
   LtmsMastersRoute: LtmsMastersRoute,
   LtmsOperationsRoute: LtmsOperationsRoute,
   LtmsReportsRoute: LtmsReportsRoute,
