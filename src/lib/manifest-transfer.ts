@@ -19,6 +19,7 @@ const transferInputSchema = z.object({
 const recordInputSchema = z.object({
   sessionToken: z.string().min(1),
   branchId: z.string().uuid(),
+  manifestDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Manifest Date is required"),
   transporterId: z.string().uuid().nullable(),
   transporterName: z.string().trim().min(1).max(200),
   transporterGstin: z
@@ -197,6 +198,7 @@ export const serverRecordLtmsManifestTransfer = createServerFn({ method: "POST" 
       "record_ltms_manifest_transfer",
       {
         p_branch_id: data.branchId,
+        p_manifest_date: data.manifestDate,
         p_transporter_id: data.transporterId,
         p_transporter_name: data.transporterName,
         p_transporter_gstin: data.transporterGstin.toUpperCase(),

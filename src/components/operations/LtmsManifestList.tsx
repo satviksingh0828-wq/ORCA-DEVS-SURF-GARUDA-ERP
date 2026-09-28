@@ -326,10 +326,14 @@ function ManifestDetailView({
           </p>
         </div>
       </header>
-      <section className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-4">
+      <section className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
         <div>
           <Label className="text-xs text-muted-foreground">Manifest Number</Label>
           <p className="font-semibold">{show(manifest.manifest_number)}</p>
+        </div>
+        <div>
+          <Label className="text-xs text-muted-foreground">Manifest Date</Label>
+          <p>{show(manifest.manifest_date)}</p>
         </div>
         <div>
           <Label className="text-xs text-muted-foreground">Branch</Label>
@@ -531,6 +535,7 @@ export function LtmsManifestList({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [historySearch, setHistorySearch] = useState("");
+  const [manifestDate, setManifestDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const [statusFilter, setStatusFilter] = useState("pending");
   const [historyMonth, setHistoryMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -604,7 +609,7 @@ export function LtmsManifestList({
     let manifestQuery = db
       .from("ltms_manifest_transfers")
       .select(
-        "id,branch_id,manifest_number,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(*),items:ltms_manifest_transfer_items(id,consignment_id,consignment_number,shipment_id,eway_bill_number,transfer_status,transfer_error,consignment:consignments(id,consignment_number,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_update_status,created_at,branch:branches(branch_name)),shipment:shipments(id,eway_bill_number,eway_bill_status,generation_mode,recipient_trade_name,recipient_gstin,recipient_place,recipient_pin_code,dispatch_from_place,dispatch_from_pin_code,ship_to_place,ship_to_pin_code,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)))",
+        "id,branch_id,manifest_number,manifest_date,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(*),items:ltms_manifest_transfer_items(id,consignment_id,consignment_number,shipment_id,eway_bill_number,transfer_status,transfer_error,consignment:consignments(id,consignment_number,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_update_status,created_at,branch:branches(branch_name)),shipment:shipments(id,eway_bill_number,eway_bill_status,generation_mode,recipient_trade_name,recipient_gstin,recipient_place,recipient_pin_code,dispatch_from_place,dispatch_from_pin_code,ship_to_place,ship_to_pin_code,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)))",
       )
       .order("created_at", { ascending: false });
     if (allowedBranches !== null) {
@@ -754,6 +759,7 @@ export function LtmsManifestList({
             sessionToken: user.sessionToken,
             branchId,
             transporterId: transporterId || null,
+            manifestDate,
             transporterName: profile.transporter_name.trim() || "ORCA",
             transporterGstin: gstin,
             items: manifestItems,
@@ -812,6 +818,7 @@ export function LtmsManifestList({
             onClick={() => {
               setSelectedIds([]);
               setTransporterId("");
+              setManifestDate(new Date().toISOString().slice(0, 10));
               setProfile(EMPTY_TRANSPORTER);
               setStatusFilter("pending");
               setIsCreating(true);
@@ -861,6 +868,7 @@ export function LtmsManifestList({
             <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
               <tr>
                 <th className="px-3 py-2">Manifest Number</th>
+                <th className="px-3 py-2">Manifest Date</th>
                 <th className="px-3 py-2">Branch</th>
                 <th className="px-3 py-2">Transporter</th>
                 <th className="px-3 py-2">GSTIN</th>
@@ -873,7 +881,7 @@ export function LtmsManifestList({
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={8} className="p-6 text-center text-muted-foreground">
+                  <td colSpan={9} className="p-6 text-center text-muted-foreground">
                     Loading…
                   </td>
                 </tr>
@@ -881,6 +889,7 @@ export function LtmsManifestList({
                 filteredHistory.map((row) => (
                   <tr key={row.id} className="border-t border-border">
                     <td className="px-3 py-2 font-semibold">{row.manifest_number}</td>
+                    <td className="px-3 py-2">{row.manifest_date || "—"}</td>
                     <td className="px-3 py-2">{row.branch?.branch_name || "—"}</td>
                     <td className="px-3 py-2">
                       {row.transporter?.transporter_name || row.transporter_name || "—"}
@@ -909,7 +918,7 @@ export function LtmsManifestList({
                 ))
               ) : (
                 <tr>
-                  <td colSpan={8} className="p-8 text-center text-muted-foreground">
+                  <td colSpan={9} className="p-8 text-center text-muted-foreground">
                     No manifest transfer history for these filters yet.
                   </td>
                 </tr>
@@ -971,7 +980,18 @@ export function LtmsManifestList({
             Transporter details stay visible even when no saved transporter is selected.
           </span>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="space-y-1.5">
+            <Label htmlFor="ltms-manifest-date" className="text-xs text-muted-foreground">
+              Manifest Date
+            </Label>
+            <Input
+              id="ltms-manifest-date"
+              type="date"
+              value={manifestDate}
+              onChange={(event) => setManifestDate(event.target.value)}
+            />
+          </div>
           {TRANSPORTER_FIELDS.map(({ label, key }) => (
             <div key={key} className="space-y-1.5">
               <Label
