@@ -290,8 +290,8 @@ function relatedRecord(value: unknown): Record<string, any> {
 }
 
 function consignmentSource(row: Consignment): string {
-  const details = relatedRecord(row.from_details);
-  return String(details.place || details.city || row.from_pin_code || "").trim();
+  const source = relatedRecord(row.source);
+  return String(source.contract_name || row.source_id || "").trim();
 }
 
 function ManifestDetailView({
@@ -576,13 +576,13 @@ export function LtmsManifestList({
       candidateRows.filter((row) => {
         const rowStatus = row.transporter_update_status || "pending";
         const source = consignmentSource(row);
-        const createdDate = String(row.created_at ?? "").slice(0, 10);
+        const consignmentDate = String(row.consignment_date ?? "").slice(0, 10);
         const statusMatch =
           candidateStatus === "all" ||
           (candidateStatus === "transferred" ? rowStatus === "updated" : rowStatus !== "updated");
         const sourceMatch = candidateSource === "all" || source === candidateSource;
-        const fromMatch = !candidateFromDate || createdDate >= candidateFromDate;
-        const toMatch = !candidateToDate || createdDate <= candidateToDate;
+        const fromMatch = !candidateFromDate || consignmentDate >= candidateFromDate;
+        const toMatch = !candidateToDate || consignmentDate <= candidateToDate;
         const text = `${row.consignment_number} ${source} ${row.to_pin_code ?? ""}`.toLowerCase();
         return (
           statusMatch &&
@@ -692,9 +692,10 @@ export function LtmsManifestList({
     let consignmentQuery = db
       .from("consignments")
       .select(
-        "id,consignment_number,branch_id,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_id,transporter_update_status,transporter_update_error,created_at,branch:branches(branch_name)",
+        "id,consignment_number,branch_id,source_id,consignment_date,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_id,transporter_update_status,transporter_update_error,created_at,branch:branches(branch_name),source:contracts(contract_name)",
       )
       .eq("transporter_id", transporterId)
+      .order("consignment_date", { ascending: false })
       .order("created_at", { ascending: false });
     if (allowedBranches !== null) {
       consignmentQuery = consignmentQuery.in(
