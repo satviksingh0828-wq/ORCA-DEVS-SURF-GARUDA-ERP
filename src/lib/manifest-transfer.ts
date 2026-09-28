@@ -71,13 +71,42 @@ function responseError(
     status.error && typeof status.error === "object"
       ? (status.error as Record<string, unknown>)
       : {};
-  return String(
-    error.message ??
-      statusError.errorCodes ??
-      status.status_desc ??
-      status.message ??
-      (statusText || undefined) ??
-      `PeriOne rejected E-Way Bill ${ewayBillNumber}`,
+  const format = (value: unknown): string => {
+    if (value == null) return "";
+    if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
+      return String(value).trim();
+    if (Array.isArray(value)) return value.map(format).filter(Boolean).join(", ");
+    if (typeof value === "object") {
+      const object = value as Record<string, unknown>;
+      for (const key of [
+        "message",
+        "errorMessage",
+        "error_message",
+        "errorCodes",
+        "status_desc",
+        "statusDesc",
+        "description",
+        "reason",
+        "code",
+      ]) {
+        const nested = format(object[key]);
+        if (nested) return nested;
+      }
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return "";
+      }
+    }
+    return "";
+  };
+  return (
+    format(error.message) ||
+    format(statusError.errorCodes) ||
+    format(status.status_desc) ||
+    format(status.message) ||
+    statusText ||
+    `PeriOne rejected E-Way Bill ${ewayBillNumber}`
   );
 }
 
