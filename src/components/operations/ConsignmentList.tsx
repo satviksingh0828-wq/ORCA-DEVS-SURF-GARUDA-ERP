@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { Eye, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+import { Eye, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
+import { printConsignorCopyPdf } from "@/lib/consignment-pdf";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
@@ -640,7 +641,7 @@ export function ConsignmentList({
     const { data, error } = await db
       .from("consignments")
       .select(
-        "*, branch:branches(branch_name), source:contracts(contract_name), vehicle:vehicles(registration_number,nickname), driver:drivers(full_name,driver_code), rental:rentals(rental_name), transporter:ltms_transporters(transporter_name,gstin,pin_code)",
+        "*, branch:branches(branch_name,address_line1,address_line2,area_locality,city,state,pin_code,gstin,pan), source:contracts(contract_name), vehicle:vehicles(registration_number,nickname), driver:drivers(full_name,driver_code), rental:rentals(rental_name), transporter:ltms_transporters(transporter_name,gstin,pin_code)",
       )
       .order("created_at", { ascending: false });
     if (error) toast.error(error.message);
@@ -2674,10 +2675,12 @@ function EwayTable({
   drafts,
   remove,
   readOnly = false,
+  onPrint,
 }: {
   drafts: ShipmentDraft[];
   remove?: (index: number) => void;
   readOnly?: boolean;
+  onPrint?: (draft: ShipmentDraft) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
@@ -2692,6 +2695,7 @@ function EwayTable({
               "Destination",
               "Valid Until",
               "Status",
+              ...(onPrint ? ["PDF"] : []),
             ].map((heading) => (
               <th key={heading} className="px-3 py-2">
                 {heading}
@@ -2702,7 +2706,7 @@ function EwayTable({
         <tbody>
           {drafts.length === 0 ? (
             <tr>
-              <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
+              <td colSpan={onPrint ? 8 : 7} className="px-3 py-8 text-center text-muted-foreground">
                 Add an E-Way Bill to begin.
               </td>
             </tr>
@@ -2718,6 +2722,18 @@ function EwayTable({
                 <td className="px-3 py-2">{draft.recipient_place || "—"}</td>
                 <td className="px-3 py-2">{draft.valid_until || "—"}</td>
                 <td className="px-3 py-2">{draft.eway_bill_status || "—"}</td>
+                {onPrint && (
+                  <td className="px-3 py-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => onPrint(draft)}
+                    >
+                      <Printer className="mr-1 size-3.5" /> Print PDF
+                    </Button>
+                  </td>
+                )}
               </tr>
             ))
           )}
@@ -3122,7 +3138,17 @@ function ConsignmentView({
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
         <h3 className="font-semibold">E-Way Bills</h3>
-        <EwayTable drafts={drafts} readOnly />
+        <EwayTable
+          drafts={drafts}
+          readOnly
+          onPrint={(draft) =>
+            void printConsignorCopyPdf({
+              consignment: row,
+              shipment: draft,
+              packages,
+            })
+          }
+        />
       </section>
       <section className="space-y-3 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Goods from all E-Way Bills</h3>
