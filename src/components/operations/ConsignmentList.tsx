@@ -1595,6 +1595,7 @@ function ConsignmentForm(props: any) {
                 type="date"
                 value={deliveryDate}
                 onChange={(event) => setDeliveryDate(event.target.value)}
+                disabled
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
             </div>
@@ -1771,28 +1772,22 @@ function ConsignmentForm(props: any) {
               </div>
             </div>
             <div className="min-w-0 space-y-1">
-              <Label className="text-xs font-semibold">
-                {type === "third_party"
-                  ? "Transporter LR Number (Not Current Transporter)"
-                  : "Transporter LR Number"}
-              </Label>
+              <Label className="text-xs font-semibold">Transporter LR Number</Label>
               <Input
                 value={transporterLrNumber}
                 onChange={(event) => setTransporterLrNumber(event.target.value)}
                 placeholder="Optional LR number"
+                disabled
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
             </div>
             <div className="min-w-0 space-y-1">
-              <Label className="text-xs font-semibold">
-                {type === "third_party"
-                  ? "Transporter LR Date (Not Current Transporter)"
-                  : "Transporter LR Date"}
-              </Label>
+              <Label className="text-xs font-semibold">Transporter LR Date</Label>
               <Input
                 type="date"
                 value={transporterLrDate}
                 onChange={(event) => setTransporterLrDate(event.target.value)}
+                disabled
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
             </div>
@@ -2967,22 +2962,8 @@ function ConsignmentView({
           <ReadonlyField label="Transporter" value={row.transporter?.transporter_name} />
           <ReadonlyField label="Transporter GSTIN" value={row.transporter?.gstin} />
           <ReadonlyField label="Transporter PIN Code" value={row.transporter?.pin_code} />
-          <ReadonlyField
-            label={
-              row.consignment_type === "third_party"
-                ? "Transporter LR Number (Not Current Transporter)"
-                : "Transporter LR Number"
-            }
-            value={row.transporter_lr_number}
-          />
-          <ReadonlyField
-            label={
-              row.consignment_type === "third_party"
-                ? "Transporter LR Date (Not Current Transporter)"
-                : "Transporter LR Date"
-            }
-            value={row.transporter_lr_date}
-          />
+          <ReadonlyField label="Transporter LR Number" value={row.transporter_lr_number} />
+          <ReadonlyField label="Transporter LR Date" value={row.transporter_lr_date} />
           <ReadonlyField label="Delivery Date" value={row.delivery_date} />
           {row.consignment_type === "third_party" && (
             <ReadonlyField
