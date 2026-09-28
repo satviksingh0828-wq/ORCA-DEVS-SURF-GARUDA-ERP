@@ -1580,6 +1580,14 @@ function ConsignmentForm(props: any) {
               }))}
               placeholder="Select branch"
             />
+            <SelectField
+              label="Source / Contract"
+              value={sourceId}
+              onChange={setSourceId}
+              options={contracts}
+              placeholder="Select source"
+              allowClear
+            />
             <div className="min-w-0 space-y-1">
               <Label className="text-xs font-semibold">Consignment Date *</Label>
               <Input
