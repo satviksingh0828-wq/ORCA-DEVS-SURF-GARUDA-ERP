@@ -1,10 +1,17 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { ChevronRight, FileBarChart, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  ChevronRight,
+  FileBarChart,
+  FilePenLine,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { MonthlyMISReport } from "@/components/reports/MonthlyMISReport";
+import { UpdateConsignmentReport } from "@/components/reports/UpdateConsignmentReport";
 
 const TABS = [
   {
@@ -12,6 +19,12 @@ const TABS = [
     label: "ADMIN MIS",
     desc: "Depot submissions and compliance overview",
     icon: FileBarChart,
+  },
+  {
+    id: "update-consignment",
+    label: "Update Consignment",
+    desc: "Update delivery and transporter LR details",
+    icon: FilePenLine,
   },
 ] as const;
 
@@ -114,6 +127,7 @@ function ReportsPage() {
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>
           {tab === "admin-mis" && <MonthlyMISReport />}
+          {tab === "update-consignment" && <UpdateConsignmentReport />}
         </div>
       </div>
     </AppShell>
