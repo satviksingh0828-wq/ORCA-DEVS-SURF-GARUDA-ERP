@@ -2675,12 +2675,10 @@ function EwayTable({
   drafts,
   remove,
   readOnly = false,
-  onPrint,
 }: {
   drafts: ShipmentDraft[];
   remove?: (index: number) => void;
   readOnly?: boolean;
-  onPrint?: (draft: ShipmentDraft) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
@@ -2695,7 +2693,6 @@ function EwayTable({
               "Destination",
               "Valid Until",
               "Status",
-              ...(onPrint ? ["PDF"] : []),
             ].map((heading) => (
               <th key={heading} className="px-3 py-2">
                 {heading}
@@ -2706,7 +2703,7 @@ function EwayTable({
         <tbody>
           {drafts.length === 0 ? (
             <tr>
-              <td colSpan={onPrint ? 8 : 7} className="px-3 py-8 text-center text-muted-foreground">
+              <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                 Add an E-Way Bill to begin.
               </td>
             </tr>
@@ -2722,18 +2719,6 @@ function EwayTable({
                 <td className="px-3 py-2">{draft.recipient_place || "—"}</td>
                 <td className="px-3 py-2">{draft.valid_until || "—"}</td>
                 <td className="px-3 py-2">{draft.eway_bill_status || "—"}</td>
-                {onPrint && (
-                  <td className="px-3 py-2">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => onPrint(draft)}
-                    >
-                      <Printer className="mr-1 size-3.5" /> Print PDF
-                    </Button>
-                  </td>
-                )}
               </tr>
             ))
           )}
@@ -3137,18 +3122,24 @@ function ConsignmentView({
         </div>
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
-        <h3 className="font-semibold">E-Way Bills</h3>
-        <EwayTable
-          drafts={drafts}
-          readOnly
-          onPrint={(draft) =>
-            void printConsignorCopyPdf({
-              consignment: row,
-              shipment: draft,
-              packages,
-            })
-          }
-        />
+        <div className="flex items-center justify-between gap-3">
+          <h3 className="font-semibold">E-Way Bills</h3>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              void printConsignorCopyPdf({
+                consignment: row,
+                shipments,
+                packages,
+              })
+            }
+          >
+            <Printer className="mr-1 size-3.5" /> Print PDF
+          </Button>
+        </div>
+        <EwayTable drafts={drafts} readOnly />
       </section>
       <section className="space-y-3 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Goods from all E-Way Bills</h3>
