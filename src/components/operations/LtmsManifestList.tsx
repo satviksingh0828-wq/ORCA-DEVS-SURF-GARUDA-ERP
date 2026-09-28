@@ -754,6 +754,10 @@ export function LtmsManifestList({
               : (result?.error ?? "Shipment has no valid E-Way Bill number"),
           };
         });
+        if (!manifestItems.some((item) => item.transfer_status === "transferred")) {
+          toast.error("No Manifest created: all selected E-Way Bill transfers failed.");
+          continue;
+        }
         const saved = await serverRecordLtmsManifestTransfer({
           data: {
             sessionToken: user.sessionToken,
