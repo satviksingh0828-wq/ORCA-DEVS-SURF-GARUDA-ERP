@@ -899,7 +899,7 @@ export function TripForm({
 
       <form onSubmit={saveTrip} className="surface-card space-y-5 p-6">
         <h3 className="text-sm font-semibold tracking-tight">Trip details</h3>
-        <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 xl:grid-cols-5">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Trip ID</Label>
             <Input className="h-10" value={trip.trip_code} readOnly />
