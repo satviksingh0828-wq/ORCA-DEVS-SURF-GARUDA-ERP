@@ -586,6 +586,7 @@ export function ConsignmentList({
   const [branchId, setBranchId] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [consignmentDate, setConsignmentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [billingStatus, setBillingStatus] = useState("to_be_billed");
   const [type, setType] = useState("own");
   const [ownTransportMode, setOwnTransportMode] = useState("own_vehicle");
   const [movement, setMovement] = useState("pickup");
@@ -749,6 +750,7 @@ export function ConsignmentList({
     setBranchId(branches.length === 1 ? branches[0].id : "");
     setSourceId("");
     setConsignmentDate(new Date().toISOString().slice(0, 10));
+    setBillingStatus("to_be_billed");
     setType("own");
     setOwnTransportMode("own_vehicle");
     setMovement("pickup");
@@ -947,6 +949,7 @@ export function ConsignmentList({
       branch_id: branchId,
       source_id: sourceId || null,
       consignment_date: consignmentDate,
+      billing_status: billingStatus,
       consignment_type: type,
       movement_mode: movement,
       transport_mode: transportMode,
@@ -1003,6 +1006,7 @@ export function ConsignmentList({
       .from("consignments")
       .update({
         consignment_date: consignmentDate,
+        billing_status: billingStatus,
         own_transport_mode: type === "own" ? ownTransportMode : "own_vehicle",
         rental_id: needsRental ? rentalId : null,
       })
@@ -1446,6 +1450,8 @@ function ConsignmentForm(props: any) {
     setSourceId,
     consignmentDate,
     setConsignmentDate,
+    billingStatus,
+    setBillingStatus,
     type,
     setType,
     ownTransportMode,
@@ -1692,6 +1698,19 @@ function ConsignmentForm(props: any) {
                 onChange={(event) => setConsignmentDate(event.target.value)}
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
+            </div>
+            <div className="min-w-0 space-y-1">
+              <Label className="text-xs font-semibold">Billing</Label>
+              <Select value={billingStatus} onValueChange={setBillingStatus}>
+                <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="to_be_billed">To be billed</SelectItem>
+                  <SelectItem value="billed">Billed</SelectItem>
+                  <SelectItem value="billed_and_paid">Billed and Paid</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
             <div className="min-w-0 space-y-1">
               <Label className="text-xs font-semibold">Delivery Date (Optional)</Label>
@@ -3013,6 +3032,16 @@ function ConsignmentView({
         <ReadonlyField
           label="Source / Contract"
           value={row.source?.contract_name || row.source_id}
+        />
+        <ReadonlyField
+          label="Billing"
+          value={
+            row.billing_status === "billed"
+              ? "Billed"
+              : row.billing_status === "billed_and_paid"
+                ? "Billed and Paid"
+                : "To be billed"
+          }
         />
         <ReadonlyField
           label="Type"

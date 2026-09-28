@@ -34,7 +34,7 @@ export function ConsignmentDetailsDialog({
       supabase
         .from("consignments")
         .select(
-          "id,consignment_number,consignment_date,consignment_type,movement_mode,transport_mode,from_pin_code,to_pin_code,delivery_date,transporter_lr_number,transporter_lr_date,source:contracts(contract_name),branch:branches(branch_name),transporter:ltms_transporters(transporter_name)",
+          "id,consignment_number,consignment_date,billing_status,consignment_type,movement_mode,transport_mode,from_pin_code,to_pin_code,delivery_date,transporter_lr_number,transporter_lr_date,source:contracts(contract_name),branch:branches(branch_name),transporter:ltms_transporters(transporter_name)",
         )
         .eq("id", consignmentId)
         .single(),
@@ -73,6 +73,16 @@ export function ConsignmentDetailsDialog({
               <Field label="Branch" value={row.branch?.branch_name} />
               <Field label="Consignment Date" value={row.consignment_date} />
               <Field label="Source" value={row.source?.contract_name} />
+              <Field
+                label="Billing"
+                value={
+                  row.billing_status === "billed"
+                    ? "Billed"
+                    : row.billing_status === "billed_and_paid"
+                      ? "Billed and Paid"
+                      : "To be billed"
+                }
+              />
               <Field
                 label="Type"
                 value={row.consignment_type === "third_party" ? "Third Party" : "Own"}
