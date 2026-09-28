@@ -1241,6 +1241,9 @@ function Field({
 type MovementOption = {
   id: string;
   consignment_number: string;
+  source_id?: string | null;
+  consignment_date?: string | null;
+  source?: { contract_name?: string | null } | null;
   vehicle_id?: string | null;
   driver_id?: string | null;
   trip_id?: string | null;
@@ -1332,11 +1335,18 @@ function MovementTab({
 }) {
   const { user } = useSession();
   const [rows, setRows] = useState<MovementOption[]>([]);
+  const [candidateRows, setCandidateRows] = useState<MovementOption[]>([]);
+  const [candidateSelected, setCandidateSelected] = useState<string[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [candidateSource, setCandidateSource] = useState("all");
+  const [candidateFromDate, setCandidateFromDate] = useState("");
+  const [candidateToDate, setCandidateToDate] = useState("");
+  const [candidateSearch, setCandidateSearch] = useState("");
+  const [candidateLoading, setCandidateLoading] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [movementDate, setMovementDate] = useState("");
   const [updating, setUpdating] = useState<MovementOption | null>(null);
   const [partBHistory, setPartBHistory] = useState<Array<Record<string, any>>>([]);
   const [bulkUpdating, setBulkUpdating] = useState(false);
@@ -1363,26 +1373,73 @@ function MovementTab({
     const { data, error } = await (supabase as any)
       .from("consignments")
       .select(
-        "id,consignment_number,vehicle_id,driver_id,trip_id,from_pin_code,to_pin_code,movement_mode,consignment_type,own_transport_mode,transport_mode,created_at,part_b_updated_at,part_b_vehicle_no,part_b_from_pin_code,part_b_from_state,part_b_from_place,part_b_transport_mode,part_b_vehicle_type,part_b_trans_doc_no,part_b_trans_doc_date,part_b_reason_code,from_details,to_details,branch:branches(branch_name,pin_code),vehicle:vehicles(registration_number),driver:drivers(full_name),trip:trips(trip_code),shipments(id,eway_bill_number,dispatch_from_pin_code,ship_to_pin_code)",
+        "id,consignment_number,source_id,consignment_date,vehicle_id,driver_id,trip_id,from_pin_code,to_pin_code,movement_mode,consignment_type,own_transport_mode,transport_mode,created_at,part_b_updated_at,part_b_vehicle_no,part_b_from_pin_code,part_b_from_state,part_b_from_place,part_b_transport_mode,part_b_vehicle_type,part_b_trans_doc_no,part_b_trans_doc_date,part_b_reason_code,from_details,to_details,source:contracts(contract_name),branch:branches(branch_name,pin_code),vehicle:vehicles(registration_number),driver:drivers(full_name),trip:trips(trip_code),shipments(id,eway_bill_number,dispatch_from_pin_code,ship_to_pin_code)",
       )
       .eq("branch_id", branchId)
-      .order("created_at", { ascending: false });
+      .eq("trip_id", tripId)
+      .order("consignment_date", { ascending: false });
     if (error) toast.error(error.message);
     const all = (data ?? []) as MovementOption[];
-    const available = all.filter(
-      (m) =>
-        ((m.consignment_type === "own" && m.movement_mode === "pickup") ||
-          (m.consignment_type === "third_party" && m.movement_mode === "drop")) &&
-        (m.trip_id === tripId ||
-          (!m.trip_id && (!vehicleId || !m.vehicle_id || m.vehicle_id === vehicleId))),
-    );
-    setRows(available);
-    setSelected(available.filter((m) => m.trip_id === tripId).map((m) => m.id));
+    setRows(all);
+    setSelected(all.map((m) => m.id));
     setLoading(false);
   };
   useEffect(() => {
     void load();
   }, [branchId, vehicleId, tripId]);
+
+  async function loadUnassignedMovements() {
+    if (!branchId || !tripId) return toast.error("Save the trip details first");
+    setCandidateLoading(true);
+    setPickerOpen(true);
+    const { data, error } = await (supabase as any)
+      .from("consignments")
+      .select(
+        "id,consignment_number,source_id,consignment_date,vehicle_id,driver_id,trip_id,from_pin_code,to_pin_code,movement_mode,consignment_type,own_transport_mode,transport_mode,created_at,part_b_updated_at,part_b_vehicle_no,part_b_from_pin_code,part_b_from_state,part_b_from_place,part_b_transport_mode,part_b_vehicle_type,part_b_trans_doc_no,part_b_trans_doc_date,part_b_reason_code,from_details,to_details,source:contracts(contract_name),branch:branches(branch_name,pin_code),vehicle:vehicles(registration_number),driver:drivers(full_name),trip:trips(trip_code),shipments(id,eway_bill_number,dispatch_from_pin_code,ship_to_pin_code)",
+      )
+      .eq("branch_id", branchId)
+      .is("trip_id", null)
+      .order("consignment_date", { ascending: false });
+    if (error) toast.error(error.message);
+    const available = ((data ?? []) as MovementOption[]).filter(
+      (m) =>
+        (m.consignment_type === "own" && m.movement_mode === "pickup") ||
+        (m.consignment_type === "third_party" && m.movement_mode === "drop"),
+    );
+    setCandidateRows(available);
+    setCandidateSelected([]);
+    setCandidateLoading(false);
+  }
+
+  const candidateSources = [
+    ...new Set(
+      candidateRows.map((m) => m.source?.contract_name || m.source_id || "").filter(Boolean),
+    ),
+  ].sort();
+  const candidateVisible = candidateRows.filter((m) => {
+    const source = String(m.source?.contract_name || m.source_id || "");
+    const date = String(m.consignment_date || "").slice(0, 10);
+    const text = `${m.consignment_number} ${source}`.toLowerCase();
+    return (
+      (candidateSource === "all" || source === candidateSource) &&
+      (!candidateFromDate || date >= candidateFromDate) &&
+      (!candidateToDate || date <= candidateToDate) &&
+      (!candidateSearch.trim() || text.includes(candidateSearch.trim().toLowerCase()))
+    );
+  });
+
+  function addCandidateMovements() {
+    const additions = candidateRows.filter((m) => candidateSelected.includes(m.id));
+    if (!additions.length) return toast.error("Select at least one unassigned movement");
+    setRows((current) => [...current, ...additions]);
+    setSelected((current) => [...new Set([...current, ...candidateSelected])]);
+    setCandidateRows((current) =>
+      current.filter((movement) => !candidateSelected.includes(movement.id)),
+    );
+    setCandidateSelected([]);
+    setPickerOpen(false);
+    toast.success(`${additions.length} movement(s) added to this trip`);
+  }
   async function save() {
     const id = await requireTripId();
     if (!id) return;
@@ -1626,14 +1683,11 @@ function MovementTab({
     m.from_pin_code || m.from_details?.pincode || m.shipments?.[0]?.dispatch_from_pin_code || "";
   const pinTo = (m: MovementOption) =>
     m.to_pin_code || m.to_details?.pincode || m.shipments?.[0]?.ship_to_pin_code || "";
-  const visible = rows.filter(
-    (m) =>
-      (!search.trim() ||
-        `${m.consignment_number} ${m.trip?.trip_code ?? ""}`
-          .toLowerCase()
-          .includes(search.trim().toLowerCase())) &&
-      (!movementDate || String(m.created_at ?? "").slice(0, 10) === movementDate),
-  );
+  const visible = rows.filter((m) => {
+    const text =
+      `${m.consignment_number} ${m.source?.contract_name || m.source_id || ""}`.toLowerCase();
+    return !search.trim() || text.includes(search.trim().toLowerCase());
+  });
   return (
     <div className="space-y-4">
       {!tripId && (
@@ -1645,7 +1699,7 @@ function MovementTab({
         <div>
           <h3 className="text-sm font-semibold tracking-tight">Trip movements</h3>
           <p className="text-xs text-muted-foreground">
-            Only unassigned movements and movements already assigned to this trip are shown.
+            Load unassigned movements using Source, Consignment Date, and number filters.
           </p>
         </div>
         {!isViewer && (
@@ -1653,7 +1707,17 @@ function MovementTab({
             <Button
               type="button"
               size="sm"
+              variant="outline"
               className="ml-auto"
+              onClick={() => void loadUnassignedMovements()}
+              disabled={!tripId}
+            >
+              <Search className="mr-1 size-4" />
+              Load Movements
+            </Button>
+            <Button
+              type="button"
+              size="sm"
               onClick={() => void save()}
               disabled={saving || !tripId}
             >
@@ -1687,19 +1751,13 @@ function MovementTab({
             onChange={(e) => setSearch(e.target.value)}
           />
         </div>
-        <Input
-          className="w-44"
-          type="date"
-          value={movementDate}
-          onChange={(e) => setMovementDate(e.target.value)}
-          aria-label="Movement date"
-        />
       </div>
       {loading ? (
         <p className="p-5 text-center text-sm text-muted-foreground">Loading movements…</p>
       ) : !visible.length ? (
         <p className="rounded-lg border border-dashed border-border p-5 text-center text-sm text-muted-foreground">
-          No movements match this trip.
+          No movements are assigned to this trip yet. Use Load Movements to add unassigned
+          movements.
         </p>
       ) : (
         <div className="space-y-2">
@@ -1745,6 +1803,114 @@ function MovementTab({
           ))}
         </div>
       )}
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Load Unassigned Movements</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Only movements that are not assigned to any Trip are shown. Dates use the stored
+            Consignment Date.
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="space-y-1.5">
+              <Label>Source</Label>
+              <Select value={candidateSource} onValueChange={setCandidateSource}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All sources</SelectItem>
+                  {candidateSources.map((source) => (
+                    <SelectItem key={source} value={source}>
+                      {source}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Consignment Date From</Label>
+              <Input
+                type="date"
+                value={candidateFromDate}
+                onChange={(e) => setCandidateFromDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Consignment Date To</Label>
+              <Input
+                type="date"
+                value={candidateToDate}
+                onChange={(e) => setCandidateToDate(e.target.value)}
+              />
+            </div>
+            <div className="relative space-y-1.5">
+              <Label>Consignment Number</Label>
+              <Search className="absolute left-3 top-9 size-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Search number"
+                value={candidateSearch}
+                onChange={(e) => setCandidateSearch(e.target.value)}
+              />
+            </div>
+          </div>
+          {candidateLoading ? (
+            <p className="p-8 text-center text-sm text-muted-foreground">
+              Loading unassigned movements…
+            </p>
+          ) : candidateVisible.length ? (
+            <div className="max-h-[48vh] space-y-2 overflow-y-auto">
+              {candidateVisible.map((m) => (
+                <label
+                  key={m.id}
+                  className="flex cursor-pointer items-center gap-3 rounded-xl border border-border bg-muted/20 p-3"
+                >
+                  <input
+                    type="checkbox"
+                    checked={candidateSelected.includes(m.id)}
+                    onChange={(e) =>
+                      setCandidateSelected((current) =>
+                        e.target.checked ? [...current, m.id] : current.filter((id) => id !== m.id),
+                      )
+                    }
+                    className="size-4"
+                  />
+                  <span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-5">
+                    <strong>{m.consignment_number}</strong>
+                    <span>{m.source?.contract_name || m.source_id || "—"}</span>
+                    <span>{m.consignment_date || "—"}</span>
+                    <span>
+                      {pinFrom(m) || "—"} → {pinTo(m) || "—"}
+                    </span>
+                    <span>{m.consignment_type === "third_party" ? "Third Party" : "Own"}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-lg border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+              No unassigned movements match these filters.
+            </p>
+          )}
+          <DialogFooter>
+            <span className="mr-auto text-xs text-muted-foreground">
+              {candidateVisible.length} matching · {candidateSelected.length} selected
+            </span>
+            <Button type="button" variant="outline" onClick={() => setPickerOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={addCandidateMovements}
+              disabled={!candidateSelected.length}
+            >
+              Add Selected Movements
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={Boolean(updating)} onOpenChange={(open) => !open && setUpdating(null)}>
         <DialogContent className="max-h-[90vh] max-w-3xl overflow-y-auto">
           <DialogHeader>
