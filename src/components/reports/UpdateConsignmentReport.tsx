@@ -28,6 +28,7 @@ type ConsignmentRow = {
   delivery_date: string | null;
   transporter_lr_number: string | null;
   transporter_lr_date: string | null;
+  transporter?: { transporter_name?: string | null } | null;
   source?: { contract_name?: string | null } | null;
 };
 
@@ -68,7 +69,7 @@ export function UpdateConsignmentReport() {
     let query = supabase
       .from("consignments")
       .select(
-        "id,consignment_number,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date,source_id,branch:branches(branch_name),source:contracts(contract_name)",
+        "id,consignment_number,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date,source_id,branch:branches(branch_name),source:contracts(contract_name),transporter:ltms_transporters(transporter_name)",
       )
       .order("consignment_date", { ascending: false })
       .order("created_at", { ascending: false });
@@ -98,13 +99,11 @@ export function UpdateConsignmentReport() {
     const { data, error } = await supabase
       .from("consignments")
       .update({
-        delivery_date: values.delivery_date || null,
         transporter_lr_number: isThirdParty ? values.transporter_lr_number.trim() || null : null,
-        transporter_lr_date: isThirdParty ? values.transporter_lr_date || null : null,
       })
       .eq("id", editing.id)
       .select(
-        "id,consignment_number,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date,branch:branches(branch_name),source:contracts(contract_name)",
+        "id,consignment_number,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date,branch:branches(branch_name),source:contracts(contract_name),transporter:ltms_transporters(transporter_name)",
       )
       .single();
     setSaving(false);
@@ -253,14 +252,20 @@ export function UpdateConsignmentReport() {
                 </div>
               </div>
               <div className="space-y-1.5">
-                <label className="text-xs font-medium text-muted-foreground">Delivery Date</label>
+                <label className="text-xs font-medium text-muted-foreground">
+                  Transporter Name
+                </label>
                 <Input
-                  type="date"
-                  value={values.delivery_date}
-                  onChange={(event) =>
-                    setValues((current) => ({ ...current, delivery_date: event.target.value }))
-                  }
+                  value={editing.transporter?.transporter_name || "—"}
+                  readOnly
+                  className="bg-muted/40"
                 />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">
+                  Delivery Date (Read Only)
+                </label>
+                <Input type="date" value={values.delivery_date} readOnly className="bg-muted/40" />
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
@@ -285,19 +290,13 @@ export function UpdateConsignmentReport() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  Transporter LR Date
-                  {editing.consignment_type !== "third_party" ? " (Third Party Only)" : ""}
+                  Transporter LR Date (Read Only)
                 </label>
                 <Input
                   type="date"
                   value={values.transporter_lr_date}
-                  disabled={editing.consignment_type !== "third_party"}
-                  onChange={(event) =>
-                    setValues((current) => ({
-                      ...current,
-                      transporter_lr_date: event.target.value,
-                    }))
-                  }
+                  readOnly
+                  className="bg-muted/40"
                 />
               </div>
             </div>
