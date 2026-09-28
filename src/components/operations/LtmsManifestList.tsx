@@ -194,10 +194,14 @@ function ConsignmentRow({
   row,
   selected,
   onToggle,
+  onConsignmentClick,
+  onUpdateTransporter,
 }: {
   row: Consignment;
   selected: boolean;
   onToggle: () => void;
+  onConsignmentClick?: (id: string) => void;
+  onUpdateTransporter?: (row: Consignment) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   return (
@@ -224,7 +228,24 @@ function ConsignmentRow({
           ) : (
             <ChevronRight className="size-4 shrink-0" />
           )}
-          <span className="font-semibold">{row.consignment_number}</span>
+          <span
+            role="button"
+            tabIndex={0}
+            className="font-semibold text-primary underline-offset-2 hover:underline"
+            onClick={(event) => {
+              event.stopPropagation();
+              onConsignmentClick?.(String(row.id));
+            }}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                event.stopPropagation();
+                onConsignmentClick?.(String(row.id));
+              }
+            }}
+          >
+            {row.consignment_number}
+          </span>
         </button>
         <span className="text-xs text-muted-foreground">{row.branch?.branch_name || "—"}</span>
         <span className="text-xs">
@@ -241,6 +262,18 @@ function ConsignmentRow({
         <span className="text-xs text-muted-foreground">
           {row.created_at ? new Date(row.created_at).toLocaleDateString("en-GB") : "—"}
         </span>
+        {onUpdateTransporter &&
+          row.consignment_type === "third_party" &&
+          row.transporter_update_status !== "updated" && (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => onUpdateTransporter(row)}
+            >
+              Update Transporter
+            </Button>
+          )}
       </div>
       {expanded && (
         <div className="space-y-3 border-t border-border/70 p-3">
@@ -699,7 +732,6 @@ export function LtmsManifestList({
       .select(
         "id,consignment_number,branch_id,source_id,consignment_date,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_id,transporter_update_status,transporter_update_error,created_at,branch:branches(branch_name),source:contracts(contract_name)",
       )
-      .eq("transporter_id", transporterId)
       .order("consignment_date", { ascending: false })
       .order("created_at", { ascending: false });
     if (allowedBranches !== null) {
@@ -739,6 +771,33 @@ export function LtmsManifestList({
     setCandidateSelectedIds([]);
     setCandidateLoading(false);
   }, [role, branchIds, transporterId]);
+
+  async function updateCandidateTransporter(row: Consignment) {
+    if (!transporterId) {
+      toast.error("Select a Manifest transporter first.");
+      return;
+    }
+    const { count, error: manifestError } = await db
+      .from("ltms_manifest_transfer_items")
+      .select("id", { count: "exact", head: true })
+      .eq("consignment_id", row.id);
+    if (manifestError)
+      return toast.error(`Could not verify Manifest status: ${manifestError.message}`);
+    if ((count ?? 0) > 0) {
+      return toast.error(
+        "Transporter cannot be changed because this Consignment is already in a Manifest.",
+      );
+    }
+    const selected = transporters.find((item) => item.id === transporterId);
+    if (!selected) return toast.error("Selected transporter could not be found.");
+    const { error } = await db
+      .from("consignments")
+      .update({ transporter_id: transporterId })
+      .eq("id", row.id);
+    if (error) return toast.error(error.message);
+    toast.success(`${row.consignment_number} assigned to ${selected.transporter_name}`);
+    await loadCandidates();
+  }
 
   useEffect(() => {
     void loadTransporters();
@@ -1282,6 +1341,10 @@ export function LtmsManifestList({
                         row={row}
                         selected={candidateSelectedIds.includes(row.id)}
                         onToggle={() => toggleCandidate(row.id)}
+                        onConsignmentClick={setDetailsConsignmentId}
+                        onUpdateTransporter={(candidate) =>
+                          void updateCandidateTransporter(candidate)
+                        }
                       />
                     ))
                   ) : (
