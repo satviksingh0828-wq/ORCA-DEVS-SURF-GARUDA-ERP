@@ -206,7 +206,10 @@ function ConsignmentRow({
           aria-label={`Select ${row.consignment_number}`}
           type="checkbox"
           checked={selected}
-          disabled={row.transporter_update_status === "updated"}
+          disabled={
+            row.transporter_update_status === "updated" ||
+            row.transporter_update_status === "partial"
+          }
           onChange={onToggle}
           className="size-4"
         />
@@ -555,7 +558,6 @@ export function LtmsManifestList({
   const [candidateSource, setCandidateSource] = useState("all");
   const [candidateFromDate, setCandidateFromDate] = useState("");
   const [candidateToDate, setCandidateToDate] = useState("");
-  const [candidateStatus, setCandidateStatus] = useState("pending");
   const [candidateSearch, setCandidateSearch] = useState("");
   const [candidateLoading, setCandidateLoading] = useState(false);
   const [history, setHistory] = useState<ManifestHistoryRow[]>([]);
@@ -577,29 +579,20 @@ export function LtmsManifestList({
         const rowStatus = row.transporter_update_status || "pending";
         const source = consignmentSource(row);
         const consignmentDate = String(row.consignment_date ?? "").slice(0, 10);
-        const statusMatch =
-          candidateStatus === "all" ||
-          (candidateStatus === "transferred" ? rowStatus === "updated" : rowStatus !== "updated");
+        const selectableStatus = rowStatus !== "updated" && rowStatus !== "partial";
         const sourceMatch = candidateSource === "all" || source === candidateSource;
         const fromMatch = !candidateFromDate || consignmentDate >= candidateFromDate;
         const toMatch = !candidateToDate || consignmentDate <= candidateToDate;
         const text = `${row.consignment_number} ${source} ${row.to_pin_code ?? ""}`.toLowerCase();
         return (
-          statusMatch &&
+          selectableStatus &&
           sourceMatch &&
           fromMatch &&
           toMatch &&
           (!candidateSearch.trim() || text.includes(candidateSearch.trim().toLowerCase()))
         );
       }),
-    [
-      candidateRows,
-      candidateStatus,
-      candidateSource,
-      candidateFromDate,
-      candidateToDate,
-      candidateSearch,
-    ],
+    [candidateRows, candidateSource, candidateFromDate, candidateToDate, candidateSearch],
   );
 
   const candidateSources = useMemo(
@@ -1245,19 +1238,6 @@ export function LtmsManifestList({
                       value={candidateToDate}
                       onChange={(event) => setCandidateToDate(event.target.value)}
                     />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Transfer status</Label>
-                    <Select value={candidateStatus} onValueChange={setCandidateStatus}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="pending">Not transferred</SelectItem>
-                        <SelectItem value="transferred">Transferred</SelectItem>
-                        <SelectItem value="all">Transferred or not transferred</SelectItem>
-                      </SelectContent>
-                    </Select>
                   </div>
                   <div className="relative space-y-1.5">
                     <Label>Search</Label>
