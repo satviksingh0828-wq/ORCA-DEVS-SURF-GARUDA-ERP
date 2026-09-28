@@ -227,32 +227,18 @@ function ConsignmentRow({
         />
         <button
           type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          className="flex size-7 shrink-0 items-center justify-center rounded hover:bg-muted"
           onClick={() => setExpanded((value) => !value)}
+          aria-label={expanded ? "Collapse consignment" : "Expand consignment shipments"}
         >
-          {expanded ? (
-            <ChevronDown className="size-4 shrink-0" />
-          ) : (
-            <ChevronRight className="size-4 shrink-0" />
-          )}
-          <span
-            role="button"
-            tabIndex={0}
-            className="font-semibold text-primary underline-offset-2 hover:underline"
-            onClick={(event) => {
-              event.stopPropagation();
-              onConsignmentClick?.(String(row.id));
-            }}
-            onKeyDown={(event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                event.stopPropagation();
-                onConsignmentClick?.(String(row.id));
-              }
-            }}
-          >
-            {row.consignment_number}
-          </span>
+          {expanded ? <ChevronDown className="size-4" /> : <ChevronRight className="size-4" />}
+        </button>
+        <button
+          type="button"
+          className="min-w-0 flex-1 text-left font-semibold text-primary underline-offset-2 hover:underline"
+          onClick={() => onConsignmentClick?.(String(row.id))}
+        >
+          {row.consignment_number}
         </button>
         <span className="text-xs text-muted-foreground">{row.branch?.branch_name || "—"}</span>
         <span className="text-xs">
