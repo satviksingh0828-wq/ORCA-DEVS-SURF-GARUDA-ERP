@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { verifyAppToken } from "@/lib/user-auth";
@@ -258,6 +259,81 @@ export const serverRecordLtmsManifestTransfer = createServerFn({ method: "POST" 
     return {
       manifestNumber: String(result.manifest_number),
       transferStatus: String(result.transfer_status),
+    };
+  });
+
+const retryManifestInputSchema = z.object({
+  sessionToken: z.string().min(1),
+  manifestId: z.string().uuid(),
+});
+
+export const serverRetryLtmsManifestTransfer = createServerFn({ method: "POST" })
+  .validator(retryManifestInputSchema)
+  .handler(async ({ data }) => {
+    const session = await verifyAppToken(data.sessionToken);
+    if (!session) throw new Error("Your session has expired. Please sign in again.");
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const db = supabaseAdmin as any;
+    const { data: manifest, error: manifestError } = await db
+      .from("ltms_manifest_transfers")
+      .select(
+        "id,branch_id,transporter_gstin,items:ltms_manifest_transfer_items(id,shipment_id,consignment_id,eway_bill_number,transfer_status,transfer_error)",
+      )
+      .eq("id", data.manifestId)
+      .maybeSingle();
+    if (manifestError || !manifest)
+      throw new Error(manifestError?.message || "Manifest was not found");
+    if (session.role === "basic") {
+      const { data: assignment, error } = await supabaseAdmin
+        .from("user_branch_access")
+        .select("branch_id")
+        .eq("user_id", session.uid)
+        .eq("branch_id", manifest.branch_id)
+        .maybeSingle();
+      if (error || !assignment) throw new Error("You do not have access to this branch");
+    }
+    const failedItems = (manifest.items ?? []).filter(
+      (item: Record<string, unknown>) => item.transfer_status !== "transferred",
+    ) as Array<Record<string, unknown>>;
+    if (!failedItems.length) return { transferStatus: "transferred", retriedCount: 0 };
+
+    const validItems = failedItems.filter((item) =>
+      /^\d{12}$/.test(String(item.eway_bill_number ?? "")),
+    );
+    const apiResults = validItems.length
+      ? await serverTransferManifestLrs({
+          data: {
+            sessionToken: data.sessionToken,
+            branchId: String(manifest.branch_id),
+            partnerGstin: String(manifest.transporter_gstin),
+            ewayBillNumbers: validItems.map((item) => String(item.eway_bill_number)),
+          },
+        })
+      : { results: [] };
+    const results = new Map(apiResults.results.map((result) => [result.ewayBillNumber, result]));
+    const updates = failedItems.map((item) => {
+      const ewayBillNumber = String(item.eway_bill_number ?? "");
+      const result = results.get(ewayBillNumber);
+      return {
+        item_id: item.id,
+        shipment_id: item.shipment_id,
+        consignment_id: item.consignment_id,
+        transfer_status: result?.ok ? "transferred" : "failed",
+        transfer_error: result?.ok
+          ? ""
+          : result?.error || "Shipment has no valid 12-digit E-Way Bill number",
+      };
+    });
+    const { data: updated, error: updateError } = await db.rpc("apply_ltms_manifest_retry", {
+      p_manifest_id: data.manifestId,
+      p_items: updates,
+    });
+    if (updateError)
+      throw new Error(`Could not update the existing Manifest: ${updateError.message}`);
+    return {
+      transferStatus: String(updated?.transfer_status ?? "partial"),
+      retriedCount: updates.length,
+      transferredCount: Number(updated?.transferred_count ?? 0),
     };
   });
 

@@ -28,6 +28,7 @@ import { isManualEwayBill } from "@/lib/ewaybill-generation";
 import {
   serverTransferManifestLrs,
   serverRecordLtmsManifestTransfer,
+  serverRetryLtmsManifestTransfer,
 } from "@/lib/manifest-transfer";
 
 const db = supabase as any;
@@ -296,9 +297,13 @@ function consignmentSource(row: Consignment): string {
 function ManifestDetailView({
   manifest,
   onBack,
+  onRetryFailed,
+  retrying,
 }: {
   manifest: ManifestHistoryRow;
   onBack: () => void;
+  onRetryFailed?: () => void;
+  retrying?: boolean;
 }) {
   const grouped = new Map<
     string,
@@ -312,6 +317,9 @@ function ManifestDetailView({
     grouped.set(key, group);
   }
   const transporter = relatedRecord(manifest.transporter);
+  const failedItems = (manifest.items ?? []).filter(
+    (item) => item.transfer_status !== "transferred",
+  );
 
   return (
     <div className="space-y-5">
@@ -319,11 +327,23 @@ function ManifestDetailView({
         <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to manifest history">
           <ArrowLeft className="size-5" />
         </Button>
-        <div>
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">Manifest {show(manifest.manifest_number)}</h2>
           <p className="text-sm text-muted-foreground">
             Transfer record and linked consignment details
           </p>
+        </div>
+        <div className="ml-auto">
+          {failedItems.length && onRetryFailed ? (
+            <Button onClick={onRetryFailed} disabled={retrying}>
+              {retrying ? (
+                <Loader2 className="mr-2 size-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 size-4" />
+              )}
+              Retry Failed E-Way Bills ({failedItems.length})
+            </Button>
+          ) : null}
         </div>
       </header>
       <section className="grid gap-3 rounded-xl border border-border bg-card p-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -549,6 +569,7 @@ export function LtmsManifestList({
   const [historyTransporterFilterId, setHistoryTransporterFilterId] = useState("");
   const [loading, setLoading] = useState(false);
   const [transferring, setTransferring] = useState(false);
+  const [retryingManifestId, setRetryingManifestId] = useState("");
 
   const candidateVisibleRows = useMemo(
     () =>
@@ -654,8 +675,10 @@ export function LtmsManifestList({
     const historyResult = await manifestQuery;
     if (historyResult.error)
       toast.error(`Could not load manifest history: ${historyResult.error.message}`);
-    setHistory((historyResult.data ?? []) as ManifestHistoryRow[]);
+    const nextHistory = (historyResult.data ?? []) as ManifestHistoryRow[];
+    setHistory(nextHistory);
     setLoading(false);
+    return nextHistory;
   }, [role, branchIds]);
 
   const fetchConsignmentCandidates = useCallback(async () => {
@@ -868,6 +891,31 @@ export function LtmsManifestList({
     }
   }
 
+  async function retryFailedManifest(manifestId: string) {
+    if (!user?.sessionToken) {
+      toast.error("Your session has expired. Please sign in again.");
+      return;
+    }
+    setRetryingManifestId(manifestId);
+    try {
+      const result = await serverRetryLtmsManifestTransfer({
+        data: { sessionToken: user.sessionToken, manifestId },
+      });
+      const nextHistory = await loadData();
+      const refreshed = nextHistory.find((row) => row.id === manifestId);
+      if (refreshed) setSelectedManifest(refreshed);
+      toast[result.transferStatus === "transferred" ? "success" : "error"](
+        result.transferStatus === "transferred"
+          ? "All failed E-Way Bills transferred. The existing Manifest is now Transferred."
+          : `${result.retriedCount} failed E-Way Bill(s) retried; the existing Manifest remains Partially Transferred.`,
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not retry failed E-Way Bills");
+    } finally {
+      setRetryingManifestId("");
+    }
+  }
+
   if (selectedManifest) {
     return (
       <ManifestDetailView
@@ -876,6 +924,8 @@ export function LtmsManifestList({
           setSelectedManifest(null);
           onSidebarVisibilityChange?.(true);
         }}
+        onRetryFailed={() => void retryFailedManifest(String(selectedManifest.id))}
+        retrying={retryingManifestId === String(selectedManifest.id)}
       />
     );
   }
