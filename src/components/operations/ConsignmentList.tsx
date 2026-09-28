@@ -932,6 +932,7 @@ export function ConsignmentList({
     if (!branchId || !consignmentDate || drafts.length < 1)
       return toast.error("Branch, Consignment Date and at least one E-Way Bill are required");
     if (!sourceId) return toast.error("Select a Source / Contract");
+    if (!billingStatus) return toast.error("Select a Billing status");
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
     if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
     if (movement === "drop" && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
@@ -1700,7 +1701,7 @@ function ConsignmentForm(props: any) {
               />
             </div>
             <div className="min-w-0 space-y-1">
-              <Label className="text-xs font-semibold">Billing</Label>
+              <Label className="text-xs font-semibold">Billing *</Label>
               <Select value={billingStatus} onValueChange={setBillingStatus}>
                 <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
                   <SelectValue />
