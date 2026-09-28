@@ -132,12 +132,12 @@ export function AppShell({
         } as CSSProperties
       }
       className={cn(
-        "relative min-h-screen overflow-hidden transition-all duration-300",
+        "relative flex h-screen flex-col overflow-hidden transition-all duration-300",
         backgroundVideoEnabled ? "bg-transparent" : "bg-background",
         isAdmin && open ? "lg:mr-[360px]" : "",
       )}
     >
-      <header className="relative sticky top-0 z-30 border-b border-border bg-card/85 backdrop-blur">
+      <header className="relative z-30 shrink-0 border-b border-border bg-card/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
           <Link to="/home" className="shrink-0">
             <img
@@ -198,7 +198,8 @@ export function AppShell({
       <main
         className={cn(
           "relative z-10",
-          "mx-auto min-w-0 max-w-screen-xl overflow-x-hidden [overflow-anchor:none] px-3 py-5 sm:px-6 sm:py-8",
+          "min-h-0 flex-1 overflow-x-hidden overflow-y-auto [overflow-anchor:none]",
+          "mx-auto w-full max-w-screen-xl px-3 py-5 sm:px-6 sm:py-8",
           mainClassName,
         )}
       >
