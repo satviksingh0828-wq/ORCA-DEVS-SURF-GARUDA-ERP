@@ -3022,9 +3022,24 @@ function ConsignmentView({
             View-only Consignment and generated Shipments
           </p>
         </div>
-        <Button variant="outline" onClick={onBack}>
-          Back
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              void printConsignorCopyPdf({
+                consignment: row,
+                shipments,
+                packages,
+              })
+            }
+          >
+            <Printer className="mr-1 size-3.5" /> Print PDF
+          </Button>
+          <Button variant="outline" onClick={onBack}>
+            Back
+          </Button>
+        </div>
       </div>
       <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-4">
         <ReadonlyField label="Document Type" value="Consignment" />
@@ -3122,23 +3137,7 @@ function ConsignmentView({
         </div>
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="font-semibold">E-Way Bills</h3>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              void printConsignorCopyPdf({
-                consignment: row,
-                shipments,
-                packages,
-              })
-            }
-          >
-            <Printer className="mr-1 size-3.5" /> Print PDF
-          </Button>
-        </div>
+        <h3 className="font-semibold">E-Way Bills</h3>
         <EwayTable drafts={drafts} readOnly />
       </section>
       <section className="space-y-3 rounded-xl border border-border p-4">
