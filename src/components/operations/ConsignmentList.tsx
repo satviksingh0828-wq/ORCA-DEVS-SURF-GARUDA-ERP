@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
-import { Eye, Plus, Search, Trash2, X } from "lucide-react";
+import { Eye, Pencil, Plus, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
@@ -612,6 +612,11 @@ export function ConsignmentList({
   const [transporters, setTransporters] = useState<Master[]>([]);
   const [partnerDialog, setPartnerDialog] = useState<"rental" | "transporter" | null>(null);
   const [partnerForm, setPartnerForm] = useState<PartnerForm>(emptyPartner());
+  const [transporterUpdateRow, setTransporterUpdateRow] = useState<Record<string, any> | null>(
+    null,
+  );
+  const [transporterUpdateId, setTransporterUpdateId] = useState("");
+  const [transporterUpdateSaving, setTransporterUpdateSaving] = useState(false);
 
   const branch = branches.find((item) => item.id === branchId);
   const common = drafts[0];
@@ -1094,6 +1099,38 @@ export function ConsignmentList({
     await loadRows();
   }
 
+  async function openTransporterUpdate(row: Record<string, any>) {
+    if (row.consignment_type !== "third_party") return;
+    const { count, error } = await db
+      .from("ltms_manifest_transfer_items")
+      .select("id", { count: "exact", head: true })
+      .eq("consignment_id", row.id);
+    if (error) return toast.error(`Could not verify Manifest status: ${error.message}`);
+    if ((count ?? 0) > 0) {
+      return toast.error(
+        "Transporter cannot be changed because an E-Way Bill from this Consignment is already in a Manifest.",
+      );
+    }
+    if (!transporters.length) await loadMasters();
+    setTransporterUpdateRow(row);
+    setTransporterUpdateId(String(row.transporter_id ?? ""));
+  }
+
+  async function saveTransporterUpdate() {
+    if (!transporterUpdateRow) return;
+    if (!transporterUpdateId) return toast.error("Select a Transporter");
+    setTransporterUpdateSaving(true);
+    const { error } = await db
+      .from("consignments")
+      .update({ transporter_id: transporterUpdateId })
+      .eq("id", transporterUpdateRow.id);
+    setTransporterUpdateSaving(false);
+    if (error) return toast.error(error.message);
+    setTransporterUpdateRow(null);
+    toast.success("Consignment transporter updated");
+    await loadRows();
+  }
+
   if (screen === "view" && view)
     return (
       <ConsignmentView
@@ -1307,6 +1344,16 @@ export function ConsignmentList({
                   <Button variant="ghost" size="sm" onClick={() => void openView(row)}>
                     <Eye className="mr-1 size-4" /> View
                   </Button>
+                  {row.consignment_type === "third_party" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => void openTransporterUpdate(row)}
+                      title="Update the transporter stored on this Consignment"
+                    >
+                      <Pencil className="mr-1 size-4" /> Update Transporter
+                    </Button>
+                  )}
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1335,6 +1382,54 @@ export function ConsignmentList({
           </tbody>
         </table>
       </div>
+      <Dialog
+        open={transporterUpdateRow !== null}
+        onOpenChange={(open) => !open && setTransporterUpdateRow(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Update Consignment Transporter</DialogTitle>
+          </DialogHeader>
+          {transporterUpdateRow && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                <div className="font-medium">{transporterUpdateRow.consignment_number}</div>
+                <div className="text-xs text-muted-foreground">
+                  Third Party Consignment · This changes only the Consignment record, not E-Way Bill
+                  data.
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Transporter *</Label>
+                <Select value={transporterUpdateId} onValueChange={setTransporterUpdateId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select transporter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {transporters.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setTransporterUpdateRow(null)}>
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void saveTransporterUpdate()}
+              disabled={transporterUpdateSaving}
+            >
+              {transporterUpdateSaving ? "Saving…" : "Update Transporter"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
