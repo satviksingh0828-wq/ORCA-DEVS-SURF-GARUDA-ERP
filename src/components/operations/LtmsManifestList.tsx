@@ -25,6 +25,7 @@ import {
 } from "@/components/ui/select";
 import { useSession } from "@/lib/session";
 import { isManualEwayBill } from "@/lib/ewaybill-generation";
+import { ConsignmentDetailsDialog } from "@/components/operations/ConsignmentDetailsDialog";
 import {
   serverTransferManifestLrs,
   serverRecordLtmsManifestTransfer,
@@ -302,11 +303,13 @@ function ManifestDetailView({
   onBack,
   onRetryFailed,
   retrying,
+  onConsignmentClick,
 }: {
   manifest: ManifestHistoryRow;
   onBack: () => void;
   onRetryFailed?: () => void;
   retrying?: boolean;
+  onConsignmentClick: (id: string) => void;
 }) {
   const grouped = new Map<
     string,
@@ -424,11 +427,19 @@ function ManifestDetailView({
                 <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
                   <div>
                     <Label className="text-xs text-muted-foreground">Consignment</Label>
-                    <p className="font-semibold">
+                    <button
+                      type="button"
+                      className="font-semibold text-primary underline-offset-2 hover:underline"
+                      onClick={() =>
+                        onConsignmentClick(
+                          String(group.consignment.id || group.items[0]?.consignment_id || ""),
+                        )
+                      }
+                    >
                       {show(
                         group.consignment.consignment_number || group.items[0]?.consignment_number,
                       )}
-                    </p>
+                    </button>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Branch</Label>
@@ -572,6 +583,7 @@ export function LtmsManifestList({
   const [loading, setLoading] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [retryingManifestId, setRetryingManifestId] = useState("");
+  const [detailsConsignmentId, setDetailsConsignmentId] = useState<string | null>(null);
 
   const candidateVisibleRows = useMemo(
     () =>
@@ -919,133 +931,141 @@ export function LtmsManifestList({
           onSidebarVisibilityChange?.(true);
         }}
         onRetryFailed={() => void retryFailedManifest(String(selectedManifest.id))}
-        retrying={retryingManifestId === String(selectedManifest.id)}
+        retrying={retryingManifestId === selectedManifest.id}
+        onConsignmentClick={setDetailsConsignmentId}
       />
     );
   }
 
   if (!isCreating) {
     return (
-      <div className="space-y-5">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-semibold">Manifest Transfer History</h2>
-            <p className="text-sm text-muted-foreground">
-              Each recorded transfer has its generated manifest number and transfer details.
-            </p>
+      <>
+        <div className="space-y-5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">Manifest Transfer History</h2>
+              <p className="text-sm text-muted-foreground">
+                Each recorded transfer has its generated manifest number and transfer details.
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                setSelectedIds([]);
+                setTransporterId("");
+                setManifestDate(new Date().toISOString().slice(0, 10));
+                setProfile(EMPTY_TRANSPORTER);
+                setIsCreating(true);
+                onSidebarVisibilityChange?.(false);
+              }}
+            >
+              <Plus className="mr-2 size-4" />
+              Create Manifest
+            </Button>
           </div>
-          <Button
-            onClick={() => {
-              setSelectedIds([]);
-              setTransporterId("");
-              setManifestDate(new Date().toISOString().slice(0, 10));
-              setProfile(EMPTY_TRANSPORTER);
-              setIsCreating(true);
-              onSidebarVisibilityChange?.(false);
-            }}
-          >
-            <Plus className="mr-2 size-4" />
-            Create Manifest
-          </Button>
-        </div>
-        <section className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
-          <Input
-            className="w-48"
-            type="month"
-            aria-label="Manifest history month"
-            value={historyMonth}
-            onChange={(event) => setHistoryMonth(event.target.value)}
-          />
-          <div className="relative min-w-60 flex-1">
-            <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+          <section className="flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card p-3">
             <Input
-              className="pl-9"
-              placeholder="Search by manifest number"
-              value={historySearch}
-              onChange={(event) => setHistorySearch(event.target.value)}
+              className="w-48"
+              type="month"
+              aria-label="Manifest history month"
+              value={historyMonth}
+              onChange={(event) => setHistoryMonth(event.target.value)}
             />
-          </div>
-          <Select
-            value={historyTransporterFilterId || "all"}
-            onValueChange={(value) => setHistoryTransporterFilterId(value === "all" ? "" : value)}
-          >
-            <SelectTrigger className="w-52">
-              <SelectValue placeholder="All transporters" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All transporters</SelectItem>
-              {transporters.map((item) => (
-                <SelectItem key={item.id} value={item.id}>
-                  {item.transporter_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </section>
-        <section className="overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full min-w-[720px] text-sm">
-            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-              <tr>
-                <th className="px-3 py-2">Manifest Number</th>
-                <th className="px-3 py-2">Manifest Date</th>
-                <th className="px-3 py-2">Branch</th>
-                <th className="px-3 py-2">Transporter</th>
-                <th className="px-3 py-2">GSTIN</th>
-                <th className="px-3 py-2">E-Way Bills</th>
-                <th className="px-3 py-2">Status</th>
-                <th className="px-3 py-2">Created</th>
-                <th className="px-3 py-2">Details</th>
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
+            <div className="relative min-w-60 flex-1">
+              <Search className="absolute left-3 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Search by manifest number"
+                value={historySearch}
+                onChange={(event) => setHistorySearch(event.target.value)}
+              />
+            </div>
+            <Select
+              value={historyTransporterFilterId || "all"}
+              onValueChange={(value) => setHistoryTransporterFilterId(value === "all" ? "" : value)}
+            >
+              <SelectTrigger className="w-52">
+                <SelectValue placeholder="All transporters" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All transporters</SelectItem>
+                {transporters.map((item) => (
+                  <SelectItem key={item.id} value={item.id}>
+                    {item.transporter_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </section>
+          <section className="overflow-x-auto rounded-xl border border-border bg-card">
+            <table className="w-full min-w-[720px] text-sm">
+              <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                 <tr>
-                  <td colSpan={9} className="p-6 text-center text-muted-foreground">
-                    Loading…
-                  </td>
+                  <th className="px-3 py-2">Manifest Number</th>
+                  <th className="px-3 py-2">Manifest Date</th>
+                  <th className="px-3 py-2">Branch</th>
+                  <th className="px-3 py-2">Transporter</th>
+                  <th className="px-3 py-2">GSTIN</th>
+                  <th className="px-3 py-2">E-Way Bills</th>
+                  <th className="px-3 py-2">Status</th>
+                  <th className="px-3 py-2">Created</th>
+                  <th className="px-3 py-2">Details</th>
                 </tr>
-              ) : filteredHistory.length ? (
-                filteredHistory.map((row) => (
-                  <tr key={row.id} className="border-t border-border">
-                    <td className="px-3 py-2 font-semibold">{row.manifest_number}</td>
-                    <td className="px-3 py-2">{row.manifest_date || "—"}</td>
-                    <td className="px-3 py-2">{row.branch?.branch_name || "—"}</td>
-                    <td className="px-3 py-2">
-                      {row.transporter?.transporter_name || row.transporter_name || "—"}
-                    </td>
-                    <td className="px-3 py-2">{row.transporter_gstin}</td>
-                    <td className="px-3 py-2">{row.eway_bill_count}</td>
-                    <td className="px-3 py-2">
-                      <TransferBadge status={row.transfer_status} />
-                    </td>
-                    <td className="px-3 py-2">
-                      {row.created_at ? new Date(row.created_at).toLocaleString("en-GB") : "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          setSelectedManifest(row);
-                          onSidebarVisibilityChange?.(false);
-                        }}
-                      >
-                        View
-                      </Button>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr>
+                    <td colSpan={9} className="p-6 text-center text-muted-foreground">
+                      Loading…
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={9} className="p-8 text-center text-muted-foreground">
-                    No manifest transfer history for these filters yet.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </section>
-      </div>
+                ) : filteredHistory.length ? (
+                  filteredHistory.map((row) => (
+                    <tr key={row.id} className="border-t border-border">
+                      <td className="px-3 py-2 font-semibold">{row.manifest_number}</td>
+                      <td className="px-3 py-2">{row.manifest_date || "—"}</td>
+                      <td className="px-3 py-2">{row.branch?.branch_name || "—"}</td>
+                      <td className="px-3 py-2">
+                        {row.transporter?.transporter_name || row.transporter_name || "—"}
+                      </td>
+                      <td className="px-3 py-2">{row.transporter_gstin}</td>
+                      <td className="px-3 py-2">{row.eway_bill_count}</td>
+                      <td className="px-3 py-2">
+                        <TransferBadge status={row.transfer_status} />
+                      </td>
+                      <td className="px-3 py-2">
+                        {row.created_at ? new Date(row.created_at).toLocaleString("en-GB") : "—"}
+                      </td>
+                      <td className="px-3 py-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedManifest(row);
+                            onSidebarVisibilityChange?.(false);
+                          }}
+                        >
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-center text-muted-foreground">
+                      No manifest transfer history for these filters yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </section>
+        </div>
+        <ConsignmentDetailsDialog
+          consignmentId={detailsConsignmentId}
+          open={detailsConsignmentId !== null}
+          onOpenChange={(open) => !open && setDetailsConsignmentId(null)}
+        />
+      </>
     );
   }
 

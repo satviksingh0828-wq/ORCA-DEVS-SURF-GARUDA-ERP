@@ -37,6 +37,7 @@ import { LocationPicker } from "@/components/LocationPicker";
 import { CsvIO } from "@/components/CsvIO";
 import { normalizeImportedDate } from "@/lib/date-input";
 import { TransporterQuickCreate } from "./TransporterQuickCreate";
+import { ConsignmentDetailsDialog } from "./ConsignmentDetailsDialog";
 import { DRIVER_CONFIG, TRANSPORTER_CONFIG, VEHICLE_CONFIG } from "@/components/masters/configs";
 import { useLocations } from "@/lib/use-locations";
 import { isDriverActive } from "@/lib/drivers";
@@ -1343,6 +1344,7 @@ function MovementTab({
   const [candidateToDate, setCandidateToDate] = useState("");
   const [candidateSearch, setCandidateSearch] = useState("");
   const [candidateLoading, setCandidateLoading] = useState(false);
+  const [detailsConsignmentId, setDetailsConsignmentId] = useState<string | null>(null);
   const [selected, setSelected] = useState<string[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -1777,7 +1779,13 @@ function MovementTab({
                 }
               />
               <span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-4">
-                <strong>{m.consignment_number}</strong>
+                <button
+                  type="button"
+                  className="text-left font-semibold text-primary underline-offset-2 hover:underline"
+                  onClick={() => setDetailsConsignmentId(m.id)}
+                >
+                  {m.consignment_number}
+                </button>
                 <span>
                   {pinFrom(m) || "—"} → {pinTo(m) || "—"}
                 </span>
@@ -1878,7 +1886,13 @@ function MovementTab({
                     className="size-4"
                   />
                   <span className="grid min-w-0 flex-1 gap-1 sm:grid-cols-2 lg:grid-cols-5">
-                    <strong>{m.consignment_number}</strong>
+                    <button
+                      type="button"
+                      className="text-left font-semibold text-primary underline-offset-2 hover:underline"
+                      onClick={() => setDetailsConsignmentId(m.id)}
+                    >
+                      {m.consignment_number}
+                    </button>
                     <span>{m.source?.contract_name || m.source_id || "—"}</span>
                     <span>{m.consignment_date || "—"}</span>
                     <span>
@@ -2065,6 +2079,11 @@ function MovementTab({
           )}
         </DialogContent>
       </Dialog>
+      <ConsignmentDetailsDialog
+        consignmentId={detailsConsignmentId}
+        open={detailsConsignmentId !== null}
+        onOpenChange={(open) => !open && setDetailsConsignmentId(null)}
+      />
     </div>
   );
 }

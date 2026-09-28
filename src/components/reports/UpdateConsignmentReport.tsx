@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ConsignmentDetailsDialog } from "@/components/operations/ConsignmentDetailsDialog";
 import {
   Dialog,
   DialogContent,
@@ -53,6 +54,7 @@ export function UpdateConsignmentReport() {
     transporter_lr_date: "",
   });
   const [saving, setSaving] = useState(false);
+  const [detailsConsignmentId, setDetailsConsignmentId] = useState<string | null>(null);
 
   async function loadSources() {
     const { data, error } = await supabase
@@ -205,7 +207,15 @@ export function UpdateConsignmentReport() {
             <tbody>
               {rows.map((row) => (
                 <tr key={row.id} className="border-b border-border/60 last:border-0">
-                  <td className="px-4 py-3 font-medium">{row.consignment_number}</td>
+                  <td className="px-4 py-3 font-medium">
+                    <button
+                      type="button"
+                      className="text-primary underline-offset-2 hover:underline"
+                      onClick={() => setDetailsConsignmentId(row.id)}
+                    >
+                      {row.consignment_number}
+                    </button>
+                  </td>
                   <td className="px-4 py-3">{row.branch?.branch_name || "—"}</td>
                   <td className="px-4 py-3">{formatType(row.consignment_type)}</td>
                   <td className="px-4 py-3">{row.delivery_date || "—"}</td>
@@ -312,6 +322,11 @@ export function UpdateConsignmentReport() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConsignmentDetailsDialog
+        consignmentId={detailsConsignmentId}
+        open={detailsConsignmentId !== null}
+        onOpenChange={(open) => !open && setDetailsConsignmentId(null)}
+      />
     </div>
   );
 }
