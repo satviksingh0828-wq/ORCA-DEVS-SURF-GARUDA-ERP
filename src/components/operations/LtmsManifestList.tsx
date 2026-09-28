@@ -617,6 +617,8 @@ export function LtmsManifestList({
   const [transferring, setTransferring] = useState(false);
   const [retryingManifestId, setRetryingManifestId] = useState("");
   const [detailsConsignmentId, setDetailsConsignmentId] = useState<string | null>(null);
+  const [candidateTransporterRow, setCandidateTransporterRow] = useState<Consignment | null>(null);
+  const [candidateTargetTransporterId, setCandidateTargetTransporterId] = useState("");
 
   const candidateVisibleRows = useMemo(
     () =>
@@ -732,6 +734,7 @@ export function LtmsManifestList({
       .select(
         "id,consignment_number,branch_id,source_id,consignment_date,consignment_type,movement_mode,from_pin_code,to_pin_code,from_details,to_details,transporter_id,transporter_update_status,transporter_update_error,created_at,branch:branches(branch_name),source:contracts(contract_name)",
       )
+      .eq("transporter_id", transporterId)
       .order("consignment_date", { ascending: false })
       .order("created_at", { ascending: false });
     if (allowedBranches !== null) {
@@ -772,15 +775,21 @@ export function LtmsManifestList({
     setCandidateLoading(false);
   }, [role, branchIds, transporterId]);
 
-  async function updateCandidateTransporter(row: Consignment) {
-    if (!transporterId) {
-      toast.error("Select a Manifest transporter first.");
+  function openCandidateTransporterUpdate(row: Consignment) {
+    setCandidateTransporterRow(row);
+    setCandidateTargetTransporterId(String(row.transporter_id ?? ""));
+  }
+
+  async function updateCandidateTransporter() {
+    if (!candidateTransporterRow) return;
+    if (!candidateTargetTransporterId) {
+      toast.error("Select a transporter.");
       return;
     }
     const { count, error: manifestError } = await db
       .from("ltms_manifest_transfer_items")
       .select("id", { count: "exact", head: true })
-      .eq("consignment_id", row.id);
+      .eq("consignment_id", candidateTransporterRow.id);
     if (manifestError)
       return toast.error(`Could not verify Manifest status: ${manifestError.message}`);
     if ((count ?? 0) > 0) {
@@ -788,14 +797,17 @@ export function LtmsManifestList({
         "Transporter cannot be changed because this Consignment is already in a Manifest.",
       );
     }
-    const selected = transporters.find((item) => item.id === transporterId);
+    const selected = transporters.find((item) => item.id === candidateTargetTransporterId);
     if (!selected) return toast.error("Selected transporter could not be found.");
     const { error } = await db
       .from("consignments")
-      .update({ transporter_id: transporterId })
-      .eq("id", row.id);
+      .update({ transporter_id: candidateTargetTransporterId })
+      .eq("id", candidateTransporterRow.id);
     if (error) return toast.error(error.message);
-    toast.success(`${row.consignment_number} assigned to ${selected.transporter_name}`);
+    setCandidateTransporterRow(null);
+    toast.success(
+      `${candidateTransporterRow.consignment_number} assigned to ${selected.transporter_name}`,
+    );
     await loadCandidates();
   }
 
@@ -1260,6 +1272,7 @@ export function LtmsManifestList({
                   row={row}
                   selected={selectedIds.includes(row.id)}
                   onToggle={() => toggle(row.id)}
+                  onConsignmentClick={setDetailsConsignmentId}
                 />
               ))
             ) : (
@@ -1342,9 +1355,7 @@ export function LtmsManifestList({
                         selected={candidateSelectedIds.includes(row.id)}
                         onToggle={() => toggleCandidate(row.id)}
                         onConsignmentClick={setDetailsConsignmentId}
-                        onUpdateTransporter={(candidate) =>
-                          void updateCandidateTransporter(candidate)
-                        }
+                        onUpdateTransporter={openCandidateTransporterUpdate}
                       />
                     ))
                   ) : (
@@ -1375,6 +1386,56 @@ export function LtmsManifestList({
           Select a transporter to load its consignments.
         </div>
       )}
+      <ConsignmentDetailsDialog
+        consignmentId={detailsConsignmentId}
+        open={detailsConsignmentId !== null}
+        onOpenChange={(open) => !open && setDetailsConsignmentId(null)}
+      />
+      <Dialog
+        open={candidateTransporterRow !== null}
+        onOpenChange={(open) => !open && setCandidateTransporterRow(null)}
+      >
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Update Consignment Transporter</DialogTitle>
+          </DialogHeader>
+          {candidateTransporterRow && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Change transporter for {candidateTransporterRow.consignment_number}. The Fetch
+                Consignments list will reload using the selected Manifest transporter.
+              </p>
+              <Select
+                value={candidateTargetTransporterId}
+                onValueChange={setCandidateTargetTransporterId}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select transporter" />
+                </SelectTrigger>
+                <SelectContent>
+                  {transporters.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {item.transporter_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setCandidateTransporterRow(null)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" onClick={() => void updateCandidateTransporter()}>
+              Update Transporter
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
