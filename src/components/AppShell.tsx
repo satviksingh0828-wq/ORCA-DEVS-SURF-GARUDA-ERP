@@ -138,7 +138,7 @@ export function AppShell({
       )}
     >
       <header className="relative z-30 shrink-0 border-b border-border bg-card/85 backdrop-blur">
-        <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
+        <div className="flex h-16 w-full items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
           <Link to="/home" className="shrink-0">
             <img
               src={
@@ -203,7 +203,7 @@ export function AppShell({
         className={cn(
           "relative z-10",
           "min-h-0 flex-1 overflow-x-hidden overflow-y-auto [overflow-anchor:none]",
-          "mx-auto w-full max-w-screen-xl px-2 py-4 sm:px-4 sm:py-6",
+          "w-full max-w-none px-2 py-4 sm:px-4 sm:py-6",
           mainClassName,
         )}
       >
