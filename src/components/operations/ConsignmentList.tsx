@@ -751,14 +751,12 @@ export function ConsignmentList({
       });
   }, [branchId]);
   useEffect(() => {
-    if (type === "third_party") {
-      setFromPin(branch?.pin_code ?? "");
-      setToPin(movement === "drop" ? (selectedTransporter?.pin_code ?? "") : "");
+    if (type === "third_party" && movement === "drop") {
+      setToPin(selectedTransporter?.pin_code ?? "");
     } else {
-      setFromPin("");
       setToPin("");
     }
-  }, [type, movement, branch?.pin_code, selectedTransporter?.pin_code]);
+  }, [type, movement, selectedTransporter?.pin_code]);
 
   function openCreate() {
     setScreen("create");
@@ -952,10 +950,7 @@ export function ConsignmentList({
     if (!billingStatus) return toast.error("Select a Billing status");
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
     if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
-    if (
-      type === "third_party" &&
-      (!/^\d{6}$/.test(fromPin) || (movement === "drop" && !/^\d{6}$/.test(toPin)))
-    )
+    if (movement === "drop" && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
       return toast.error("Drop mode requires valid From and To Pincodes");
     if (!common) return toast.error("Add at least one E-Way Bill");
     if (
@@ -980,15 +975,9 @@ export function ConsignmentList({
       transporter_lr_number: transporterLrNumber.trim() || null,
       transporter_lr_date: transporterLrDate || null,
       delivery_date: deliveryDate || null,
-      // LTMS third-party routes run from the selected branch to the transporter.
-      // Pickup has no destination PIN because the transporter collects from the branch.
-      from_pin_code: type === "third_party" ? branch?.pin_code || null : common.supplier_pin_code,
-      to_pin_code:
-        type === "third_party"
-          ? movement === "drop"
-            ? selectedTransporter?.pin_code || null
-            : null
-          : common.recipient_pin_code,
+      // Keep the persisted route PINs identical to the visible Consignment From/To PIN fields.
+      from_pin_code: common.supplier_pin_code,
+      to_pin_code: common.recipient_pin_code,
       from_gstin: common.supplier_gstin,
       to_gstin: common.recipient_gstin,
       generation_mode: common.generation_mode,
@@ -1784,22 +1773,8 @@ function ConsignmentForm(props: any) {
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
             </div>
-            <ReadonlyField
-              dense
-              label="Consignment From PIN"
-              value={type === "third_party" ? branch?.pin_code : common?.supplier_pin_code}
-            />
-            {!(type === "third_party" && movement === "pickup") && (
-              <ReadonlyField
-                dense
-                label="Consignment To PIN"
-                value={
-                  type === "third_party"
-                    ? selectedTransporter?.pin_code
-                    : common?.recipient_pin_code
-                }
-              />
-            )}
+            <ReadonlyField dense label="Consignment From PIN" value={common?.supplier_pin_code} />
+            <ReadonlyField dense label="Consignment To PIN" value={common?.recipient_pin_code} />
             <div className="min-w-0 space-y-1">
               <Label className="text-xs font-semibold">Mode *</Label>
               <Select value={transportMode} onValueChange={setTransportMode}>
@@ -1997,7 +1972,6 @@ function ConsignmentForm(props: any) {
               <Input
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
                 value={fromPin}
-                readOnly={type === "third_party"}
                 onChange={(event) => setFromPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder={branch?.pin_code ?? "Branch pincode"}
               />
@@ -2007,7 +1981,6 @@ function ConsignmentForm(props: any) {
               <Input
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
                 value={toPin}
-                readOnly
                 disabled={type !== "third_party" || movement !== "drop"}
                 onChange={(event) => setToPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="Transporter pincode"
@@ -3087,15 +3060,8 @@ function ConsignmentView({
   const isThirdPartyDrop = row.consignment_type === "third_party" && row.movement_mode === "drop";
   const fromDetails = row.from_details ?? {};
   const toDetails = row.to_details ?? {};
-  const commonFromPin =
-    row.consignment_type === "third_party"
-      ? row.branch?.pin_code || row.from_pin_code
-      : drafts[0]?.supplier_pin_code || fromDetails.pincode || row.from_pin_code;
-  const commonToPin = isThirdPartyDrop
-    ? row.transporter?.pin_code || row.to_pin_code
-    : row.consignment_type === "third_party"
-      ? null
-      : drafts[0]?.recipient_pin_code || toDetails.pincode || row.to_pin_code;
+  const commonFromPin = drafts[0]?.supplier_pin_code || fromDetails.pincode || row.from_pin_code;
+  const commonToPin = drafts[0]?.recipient_pin_code || toDetails.pincode || row.to_pin_code;
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -3149,7 +3115,7 @@ function ConsignmentView({
         />
         <ReadonlyField label="Transport Mode" value={row.transport_mode} />
         <ReadonlyField label="Consignment From PIN" value={commonFromPin} />
-        {commonToPin && <ReadonlyField label="Consignment To PIN" value={commonToPin} />}
+        <ReadonlyField label="Consignment To PIN" value={commonToPin} />
       </div>
       <CommonEwayDetails draft={drafts[0]} />
       <section className="space-y-4 rounded-xl border border-border p-4">
@@ -3215,8 +3181,8 @@ function ConsignmentView({
       <section className="space-y-4 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Pincodes</h3>
         <div className="grid gap-3 md:grid-cols-2">
-          <ReadonlyField label="From Pincode" value={commonFromPin} />
-          {isThirdPartyDrop && <ReadonlyField label="To Pincode" value={commonToPin} />}
+          <ReadonlyField label="From Pincode" value={row.from_pin_code} />
+          {isThirdPartyDrop && <ReadonlyField label="To Pincode" value={row.to_pin_code} />}
         </div>
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
