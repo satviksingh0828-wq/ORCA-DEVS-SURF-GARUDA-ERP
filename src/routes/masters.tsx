@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
+import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { MasterList } from "@/components/masters/MasterList";
 import { Contracts } from "@/components/masters/Contracts";
@@ -186,7 +187,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
       <div className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}>
         {/* Desktop left nav */}
         {navOpen && (
-          <nav className="app-sidebar-scroll hidden lg:block lg:sticky lg:top-0 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+          <SharedSidebar open={navOpen} width="220px" label="Masters">
             <ul className="space-y-1">
               {TABS.map((t) => {
                 const Icon = t.icon;
@@ -212,7 +213,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
                 );
               })}
             </ul>
-          </nav>
+          </SharedSidebar>
         )}
 
         {/* Mobile dropdown navigation */}

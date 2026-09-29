@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
+import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { ProfitLossComparison } from "@/components/reports/ProfitLossComparison";
 import { VehicleExpenseReport } from "@/components/reports/VehicleExpenseReport";
@@ -152,7 +153,7 @@ function ReportsPage() {
       <div className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}>
         {/* ── Left nav (desktop) ── */}
         {navOpen && (
-          <nav className="app-sidebar-scroll hidden lg:block lg:sticky lg:top-0 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+          <SharedSidebar open={navOpen} width="220px" label="Reports">
             <ul className="space-y-1">
               {visibleTabs.map((t) => {
                 const Icon = t.icon;
@@ -178,7 +179,7 @@ function ReportsPage() {
                 );
               })}
             </ul>
-          </nav>
+          </SharedSidebar>
         )}
 
         {/* Mobile dropdown navigation */}

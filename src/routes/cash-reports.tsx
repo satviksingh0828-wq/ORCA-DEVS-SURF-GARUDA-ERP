@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { ChevronRight, PanelLeftClose, PanelLeftOpen, Truck, Wallet } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
+import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { CashLedger } from "@/components/reports/CashLedger";
 import { useSession } from "@/lib/session";
@@ -69,7 +70,7 @@ function CashReportsPage() {
     >
       <div className={`grid gap-6 ${navOpen ? "lg:grid-cols-[260px_1fr]" : "grid-cols-1"}`}>
         {navOpen && (
-          <nav className="hidden lg:block">
+          <SharedSidebar open={navOpen} width="260px" label="Cash reports">
             <ul className="space-y-1">
               {TABS.map((t) => {
                 const Icon = t.icon;
@@ -91,7 +92,7 @@ function CashReportsPage() {
                 );
               })}
             </ul>
-          </nav>
+          </SharedSidebar>
         )}
         <MobileTabDropdown tabs={TABS} activeId={tab} label="CASH REPORTS" onChange={setTab} />
         <ReportFiltersContext.Provider value={{ branchId, financialYear: "none" }}>

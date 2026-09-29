@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
+import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { CompanySettings } from "@/components/settings/CompanySettings";
 import { BranchSettings } from "@/components/settings/BranchSettings";
@@ -142,7 +143,7 @@ function SettingsPage() {
       <div className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}>
         {/* Desktop left nav */}
         {navOpen && (
-          <nav className="app-sidebar-scroll hidden lg:block lg:sticky lg:top-0 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+          <SharedSidebar open={navOpen} width="220px" label="Settings">
             <ul className="space-y-1">
               {TABS.map((t) => {
                 const Icon = t.icon;
@@ -168,7 +169,7 @@ function SettingsPage() {
                 );
               })}
             </ul>
-          </nav>
+          </SharedSidebar>
         )}
 
         {/* Mobile dropdown navigation */}

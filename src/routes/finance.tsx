@@ -13,6 +13,7 @@ import {
 import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
+import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { TabErrorBoundary } from "@/components/TabErrorBoundary";
 import { FinanceList } from "@/components/operations/FinanceList";
@@ -151,7 +152,7 @@ function FinancePage() {
         className={`grid items-start gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}
       >
         {navOpen && (
-          <nav className="app-sidebar-scroll hidden lg:block lg:sticky lg:top-0 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+          <SharedSidebar open={navOpen} width="220px" label="Finance">
             <ul className="space-y-1">
               {tabs.map((item) => {
                 const Icon = item.icon;
@@ -173,7 +174,7 @@ function FinancePage() {
                 );
               })}
             </ul>
-          </nav>
+          </SharedSidebar>
         )}
         <MobileTabDropdown tabs={tabs} activeId={safeTab} label="Finance" onChange={setTab} />
         <div className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>

@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
+import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { TabErrorBoundary } from "@/components/TabErrorBoundary";
 import { Trips } from "@/components/operations/Trips";
@@ -250,7 +251,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       >
         {/* Desktop left nav */}
         {navOpen && (
-          <nav className="app-sidebar-scroll hidden lg:block lg:sticky lg:top-0 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+          <SharedSidebar open={navOpen} width="220px" label="Operations">
             <ul className="space-y-1">
               {TABS.map((t) => {
                 const Icon = t.icon;
@@ -277,7 +278,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
                 );
               })}
             </ul>
-          </nav>
+          </SharedSidebar>
         )}
 
         {/* Mobile dropdown navigation */}
