@@ -21,7 +21,6 @@ type ConsignmentRow = {
   id: string;
   consignment_number: string;
   source_id: string | null;
-  transporter_id: string | null;
   consignment_date: string | null;
   consignment_type: string | null;
   transport_mode: string | null;
@@ -109,7 +108,7 @@ export function ConsignmentIncomeReport() {
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,source_id,transporter_id,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,source:contracts(contract_name)",
+          "id,consignment_number,source_id,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,source:contracts(contract_name)",
         )
         .gte("consignment_date", fromDate)
         .lte("consignment_date", toDate)
@@ -121,9 +120,6 @@ export function ConsignmentIncomeReport() {
       const consignmentIds = consignments.map((row) => row.id);
       const sourceIds = [
         ...new Set(consignments.map((row) => row.source_id).filter(Boolean)),
-      ] as string[];
-      const transporterIds = [
-        ...new Set(consignments.map((row) => row.transporter_id).filter(Boolean)),
       ] as string[];
       const [packages, contracts, entries] = await Promise.all([
         consignmentIds.length
@@ -144,16 +140,14 @@ export function ConsignmentIncomeReport() {
                 .in("id", sourceIds),
             )
           : Promise.resolve([] as ContractLite[]),
-        transporterIds.length
+        sourceIds.length
           ? fetchAll<ConsignmentEntry>(() =>
-              // The transporter-entry table is added by the app migration and is not in older generated Supabase types.
-              // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              (supabase as never as { from: (table: string) => any })
-                .from("ltms_transporter_entries")
+              supabase
+                .from("contract_entries")
                 .select(
-                  "id,transporter_id,mode,from_location_id,to_location_id,from_pin_code,to_pin_code,freight_route_range_type,freight_route_ranges,loading_route_range_type,loading_route_ranges",
+                  "id,contract_id,mode,from_location_id,to_location_id,from_pin_code,to_pin_code,freight_route_range_type,freight_route_ranges,loading_route_range_type,loading_route_ranges,per_manifest_amount",
                 )
-                .in("transporter_id", transporterIds),
+                .in("contract_id", sourceIds),
             )
           : Promise.resolve([] as ConsignmentEntry[]),
       ]);
@@ -166,22 +160,19 @@ export function ConsignmentIncomeReport() {
         packageTotals.set(item.consignment_id, current);
       }
       const contractMap = new Map(contracts.map((contract) => [contract.id, contract]));
-      const entriesByTransporter = new Map<string, ConsignmentEntry[]>();
+      const entriesBySource = new Map<string, ConsignmentEntry[]>();
       for (const entry of entries) {
-        const transporterId = String(
-          (entry as ConsignmentEntry & { transporter_id?: string }).transporter_id ?? "",
-        );
-        const list = entriesByTransporter.get(transporterId) ?? [];
+        const list = entriesBySource.get(entry.contract_id) ?? [];
         list.push(entry);
-        entriesByTransporter.set(transporterId, list);
+        entriesBySource.set(entry.contract_id, list);
       }
 
       setRows(
         consignments.map((row) => {
           const packageTotal = packageTotals.get(row.id) ?? { quantity: 0, weight: 0 };
           const contract = row.source_id ? contractMap.get(row.source_id) : undefined;
-          const entry = row.transporter_id
-            ? findConsignmentEntry(entriesByTransporter.get(row.transporter_id) ?? [], row)
+          const entry = row.source_id
+            ? findConsignmentEntry(entriesBySource.get(row.source_id) ?? [], row)
             : undefined;
           const charges = manifestCharges(contract, entry, {
             from_location_id: null,
