@@ -114,9 +114,6 @@ function Screen({ children }: { children: ReactNode }) {
       <div className="pointer-events-none absolute -bottom-28 -right-20 size-96 rounded-full bg-primary/10 blur-3xl" />
 
       <div className="surface-card relative z-10 w-full max-w-md animate-fade-up px-6 py-8 text-center sm:px-8">
-        <div className="mx-auto mb-6 flex w-40 items-center justify-center rounded-2xl bg-background p-3 shadow-sm ring-1 ring-border">
-          <img src="/garuda-logo.png" alt="Garuda Logistics Solution" className="h-auto w-full" />
-        </div>
         {children}
       </div>
 
