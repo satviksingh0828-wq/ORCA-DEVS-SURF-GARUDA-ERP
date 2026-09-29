@@ -268,6 +268,29 @@ function LoginPage() {
   const isLocked = lockedUntilMs > 0;
   const canSubmit = !!turnstileToken && !isLocked && !busy;
 
+  if (loginUi === "video" && !videoReady) {
+    return (
+      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
+        <video
+          className="hidden"
+          autoPlay
+          muted
+          playsInline
+          preload="auto"
+          aria-hidden="true"
+          onCanPlayThrough={() => setVideoReady(true)}
+          onError={() => setVideoReady(true)}
+        >
+          <source src={backgroundVideoUrl} />
+        </video>
+        <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+          <Loader2 className="size-6 animate-spin text-primary" />
+          <span>Loading sign-in…</span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <>
       {/* ── Error popup ───────────────────────────────────────────────────── */}
@@ -512,7 +535,6 @@ function LoginPage() {
               muted
               playsInline
               preload="auto"
-              poster="/garuda-banner.webp"
               aria-hidden="true"
               onCanPlayThrough={() => setVideoReady(true)}
               onError={() => setVideoReady(true)}
