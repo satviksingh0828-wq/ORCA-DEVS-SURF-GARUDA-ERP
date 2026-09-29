@@ -117,7 +117,7 @@ export function ApprovalChargeAdvanceReport() {
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      toast.error("Failed to load Transpoter advance report: " + message);
+      toast.error("Failed to load Rental Advance report: " + message);
     } finally {
       setLoading(false);
     }
@@ -231,7 +231,7 @@ export function ApprovalChargeAdvanceReport() {
       financialYear !== "none"
         ? `FY-${financialYear}-${Number(financialYear) + 1}`
         : `${startDate}_to_${endDate}`;
-    downloadCsv(csv, `transpoter_advance_${period}.csv`);
+    downloadCsv(csv, `rental_advance_${period}.csv`);
   }
 
   return (
@@ -318,7 +318,7 @@ export function ApprovalChargeAdvanceReport() {
               ) : visible.length === 0 ? (
                 <tr>
                   <td colSpan={5} className="py-12 text-center text-muted-foreground">
-                    No transpoter advance entries found for this period.
+                    No Rental Advance entries found for this period.
                   </td>
                 </tr>
               ) : (

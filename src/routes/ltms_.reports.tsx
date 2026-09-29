@@ -2,6 +2,7 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   ChevronRight,
+  ClipboardList,
   FileBarChart,
   FilePenLine,
   Package,
@@ -14,6 +15,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { MonthlyMISReport } from "@/components/reports/MonthlyMISReport";
+import { MonthlyMIS } from "@/components/operations/MonthlyMIS";
 import { UpdateConsignmentReport } from "@/components/reports/UpdateConsignmentReport";
 import { ConsignmentIncomeReport } from "@/components/reports/ConsignmentIncomeReport";
 import { TransporterExpenditureReport } from "@/components/reports/TransporterExpenditureReport";
@@ -26,6 +28,12 @@ const TABS = [
     label: "ADMIN MIS",
     desc: "Depot submissions and compliance overview",
     icon: FileBarChart,
+  },
+  {
+    id: "monthly-mis",
+    label: "Monthly MIS",
+    desc: "Branch-wise date-wise MIS submission calendar",
+    icon: ClipboardList,
   },
   {
     id: "update-consignment",
@@ -158,6 +166,7 @@ function ReportsPage() {
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>
           {tab === "admin-mis" && <MonthlyMISReport />}
+          {tab === "monthly-mis" && <MonthlyMIS />}
           {tab === "update-consignment" && <UpdateConsignmentReport />}
           {tab === "consignment-income" && <ConsignmentIncomeReport />}
           {tab === "transporter-expenditure" && <TransporterExpenditureReport />}
