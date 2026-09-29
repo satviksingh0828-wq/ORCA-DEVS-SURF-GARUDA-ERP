@@ -28,6 +28,10 @@ type ConsignmentRow = {
   from_pin_code: string | null;
   to_pin_code: string | null;
   transporter?: { transporter_name?: string | null; pin_code?: string | null } | null;
+  freight_deduction: number | string | null;
+  additional_freight: number | string | null;
+  loading_deduction: number | string | null;
+  additional_loading: number | string | null;
 };
 
 type PackageRow = {
@@ -114,7 +118,7 @@ export function TransporterExpenditureReport() {
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,transporter_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,transporter:ltms_transporters(transporter_name,pin_code)",
+          "id,consignment_number,transporter_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code)",
         )
         .eq("consignment_type", "third_party")
         .gte("consignment_date", fromDate)
@@ -190,9 +194,23 @@ export function TransporterExpenditureReport() {
             to_pin_code: route.toPin,
             total_quantity: packageTotal.quantity,
             total_weight: packageTotal.weight,
-            freight: charges.freight,
-            loading: charges.loading,
-            total_income: charges.freight + charges.loading,
+            freight: Math.max(
+              0,
+              charges.freight - num(row.freight_deduction) + num(row.additional_freight),
+            ),
+            loading: Math.max(
+              0,
+              charges.loading - num(row.loading_deduction) + num(row.additional_loading),
+            ),
+            total_income:
+              Math.max(
+                0,
+                charges.freight - num(row.freight_deduction) + num(row.additional_freight),
+              ) +
+              Math.max(
+                0,
+                charges.loading - num(row.loading_deduction) + num(row.additional_loading),
+              ),
             rateMatched: charges.matched && Boolean(entry),
           };
         }),

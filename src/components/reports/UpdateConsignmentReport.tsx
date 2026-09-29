@@ -29,6 +29,10 @@ type ConsignmentRow = {
   delivery_date: string | null;
   transporter_lr_number: string | null;
   transporter_lr_date: string | null;
+  freight_deduction: number | string | null;
+  additional_freight: number | string | null;
+  loading_deduction: number | string | null;
+  additional_loading: number | string | null;
   transporter?: { transporter_name?: string | null } | null;
   source?: { contract_name?: string | null } | null;
 };
@@ -37,6 +41,10 @@ type EditValues = {
   delivery_date: string;
   transporter_lr_number: string;
   transporter_lr_date: string;
+  freight_deduction: string;
+  additional_freight: string;
+  loading_deduction: string;
+  additional_loading: string;
 };
 
 export function UpdateConsignmentReport() {
@@ -52,6 +60,10 @@ export function UpdateConsignmentReport() {
     delivery_date: "",
     transporter_lr_number: "",
     transporter_lr_date: "",
+    freight_deduction: "0",
+    additional_freight: "0",
+    loading_deduction: "0",
+    additional_loading: "0",
   });
   const [saving, setSaving] = useState(false);
   const [detailsConsignmentId, setDetailsConsignmentId] = useState<string | null>(null);
@@ -71,7 +83,7 @@ export function UpdateConsignmentReport() {
     let query = supabase
       .from("consignments")
       .select(
-        "id,consignment_number,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date,source_id,branch:branches(branch_name),source:contracts(contract_name),transporter:ltms_transporters(transporter_name)",
+        "id,consignment_number,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date,freight_deduction,additional_freight,loading_deduction,additional_loading,source_id,branch:branches(branch_name),source:contracts(contract_name),transporter:ltms_transporters(transporter_name)",
       )
       .order("consignment_date", { ascending: false })
       .order("created_at", { ascending: false });
@@ -91,6 +103,10 @@ export function UpdateConsignmentReport() {
       delivery_date: row.delivery_date ?? "",
       transporter_lr_number: row.transporter_lr_number ?? "",
       transporter_lr_date: row.transporter_lr_date ?? "",
+      freight_deduction: String(row.freight_deduction ?? 0),
+      additional_freight: String(row.additional_freight ?? 0),
+      loading_deduction: String(row.loading_deduction ?? 0),
+      additional_loading: String(row.additional_loading ?? 0),
     });
   }
 
@@ -103,10 +119,14 @@ export function UpdateConsignmentReport() {
       .update({
         transporter_lr_number: isThirdParty ? values.transporter_lr_number.trim() || null : null,
         transporter_lr_date: isThirdParty ? values.transporter_lr_date || null : null,
+        freight_deduction: isThirdParty ? Number(values.freight_deduction) || 0 : 0,
+        additional_freight: isThirdParty ? Number(values.additional_freight) || 0 : 0,
+        loading_deduction: isThirdParty ? Number(values.loading_deduction) || 0 : 0,
+        additional_loading: isThirdParty ? Number(values.additional_loading) || 0 : 0,
       })
       .eq("id", editing.id)
       .select(
-        "id,consignment_number,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date,branch:branches(branch_name),source:contracts(contract_name),transporter:ltms_transporters(transporter_name)",
+        "id,consignment_number,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date,freight_deduction,additional_freight,loading_deduction,additional_loading,branch:branches(branch_name),source:contracts(contract_name),transporter:ltms_transporters(transporter_name)",
       )
       .single();
     setSaving(false);
@@ -299,6 +319,35 @@ export function UpdateConsignmentReport() {
                   }
                 />
               </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                {(
+                  [
+                    ["freight_deduction", "Freight Deduction"],
+                    ["additional_freight", "Additional Freight"],
+                    ["loading_deduction", "Loading Deduction"],
+                    ["additional_loading", "Additional Loading"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <div key={key} className="space-y-1.5">
+                    <label className="text-xs font-medium text-muted-foreground">{label}</label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={values[key]}
+                      disabled={editing.consignment_type !== "third_party"}
+                      onChange={(event) =>
+                        setValues((current) => ({ ...current, [key]: event.target.value }))
+                      }
+                      placeholder="0"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Final freight = calculated freight − deduction + additional freight. Final loading
+                follows the same rule.
+              </p>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
                   Transporter LR Date
