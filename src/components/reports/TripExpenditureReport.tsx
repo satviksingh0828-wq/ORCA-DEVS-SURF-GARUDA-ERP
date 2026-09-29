@@ -30,10 +30,12 @@ type TripRow = {
 type ConsignmentRow = {
   id: string;
   trip_id: string | null;
+  branch_id: string | null;
   consignment_number: string;
   consignment_type: string | null;
   movement_mode: string | null;
   consignment_date: string | null;
+  branch?: { branch_name?: string | null } | null;
 };
 type PackageRow = { consignment_id: string; weight_kg: number | string | null };
 type TripExpenseRow = { trip_id: string; amount: number | string | null };
@@ -79,6 +81,11 @@ function isEligibleMovement(trip: TripRow, consignment: ConsignmentRow) {
     (ownership === "third_party" && type === "third_party" && mode === "drop")
   );
 }
+function isEligibleWithoutTrip(consignment: ConsignmentRow) {
+  const type = String(consignment.consignment_type ?? "").toLowerCase();
+  const mode = String(consignment.movement_mode ?? "").toLowerCase();
+  return type === "own" || (type === "third_party" && mode === "drop");
+}
 
 export function TripExpenditureReport() {
   const [fromDate, setFromDate] = useState(monthStart);
@@ -103,48 +110,53 @@ export function TripExpenditureReport() {
     if (fromDate > toDate) return toast.error("From Date cannot be after To Date");
     setLoading(true);
     try {
-      let tripQuery = supabase
-        .from("trips")
+      let consignmentQuery = supabase
+        .from("consignments")
         .select(
-          "id,trip_code,ownership,branch_id,vehicle_id,driver_id,third_party_vehicle_number,start_date,branch:branches(branch_name),expense_hire_charges,expense_toll_charges,expense_toll_cash,expense_fuel,expense_driver_bata,expense_morning,expense_night,expense_sunday,expense_parking,expense_dala,expense_unloading",
+          "id,trip_id,branch_id,consignment_number,consignment_type,movement_mode,consignment_date,branch:branches(branch_name)",
         )
-        .in("ownership", ["own", "third_party"])
-        .gte("start_date", fromDate)
-        .lte("start_date", toDate)
-        .order("start_date", { ascending: false });
-      if (branchId !== "all") tripQuery = tripQuery.eq("branch_id", branchId);
-      const trips = await fetchAll<TripRow & Record<string, unknown>>(() => tripQuery);
-      const tripIds = trips.map((trip) => trip.id);
-      if (!tripIds.length) {
-        setRows([]);
-        return;
-      }
-      const [consignments, tripExpenses, vehicles, drivers] = await Promise.all([
-        fetchAll<ConsignmentRow>(() =>
-          supabase
-            .from("consignments")
-            .select("id,trip_id,consignment_number,consignment_type,movement_mode,consignment_date")
-            .in("trip_id", tripIds),
-        ),
-        fetchAll<TripExpenseRow>(() =>
-          supabase.from("trip_expenses").select("trip_id,amount").in("trip_id", tripIds),
-        ),
-        fetchAll<VehicleRow>(() =>
-          supabase
-            .from("vehicles")
-            .select("id,registration_number")
-            .in("id", [
-              ...new Set(trips.map((trip) => trip.vehicle_id).filter(Boolean)),
-            ] as string[]),
-        ),
-        fetchAll<DriverRow>(() =>
-          supabase
-            .from("drivers")
-            .select("id,full_name,driver_code")
-            .in("id", [
-              ...new Set(trips.map((trip) => trip.driver_id).filter(Boolean)),
-            ] as string[]),
-        ),
+        .gte("consignment_date", fromDate)
+        .lte("consignment_date", toDate)
+        .order("consignment_date", { ascending: false });
+      if (branchId !== "all") consignmentQuery = consignmentQuery.eq("branch_id", branchId);
+      const consignments = await fetchAll<ConsignmentRow>(() => consignmentQuery);
+      const tripIds = [
+        ...new Set(consignments.map((consignment) => consignment.trip_id).filter(Boolean)),
+      ] as string[];
+      const trips = tripIds.length
+        ? await fetchAll<TripRow & Record<string, unknown>>(() =>
+            supabase
+              .from("trips")
+              .select(
+                "id,trip_code,ownership,branch_id,vehicle_id,driver_id,third_party_vehicle_number,start_date,branch:branches(branch_name),expense_hire_charges,expense_toll_charges,expense_toll_cash,expense_fuel,expense_driver_bata,expense_morning,expense_night,expense_sunday,expense_parking,expense_dala,expense_unloading",
+              )
+              .in("id", tripIds)
+              .in("ownership", ["own", "third_party"])
+              .order("start_date", { ascending: false }),
+          )
+        : [];
+      const vehicleIds = [
+        ...new Set(trips.map((trip) => trip.vehicle_id).filter(Boolean)),
+      ] as string[];
+      const driverIds = [
+        ...new Set(trips.map((trip) => trip.driver_id).filter(Boolean)),
+      ] as string[];
+      const [tripExpenses, vehicles, drivers] = await Promise.all([
+        tripIds.length
+          ? fetchAll<TripExpenseRow>(() =>
+              supabase.from("trip_expenses").select("trip_id,amount").in("trip_id", tripIds),
+            )
+          : Promise.resolve([] as TripExpenseRow[]),
+        vehicleIds.length
+          ? fetchAll<VehicleRow>(() =>
+              supabase.from("vehicles").select("id,registration_number").in("id", vehicleIds),
+            )
+          : Promise.resolve([] as VehicleRow[]),
+        driverIds.length
+          ? fetchAll<DriverRow>(() =>
+              supabase.from("drivers").select("id,full_name,driver_code").in("id", driverIds),
+            )
+          : Promise.resolve([] as DriverRow[]),
       ]);
       const consignmentIds = consignments.map((consignment) => consignment.id);
       const packages = consignmentIds.length
@@ -221,6 +233,32 @@ export function TripExpenditureReport() {
               tripWeight > 0 ? (tripExpenditure / tripWeight) * item.weight : 0,
           });
         }
+      }
+      const assignedConsignmentIds = new Set(nextRows.map((row) => row.id));
+      for (const consignment of consignments) {
+        if (consignment.trip_id || assignedConsignmentIds.has(consignment.id)) continue;
+        if (!isEligibleWithoutTrip(consignment)) continue;
+        const isThirdPartyDrop =
+          String(consignment.consignment_type ?? "").toLowerCase() === "third_party";
+        nextRows.push({
+          id: consignment.id,
+          trip_id: "",
+          trip_code: "Not assigned",
+          ownership: isThirdPartyDrop ? "Third Party Drop" : "Own",
+          branch:
+            consignment.branch?.branch_name ??
+            branches.find((branch) => branch.id === consignment.branch_id)?.branch_name ??
+            "—",
+          vehicle_number: "—",
+          driver: "—",
+          start_date: "—",
+          consignment_number: consignment.consignment_number,
+          consignment_date: consignment.consignment_date ?? "—",
+          consignment_weight: packagesByConsignment.get(consignment.id) ?? 0,
+          trip_weight: 0,
+          trip_expenditure: 0,
+          consignment_expenditure: 0,
+        });
       }
       setRows(nextRows);
     } catch (error) {
@@ -362,9 +400,9 @@ export function TripExpenditureReport() {
         </div>
       </div>
       <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        All consignments assigned to Own trips and Third Party Drop trips are included. Consignment
-        Expenditure = (Trip Expenditure ÷ Total assigned Package Information Weight) × Consignment
-        Package Information Weight.
+        All Own and Third Party Drop consignments are included, even before a trip is assigned.
+        Assigned rows use: (Trip Expenditure ÷ Total assigned Package Information Weight) ×
+        Consignment Package Information Weight.
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -412,7 +450,7 @@ export function TripExpenditureReport() {
               ) : !filtered.length ? (
                 <tr>
                   <td colSpan={11} className="py-12 text-center text-muted-foreground">
-                    No own or third-party drop trips found.
+                    No own or third-party drop consignments found.
                   </td>
                 </tr>
               ) : (
