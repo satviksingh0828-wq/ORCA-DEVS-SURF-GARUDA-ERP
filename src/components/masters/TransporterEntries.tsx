@@ -258,7 +258,7 @@ export function TransporterEntries({
           <DialogContent>
             <DialogHeader>
               <DialogTitle>
-                {editingSourceId ? "Edit transporter source" : "Create transporter source"}
+                {editingSourceId ? "Edit / rename transporter source" : "Create transporter source"}
               </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">

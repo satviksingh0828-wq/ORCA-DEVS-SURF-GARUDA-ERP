@@ -151,7 +151,9 @@ export function ContractForm({
   const [saving, setSaving] = useState(false);
   const [showCompany, setShowCompany] = useState(!!initial.company_name);
   const [assetLedgers, setAssetLedgers] = useState<Array<{ id: string; account_name: string }>>([]);
-  const [incomeLedgers, setIncomeLedgers] = useState<Array<{ id: string; account_name: string }>>([]);
+  const [incomeLedgers, setIncomeLedgers] = useState<Array<{ id: string; account_name: string }>>(
+    [],
+  );
   const [incomeLines, setIncomeLines] = useState<FixedIncomeLine[]>([]);
 
   useEffect(() => {
@@ -188,8 +190,18 @@ export function ContractForm({
         return;
       }
       const db = supabase as any;
-      const { data } = await db.from("fixed_income_lines").select("id,frequency,income_name,amount,income_ledger_id,note").eq("contract_id", initial.id).eq("is_active", true).order("created_at");
-      setIncomeLines((data ?? []).map((line: FixedIncomeLine) => ({ ...line, amount: String(line.amount ?? "") })));
+      const { data } = await db
+        .from("fixed_income_lines")
+        .select("id,frequency,income_name,amount,income_ledger_id,note")
+        .eq("contract_id", initial.id)
+        .eq("is_active", true)
+        .order("created_at");
+      setIncomeLines(
+        (data ?? []).map((line: FixedIncomeLine) => ({
+          ...line,
+          amount: String(line.amount ?? ""),
+        })),
+      );
     }
     void loadLines();
   }, [initial.id]);
@@ -205,12 +217,14 @@ export function ContractForm({
       ...rest,
       start_date: rest.start_date?.trim() || null,
       end_date: rest.end_date?.trim() || null,
-      fixed_monthly_charge: rest.fixed_monthly_charge === "" || rest.fixed_monthly_charge == null
-        ? 0
-        : Number(rest.fixed_monthly_charge),
-      fixed_yearly_charge: rest.fixed_yearly_charge === "" || rest.fixed_yearly_charge == null
-        ? 0
-        : Number(rest.fixed_yearly_charge),
+      fixed_monthly_charge:
+        rest.fixed_monthly_charge === "" || rest.fixed_monthly_charge == null
+          ? 0
+          : Number(rest.fixed_monthly_charge),
+      fixed_yearly_charge:
+        rest.fixed_yearly_charge === "" || rest.fixed_yearly_charge == null
+          ? 0
+          : Number(rest.fixed_yearly_charge),
     } as never;
     const res = id
       ? await supabase.from("contracts").update(payload).eq("id", id)
@@ -220,11 +234,21 @@ export function ContractForm({
     const contractId = id ?? (res.data as { id: string } | null)?.id;
     if (!contractId) return toast.error("Could not identify the saved source");
     const db = supabase as any;
-    const { error: deleteLinesError } = await db.from("fixed_income_lines").delete().eq("contract_id", contractId);
+    const { error: deleteLinesError } = await db
+      .from("fixed_income_lines")
+      .delete()
+      .eq("contract_id", contractId);
     if (deleteLinesError) return toast.error(deleteLinesError.message);
     const linePayload = incomeLines
       .filter((line) => line.income_name.trim() && Number(line.amount) > 0 && line.income_ledger_id)
-      .map((line) => ({ contract_id: contractId, frequency: line.frequency, income_name: line.income_name.trim(), amount: Number(line.amount), income_ledger_id: line.income_ledger_id, note: line.note.trim() }));
+      .map((line) => ({
+        contract_id: contractId,
+        frequency: line.frequency,
+        income_name: line.income_name.trim(),
+        amount: Number(line.amount),
+        income_ledger_id: line.income_ledger_id,
+        note: line.note.trim(),
+      }));
     if (linePayload.length > 0) {
       const { error: insertLinesError } = await db.from("fixed_income_lines").insert(linePayload);
       if (insertLinesError) return toast.error(insertLinesError.message);
@@ -260,7 +284,11 @@ export function ContractForm({
           Back to sources
         </Button>
         <h2 className="text-lg font-semibold tracking-tight">
-          {form.id ? (isInactive ? "View source (inactive)" : "Edit source") : "New source"}
+          {form.id
+            ? isInactive
+              ? "View source (inactive)"
+              : "Edit / rename source"
+            : "New source"}
         </h2>
         {isInactive && (
           <span className="inline-flex items-center gap-1 rounded-full bg-muted px-2.5 py-1 text-xs font-medium text-muted-foreground">
@@ -271,8 +299,8 @@ export function ContractForm({
 
       {isInactive && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 dark:border-amber-800/40 dark:bg-amber-950/30 dark:text-amber-300">
-          This source is <strong>inactive</strong> — its data is shown for reference only and cannot be edited.
-          To reactivate it, change the status to Active below and save.
+          This source is <strong>inactive</strong> — its data is shown for reference only and cannot
+          be edited. To reactivate it, change the status to Active below and save.
         </div>
       )}
 
@@ -299,7 +327,9 @@ export function ContractForm({
             >
               <option value="">Select asset account</option>
               {assetLedgers.map((ledger) => (
-                <option key={ledger.id} value={ledger.id}>{ledger.account_name}</option>
+                <option key={ledger.id} value={ledger.id}>
+                  {ledger.account_name}
+                </option>
               ))}
             </select>
           </div>
@@ -327,7 +357,9 @@ export function ContractForm({
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">
               End Date{" "}
-              <span className="text-muted-foreground/60">(optional — leave blank for no expiry)</span>
+              <span className="text-muted-foreground/60">
+                (optional — leave blank for no expiry)
+              </span>
             </Label>
             <Input
               className="h-10"
@@ -339,10 +371,7 @@ export function ContractForm({
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Status</Label>
-            <Select
-              value={form.status ?? "active"}
-              onValueChange={handleStatusChange}
-            >
+            <Select value={form.status ?? "active"} onValueChange={handleStatusChange}>
               <SelectTrigger className="h-10">
                 <SelectValue />
               </SelectTrigger>
@@ -362,35 +391,118 @@ export function ContractForm({
 
       <Section title="Fixed recurring charges">
         <p className="mb-4 text-xs text-muted-foreground">
-          Optional fixed charges billed on this contract. Yearly charges are automatically
-          divided by 12 to calculate monthly cost in Fixed Incomes reports.
+          Optional fixed charges billed on this contract. Yearly charges are automatically divided
+          by 12 to calculate monthly cost in Fixed Incomes reports.
         </p>
         <div className="mb-5 space-y-3">
           {incomeLines.map((line, index) => (
-            <div key={line.id ?? index} className="grid grid-cols-1 gap-2 rounded-lg border border-border p-3 sm:grid-cols-6">
-              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={line.frequency} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, frequency: e.target.value as "monthly" | "yearly" } : row))}>
-                <option value="monthly">Monthly</option><option value="yearly">Yearly</option>
+            <div
+              key={line.id ?? index}
+              className="grid grid-cols-1 gap-2 rounded-lg border border-border p-3 sm:grid-cols-6"
+            >
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={line.frequency}
+                onChange={(e) =>
+                  setIncomeLines((rows) =>
+                    rows.map((row, i) =>
+                      i === index
+                        ? { ...row, frequency: e.target.value as "monthly" | "yearly" }
+                        : row,
+                    ),
+                  )
+                }
+              >
+                <option value="monthly">Monthly</option>
+                <option value="yearly">Yearly</option>
               </select>
-              <Input className="h-10" placeholder="Income name" value={line.income_name} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, income_name: e.target.value } : row))} />
-              <Input className="h-10" type="number" min="0" step="0.01" placeholder="Amount" value={line.amount} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, amount: e.target.value } : row))} />
-              <select className="h-10 rounded-md border border-input bg-background px-3 text-sm" value={line.income_ledger_id} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, income_ledger_id: e.target.value } : row))}>
+              <Input
+                className="h-10"
+                placeholder="Income name"
+                value={line.income_name}
+                onChange={(e) =>
+                  setIncomeLines((rows) =>
+                    rows.map((row, i) =>
+                      i === index ? { ...row, income_name: e.target.value } : row,
+                    ),
+                  )
+                }
+              />
+              <Input
+                className="h-10"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Amount"
+                value={line.amount}
+                onChange={(e) =>
+                  setIncomeLines((rows) =>
+                    rows.map((row, i) => (i === index ? { ...row, amount: e.target.value } : row)),
+                  )
+                }
+              />
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={line.income_ledger_id}
+                onChange={(e) =>
+                  setIncomeLines((rows) =>
+                    rows.map((row, i) =>
+                      i === index ? { ...row, income_ledger_id: e.target.value } : row,
+                    ),
+                  )
+                }
+              >
                 <option value="">Select income account</option>
-                {incomeLedgers.map((ledger) => <option key={ledger.id} value={ledger.id}>{ledger.account_name}</option>)}
+                {incomeLedgers.map((ledger) => (
+                  <option key={ledger.id} value={ledger.id}>
+                    {ledger.account_name}
+                  </option>
+                ))}
               </select>
-              <Input className="h-10" placeholder="Optional note" value={line.note} onChange={(e) => setIncomeLines((rows) => rows.map((row, i) => i === index ? { ...row, note: e.target.value } : row))} />
-              <Button type="button" variant="outline" onClick={() => setIncomeLines((rows) => rows.filter((_, i) => i !== index))}>Remove</Button>
+              <Input
+                className="h-10"
+                placeholder="Optional note"
+                value={line.note}
+                onChange={(e) =>
+                  setIncomeLines((rows) =>
+                    rows.map((row, i) => (i === index ? { ...row, note: e.target.value } : row)),
+                  )
+                }
+              />
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIncomeLines((rows) => rows.filter((_, i) => i !== index))}
+              >
+                Remove
+              </Button>
             </div>
           ))}
-          <Button type="button" variant="outline" onClick={() => setIncomeLines((rows) => [...rows, { frequency: "monthly", income_name: "", amount: "", income_ledger_id: "", note: "" }])}>Add fixed income</Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setIncomeLines((rows) => [
+                ...rows,
+                {
+                  frequency: "monthly",
+                  income_name: "",
+                  amount: "",
+                  income_ledger_id: "",
+                  note: "",
+                },
+              ])
+            }
+          >
+            Add fixed income
+          </Button>
         </div>
       </Section>
 
       <section className="surface-card p-6">
         <div className="flex items-center justify-between">
           <div>
-            <h3 className="text-sm font-semibold tracking-tight">
-              Contracting company details
-            </h3>
+            <h3 className="text-sm font-semibold tracking-tight">Contracting company details</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Optional — details of the company you are contracting with.
             </p>
@@ -406,26 +518,130 @@ export function ContractForm({
         </div>
         {showCompany ? (
           <div className="mt-5 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
-            <TextField label="Company Name" full value={form.company_name ?? ""} onChange={(v) => patch({ company_name: v })} disabled={isInactive} />
-            <TextField label="Legal Business Name" value={form.legal_business_name ?? ""} onChange={(v) => patch({ legal_business_name: v })} disabled={isInactive} />
-            <TextField label="Company Type" value={form.company_type ?? ""} onChange={(v) => patch({ company_type: v })} disabled={isInactive} />
-            <TextField label="Industry" value={form.industry ?? ""} onChange={(v) => patch({ industry: v })} disabled={isInactive} />
-            <TextField label="PAN" value={form.pan ?? ""} onChange={(v) => patch({ pan: v })} disabled={isInactive} />
-            <TextField label="GSTIN" value={form.gstin ?? ""} onChange={(v) => patch({ gstin: v })} disabled={isInactive} />
-            <TextField label="CIN" value={form.cin ?? ""} onChange={(v) => patch({ cin: v })} disabled={isInactive} />
-            <TextField label="MSME / Udyam" value={form.msme_udyam ?? ""} onChange={(v) => patch({ msme_udyam: v })} disabled={isInactive} />
-            <TextField label="TAN" value={form.tan ?? ""} onChange={(v) => patch({ tan: v })} disabled={isInactive} />
-            <TextField label="IEC" value={form.iec ?? ""} onChange={(v) => patch({ iec: v })} disabled={isInactive} />
-            <TextField label="Address Line 1" full value={form.address_line1 ?? ""} onChange={(v) => patch({ address_line1: v })} disabled={isInactive} />
-            <TextField label="Address Line 2" full value={form.address_line2 ?? ""} onChange={(v) => patch({ address_line2: v })} disabled={isInactive} />
-            <TextField label="City" value={form.city ?? ""} onChange={(v) => patch({ city: v })} disabled={isInactive} />
-            <TextField label="State" value={form.state ?? ""} onChange={(v) => patch({ state: v })} disabled={isInactive} />
-            <TextField label="Country" value={form.country ?? ""} onChange={(v) => patch({ country: v })} disabled={isInactive} />
-            <TextField label="PIN Code" value={form.pin_code ?? ""} onChange={(v) => patch({ pin_code: v })} disabled={isInactive} />
-            <TextField label="Mobile" value={form.mobile_number ?? ""} onChange={(v) => patch({ mobile_number: v })} disabled={isInactive} />
-            <TextField label="Telephone" value={form.telephone_number ?? ""} onChange={(v) => patch({ telephone_number: v })} disabled={isInactive} />
-            <TextField label="Email" type="email" value={form.email ?? ""} onChange={(v) => patch({ email: v })} disabled={isInactive} />
-            <TextField label="Website" value={form.website ?? ""} onChange={(v) => patch({ website: v })} disabled={isInactive} />
+            <TextField
+              label="Company Name"
+              full
+              value={form.company_name ?? ""}
+              onChange={(v) => patch({ company_name: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Legal Business Name"
+              value={form.legal_business_name ?? ""}
+              onChange={(v) => patch({ legal_business_name: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Company Type"
+              value={form.company_type ?? ""}
+              onChange={(v) => patch({ company_type: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Industry"
+              value={form.industry ?? ""}
+              onChange={(v) => patch({ industry: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="PAN"
+              value={form.pan ?? ""}
+              onChange={(v) => patch({ pan: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="GSTIN"
+              value={form.gstin ?? ""}
+              onChange={(v) => patch({ gstin: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="CIN"
+              value={form.cin ?? ""}
+              onChange={(v) => patch({ cin: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="MSME / Udyam"
+              value={form.msme_udyam ?? ""}
+              onChange={(v) => patch({ msme_udyam: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="TAN"
+              value={form.tan ?? ""}
+              onChange={(v) => patch({ tan: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="IEC"
+              value={form.iec ?? ""}
+              onChange={(v) => patch({ iec: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Address Line 1"
+              full
+              value={form.address_line1 ?? ""}
+              onChange={(v) => patch({ address_line1: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Address Line 2"
+              full
+              value={form.address_line2 ?? ""}
+              onChange={(v) => patch({ address_line2: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="City"
+              value={form.city ?? ""}
+              onChange={(v) => patch({ city: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="State"
+              value={form.state ?? ""}
+              onChange={(v) => patch({ state: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Country"
+              value={form.country ?? ""}
+              onChange={(v) => patch({ country: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="PIN Code"
+              value={form.pin_code ?? ""}
+              onChange={(v) => patch({ pin_code: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Mobile"
+              value={form.mobile_number ?? ""}
+              onChange={(v) => patch({ mobile_number: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Telephone"
+              value={form.telephone_number ?? ""}
+              onChange={(v) => patch({ telephone_number: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Email"
+              type="email"
+              value={form.email ?? ""}
+              onChange={(v) => patch({ email: v })}
+              disabled={isInactive}
+            />
+            <TextField
+              label="Website"
+              value={form.website ?? ""}
+              onChange={(v) => patch({ website: v })}
+              disabled={isInactive}
+            />
           </div>
         ) : null}
       </section>
@@ -441,10 +657,7 @@ export function ContractForm({
           </Button>
         )}
         {isInactive && (
-          <Button
-            type="button"
-            onClick={() => patch({ status: "active" })}
-          >
+          <Button type="button" onClick={() => patch({ status: "active" })}>
             Reactivate
           </Button>
         )}
