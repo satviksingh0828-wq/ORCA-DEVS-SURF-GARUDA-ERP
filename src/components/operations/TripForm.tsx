@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft,
+  CheckCircle2,
   Clock3,
   Link2,
   Loader2,
@@ -844,6 +845,23 @@ export function TripForm({
     }
   }
 
+  async function closeTrip() {
+    if (!trip.id || isViewer || trip.closed === true) return;
+    const { error } = await supabase
+      .from("trips")
+      .update({ closed: true } as never)
+      .eq("id", trip.id);
+    if (error) return toast.error(error.message);
+    setTrip((current) => ({ ...current, closed: true }));
+    logAction("updated", "trip", {
+      entityId: trip.id,
+      entityLabel: trip.trip_code,
+      details: { closed: true },
+    });
+    toast.success("Trip marked closed");
+    onSaved();
+  }
+
   // Ensure selected tab exists in TABS (e.g. basic user was on "summary")
   const activeTab = (TABS as readonly { id: string; label: string }[]).find((t) => t.id === tab)
     ? tab
@@ -891,6 +909,16 @@ export function TripForm({
           )}
           Internal Note
         </Button>
+        {trip.id && trip.closed !== true && !isViewer ? (
+          <Button variant="outline" size="sm" onClick={() => void closeTrip()}>
+            <CheckCircle2 className="size-4" />
+            Close Trip
+          </Button>
+        ) : trip.closed === true ? (
+          <Badge variant="outline" className="border-emerald-300 text-emerald-700">
+            Closed
+          </Badge>
+        ) : null}
         {!isViewer && (
           <Button onClick={() => saveTrip()} disabled={saving}>
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}

@@ -107,22 +107,6 @@ export function Trips({
     load();
   }
 
-  async function closeTrip(trip: TripRow) {
-    if (!trip.id || isViewer) return;
-    const { error } = await supabase
-      .from("trips")
-      .update({ closed: true } as never)
-      .eq("id", trip.id);
-    if (error) return toast.error(error.message);
-    logAction("updated", "trip", {
-      entityId: trip.id,
-      entityLabel: trip.trip_code,
-      details: { closed: true },
-    });
-    toast.success("Trip marked closed");
-    load();
-  }
-
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const matchesTripSearch = (
     id: string | null | undefined,
@@ -258,11 +242,6 @@ export function Trips({
                       </span>
                     ) : null}
                     <DriverTripActions trip={t} />
-                    {!isViewer && (
-                      <Button variant="outline" size="sm" onClick={() => void closeTrip(t)}>
-                        <CheckCircle2 className="mr-1 size-4" /> Close trip
-                      </Button>
-                    )}
                     {!isViewer && !t.part_b_locked_at && (
                       <Button
                         variant="ghost"
