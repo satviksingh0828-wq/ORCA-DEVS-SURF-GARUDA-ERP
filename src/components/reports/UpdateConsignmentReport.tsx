@@ -102,6 +102,7 @@ export function UpdateConsignmentReport() {
       .from("consignments")
       .update({
         transporter_lr_number: isThirdParty ? values.transporter_lr_number.trim() || null : null,
+        transporter_lr_date: isThirdParty ? values.transporter_lr_date || null : null,
       })
       .eq("id", editing.id)
       .select(
@@ -300,13 +301,20 @@ export function UpdateConsignmentReport() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">
-                  Transporter LR Date (Read Only)
+                  Transporter LR Date
+                  {editing.consignment_type !== "third_party" ? " (Read Only)" : ""}
                 </label>
                 <Input
                   type="date"
                   value={values.transporter_lr_date}
-                  readOnly
-                  className="bg-muted/40"
+                  readOnly={editing.consignment_type !== "third_party"}
+                  onChange={(event) =>
+                    setValues((current) => ({
+                      ...current,
+                      transporter_lr_date: event.target.value,
+                    }))
+                  }
+                  className={editing.consignment_type !== "third_party" ? "bg-muted/40" : ""}
                 />
               </div>
             </div>
