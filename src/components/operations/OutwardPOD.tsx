@@ -199,6 +199,7 @@ export function OutwardPOD() {
     if (!needle) return [];
     return rows
       .filter((row) => {
+        if (first(row.outward_pod)) return false;
         if (searchBy === "consignment")
           return row.consignment_number.toLowerCase().includes(needle);
         return party(row, searchBy).toLowerCase().includes(needle);
