@@ -6,6 +6,7 @@ import {
   FilePenLine,
   Package,
   ReceiptText,
+  Truck,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { UpdateConsignmentReport } from "@/components/reports/UpdateConsignmentR
 import { ConsignmentIncomeReport } from "@/components/reports/ConsignmentIncomeReport";
 import { TransporterExpenditureReport } from "@/components/reports/TransporterExpenditureReport";
 import { LoadingChargesReport } from "@/components/reports/LoadingChargesReport";
+import { TripExpenditureReport } from "@/components/reports/TripExpenditureReport";
 
 const TABS = [
   {
@@ -48,6 +50,12 @@ const TABS = [
     label: "Loading Charges",
     desc: "Package-rate loading with deductions and additions",
     icon: Package,
+  },
+  {
+    id: "trip-expenditure",
+    label: "Trip Expenditure",
+    desc: "Allocate trip costs by consignment package weight",
+    icon: Truck,
   },
 ] as const;
 
@@ -154,6 +162,7 @@ function ReportsPage() {
           {tab === "consignment-income" && <ConsignmentIncomeReport />}
           {tab === "transporter-expenditure" && <TransporterExpenditureReport />}
           {tab === "loading-charges" && <LoadingChargesReport />}
+          {tab === "trip-expenditure" && <TripExpenditureReport />}
         </div>
       </div>
     </AppShell>
