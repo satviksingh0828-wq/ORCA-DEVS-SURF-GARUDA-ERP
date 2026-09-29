@@ -9,6 +9,7 @@ import {
   Package,
   ReceiptText,
   Truck,
+  Scale,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -23,6 +24,7 @@ import { TransporterExpenditureReport } from "@/components/reports/TransporterEx
 import { LoadingChargesReport } from "@/components/reports/LoadingChargesReport";
 import { TripExpenditureReport } from "@/components/reports/TripExpenditureReport";
 import { EwayBillList } from "@/components/operations/EwayBillList";
+import { ConsignmentNetReport } from "@/components/reports/ConsignmentNetReport";
 
 const TABS = [
   {
@@ -72,6 +74,12 @@ const TABS = [
     label: "Trip Expenditure",
     desc: "Allocate trip costs by consignment package weight",
     icon: Truck,
+  },
+  {
+    id: "consignment-net",
+    label: "Consignment Net",
+    desc: "Income, expenditure and net by consignment",
+    icon: Scale,
   },
 ] as const;
 
@@ -181,6 +189,7 @@ function ReportsPage() {
           {tab === "transporter-expenditure" && <TransporterExpenditureReport />}
           {tab === "loading-charges" && <LoadingChargesReport />}
           {tab === "trip-expenditure" && <TripExpenditureReport />}
+          {tab === "consignment-net" && <ConsignmentNetReport />}
         </div>
       </div>
     </AppShell>
