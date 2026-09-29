@@ -242,8 +242,8 @@ export function ConsignmentIncomeReport() {
         Date: row.consignment_date ?? "",
         Source: row.source?.contract_name ?? "",
         Mode: row.transport_mode ?? "",
-        "From PIN": row.from_pin_code ?? "",
-        "To PIN": row.to_pin_code ?? "",
+        "Consignment From PIN": row.from_pin_code ?? "",
+        "Consignment To PIN": row.to_pin_code ?? "",
         "Total Quantity": row.total_quantity,
         "Total Weight (KG)": row.total_weight,
         Freight: row.freight,
@@ -255,8 +255,8 @@ export function ConsignmentIncomeReport() {
         "Date",
         "Source",
         "Mode",
-        "From PIN",
-        "To PIN",
+        "Consignment From PIN",
+        "Consignment To PIN",
         "Total Quantity",
         "Total Weight (KG)",
         "Freight",
@@ -346,8 +346,8 @@ export function ConsignmentIncomeReport() {
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Mode</th>
-                <th className="px-4 py-3">From PIN</th>
-                <th className="px-4 py-3">To PIN</th>
+                <th className="px-4 py-3">Consignment From PIN</th>
+                <th className="px-4 py-3">Consignment To PIN</th>
                 <th className="px-4 py-3 text-right">Quantity</th>
                 <th className="px-4 py-3 text-right">Weight (KG)</th>
                 <th className="px-4 py-3 text-right">Freight</th>
