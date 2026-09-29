@@ -210,7 +210,7 @@ export function ConsignmentIncomeReport() {
             quantity: String(packageTotal.quantity),
           });
           return {
-            ...row,
+            ...incomeRow,
             total_quantity: packageTotal.quantity,
             total_weight: packageTotal.weight,
             freight: charges.freight,
