@@ -126,11 +126,13 @@ export function AccountsSectionNav({
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
   const sidebarRef = useRef<HTMLElement>(null);
+  const layoutRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
     if (!desktop) return;
-    const layout = sidebarRef.current?.parentElement;
+    const layout = sidebarRef.current?.parentElement ?? layoutRef.current;
     if (!layout) return;
+    layoutRef.current = layout;
     layout.style.gridTemplateColumns = sidebarOpen ? "220px minmax(0, 1fr)" : "1fr";
     const content = layout.children[1] as HTMLElement | undefined;
     if (content) content.style.gridColumnStart = sidebarOpen ? "2" : "1";
