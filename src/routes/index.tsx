@@ -87,6 +87,7 @@ function LoginPage() {
   const { credentialId } = usePasskeyContext();
   const navigate = useNavigate();
   const { loginUi, backgroundVideoUrl } = useTheme();
+  const [videoReady, setVideoReady] = useState(loginUi !== "video");
 
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
@@ -183,6 +184,10 @@ function LoginPage() {
   useEffect(() => {
     if (ready && user) navigate({ to: "/home", replace: true });
   }, [ready, user, navigate]);
+
+  useEffect(() => {
+    setVideoReady(loginUi !== "video");
+  }, [loginUi, backgroundVideoUrl]);
 
   useEffect(() => {
     function tick() {
@@ -509,6 +514,9 @@ function LoginPage() {
               preload="auto"
               poster="/garuda-banner.webp"
               aria-hidden="true"
+              onCanPlay={() => setVideoReady(true)}
+              onLoadedData={() => setVideoReady(true)}
+              onError={() => setVideoReady(true)}
             >
               <source src={backgroundVideoUrl} />
             </video>
@@ -541,101 +549,111 @@ function LoginPage() {
 
         {/* Login */}
         <section className="relative flex min-h-[100dvh] min-w-0 flex-col items-center justify-center bg-background px-6 py-10">
-          {/* ── Normal login form — always visible ────────────────────────── */}
-          <div className="w-full max-w-sm animate-fade-up">
-            <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Enter your operator credentials to continue.
-            </p>
+          {videoReady ? (
+            <>
+              {/* ── Normal login form — always visible ────────────────────────── */}
+              <div className="w-full max-w-sm animate-fade-up">
+                <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
+                <p className="mt-1.5 text-sm text-muted-foreground">
+                  Enter your operator credentials to continue.
+                </p>
 
-            <form onSubmit={onSubmit} className="mt-6 space-y-4">
-              {/* Honeypot */}
-              <div
-                style={{
-                  position: "absolute",
-                  left: "-9999px",
-                  top: "-9999px",
-                  opacity: 0,
-                  height: 0,
-                  overflow: "hidden",
-                }}
-                aria-hidden="true"
-                tabIndex={-1}
-              >
-                <label>Leave this field empty</label>
-                <input
-                  type="text"
-                  name="website"
-                  value={honeypot}
-                  onChange={(e) => setHoneypot(e.target.value)}
-                  autoComplete="off"
-                  tabIndex={-1}
-                />
+                <form onSubmit={onSubmit} className="mt-6 space-y-4">
+                  {/* Honeypot */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      left: "-9999px",
+                      top: "-9999px",
+                      opacity: 0,
+                      height: 0,
+                      overflow: "hidden",
+                    }}
+                    aria-hidden="true"
+                    tabIndex={-1}
+                  >
+                    <label>Leave this field empty</label>
+                    <input
+                      type="text"
+                      name="website"
+                      value={honeypot}
+                      onChange={(e) => setHoneypot(e.target.value)}
+                      autoComplete="off"
+                      tabIndex={-1}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="loginId">Login ID</Label>
+                    <div className="relative">
+                      <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="loginId"
+                        value={id}
+                        onChange={(e) => setId(e.target.value)}
+                        placeholder="admin"
+                        autoComplete="username"
+                        className="h-11 pl-9"
+                        required
+                        disabled={isLocked || busy}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Password</Label>
+                    <div className="relative">
+                      <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        id="password"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        autoComplete="current-password"
+                        className="h-11 pl-9"
+                        required
+                        disabled={isLocked || busy}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Cloudflare Turnstile CAPTCHA */}
+                  <div className="space-y-1.5">
+                    <Label className="text-sm">Security check</Label>
+                    <TurnstileWidget
+                      onToken={setTurnstileToken}
+                      onExpire={() => setTurnstileToken(null)}
+                      onError={() => setTurnstileToken(null)}
+                      resetRef={turnstileResetRef}
+                    />
+                  </div>
+
+                  <Button type="submit" disabled={!canSubmit} className="h-11 w-full">
+                    {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+                    {busy
+                      ? "Signing in…"
+                      : isLocked
+                        ? `Locked — ${lockoutLabel(lockedUntilMs)}`
+                        : "Sign in"}
+                  </Button>
+                </form>
+
+                <p className="mt-8 text-center text-xs text-muted-foreground">
+                  Access is limited to authorised operators. Contact your administrator for
+                  credentials.
+                </p>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="loginId">Login ID</Label>
-                <div className="relative">
-                  <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="loginId"
-                    value={id}
-                    onChange={(e) => setId(e.target.value)}
-                    placeholder="admin"
-                    autoComplete="username"
-                    className="h-11 pl-9"
-                    required
-                    disabled={isLocked || busy}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <div className="relative">
-                  <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    id="password"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    autoComplete="current-password"
-                    className="h-11 pl-9"
-                    required
-                    disabled={isLocked || busy}
-                  />
-                </div>
-              </div>
-
-              {/* Cloudflare Turnstile CAPTCHA */}
-              <div className="space-y-1.5">
-                <Label className="text-sm">Security check</Label>
-                <TurnstileWidget
-                  onToken={setTurnstileToken}
-                  onExpire={() => setTurnstileToken(null)}
-                  onError={() => setTurnstileToken(null)}
-                  resetRef={turnstileResetRef}
-                />
-              </div>
-
-              <Button type="submit" disabled={!canSubmit} className="h-11 w-full">
-                {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-                {busy
-                  ? "Signing in…"
-                  : isLocked
-                    ? `Locked — ${lockoutLabel(lockedUntilMs)}`
-                    : "Sign in"}
-              </Button>
-            </form>
-
-            <p className="mt-8 text-center text-xs text-muted-foreground">
-              Access is limited to authorised operators. Contact your administrator for credentials.
-            </p>
-          </div>
-
-          {/* Powered by branding */}
-          <PoweredBy className="absolute bottom-6 left-1/2 w-full -translate-x-1/2 px-6 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/50" />
+              {/* Powered by branding */}
+              <PoweredBy className="absolute bottom-6 left-1/2 w-full -translate-x-1/2 px-6 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/50" />
+            </>
+          ) : (
+            <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
+              <Loader2 className="size-6 animate-spin text-primary" />
+              <span>Loading sign-in…</span>
+            </div>
+          )}
         </section>
       </div>
     </>
