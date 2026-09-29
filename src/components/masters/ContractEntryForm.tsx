@@ -200,6 +200,7 @@ export function ContractEntryForm({
   onSaved,
   table = "contract_entries",
   ownerKey = "contract_id",
+  hidePerManifest = false,
 }: {
   contract: ContractRow;
   initial: EntryRow;
@@ -207,6 +208,7 @@ export function ContractEntryForm({
   onSaved: () => void;
   table?: "contract_entries" | "ltms_transporter_entries";
   ownerKey?: "contract_id" | "transporter_id";
+  hidePerManifest?: boolean;
 }) {
   const entryTable = table;
   const entryOwnerKey = ownerKey;
@@ -305,29 +307,30 @@ export function ContractEntryForm({
         onRangesChange={(r) => patch({ loading_route_ranges: r })}
       />
 
-      <section className="surface-card p-6">
-        <h3 className="text-sm font-semibold tracking-tight">Per manifest charge</h3>
-        <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-3">
-          <div className="space-y-1.5">
-            <Label className="text-xs font-medium text-muted-foreground">Amount</Label>
-            <Input
-              type="number"
-              className="h-10"
-              value={form.per_manifest_amount}
-              onChange={(e) => patch({ per_manifest_amount: e.target.value })}
-            />
+      {!hidePerManifest ? (
+        <section className="surface-card p-6">
+          <h3 className="text-sm font-semibold tracking-tight">Per manifest charge</h3>
+          <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium text-muted-foreground">Amount</Label>
+              <Input
+                type="number"
+                className="h-10"
+                value={form.per_manifest_amount}
+                onChange={(e) => patch({ per_manifest_amount: e.target.value })}
+              />
+            </div>
+            <div className="space-y-1.5 sm:col-span-2">
+              <Label className="text-xs font-medium text-muted-foreground">Note</Label>
+              <Textarea
+                rows={2}
+                value={form.per_manifest_note}
+                onChange={(e) => patch({ per_manifest_note: e.target.value })}
+              />
+            </div>
           </div>
-          <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs font-medium text-muted-foreground">Note</Label>
-            <Textarea
-              rows={2}
-              value={form.per_manifest_note}
-              onChange={(e) => patch({ per_manifest_note: e.target.value })}
-            />
-          </div>
-        </div>
-      </section>
-
+        </section>
+      ) : null}
       <div className="flex justify-end gap-2">
         <Button type="button" variant="outline" onClick={onCancel}>
           Cancel

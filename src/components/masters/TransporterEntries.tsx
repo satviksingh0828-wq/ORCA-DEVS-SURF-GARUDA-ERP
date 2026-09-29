@@ -52,6 +52,7 @@ export function TransporterEntries({
         initial={editing}
         table="ltms_transporter_entries"
         ownerKey="transporter_id"
+        hidePerManifest
         onCancel={() => setEditing(null)}
         onSaved={() => {
           setEditing(null);
@@ -131,9 +132,6 @@ export function TransporterEntries({
                     {freight
                       ? `${entry.freight_route_range_type} ≥${freight.start}: ${freight.value || "—"}`
                       : "—"}
-                    {entry.per_manifest_amount
-                      ? ` · Per manifest ₹${entry.per_manifest_amount}`
-                      : ""}
                   </p>
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
