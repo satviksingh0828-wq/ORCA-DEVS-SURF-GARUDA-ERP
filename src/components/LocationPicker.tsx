@@ -55,11 +55,13 @@ export function LocationPicker({
   value,
   onChange,
   onPinCode,
+  disabled = false,
 }: {
   label: string;
   value: string | null | undefined;
   onChange: (id: string | null, loc?: LocationOption) => void;
   onPinCode?: (pin: string) => void;
+  disabled?: boolean;
 }) {
   const [locations, setLocations] = useState<LocationOption[]>([]);
   const [open, setOpen] = useState(false);
@@ -152,6 +154,7 @@ export function LocationPicker({
               variant="outline"
               role="combobox"
               className="h-10 w-full justify-between font-normal"
+              disabled={disabled}
             >
               <span className="flex min-w-0 items-center gap-2 truncate">
                 <Search className="size-4 shrink-0 text-muted-foreground" />

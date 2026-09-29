@@ -150,6 +150,45 @@ function isBasicStartDateAllowed(startDate: string) {
   return startDate === min || startDate === max;
 }
 
+function validateTripBeforeClose(trip: TripRow): string | null {
+  const required: Array<[string, string | null | undefined]> = [
+    ["Trip ID", trip.trip_code],
+    ["Branch", trip.branch_id],
+    ["Start date", trip.start_date],
+    ["Start time", trip.start_time],
+    ["End date", trip.end_date],
+    ["End time", trip.end_time],
+  ];
+  const missing = required.find(([, value]) => !String(value ?? "").trim());
+  if (missing) return `${missing[0]} is required before closing the trip`;
+
+  if (trip.end_date < trip.start_date) return "End date cannot be before start date";
+  if (trip.end_date === trip.start_date && trip.end_time < trip.start_time) {
+    return "End time cannot be before start time on the same date";
+  }
+
+  if (trip.ownership === "own" || trip.ownership === "owned") {
+    if (!trip.vehicle_id) return "Vehicle is required before closing an own-vehicle trip";
+    if (!trip.driver_id) return "Driver is required before closing an own-vehicle trip";
+    if (!String(trip.odometer_start ?? "").trim()) return "Odometer start is required before closing";
+    if (!String(trip.odometer_end ?? "").trim()) return "Odometer end is required before closing";
+    const start = Number(trip.odometer_start);
+    const end = Number(trip.odometer_end);
+    if (!Number.isFinite(start) || start < 0) return "Odometer start must be a non-negative number";
+    if (!Number.isFinite(end) || end < 0) return "Odometer end must be a non-negative number";
+    if (end < start) return "Odometer end cannot be less than odometer start";
+  }
+
+  if (trip.ownership === "third_party") {
+    if (!trip.transporter_id) return "Transporter is required before closing a rented trip";
+    if (!trip.rental_id) return "Rental is required before closing a rented trip";
+    if (!trip.third_party_vehicle_number.trim()) {
+      return "Third-party vehicle number is required before closing";
+    }
+  }
+  return null;
+}
+
 export function emptyTrip(): TripRow {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
@@ -220,6 +259,7 @@ export function TripForm({
   const basicStartDateBounds = getBasicStartDateBounds();
 
   const [trip, setTrip] = useState<TripRow>({ ...initial, mode: initial.mode ?? "ROAD" });
+  const tripClosed = trip.closed === true;
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [tab, setTab] = useState<TabId>("movement");
@@ -259,7 +299,10 @@ export function TripForm({
       ),
     [locations],
   );
-  const patch = (p: Partial<TripRow>) => setTrip((t) => ({ ...t, ...p }));
+  const patch = (p: Partial<TripRow>) => {
+    if (tripClosed) return;
+    setTrip((t) => ({ ...t, ...p }));
+  };
 
   async function loadMasters() {
     const [v, d, t, r, c, e] = await Promise.all([
@@ -412,6 +455,10 @@ export function TripForm({
 
   async function saveTrip(e?: React.FormEvent): Promise<string | null> {
     e?.preventDefault();
+    if (tripClosed) {
+      toast.error("Closed trips are read-only. Reopen the trip before editing.");
+      return null;
+    }
     if (saving) return null;
 
     // ── Validation ──────────────────────────────────────────────────────────
@@ -512,6 +559,7 @@ export function TripForm({
   }
 
   async function requireTripId(): Promise<string | null> {
+    if (tripClosed) return null;
     if (trip.id) return trip.id;
     const id = await saveTrip();
     return typeof id === "string" ? id : null;
@@ -523,6 +571,10 @@ export function TripForm({
     _nameCol: "income_name" | "expense_name",
     silent = false,
   ): Promise<boolean> {
+    if (tripClosed) {
+      toast.error("Closed trips are read-only. Reopen the trip before editing.");
+      return false;
+    }
     const tripId = await requireTripId();
     if (!tripId || !user?.sessionToken) {
       toast.error("Your session has expired. Please sign in again.");
@@ -846,7 +898,12 @@ export function TripForm({
   }
 
   async function closeTrip() {
-    if (!trip.id || isViewer || trip.closed === true) return;
+    if (!trip.id || isViewer || tripClosed) return;
+    const validationError = validateTripBeforeClose(trip);
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
     const { error } = await supabase
       .from("trips")
       .update({ closed: true } as never)
@@ -920,7 +977,7 @@ export function TripForm({
           </Badge>
         ) : null}
         {!isViewer && (
-          <Button onClick={() => saveTrip()} disabled={saving}>
+          <Button onClick={() => saveTrip()} disabled={saving || tripClosed}>
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             {trip.id ? "Update trip" : "Save trip"}
           </Button>
@@ -939,6 +996,7 @@ export function TripForm({
               Contract Ownership <span className="text-destructive">*</span>
             </Label>
             <Select
+              disabled={tripClosed}
               value={trip.ownership}
               onValueChange={(v) => {
                 const isThirdParty = v === "third_party";
@@ -980,6 +1038,7 @@ export function TripForm({
               Transport Mode <span className="text-destructive">*</span>
             </Label>
             <Select
+              disabled={tripClosed}
               value={trip.mode ?? "ROAD"}
               onValueChange={(mode) => patch({ mode: mode as TripRow["mode"] })}
             >
@@ -1001,13 +1060,14 @@ export function TripForm({
               <EntityPicker
                 label="Vehicle (required)"
                 value={trip.vehicle_id}
-                disabled={Boolean(trip.part_b_locked_at)}
+                disabled={tripClosed || Boolean(trip.part_b_locked_at)}
                 options={vehicleOpts}
                 onChange={(id) => patch({ vehicle_id: id })}
               />
               <EntityPicker
                 label="Driver (required)"
                 value={trip.driver_id}
+                disabled={tripClosed}
                 options={driverOpts}
                 onChange={(id) => patch({ driver_id: id })}
               />
@@ -1020,12 +1080,14 @@ export function TripForm({
               <EntityPicker
                 label="Rental (required for rented)"
                 value={trip.rental_id}
+                disabled={tripClosed}
                 options={rentalOpts}
                 onChange={(id) => patch({ rental_id: id })}
               />
               <Field
                 label="Vehicle Number (3rd party)"
                 value={trip.third_party_vehicle_number}
+                disabled={tripClosed}
                 onChange={(v) => patch({ third_party_vehicle_number: v })}
               />
             </>
@@ -1034,7 +1096,7 @@ export function TripForm({
           <EntityPicker
             label="Branch (required)"
             value={trip.branch_id}
-            disabled={Boolean(trip.part_b_locked_at)}
+            disabled={tripClosed || Boolean(trip.part_b_locked_at)}
             options={branchOpts}
             onChange={(id) => {
               const prefix = allBranches.find((b) => b.id === id)?.trip_series_prefix ?? null;
@@ -1058,17 +1120,20 @@ export function TripForm({
           <LocationPicker
             label="Starting Location"
             value={trip.start_location_id}
+            disabled={tripClosed}
             onChange={(id) => patch({ start_location_id: id })}
           />
           <LocationPicker
             label="Ending Location"
             value={trip.end_location_id}
+            disabled={tripClosed}
             onChange={(id) => patch({ end_location_id: id })}
           />
 
           {/* Start date & time — required */}
           <Field
             label="Start Date (required)"
+            disabled={tripClosed}
             type="date"
             value={trip.start_date}
             onChange={(v) => patch({ start_date: v })}
@@ -1077,6 +1142,7 @@ export function TripForm({
           />
           <Field
             label="Start Time (required)"
+            disabled={tripClosed}
             type="time"
             value={trip.start_time}
             onChange={(v) => patch({ start_time: v })}
@@ -1086,12 +1152,14 @@ export function TripForm({
           <>
             <Field
               label="End Date (required to close)"
+              disabled={tripClosed}
               type="date"
               value={trip.end_date}
               onChange={(v) => patch({ end_date: v })}
             />
             <Field
               label="End Time (required to close)"
+              disabled={tripClosed}
               type="time"
               value={trip.end_time}
               onChange={(v) => patch({ end_time: v })}
@@ -1103,12 +1171,14 @@ export function TripForm({
             <>
               <Field
                 label="Odometer Start (required)"
+                disabled={tripClosed}
                 type="number"
                 value={trip.odometer_start}
                 onChange={(v) => patch({ odometer_start: v })}
               />
               <Field
                 label="Odometer End (required to close)"
+                disabled={tripClosed}
                 type="number"
                 value={trip.odometer_end}
                 onChange={(v) => patch({ odometer_end: v })}
@@ -1150,6 +1220,7 @@ export function TripForm({
               driverId={trip.driver_id}
               requireTripId={requireTripId}
               tripLocked={Boolean(trip.part_b_locked_at)}
+              tripClosed={tripClosed}
               onPartBUpdated={() =>
                 setTrip((current) => ({ ...current, part_b_locked_at: new Date().toISOString() }))
               }
@@ -1165,6 +1236,7 @@ export function TripForm({
               total={otherIncomeTotal}
               onSave={() => saveLines("trip_other_income", incomes, "income_name")}
               isViewer={isViewer}
+              tripClosed={tripClosed}
             />
           ) : null}
           {activeTab === "expense" ? (
@@ -1176,6 +1248,7 @@ export function TripForm({
               total={expenseTotal}
               onSave={() => saveLines("trip_expenses", expenses, "expense_name")}
               isViewer={isViewer}
+              tripClosed={tripClosed}
               showHireChargeFields={isRented}
             />
           ) : null}
@@ -1352,6 +1425,7 @@ function MovementTab({
   requireTripId,
   isViewer = false,
   tripLocked = false,
+  tripClosed = false,
   onPartBUpdated,
 }: {
   tripId: string | null;
@@ -1361,6 +1435,7 @@ function MovementTab({
   requireTripId: () => Promise<string | null>;
   isViewer?: boolean;
   tripLocked?: boolean;
+  tripClosed?: boolean;
   onPartBUpdated?: () => void;
 }) {
   const { user } = useSession();
@@ -1420,6 +1495,7 @@ function MovementTab({
   }, [branchId, vehicleId, tripId]);
 
   async function loadUnassignedMovements() {
+    if (tripClosed) return toast.error("Closed trips are read-only. Reopen the trip before editing.");
     if (!branchId || !tripId) return toast.error("Save the trip details first");
     setCandidateLoading(true);
     setPickerOpen(true);
@@ -1460,6 +1536,7 @@ function MovementTab({
   });
 
   function addCandidateMovements() {
+    if (tripClosed) return;
     const additions = candidateRows.filter((m) => candidateSelected.includes(m.id));
     if (!additions.length) return toast.error("Select at least one unassigned movement");
     setRows((current) => [...current, ...additions]);
@@ -1472,6 +1549,7 @@ function MovementTab({
     toast.success(`${additions.length} movement(s) added to this trip`);
   }
   async function save() {
+    if (tripClosed) return toast.error("Closed trips are read-only. Reopen the trip before editing.");
     const id = await requireTripId();
     if (!id) return;
     setSaving(true);
@@ -1516,6 +1594,7 @@ function MovementTab({
     setPartBHistory((data ?? []) as Array<Record<string, any>>);
   }
   function openPartB(m: MovementOption) {
+    if (tripClosed) return;
     void loadPartBHistory(m);
     const first = !m.part_b_updated_at;
     const pin = m.part_b_from_pin_code || m.from_pin_code || "";
@@ -1561,6 +1640,7 @@ function MovementTab({
     }));
   }
   async function updateAllAssignedPartB() {
+    if (tripClosed) return toast.error("Closed trips are read-only. Reopen the trip before editing.");
     if (!user?.sessionToken || !tripId) return toast.error("Save the trip before updating Part-B");
     const assigned = rows.filter((m) => m.trip_id === tripId);
     if (!assigned.length) return toast.error("No movements are assigned to this trip");
@@ -1647,6 +1727,7 @@ function MovementTab({
   }
 
   async function submitPartB() {
+    if (tripClosed) return toast.error("Closed trips are read-only. Reopen the trip before editing.");
     if (!updating || !user?.sessionToken) return;
     const vehicleNo = form.vehicleNo.trim();
     const fromPin = form.fromPin.trim();
@@ -1733,7 +1814,7 @@ function MovementTab({
             Load unassigned movements using Source, Consignment Date, and number filters.
           </p>
         </div>
-        {!isViewer && (
+        {!isViewer && !tripClosed && (
           <>
             <Button
               type="button"
@@ -1800,7 +1881,7 @@ function MovementTab({
               <input
                 type="checkbox"
                 checked={selected.includes(m.id)}
-                disabled={isViewer || tripLocked}
+                disabled={isViewer || tripLocked || tripClosed}
                 onChange={(e) =>
                   setSelected((old) =>
                     e.target.checked ? [...old, m.id] : old.filter((id) => id !== m.id),
@@ -1826,7 +1907,7 @@ function MovementTab({
                   {m.trip?.trip_code ? `Trip: ${m.trip.trip_code}` : "Unassigned"}
                 </span>
               </span>
-              {m.trip_id === tripId && !isViewer && (
+              {m.trip_id === tripId && !isViewer && !tripClosed && (
                 <Button type="button" variant="outline" size="sm" onClick={() => openPartB(m)}>
                   {m.part_b_updated_at ? "Update Part-B" : "Update Part-B"}
                 </Button>
@@ -1947,7 +2028,7 @@ function MovementTab({
             <Button
               type="button"
               onClick={addCandidateMovements}
-              disabled={!candidateSelected.length}
+              disabled={tripClosed || !candidateSelected.length}
             >
               Add Selected Movements
             </Button>
@@ -2577,6 +2658,7 @@ function LineTab({
   total,
   onSave,
   isViewer = false,
+  tripClosed = false,
   showHireChargeFields = false,
 }: {
   title: string;
@@ -2586,6 +2668,7 @@ function LineTab({
   total: number;
   onSave: () => void;
   isViewer?: boolean;
+  tripClosed?: boolean;
   showHireChargeFields?: boolean;
 }) {
   const update = (i: number, p: Partial<LineRow>) =>
@@ -2595,7 +2678,7 @@ function LineTab({
     <div className="space-y-4">
       <div className="flex items-center gap-2">
         <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
-        {!isViewer && (
+        {!isViewer && !tripClosed && (
           <>
             <Button type="button" size="sm" onClick={onSave}>
               <Save className="size-4" />
@@ -2625,8 +2708,8 @@ function LineTab({
                   className="h-10"
                   type="number"
                   value={r.amount}
-                  readOnly={isViewer}
-                  onChange={(e) => !isViewer && update(i, { amount: e.target.value })}
+                  readOnly={isViewer || tripClosed}
+                  onChange={(e) => !isViewer && !tripClosed && update(i, { amount: e.target.value })}
                 />
               </div>
               <div className="space-y-1.5">
@@ -2634,8 +2717,8 @@ function LineTab({
                 <Input
                   className="h-10"
                   value={r.note}
-                  readOnly={isViewer}
-                  onChange={(e) => !isViewer && update(i, { note: e.target.value })}
+                  readOnly={isViewer || tripClosed}
+                  onChange={(e) => !isViewer && !tripClosed && update(i, { note: e.target.value })}
                 />
               </div>
 
@@ -2647,8 +2730,8 @@ function LineTab({
                       className="h-10"
                       type="number"
                       value={r.advance ?? ""}
-                      readOnly={isViewer}
-                      onChange={(e) => !isViewer && update(i, { advance: e.target.value })}
+                      readOnly={isViewer || tripClosed}
+                      onChange={(e) => !isViewer && !tripClosed && update(i, { advance: e.target.value })}
                     />
                   </div>
                   <div className="space-y-1.5">

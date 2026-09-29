@@ -10,6 +10,7 @@ import {
   Truck,
   Users,
   CalendarRange,
+  Package,
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -19,6 +20,7 @@ import { VehicleExpenseReport } from "@/components/reports/VehicleExpenseReport"
 import { DriverExpenseReport } from "@/components/reports/DriverExpenseReport";
 import { TransporterExpenseReport } from "@/components/reports/TransporterExpenseReport";
 import { OtherExpenseReport } from "@/components/reports/OtherExpenseReport";
+import { ConsignmentIncomeReport } from "@/components/reports/ConsignmentIncomeReport";
 import { TripDetailsPanel } from "@/components/operations/TripDetailsPanel";
 import { useSession } from "@/lib/session";
 import { ReportFiltersContext } from "@/lib/report-filters";
@@ -57,6 +59,12 @@ const TABS = [
     label: "Booking Report",
     desc: "Trip and manifest booking details",
     icon: CalendarRange,
+  },
+  {
+    id: "consignment-income",
+    label: "Consignment Income",
+    desc: "Package quantity and weight by consignment",
+    icon: Package,
   },
   {
     id: "pnl-compare",
@@ -225,6 +233,7 @@ function ReportsPage() {
             )}
             {tab === "pnl-compare" && <ProfitLossComparison />}
             {tab === "booking-report" && <TripDetailsPanel />}
+            {tab === "consignment-income" && <ConsignmentIncomeReport />}
             {tab === "vehicle-expenses" && <VehicleExpenseReport />}
             {tab === "driver-expenses" && <DriverExpenseReport />}
             {tab === "transporter-expenses" && <TransporterExpenseReport />}

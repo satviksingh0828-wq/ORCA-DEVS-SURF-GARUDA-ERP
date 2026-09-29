@@ -1305,7 +1305,7 @@ export function ConsignmentList({
         </div>
       </div>
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="min-w-max text-sm">
+        <table className="w-full min-w-[980px] text-sm">
           <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
               <th className="px-3 py-2">Consignment No.</th>
@@ -1381,42 +1381,44 @@ export function ConsignmentList({
                   <td className="whitespace-nowrap px-3 py-2">
                     {new Date(row.created_at).toLocaleDateString("en-IN")}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2 text-right">
-                    <Button variant="ghost" size="sm" onClick={() => void openView(row)}>
-                      <Eye className="mr-1 size-4" /> View
-                    </Button>
-                    {row.consignment_type === "third_party" && (
+                  <td className="w-px whitespace-nowrap px-3 py-2 text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button variant="ghost" size="sm" onClick={() => void openView(row)}>
+                        <Eye className="mr-1 size-4" /> View
+                      </Button>
+                      {row.consignment_type === "third_party" && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void openTransporterUpdate(row)}
+                          title="Update the transporter stored on this Consignment"
+                        >
+                          <Pencil className="mr-1 size-4" /> Update Transporter
+                        </Button>
+                      )}
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => void openTransporterUpdate(row)}
-                        title="Update the transporter stored on this Consignment"
+                        disabled={
+                          Boolean(row.trip_id) ||
+                          ["partial", "updated"].includes(
+                            String(row.transporter_update_status ?? "pending"),
+                          )
+                        }
+                        title={
+                          row.trip_id
+                            ? "Assigned to a Trip — unassign it before deleting"
+                            : ["partial", "updated"].includes(
+                                  String(row.transporter_update_status ?? "pending"),
+                                )
+                              ? "Transporter update exists — cannot delete"
+                              : "Delete Consignment"
+                        }
+                        onClick={() => void deleteRow(row)}
                       >
-                        <Pencil className="mr-1 size-4" /> Update Transporter
+                        <Trash2 className="mr-1 size-4 text-destructive" /> Delete
                       </Button>
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      disabled={
-                        Boolean(row.trip_id) ||
-                        ["partial", "updated"].includes(
-                          String(row.transporter_update_status ?? "pending"),
-                        )
-                      }
-                      title={
-                        row.trip_id
-                          ? "Assigned to a Trip — unassign it before deleting"
-                          : ["partial", "updated"].includes(
-                                String(row.transporter_update_status ?? "pending"),
-                              )
-                            ? "Transporter update exists — cannot delete"
-                            : "Delete Consignment"
-                      }
-                      onClick={() => void deleteRow(row)}
-                    >
-                      <Trash2 className="mr-1 size-4 text-destructive" /> Delete
-                    </Button>
+                    </div>
                   </td>
                 </tr>
               </Fragment>
