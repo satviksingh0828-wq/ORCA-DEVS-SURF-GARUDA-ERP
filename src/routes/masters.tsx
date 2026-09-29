@@ -141,6 +141,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
   const [openTransporter, setOpenTransporter] = useState<{
     id: string;
     transporter_name: string;
+    branch_id: string | null;
   } | null>(null);
 
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
@@ -267,6 +268,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
                       setOpenTransporter({
                         id: String(row.id),
                         transporter_name: String(row.transporter_name ?? ""),
+                        branch_id: (row.branch_id as string | null) ?? null,
                       })
                     }
                   >

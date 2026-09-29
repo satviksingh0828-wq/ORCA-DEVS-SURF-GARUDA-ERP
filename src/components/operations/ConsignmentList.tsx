@@ -603,6 +603,8 @@ export function ConsignmentList({
   const [driverId, setDriverId] = useState("");
   const [rentalId, setRentalId] = useState("");
   const [transporterId, setTransporterId] = useState("");
+  const [transporterSourceId, setTransporterSourceId] = useState("");
+  const [transporterSources, setTransporterSources] = useState<Master[]>([]);
   const [transporterLrNumber, setTransporterLrNumber] = useState("");
   const [transporterLrDate, setTransporterLrDate] = useState("");
   const [deliveryDate, setDeliveryDate] = useState("");
@@ -769,6 +771,28 @@ export function ConsignmentList({
       setToPin("");
     }
   }, [type, movement, branch?.pin_code, selectedTransporter?.pin_code]);
+  useEffect(() => {
+    if (type !== "third_party" || !branchId || !transporterId) {
+      setTransporterSources([]);
+      setTransporterSourceId("");
+      return;
+    }
+    void db
+      .from("ltms_transporter_sources")
+      .select("id,source_name")
+      .eq("branch_id", branchId)
+      .eq("transporter_id", transporterId)
+      .eq("is_active", true)
+      .order("source_name")
+      .then(({ data, error }: any) => {
+        if (error) toast.error(error.message);
+        const options = (data ?? []).map((row: any) => ({ id: row.id, label: row.source_name }));
+        setTransporterSources(options);
+        setTransporterSourceId((current) =>
+          options.some((option: Master) => option.id === current) ? current : "",
+        );
+      });
+  }, [type, branchId, transporterId]);
 
   function openCreate() {
     setScreen("create");
@@ -786,6 +810,8 @@ export function ConsignmentList({
     setDriverId("");
     setRentalId("");
     setTransporterId("");
+    setTransporterSourceId("");
+    setTransporterSources([]);
     setTransporterLrNumber("");
     setTransporterLrDate("");
     setDeliveryDate("");
@@ -855,6 +881,24 @@ export function ConsignmentList({
           .upsert(partyRows, { onConflict: "party_type,branch_id,gstin" });
         if (partyError) throw partyError;
       }
+      const [{ data: consignorMaster }, { data: consigneeMaster }] = await Promise.all([
+        db
+          .from("party_masters")
+          .select("phone_number")
+          .eq("party_type", "consignor")
+          .eq("branch_id", branchId)
+          .eq("gstin", draft.supplier_gstin.toUpperCase())
+          .maybeSingle(),
+        db
+          .from("party_masters")
+          .select("phone_number")
+          .eq("party_type", "consignee")
+          .eq("branch_id", branchId)
+          .eq("gstin", draft.recipient_gstin.toUpperCase())
+          .maybeSingle(),
+      ]);
+      draft.supplier_phone = consignorMaster?.phone_number ?? "";
+      draft.recipient_phone = consigneeMaster?.phone_number ?? "";
       if (!draft.items.length) throw new Error("The E-Way Bill has no goods details");
       for (const item of draft.items) {
         const productName = String(item.product_name ?? "").trim();
@@ -964,6 +1008,7 @@ export function ConsignmentList({
     if (!billingStatus) return toast.error("Select a Billing status");
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
     if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
+    if (needsTransporter && !transporterSourceId) return toast.error("Select a Transporter Source");
     if (needsTransporter && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
       return toast.error("Transporter movement requires valid From and To Pincodes");
     if (!common) return toast.error("Add at least one E-Way Bill");
@@ -986,6 +1031,7 @@ export function ConsignmentList({
       vehicle_id: needsOwnVehicle ? vehicleId || null : null,
       driver_id: type === "own" || movement === "drop" ? driverId || null : null,
       transporter_id: needsTransporter ? transporterId : "",
+      transporter_source_id: needsTransporter ? transporterSourceId : null,
       transporter_lr_number: transporterLrNumber.trim() || null,
       transporter_lr_date: transporterLrDate || null,
       delivery_date: deliveryDate || null,
@@ -1960,6 +2006,18 @@ function ConsignmentForm(props: any) {
                   Create New
                 </Button>
               </div>
+            </div>
+            <div className="col-span-1 min-w-0 sm:col-span-2 xl:col-span-2">
+              <SelectField
+                label="Transporter Source *"
+                value={transporterSourceId}
+                onChange={setTransporterSourceId}
+                options={transporterSources}
+                placeholder={
+                  transporterId ? "Select source for this transporter" : "Select transporter first"
+                }
+                disabled={!needsTransporter || !transporterId}
+              />
             </div>
             <div className="min-w-0 space-y-1">
               <Label className="text-xs font-semibold">Transporter LR Number</Label>

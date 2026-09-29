@@ -21,6 +21,7 @@ export type EntryRow = {
   id?: string;
   contract_id?: string;
   transporter_id?: string;
+  source_id?: string;
   mode: "ROAD" | "RAIL" | "AIR" | "SHIP";
   from_location_id: string | null;
   to_location_id: string | null;

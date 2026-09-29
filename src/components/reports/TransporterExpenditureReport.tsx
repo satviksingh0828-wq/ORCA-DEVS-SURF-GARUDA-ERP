@@ -23,11 +23,13 @@ import { downloadCsv, toCsv } from "@/lib/csv";
 import { manifestCharges, num, type ContractLite, type EntryLite } from "@/lib/trip-calc";
 
 type TransporterOption = { id: string; transporter_name: string };
+type SourceOption = { id: string; source_name: string; transporter_id: string };
 
 type ConsignmentRow = {
   id: string;
   consignment_number: string;
   transporter_id: string | null;
+  transporter_source_id: string | null;
   movement_mode: string | null;
   consignment_date: string | null;
   consignment_type: string | null;
@@ -36,6 +38,7 @@ type ConsignmentRow = {
   to_pin_code: string | null;
   to_details?: { pincode?: string | null } | null;
   transporter?: { transporter_name?: string | null; pin_code?: string | null } | null;
+  transporter_source?: { source_name?: string | null } | null;
   freight_deduction: number | string | null;
   additional_freight: number | string | null;
   loading_deduction: number | string | null;
@@ -90,12 +93,16 @@ function transporterRoutePins(consignment: ConsignmentRow) {
 function findTransporterEntry(
   entries: ConsignmentEntry[],
   consignment: ConsignmentRow,
+  sourceId?: string | null,
 ): ConsignmentEntry | undefined {
   const mode = normalizeMode(consignment.transport_mode);
   const { fromPin, toPin } = transporterRoutePins(consignment);
   return entries.find(
     (entry) =>
       normalizeMode(entry.mode) === mode &&
+      (sourceId
+        ? String((entry as ConsignmentEntry & { source_id?: string }).source_id ?? "") === sourceId
+        : !(entry as ConsignmentEntry & { source_id?: string }).source_id) &&
       String(entry.from_pin_code ?? "").trim() === fromPin &&
       String(entry.to_pin_code ?? "").trim() === toPin,
   );
@@ -104,7 +111,9 @@ export function TransporterExpenditureReport() {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [transporterId, setTransporterId] = useState("all");
+  const [sourceId, setSourceId] = useState("all");
   const [transporters, setTransporters] = useState<TransporterOption[]>([]);
+  const [sources, setSources] = useState<SourceOption[]>([]);
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
@@ -153,6 +162,14 @@ export function TransporterExpenditureReport() {
       .order("transporter_name");
     if (error) return toast.error(`Could not load transporters: ${error.message}`);
     setTransporters((data ?? []) as TransporterOption[]);
+    const { data: sourceData, error: sourceError } = await supabase
+      .from("ltms_transporter_sources")
+      .select("id,source_name,transporter_id")
+      .eq("is_active", true)
+      .order("source_name");
+    if (sourceError)
+      return toast.error(`Could not load transporter sources: ${sourceError.message}`);
+    setSources((sourceData ?? []) as SourceOption[]);
   }
   async function loadData() {
     if (!fromDate || !toDate) return toast.error("Select both From Date and To Date");
@@ -162,7 +179,7 @@ export function TransporterExpenditureReport() {
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,transporter_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,to_details,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code)",
+          "id,consignment_number,transporter_id,transporter_source_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,to_details,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code),transporter_source:ltms_transporter_sources(source_name)",
         )
         .eq("consignment_type", "third_party")
         .gte("consignment_date", fromDate)
@@ -170,6 +187,7 @@ export function TransporterExpenditureReport() {
         .order("consignment_date", { ascending: false })
         .order("created_at", { ascending: false });
       if (transporterId !== "all") query = query.eq("transporter_id", transporterId);
+      if (sourceId !== "all") query = query.eq("transporter_source_id", sourceId);
       const consignments = await fetchAll<ConsignmentRow>(() => query);
       const consignmentIds = consignments.map((row) => row.id);
       const transporterIds = [
@@ -191,7 +209,7 @@ export function TransporterExpenditureReport() {
               (supabase as never as { from: (table: string) => any })
                 .from("ltms_transporter_entries")
                 .select(
-                  "id,transporter_id,mode,from_location_id,to_location_id,from_pin_code,to_pin_code,freight_route_range_type,freight_route_ranges,loading_route_range_type,loading_route_ranges",
+                  "id,transporter_id,source_id,mode,from_location_id,to_location_id,from_pin_code,to_pin_code,freight_route_range_type,freight_route_ranges,loading_route_range_type,loading_route_ranges",
                 )
                 .in("transporter_id", transporterIds),
             )
@@ -204,21 +222,29 @@ export function TransporterExpenditureReport() {
         current.weight += num(item.weight_kg);
         packageTotals.set(item.consignment_id, current);
       }
-      const entriesByTransporter = new Map<string, ConsignmentEntry[]>();
+      const entriesByScope = new Map<string, ConsignmentEntry[]>();
       for (const entry of entries) {
         const id = String(
           (entry as ConsignmentEntry & { transporter_id?: string }).transporter_id ?? "",
         );
-        const list = entriesByTransporter.get(id) ?? [];
+        const sourceKey = String(
+          (entry as ConsignmentEntry & { source_id?: string }).source_id ?? id,
+        );
+        const list = entriesByScope.get(sourceKey) ?? [];
         list.push(entry);
-        entriesByTransporter.set(id, list);
+        entriesByScope.set(sourceKey, list);
       }
       setRows(
         consignments.map((row) => {
           const packageTotal = packageTotals.get(row.id) ?? { quantity: 0, weight: 0 };
           const route = transporterRoutePins(row);
-          const entry = row.transporter_id
-            ? findTransporterEntry(entriesByTransporter.get(row.transporter_id) ?? [], row)
+          const scopeKey = row.transporter_source_id ?? row.transporter_id;
+          const entry = scopeKey
+            ? findTransporterEntry(
+                entriesByScope.get(scopeKey) ?? [],
+                row,
+                row.transporter_source_id,
+              )
             : undefined;
           const transporterContract: ContractLite = {
             id: row.transporter_id ?? "",
@@ -273,7 +299,7 @@ export function TransporterExpenditureReport() {
 
   useEffect(() => {
     void loadData();
-  }, [fromDate, toDate, transporterId]);
+  }, [fromDate, toDate, transporterId, sourceId]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -282,6 +308,7 @@ export function TransporterExpenditureReport() {
       [
         row.consignment_number,
         row.transporter?.transporter_name,
+        row.transporter_source?.source_name,
         row.transport_mode,
         row.from_pin_code,
         row.to_pin_code,
@@ -315,6 +342,7 @@ export function TransporterExpenditureReport() {
         "Consignment No.": row.consignment_number,
         Date: row.consignment_date ?? "",
         Transporter: row.transporter?.transporter_name ?? "",
+        Source: row.transporter_source?.source_name ?? "",
         Movement: row.movement_mode ?? "",
         Mode: row.transport_mode ?? "",
         "Transporter From PIN": row.from_pin_code ?? "",
@@ -329,6 +357,7 @@ export function TransporterExpenditureReport() {
         "Consignment No.",
         "Date",
         "Transporter",
+        "Source",
         "Movement",
         "Mode",
         "Transporter From PIN",
@@ -386,6 +415,26 @@ export function TransporterExpenditureReport() {
                   {transporter.transporter_name}
                 </SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Source</label>
+          <Select value={sourceId} onValueChange={setSourceId}>
+            <SelectTrigger className="h-9 w-56">
+              <SelectValue placeholder="All transporter sources" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All transporter sources</SelectItem>
+              {sources
+                .filter(
+                  (source) => transporterId === "all" || source.transporter_id === transporterId,
+                )
+                .map((source) => (
+                  <SelectItem key={source.id} value={source.id}>
+                    {source.source_name}
+                  </SelectItem>
+                ))}
             </SelectContent>
           </Select>
         </div>
@@ -452,6 +501,7 @@ export function TransporterExpenditureReport() {
                 <th className="px-4 py-3">Consignment No.</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Transporter</th>
+                <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Movement</th>
                 <th className="px-4 py-3">Mode</th>
                 <th className="px-4 py-3">Transporter From PIN</th>
@@ -467,13 +517,13 @@ export function TransporterExpenditureReport() {
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={13} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={14} className="py-12 text-center text-muted-foreground">
                     <RefreshCw className="mx-auto mb-2 size-6 animate-spin opacity-20" /> Loading…
                   </td>
                 </tr>
               ) : !filtered.length ? (
                 <tr>
-                  <td colSpan={13} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={14} className="py-12 text-center text-muted-foreground">
                     No third-party consignments found for these filters.
                   </td>
                 </tr>
@@ -487,6 +537,7 @@ export function TransporterExpenditureReport() {
                       {row.consignment_date ?? "—"}
                     </td>
                     <td className="px-4 py-3">{row.transporter?.transporter_name ?? "—"}</td>
+                    <td className="px-4 py-3">{row.transporter_source?.source_name ?? "—"}</td>
                     <td className="px-4 py-3 capitalize">{row.movement_mode ?? "—"}</td>
                     <td className="px-4 py-3">{row.transport_mode ?? "—"}</td>
                     <td className="px-4 py-3 tabular-nums">{row.from_pin_code || "—"}</td>
@@ -523,7 +574,7 @@ export function TransporterExpenditureReport() {
             {!loading && filtered.length > 0 ? (
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <td className="px-4 py-3" colSpan={7}>
+                  <td className="px-4 py-3" colSpan={8}>
                     Total ({filtered.length} consignments)
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
