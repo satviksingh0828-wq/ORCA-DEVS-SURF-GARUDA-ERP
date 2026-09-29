@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ReactNode, RefObject } from "react";
 import { cn } from "@/lib/utils";
 
 export function SharedSidebar({
@@ -7,17 +7,22 @@ export function SharedSidebar({
   width = "220px",
   label,
   className,
+  breakpoint = "lg",
+  containerRef,
 }: {
   children: ReactNode;
   open?: boolean;
   width?: string;
   label?: string;
   className?: string;
+  breakpoint?: "lg" | "xl";
+  containerRef?: RefObject<HTMLElement | null>;
 }) {
   if (!open) return null;
   return (
     <aside
-      className={cn("hidden shrink-0 lg:block", className)}
+      ref={containerRef}
+      className={cn("hidden shrink-0", breakpoint === "xl" ? "xl:block" : "lg:block", className)}
       style={{ width }}
       aria-label={label}
     >

@@ -15,6 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
+import { SharedSidebar } from "@/components/SharedSidebar";
 
 export type LedgerTab = "capital" | "create" | "list" | "view";
 type SectionMode = "masters" | "ledger" | "journal" | "auto-rules";
@@ -146,11 +147,7 @@ export function AccountsSectionNav({
     return (
       <>
         {sidebarOpen ? (
-          <nav
-            ref={sidebarRef}
-            aria-label={title}
-            className="app-sidebar-scroll hidden lg:sticky lg:top-0 lg:block lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
-          >
+          <SharedSidebar open={sidebarOpen} label={title} containerRef={sidebarRef}>
             <div className="space-y-1">
               {mode === "masters" &&
                 masterLinks.map(({ label, description, to, icon: Icon }) => {
@@ -225,7 +222,7 @@ export function AccountsSectionNav({
                   </button>
                 ))}
             </div>
-          </nav>
+          </SharedSidebar>
         ) : null}
         {headerTarget &&
           createPortal(

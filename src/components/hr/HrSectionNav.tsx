@@ -24,6 +24,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { SharedSidebar } from "@/components/SharedSidebar";
 
 export type HrArea = "master" | "attendance" | "payroll";
 
@@ -154,10 +155,7 @@ export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?
 
   if (desktop) {
     return (
-      <nav
-        aria-label={`${areaLabels[area]} sections`}
-        className="app-sidebar-scroll hidden xl:block xl:sticky xl:top-24 xl:max-h-[calc(100dvh-7rem)] xl:self-start xl:overflow-y-auto xl:overscroll-contain xl:pr-1"
-      >
+      <SharedSidebar open width="220px" breakpoint="xl" label={`${areaLabels[area]} sections`}>
         <ul className="space-y-1">
           {links.map(({ label, description, to, icon: Icon }) => {
             const active = linkIsActive(pathname, to);
@@ -182,7 +180,7 @@ export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?
             );
           })}
         </ul>
-      </nav>
+      </SharedSidebar>
     );
   }
 
