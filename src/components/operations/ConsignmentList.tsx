@@ -3057,11 +3057,27 @@ function ConsignmentView({
       total + draft.items.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
     0,
   );
-  const isThirdPartyDrop = row.consignment_type === "third_party" && row.movement_mode === "drop";
+  const isThirdParty = row.consignment_type === "third_party";
   const fromDetails = row.from_details ?? {};
   const toDetails = row.to_details ?? {};
   const commonFromPin = drafts[0]?.supplier_pin_code || fromDetails.pincode || row.from_pin_code;
   const commonToPin = drafts[0]?.recipient_pin_code || toDetails.pincode || row.to_pin_code;
+  const transporterFrom = isThirdParty
+    ? row.movement_mode === "pickup"
+      ? row.transporter
+      : row.branch
+    : null;
+  const transporterTo = isThirdParty
+    ? row.movement_mode === "pickup"
+      ? row.branch
+      : row.transporter
+    : null;
+  const transporterFromLabel = transporterFrom
+    ? `${transporterFrom.branch_name || transporterFrom.transporter_name || "—"} · ${transporterFrom.pin_code || "—"}`
+    : "—";
+  const transporterToLabel = transporterTo
+    ? `${transporterTo.branch_name || transporterTo.transporter_name || "—"} · ${transporterTo.pin_code || "—"}`
+    : "—";
   return (
     <div className="space-y-5">
       <div className="flex items-center justify-between">
@@ -3181,8 +3197,13 @@ function ConsignmentView({
       <section className="space-y-4 rounded-xl border border-border p-4">
         <h3 className="font-semibold">Pincodes</h3>
         <div className="grid gap-3 md:grid-cols-2">
-          <ReadonlyField label="From Pincode" value={row.from_pin_code} />
-          {isThirdPartyDrop && <ReadonlyField label="To Pincode" value={row.to_pin_code} />}
+          <ReadonlyField
+            label={isThirdParty ? "Transporter From Pincode" : "Consignment From Pincode"}
+            value={isThirdParty ? transporterFrom?.pin_code : row.from_pin_code}
+          />
+          {isThirdParty && (
+            <ReadonlyField label="Transporter To Pincode" value={transporterTo?.pin_code} />
+          )}
         </div>
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
@@ -3234,6 +3255,8 @@ function ConsignmentView({
           <ReadonlyField label="Consignment Number" value={row.consignment_number} />
           <ReadonlyField label="Total Weight" value={`${totalWeight.toLocaleString("en-IN")} kg`} />
           <ReadonlyField label="Total Quantity" value={totalQuantity.toLocaleString("en-IN")} />
+          <ReadonlyField label="Transporter From" value={transporterFromLabel} />
+          <ReadonlyField label="Transporter To" value={transporterToLabel} />
           <ReadonlyField
             label="Consignment From"
             value={`${fromDetails.trade_name || fromDetails.legal_name || row.from_gstin || "—"} · ${commonFromPin || "—"}`}
@@ -3241,14 +3264,6 @@ function ConsignmentView({
           <ReadonlyField
             label="Consignment To"
             value={`${toDetails.trade_name || toDetails.legal_name || row.to_gstin || "—"} · ${commonToPin || "—"}`}
-          />
-          <ReadonlyField
-            label="Transporter From"
-            value={isThirdPartyDrop ? row.branch?.branch_name || "—" : "—"}
-          />
-          <ReadonlyField
-            label="Transporter To"
-            value={isThirdPartyDrop ? row.transporter?.transporter_name || "—" : "—"}
           />
         </div>
       </section>
