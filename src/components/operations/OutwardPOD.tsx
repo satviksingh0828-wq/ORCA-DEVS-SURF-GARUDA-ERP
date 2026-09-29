@@ -150,6 +150,7 @@ export function OutwardPOD() {
   const [urls, setUrls] = useState(emptyUrls);
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [screen, setScreen] = useState<"list" | "create">("list");
 
   async function loadRows() {
     setLoading(true);
@@ -288,6 +289,8 @@ export function OutwardPOD() {
       });
       if (podError) throw podError;
       toast.success("Outward POD created. It is now view-only.");
+      setSelected(null);
+      setScreen("list");
       await loadRows();
       const refreshed = rows.find((row) => row.id === selected.id);
       if (refreshed)
@@ -318,9 +321,105 @@ export function OutwardPOD() {
     ) ?? 0;
   const trip = selected?.trip;
   const isThirdParty = selected?.consignment_type === "third_party";
+  const podRows = useMemo(() => rows.filter((row) => Boolean(first(row.outward_pod))), [rows]);
+
+  if (screen === "list") {
+    return (
+      <div className="space-y-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+          <div>
+            <h2 className="font-semibold">Outward POD List</h2>
+            <p className="text-xs text-muted-foreground">
+              All created outward proof of delivery records.
+            </p>
+          </div>
+          <Button
+            type="button"
+            onClick={() => {
+              setSelected(null);
+              setScreen("create");
+            }}
+          >
+            <Upload className="mr-2 size-4" />
+            Create POD
+          </Button>
+        </div>
+        <div className="overflow-x-auto rounded-xl border border-border bg-card">
+          <table className="w-full text-sm">
+            <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+              <tr>
+                <th className="px-4 py-3">Consignment</th>
+                <th className="px-4 py-3">Consignor</th>
+                <th className="px-4 py-3">Consignee</th>
+                <th className="px-4 py-3">Delivery Date</th>
+                <th className="px-4 py-3">Created At</th>
+                <th className="px-4 py-3">Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {podRows.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                    No Outward POD records created yet.
+                  </td>
+                </tr>
+              ) : (
+                podRows.map((row) => {
+                  const pod = first(row.outward_pod) as POD;
+                  return (
+                    <tr key={row.id} className="border-t border-border">
+                      <td className="px-4 py-3 font-semibold">{row.consignment_number}</td>
+                      <td className="px-4 py-3">{party(row, "consignor")}</td>
+                      <td className="px-4 py-3">{party(row, "consignee")}</td>
+                      <td className="px-4 py-3">{pod.delivery_date || "—"}</td>
+                      <td className="px-4 py-3">
+                        {pod.created_at ? new Date(pod.created_at).toLocaleString("en-IN") : "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            void selectConsignment(row);
+                            setScreen("create");
+                          }}
+                        >
+                          <Eye className="mr-1.5 size-3.5" />
+                          View
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-5">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
+        <div>
+          <h2 className="font-semibold">Create Outward POD</h2>
+          <p className="text-xs text-muted-foreground">
+            Select a consignment and complete the POD documents.
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setScreen("list");
+            setSelected(null);
+          }}
+        >
+          Back to POD List
+        </Button>
+      </div>
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
