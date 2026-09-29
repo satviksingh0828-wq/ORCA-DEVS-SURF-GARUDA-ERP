@@ -413,8 +413,8 @@ export function TransporterExpenditureReport() {
       </div>
 
       <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        Default period is the current month. Drop uses the saved transporter To PIN as From and
-        the first E-Way Bill To PIN as destination. Pickup uses the saved From/To PIN route.
+        Default period is the current month. Drop uses the saved transporter To PIN as From and the
+        first E-Way Bill To PIN as destination. Pickup uses the saved From/To PIN route.
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -560,6 +560,20 @@ export function TransporterExpenditureReport() {
                 <div className="text-xs text-muted-foreground">
                   {editing.transporter?.transporter_name || "Transporter"}
                 </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  ["Freight", editing.freight],
+                  ["Loading", editing.loading],
+                  ["Total", editing.total_income],
+                ].map(([label, value]) => (
+                  <div key={label} className="rounded-lg border border-border bg-muted/30 p-3">
+                    <div className="text-xs text-muted-foreground">{label}</div>
+                    <div className="mt-1 font-semibold tabular-nums">
+                      {displayMoney(Number(value))}
+                    </div>
+                  </div>
+                ))}
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
                 {(
