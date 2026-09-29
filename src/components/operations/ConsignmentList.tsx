@@ -1978,6 +1978,7 @@ function ConsignmentForm(props: any) {
               <Input
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
                 value={fromPin}
+                readOnly={type === "third_party" && movement === "drop"}
                 onChange={(event) => setFromPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder={branch?.pin_code ?? "Branch pincode"}
               />
