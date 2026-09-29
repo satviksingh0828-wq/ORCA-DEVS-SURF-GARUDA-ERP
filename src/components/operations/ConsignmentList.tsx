@@ -986,7 +986,7 @@ export function ConsignmentList({
       to_pin_code:
         type === "third_party"
           ? movement === "drop"
-            ? selectedTransporter?.pin_code || null
+            ? toPin || null
             : null
           : common.recipient_pin_code,
       from_gstin: common.supplier_gstin,
@@ -1794,9 +1794,7 @@ function ConsignmentForm(props: any) {
                 dense
                 label="Consignment To PIN"
                 value={
-                  type === "third_party"
-                    ? selectedTransporter?.pin_code
-                    : common?.recipient_pin_code
+                  type === "third_party" && movement === "drop" ? toPin : common?.recipient_pin_code
                 }
               />
             )}
@@ -2007,7 +2005,6 @@ function ConsignmentForm(props: any) {
               <Input
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
                 value={toPin}
-                readOnly
                 disabled={type !== "third_party" || movement !== "drop"}
                 onChange={(event) => setToPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder="Transporter pincode"
@@ -3092,7 +3089,7 @@ function ConsignmentView({
       ? row.branch?.pin_code || row.from_pin_code
       : drafts[0]?.supplier_pin_code || fromDetails.pincode || row.from_pin_code;
   const commonToPin = isThirdPartyDrop
-    ? row.transporter?.pin_code || row.to_pin_code
+    ? row.to_pin_code
     : row.consignment_type === "third_party"
       ? null
       : drafts[0]?.recipient_pin_code || toDetails.pincode || row.to_pin_code;
