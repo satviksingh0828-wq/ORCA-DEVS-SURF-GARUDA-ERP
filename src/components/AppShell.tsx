@@ -63,7 +63,7 @@ export function AppShell({
   const { signOut, user } = useSession();
   const navigate = useNavigate();
   const { open } = useOrcaAI();
-  const { backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
+  const { theme, backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
 
@@ -141,7 +141,11 @@ export function AppShell({
         <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
           <Link to="/home" className="shrink-0">
             <img
-              src="/garuda-logo.png"
+              src={
+                theme === "neon" || theme === "midnight" || theme === "forest" || theme === "storm"
+                  ? "/garuda-logo.png"
+                  : "/garuda-logo-light.png"
+              }
               alt="Garuda Logistics Solution"
               className="h-8 w-auto sm:h-10"
             />
