@@ -1,5 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { Download, Package, RefreshCw, Save, Search } from "lucide-react";
+import { Fragment, useEffect, useMemo, useState } from "react";
+import {
+  ChevronDown,
+  ChevronRight,
+  Download,
+  Package,
+  RefreshCw,
+  Save,
+  Search,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -46,6 +54,16 @@ type RateEntry = {
   to_value: number | string | null;
   amount: number | string;
 };
+type PackageDetail = PackageRow & {
+  rate_type: string;
+  charge_mode: "fixed" | "rate" | "—";
+  measure: number;
+  slab_from: number | null;
+  slab_to: number | null;
+  slab_amount: number | null;
+  calculated_amount: number;
+  matched: boolean;
+};
 type ReportRow = ConsignmentRow & {
   package_count: number;
   package_summary: string;
@@ -54,6 +72,7 @@ type ReportRow = ConsignmentRow & {
   calculated_loading: number;
   final_loading: number;
   rateMatched: boolean;
+  package_details: PackageDetail[];
 };
 type Adjustment = { deduction: string; addition: string };
 
@@ -72,8 +91,19 @@ function monthEnd(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10);
 }
 function packageCharge(packageRow: PackageRow, type: RateType | undefined, entries: RateEntry[]) {
-  if (!type) return { amount: 0, matched: false };
-  const measure = type.basis === "weight" ? num(packageRow.weight_kg) : num(packageRow.quantity);
+  const measure = type?.basis === "weight" ? num(packageRow.weight_kg) : num(packageRow.quantity);
+  const detail: PackageDetail = {
+    ...packageRow,
+    rate_type: type?.package_type ?? packageRow.package_type,
+    charge_mode: type?.charge_mode ?? "—",
+    measure,
+    slab_from: null,
+    slab_to: null,
+    slab_amount: null,
+    calculated_amount: 0,
+    matched: false,
+  };
+  if (!type) return { amount: 0, matched: false, detail };
   const slab = entries
     .filter((entry) => entry.package_rate_type_id === type.id)
     .sort((a, b) => num(b.from_value) - num(a.from_value))
@@ -82,9 +112,20 @@ function packageCharge(packageRow: PackageRow, type: RateType | undefined, entri
         num(entry.from_value) <= measure &&
         (entry.to_value == null || measure <= num(entry.to_value)),
     );
-  if (!slab) return { amount: 0, matched: false };
+  if (!slab) return { amount: 0, matched: false, detail };
   const amount = type.charge_mode === "rate" ? num(slab.amount) * measure : num(slab.amount);
-  return { amount, matched: true };
+  return {
+    amount,
+    matched: true,
+    detail: {
+      ...detail,
+      slab_from: num(slab.from_value),
+      slab_to: slab.to_value == null ? null : num(slab.to_value),
+      slab_amount: num(slab.amount),
+      calculated_amount: amount,
+      matched: true,
+    },
+  };
 }
 
 export function LoadingChargesReport() {
@@ -95,6 +136,7 @@ export function LoadingChargesReport() {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [adjustments, setAdjustments] = useState<Record<string, Adjustment>>({});
   const [search, setSearch] = useState("");
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
 
@@ -168,12 +210,14 @@ export function LoadingChargesReport() {
         let rateMatched = packageRows.length > 0;
         let quantity = 0;
         let weight = 0;
+        const packageDetails: PackageDetail[] = [];
         for (const item of packageRows) {
           quantity += num(item.quantity);
           weight += num(item.weight_kg);
           const result = packageCharge(item, types.get(item.package_rate_type_id), rateEntries);
           calculated += result.amount;
           rateMatched = rateMatched && result.matched;
+          packageDetails.push(result.detail);
         }
         const deduction = num(row.loading_deduction);
         const addition = num(row.additional_loading);
@@ -189,6 +233,7 @@ export function LoadingChargesReport() {
           calculated_loading: calculated,
           final_loading: Math.max(0, calculated - deduction + addition),
           rateMatched,
+          package_details: packageDetails,
         };
       });
       setAdjustments(nextAdjustments);
@@ -249,6 +294,14 @@ export function LoadingChargesReport() {
           : row,
       ),
     );
+  }
+  function toggleExpanded(id: string) {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   }
   async function saveAdjustment(row: ReportRow) {
     const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
@@ -404,6 +457,7 @@ export function LoadingChargesReport() {
           <table className="w-full min-w-[1320px] text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <th className="w-10 px-2 py-3" />
                 <th className="px-4 py-3">Consignment No.</th>
                 <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Branch</th>
@@ -420,13 +474,13 @@ export function LoadingChargesReport() {
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={12} className="py-12 text-center text-muted-foreground">
                     <RefreshCw className="mx-auto mb-2 size-6 animate-spin opacity-20" /> Loading…
                   </td>
                 </tr>
               ) : !filtered.length ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={12} className="py-12 text-center text-muted-foreground">
                     No Package Information found for these filters.
                   </td>
                 </tr>
@@ -434,70 +488,161 @@ export function LoadingChargesReport() {
                 filtered.map((row) => {
                   const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
                   return (
-                    <tr key={row.id} className="transition-colors hover:bg-muted/30">
-                      <td className="whitespace-nowrap px-4 py-3 font-medium">
-                        {row.consignment_number}
-                      </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                        {row.consignment_date ?? "—"}
-                      </td>
-                      <td className="px-4 py-3">{row.branch?.branch_name ?? "—"}</td>
-                      <td className="px-4 py-3">
-                        {row.package_summary || "—"}
-                        {!row.rateMatched && (
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            (rate not matched)
-                          </span>
-                        )}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {displayNumber(row.total_quantity)}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {displayNumber(row.total_weight)}
-                      </td>
-                      <td className="px-4 py-3 text-right tabular-nums">
-                        {displayMoney(row.calculated_loading)}
-                      </td>
-                      <td className="px-4 py-3">
-                        <Input
-                          className="ml-auto h-8 w-28 text-right"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={value.deduction}
-                          onChange={(event) =>
-                            updateAdjustment(row.id, "deduction", event.target.value)
-                          }
-                        />
-                      </td>
-                      <td className="px-4 py-3">
-                        <Input
-                          className="ml-auto h-8 w-28 text-right"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={value.addition}
-                          onChange={(event) =>
-                            updateAdjustment(row.id, "addition", event.target.value)
-                          }
-                        />
-                      </td>
-                      <td className="px-4 py-3 text-right font-semibold tabular-nums">
-                        {displayMoney(row.final_loading)}
-                      </td>
-                      <td className="px-4 py-3 text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => void saveAdjustment(row)}
-                          disabled={savingId === row.id}
-                        >
-                          <Save className="mr-1 size-3.5" />
-                          {savingId === row.id ? "Saving…" : "Save"}
-                        </Button>
-                      </td>
-                    </tr>
+                    <Fragment key={row.id}>
+                      <tr key={row.id} className="transition-colors hover:bg-muted/30">
+                        <td className="px-2 py-3 text-center">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-8"
+                            onClick={() => toggleExpanded(row.id)}
+                            title={
+                              expanded.has(row.id) ? "Hide package details" : "Show package details"
+                            }
+                          >
+                            {expanded.has(row.id) ? (
+                              <ChevronDown className="size-4" />
+                            ) : (
+                              <ChevronRight className="size-4" />
+                            )}
+                          </Button>
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 font-medium">
+                          {row.consignment_number}
+                        </td>
+                        <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                          {row.consignment_date ?? "—"}
+                        </td>
+                        <td className="px-4 py-3">{row.branch?.branch_name ?? "—"}</td>
+                        <td className="px-4 py-3">
+                          {row.package_summary || "—"}
+                          {!row.rateMatched && (
+                            <span className="ml-1 text-xs text-muted-foreground">
+                              (rate not matched)
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {displayNumber(row.total_quantity)}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {displayNumber(row.total_weight)}
+                        </td>
+                        <td className="px-4 py-3 text-right tabular-nums">
+                          {displayMoney(row.calculated_loading)}
+                        </td>
+                        <td className="px-4 py-3">
+                          <Input
+                            className="ml-auto h-8 w-28 text-right"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={value.deduction}
+                            onChange={(event) =>
+                              updateAdjustment(row.id, "deduction", event.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <Input
+                            className="ml-auto h-8 w-28 text-right"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={value.addition}
+                            onChange={(event) =>
+                              updateAdjustment(row.id, "addition", event.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                          {displayMoney(row.final_loading)}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => void saveAdjustment(row)}
+                            disabled={savingId === row.id}
+                          >
+                            <Save className="mr-1 size-3.5" />
+                            {savingId === row.id ? "Saving…" : "Save"}
+                          </Button>
+                        </td>
+                      </tr>
+                      {expanded.has(row.id) && (
+                        <tr key={`${row.id}-details`} className="bg-muted/20">
+                          <td colSpan={12} className="px-6 py-4">
+                            <div className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Package rate calculation details
+                            </div>
+                            {row.package_details.length ? (
+                              <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                                <table className="w-full min-w-[980px] text-xs">
+                                  <thead className="bg-muted/40 text-left font-semibold text-muted-foreground">
+                                    <tr>
+                                      <th className="px-3 py-2">Package</th>
+                                      <th className="px-3 py-2">Basis / Value</th>
+                                      <th className="px-3 py-2">Rate Mode</th>
+                                      <th className="px-3 py-2">Matched Slab</th>
+                                      <th className="px-3 py-2 text-right">Rate / Amount</th>
+                                      <th className="px-3 py-2">Calculation</th>
+                                      <th className="px-3 py-2 text-right">Calculated</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border">
+                                    {row.package_details.map((detail, index) => {
+                                      const slab =
+                                        detail.slab_from == null
+                                          ? "No matching slab"
+                                          : `${displayNumber(detail.slab_from)}–${detail.slab_to == null ? "∞" : displayNumber(detail.slab_to)}`;
+                                      const calculation = !detail.matched
+                                        ? "Not calculated"
+                                        : detail.charge_mode === "rate"
+                                          ? `${displayMoney(detail.slab_amount ?? 0)} × ${displayNumber(detail.measure)}`
+                                          : "Fixed slab amount";
+                                      return (
+                                        <tr key={`${row.id}-package-${index}`}>
+                                          <td className="px-3 py-2 font-medium">
+                                            {detail.rate_type}
+                                          </td>
+                                          <td className="px-3 py-2">
+                                            {detail.basis} · {displayNumber(detail.measure)}
+                                          </td>
+                                          <td className="px-3 py-2">{detail.charge_mode}</td>
+                                          <td className="px-3 py-2">{slab}</td>
+                                          <td className="px-3 py-2 text-right tabular-nums">
+                                            {detail.slab_amount == null
+                                              ? "—"
+                                              : displayMoney(detail.slab_amount)}
+                                          </td>
+                                          <td className="px-3 py-2">{calculation}</td>
+                                          <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                                            {displayMoney(detail.calculated_amount)}
+                                          </td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                No Package Information entries found.
+                              </p>
+                            )}
+                            <div className="mt-3 text-xs text-muted-foreground">
+                              Loading total: {displayMoney(row.calculated_loading)} − Deduction{" "}
+                              {displayMoney(num(value.deduction))} + Addition{" "}
+                              {displayMoney(num(value.addition))} ={" "}
+                              <span className="font-semibold text-foreground">
+                                {displayMoney(row.final_loading)}
+                              </span>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   );
                 })
               )}
@@ -505,7 +650,7 @@ export function LoadingChargesReport() {
             {!loading && filtered.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <td className="px-4 py-3" colSpan={6}>
+                  <td className="px-4 py-3" colSpan={7}>
                     Total ({filtered.length} consignments)
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
