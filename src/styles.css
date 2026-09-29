@@ -1040,3 +1040,58 @@ table td {
 [data-video-background="on"] main {
   background-color: transparent;
 }
+
+/* Desktop tab sidebars collapse to icons and expand when hovered or focused. */
+@media (min-width: 1024px) {
+  .app-sidebar-scroll {
+    width: 44px !important;
+    overflow-x: hidden;
+    transition:
+      width 180ms ease,
+      background-color 180ms ease,
+      box-shadow 180ms ease;
+  }
+
+  .app-sidebar-scroll:hover,
+  .app-sidebar-scroll:focus-within {
+    width: 220px !important;
+    z-index: 40;
+    border-radius: 0.75rem;
+    background: color-mix(in oklch, var(--card) 96%, transparent);
+    box-shadow: 0 8px 24px -16px oklch(0 0 0 / 0.45);
+  }
+
+  .app-sidebar-scroll > p,
+  .app-sidebar-scroll button > span {
+    width: 0;
+    max-width: 0;
+    overflow: hidden;
+    opacity: 0;
+    transition:
+      width 180ms ease,
+      max-width 180ms ease,
+      opacity 120ms ease;
+  }
+
+  .app-sidebar-scroll:hover > p,
+  .app-sidebar-scroll:focus-within > p,
+  .app-sidebar-scroll:hover button > span,
+  .app-sidebar-scroll:focus-within button > span {
+    width: auto;
+    max-width: 190px;
+    opacity: 1;
+  }
+
+  .app-sidebar-scroll button {
+    justify-content: center;
+    gap: 0;
+    padding-inline: 0.75rem;
+    white-space: nowrap;
+  }
+
+  .app-sidebar-scroll:hover button,
+  .app-sidebar-scroll:focus-within button {
+    justify-content: flex-start;
+    gap: 0.75rem;
+  }
+}
