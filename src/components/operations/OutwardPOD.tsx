@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
+  Download,
   Eye,
   FileText,
   Loader2,
@@ -33,9 +34,9 @@ type POD = {
   delivery_date: string;
   transporter_lr_number: string | null;
   transporter_lr_date: string | null;
-  front_copy_path: string;
-  back_copy_path: string;
-  signature_copy_path: string;
+  front_copy_path: string | null;
+  back_copy_path: string | null;
+  signature_copy_path: string | null;
   created_at: string;
 };
 type Consignment = {
@@ -130,6 +131,23 @@ function isImage(fileOrUrl: File | string | null) {
   );
 }
 
+async function downloadDocument(url: string, filename: string) {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error("Download failed");
+    const blobUrl = URL.createObjectURL(await response.blob());
+    const anchor = document.createElement("a");
+    anchor.href = blobUrl;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(blobUrl);
+  } catch {
+    window.open(url, "_blank", "noopener,noreferrer");
+  }
+}
+
 export function OutwardPOD() {
   const { user } = useSession();
   const branches = useBranches();
@@ -206,7 +224,7 @@ export function OutwardPOD() {
     setFiles({ ...emptyFiles });
     setUrls({ ...emptyUrls });
     if (existing) {
-      const paths: Record<DocumentKind, string> = {
+      const paths: Partial<Record<DocumentKind, string>> = {
         front: existing.front_copy_path,
         back: existing.back_copy_path,
         signature: existing.signature_copy_path,
@@ -214,9 +232,11 @@ export function OutwardPOD() {
       const next = { ...emptyUrls };
       await Promise.all(
         (Object.keys(paths) as DocumentKind[]).map(async (kind) => {
+          const path = paths[kind];
+          if (!path) return;
           const { data, error } = await supabase.storage
             .from("outward-pod-documents")
-            .createSignedUrl(paths[kind], 600);
+            .createSignedUrl(path, 600);
           if (!error && data?.signedUrl) next[kind] = data.signedUrl;
         }),
       );
@@ -240,8 +260,8 @@ export function OutwardPOD() {
   async function createPOD() {
     if (!selected || first(selected.outward_pod)) return;
     if (!form.delivery_date) return toast.error("Delivery date is required");
-    if (!files.front || !files.back || !files.signature)
-      return toast.error("Front, Back and Signature copies are required");
+    if (!files.front && !files.back && !files.signature)
+      return toast.error("Upload at least one of Front, Back or Signature copy");
     if (
       selected.consignment_type === "third_party" &&
       (!form.transporter_lr_number.trim() || !form.transporter_lr_date)
@@ -253,9 +273,14 @@ export function OutwardPOD() {
     setCreating(true);
     const uploaded: string[] = [];
     try {
-      const paths: Record<DocumentKind, string> = { front: "", back: "", signature: "" };
+      const paths: Record<DocumentKind, string | null> = {
+        front: null,
+        back: null,
+        signature: null,
+      };
       for (const kind of ["front", "back", "signature"] as DocumentKind[]) {
-        const file = files[kind] as File;
+        const file = files[kind];
+        if (!file) continue;
         const path = `${user?.id ?? "user"}/${selected.id}/${crypto.randomUUID()}-${safeName(file.name)}`;
         const { error } = await supabase.storage
           .from("outward-pod-documents")
@@ -599,7 +624,7 @@ export function OutwardPOD() {
             <div>
               <h3 className="font-semibold">POD document area</h3>
               <p className="text-xs text-muted-foreground">
-                Upload image or PDF copies. After creation, documents are view-only.
+                Upload at least one image or PDF copy. After creation, documents are view-only.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
@@ -636,6 +661,14 @@ export function OutwardPOD() {
                 file={files[kind]}
                 locked={Boolean(existing)}
                 onRemove={() => removeDraftFile(kind)}
+                onDownload={() =>
+                  urls[kind]
+                    ? void downloadDocument(
+                        urls[kind] as string,
+                        `${selected?.consignment_number ?? "pod"}-${kind}`,
+                      )
+                    : undefined
+                }
               />
             ))}
           </section>
@@ -715,12 +748,14 @@ function DocumentPanel({
   file,
   locked,
   onRemove,
+  onDownload,
 }: {
   kind: DocumentKind;
   url: string | null;
   file: File | null;
   locked: boolean;
   onRemove: () => void;
+  onDownload: () => void;
 }) {
   const label = kind === "front" ? "Front Copy" : kind === "back" ? "Back Copy" : "Signature Copy";
   return (
@@ -741,7 +776,20 @@ function DocumentPanel({
             </button>
           </span>
         )}
-        {url && locked && <Eye className="size-3.5 text-emerald-600" />}
+        {url && locked && (
+          <span className="flex items-center gap-1">
+            <button
+              type="button"
+              title="View"
+              onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
+            >
+              <Eye className="size-3.5 text-emerald-600" />
+            </button>
+            <button type="button" title="Download" onClick={onDownload}>
+              <Download className="size-3.5 text-emerald-600" />
+            </button>
+          </span>
+        )}
       </div>
       <div className="flex min-h-40 items-center justify-center bg-muted/10 p-2">
         {url ? (
