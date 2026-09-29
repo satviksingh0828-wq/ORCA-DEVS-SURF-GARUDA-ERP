@@ -1,9 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
-import { Download, Package, RefreshCw, Search } from "lucide-react";
+import { Download, Package, Pencil, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -101,6 +108,43 @@ export function TransporterExpenditureReport() {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [editing, setEditing] = useState<ReportRow | null>(null);
+  const [adjustments, setAdjustments] = useState({
+    freight_deduction: "0",
+    additional_freight: "0",
+    loading_deduction: "0",
+    additional_loading: "0",
+  });
+  const [savingAdjustment, setSavingAdjustment] = useState(false);
+
+  function openAdjustment(row: ReportRow) {
+    setEditing(row);
+    setAdjustments({
+      freight_deduction: String(row.freight_deduction ?? 0),
+      additional_freight: String(row.additional_freight ?? 0),
+      loading_deduction: String(row.loading_deduction ?? 0),
+      additional_loading: String(row.additional_loading ?? 0),
+    });
+  }
+
+  async function saveAdjustment() {
+    if (!editing) return;
+    setSavingAdjustment(true);
+    const { error } = await supabase
+      .from("consignments")
+      .update({
+        freight_deduction: Number(adjustments.freight_deduction) || 0,
+        additional_freight: Number(adjustments.additional_freight) || 0,
+        loading_deduction: Number(adjustments.loading_deduction) || 0,
+        additional_loading: Number(adjustments.additional_loading) || 0,
+      })
+      .eq("id", editing.id);
+    setSavingAdjustment(false);
+    if (error) return toast.error(`Could not save adjustments: ${error.message}`);
+    setEditing(null);
+    toast.success("Transporter expense adjustments saved");
+    await loadData();
+  }
 
   async function loadTransporters() {
     const { data, error } = await supabase
@@ -403,7 +447,7 @@ export function TransporterExpenditureReport() {
           <h2 className="text-sm font-semibold">Transporter Expenditure ({filtered.length})</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1500px] text-left text-sm">
+          <table className="w-full min-w-[1650px] text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-3">Consignment No.</th>
@@ -418,18 +462,19 @@ export function TransporterExpenditureReport() {
                 <th className="px-4 py-3 text-right">Freight</th>
                 <th className="px-4 py-3 text-right">Loading</th>
                 <th className="px-4 py-3 text-right">Total Expenditure</th>
+                <th className="px-4 py-3 text-right">Options</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={13} className="py-12 text-center text-muted-foreground">
                     <RefreshCw className="mx-auto mb-2 size-6 animate-spin opacity-20" /> Loading…
                   </td>
                 </tr>
               ) : !filtered.length ? (
                 <tr>
-                  <td colSpan={12} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={13} className="py-12 text-center text-muted-foreground">
                     No third-party consignments found for these filters.
                   </td>
                 </tr>
@@ -467,6 +512,11 @@ export function TransporterExpenditureReport() {
                         </span>
                       )}
                     </td>
+                    <td className="px-4 py-3 text-right">
+                      <Button variant="outline" size="sm" onClick={() => openAdjustment(row)}>
+                        <Pencil className="mr-1 size-3.5" /> Adjust
+                      </Button>
+                    </td>
                   </tr>
                 ))
               )}
@@ -492,12 +542,67 @@ export function TransporterExpenditureReport() {
                   <td className="px-4 py-3 text-right tabular-nums">
                     {displayMoney(totals.income)}
                   </td>
+                  <td />
                 </tr>
               </tfoot>
             ) : null}
           </table>
         </div>
       </div>
+      <Dialog open={editing !== null} onOpenChange={(open) => !open && setEditing(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>Transporter Expense Adjustments</DialogTitle>
+          </DialogHeader>
+          {editing && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-muted/30 p-3 text-sm">
+                <div className="font-medium">{editing.consignment_number}</div>
+                <div className="text-xs text-muted-foreground">
+                  {editing.transporter?.transporter_name || "Transporter"}
+                </div>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {(
+                  [
+                    ["freight_deduction", "Freight Deduction"],
+                    ["additional_freight", "Additional Freight"],
+                    ["loading_deduction", "Loading Deduction"],
+                    ["additional_loading", "Additional Loading"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label
+                    key={key}
+                    className="space-y-1.5 text-xs font-medium text-muted-foreground"
+                  >
+                    {label}
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={adjustments[key]}
+                      onChange={(event) =>
+                        setAdjustments((current) => ({ ...current, [key]: event.target.value }))
+                      }
+                    />
+                  </label>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Final freight/loading = calculated amount − deduction + additional amount.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>
+              Cancel
+            </Button>
+            <Button onClick={() => void saveAdjustment()} disabled={savingAdjustment}>
+              {savingAdjustment ? "Saving…" : "Save Adjustments"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
