@@ -87,7 +87,7 @@ function LoginPage() {
   const { credentialId } = usePasskeyContext();
   const navigate = useNavigate();
   const { loginUi, backgroundVideoUrl } = useTheme();
-  const [videoReady, setVideoReady] = useState(loginUi !== "video");
+  const [videoReady, setVideoReady] = useState(false);
 
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
@@ -514,8 +514,7 @@ function LoginPage() {
               preload="auto"
               poster="/garuda-banner.webp"
               aria-hidden="true"
-              onCanPlay={() => setVideoReady(true)}
-              onLoadedData={() => setVideoReady(true)}
+              onCanPlayThrough={() => setVideoReady(true)}
               onError={() => setVideoReady(true)}
             >
               <source src={backgroundVideoUrl} />
