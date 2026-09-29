@@ -20,6 +20,8 @@ import { VehicleInsuranceSection } from "@/components/masters/VehicleInsuranceSe
 import { VehicleRoadTaxSection } from "@/components/masters/VehicleRoadTaxSection";
 import { PartyMaster } from "@/components/masters/PartyMaster";
 import { PackageRates } from "@/components/masters/PackageRates";
+import { TransporterEntries } from "@/components/masters/TransporterEntries";
+import { Button } from "@/components/ui/button";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 import {
@@ -136,6 +138,10 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
 
   const [tab, setTab] = useState<TabId>(isAdmin || isViewer ? "vehicle" : "driver");
   const [navOpen, setNavOpen] = useState(true);
+  const [openTransporter, setOpenTransporter] = useState<{
+    id: string;
+    transporter_name: string;
+  } | null>(null);
 
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
   const safeTab = active?.id ?? "driver";
@@ -244,7 +250,32 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
           ) : null}
           {safeTab === "driver" ? <MasterList config={DRIVER_CONFIG} /> : null}
           {safeTab === "transporter" ? <MasterList config={TRANSPORTER_CONFIG} /> : null}
-          {safeTab === "ltms-transporter" ? <MasterList config={LTMS_TRANSPORTER_CONFIG} /> : null}
+          {safeTab === "ltms-transporter" ? (
+            openTransporter ? (
+              <TransporterEntries
+                transporter={openTransporter}
+                onBack={() => setOpenTransporter(null)}
+              />
+            ) : (
+              <MasterList
+                config={LTMS_TRANSPORTER_CONFIG}
+                renderRowActions={(row) => (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() =>
+                      setOpenTransporter({
+                        id: String(row.id),
+                        transporter_name: String(row.transporter_name ?? ""),
+                      })
+                    }
+                  >
+                    Open
+                  </Button>
+                )}
+              />
+            )
+          ) : null}
           {safeTab === "rental" ? <MasterList config={RENTAL_CONFIG} /> : null}
           {safeTab === "delivery-partner" ? <MasterList config={DELIVERY_PARTNER_CONFIG} /> : null}
           {safeTab === "location" ? <MasterList config={LOCATION_CONFIG} /> : null}

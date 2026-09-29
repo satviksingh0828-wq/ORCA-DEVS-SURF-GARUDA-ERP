@@ -155,9 +155,11 @@ function DriverPhotoField({
 export function MasterList({
   config,
   renderExtraEditSections,
+  renderRowActions,
 }: {
   config: MasterConfig;
   renderExtraEditSections?: (id: string, row: Row) => React.ReactNode;
+  renderRowActions?: (row: Row) => React.ReactNode;
 }) {
   const [items, setItems] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -744,6 +746,7 @@ export function MasterList({
                       entityLabel={String(r[config.titleKey] ?? "")}
                     />
                   ) : null}
+                  {renderRowActions ? renderRowActions(r) : null}
                   {!isViewer ? (
                     <>
                       <Button variant="outline" size="sm" onClick={() => setEditing(r)}>

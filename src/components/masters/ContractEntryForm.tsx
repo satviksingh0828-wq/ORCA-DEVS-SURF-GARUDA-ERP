@@ -19,7 +19,8 @@ import type { ContractRow } from "./ContractForm";
 
 export type EntryRow = {
   id?: string;
-  contract_id: string;
+  contract_id?: string;
+  transporter_id?: string;
   mode: "ROAD" | "RAIL" | "AIR" | "SHIP";
   from_location_id: string | null;
   to_location_id: string | null;
@@ -96,13 +97,11 @@ function RouteRangeEditor({
     <section className="surface-card p-6">
       <h3 className="text-sm font-semibold tracking-tight">{sectionLabel}</h3>
       <p className="mt-1 text-xs text-muted-foreground">
-        <span className="font-medium text-foreground">Both boundaries are inclusive.</span>{" "}
-        Enter the From (≥) and To (≤) values for each slab.{" "}
-        Leave <span className="font-medium text-foreground">To</span> blank for the last
-        open-ended slab (∞).{" "}
-        <span className="font-medium text-foreground">Rate ×</span> multiplies charge by actual
-        units.{" "}
-        <span className="font-medium text-amber-700 dark:text-amber-300">Fixed ₹</span> is a
+        <span className="font-medium text-foreground">Both boundaries are inclusive.</span> Enter
+        the From (≥) and To (≤) values for each slab. Leave{" "}
+        <span className="font-medium text-foreground">To</span> blank for the last open-ended slab
+        (∞). <span className="font-medium text-foreground">Rate ×</span> multiplies charge by actual
+        units. <span className="font-medium text-amber-700 dark:text-amber-300">Fixed ₹</span> is a
         flat amount regardless of units.
       </p>
 
@@ -199,13 +198,19 @@ export function ContractEntryForm({
   initial,
   onCancel,
   onSaved,
+  table = "contract_entries",
+  ownerKey = "contract_id",
 }: {
   contract: ContractRow;
   initial: EntryRow;
   onCancel: () => void;
   onSaved: () => void;
+  table?: "contract_entries" | "ltms_transporter_entries";
+  ownerKey?: "contract_id" | "transporter_id";
 }) {
-  const [form, setForm] = useState<EntryRow>({ mode: "ROAD", ...initial });
+  const entryTable = table;
+  const entryOwnerKey = ownerKey;
+  const [form, setForm] = useState<EntryRow>({ ...initial, mode: initial.mode ?? "ROAD" });
   const [saving, setSaving] = useState(false);
 
   const patch = (p: Partial<EntryRow>) => setForm((f) => ({ ...f, ...p }));
@@ -214,10 +219,20 @@ export function ContractEntryForm({
     e.preventDefault();
     setSaving(true);
     const { id, ...rest } = form;
-    const payload = rest as never;
+    const payload = { ...rest, [entryOwnerKey]: contract.id };
+    if (entryOwnerKey === "contract_id") delete (payload as EntryRow).transporter_id;
+    else delete (payload as EntryRow).contract_id;
+    const db = supabase as unknown as {
+      from: (table: string) => {
+        update: (values: unknown) => {
+          eq: (column: string, value: unknown) => Promise<{ error: { message: string } | null }>;
+        };
+        insert: (values: unknown) => Promise<{ error: { message: string } | null }>;
+      };
+    };
     const res = id
-      ? await supabase.from("contract_entries").update(payload).eq("id", id)
-      : await supabase.from("contract_entries").insert(payload);
+      ? await db.from(entryTable).update(payload).eq("id", id)
+      : await db.from(entryTable).insert(payload);
     setSaving(false);
     if (res.error) return toast.error(res.error.message);
     toast.success(id ? "Entry updated" : "Entry added");
@@ -244,8 +259,13 @@ export function ContractEntryForm({
         <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Transport Mode *</Label>
-            <Select value={form.mode ?? "ROAD"} onValueChange={(mode) => patch({ mode: mode as EntryRow["mode"] })}>
-              <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
+            <Select
+              value={form.mode ?? "ROAD"}
+              onValueChange={(mode) => patch({ mode: mode as EntryRow["mode"] })}
+            >
+              <SelectTrigger className="h-10">
+                <SelectValue />
+              </SelectTrigger>
               <SelectContent>
                 <SelectItem value="ROAD">Road</SelectItem>
                 <SelectItem value="RAIL">Rail</SelectItem>
@@ -258,17 +278,13 @@ export function ContractEntryForm({
             label="From"
             locationId={form.from_location_id}
             pinCode={form.from_pin_code}
-            onChange={(n) =>
-              patch({ from_location_id: n.location_id, from_pin_code: n.pin_code })
-            }
+            onChange={(n) => patch({ from_location_id: n.location_id, from_pin_code: n.pin_code })}
           />
           <LocationPinPair
             label="To"
             locationId={form.to_location_id}
             pinCode={form.to_pin_code}
-            onChange={(n) =>
-              patch({ to_location_id: n.location_id, to_pin_code: n.pin_code })
-            }
+            onChange={(n) => patch({ to_location_id: n.location_id, to_pin_code: n.pin_code })}
           />
         </div>
       </section>

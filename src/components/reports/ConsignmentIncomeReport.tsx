@@ -54,7 +54,10 @@ const moneyFormat = new Intl.NumberFormat("en-IN", {
 });
 const displayNumber = (value: number) => numberFormat.format(value);
 const displayMoney = (value: number) => moneyFormat.format(value);
-const normalizeMode = (value: unknown) => String(value ?? "").trim().toUpperCase();
+const normalizeMode = (value: unknown) =>
+  String(value ?? "")
+    .trim()
+    .toUpperCase();
 
 function monthStart(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
@@ -78,7 +81,6 @@ function findConsignmentEntry(
       String(entry.to_pin_code ?? "").trim() === toPin,
   );
 }
-
 export function ConsignmentIncomeReport() {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
@@ -116,7 +118,9 @@ export function ConsignmentIncomeReport() {
 
       const consignments = await fetchAll<ConsignmentRow>(() => query);
       const consignmentIds = consignments.map((row) => row.id);
-      const sourceIds = [...new Set(consignments.map((row) => row.source_id).filter(Boolean))] as string[];
+      const sourceIds = [
+        ...new Set(consignments.map((row) => row.source_id).filter(Boolean)),
+      ] as string[];
       const [packages, contracts, entries] = await Promise.all([
         consignmentIds.length
           ? fetchAll<PackageRow>(() =>
@@ -130,7 +134,9 @@ export function ConsignmentIncomeReport() {
           ? fetchAll<ContractLite>(() =>
               supabase
                 .from("contracts")
-                .select("id,contract_name,company_name,gstin,fixed_monthly_charge,fixed_yearly_charge")
+                .select(
+                  "id,contract_name,company_name,gstin,fixed_monthly_charge,fixed_yearly_charge",
+                )
                 .in("id", sourceIds),
             )
           : Promise.resolve([] as ContractLite[]),
@@ -168,18 +174,14 @@ export function ConsignmentIncomeReport() {
           const entry = row.source_id
             ? findConsignmentEntry(entriesBySource.get(row.source_id) ?? [], row)
             : undefined;
-          const charges = manifestCharges(
-            contract,
-            entry,
-            {
-              from_location_id: null,
-              to_location_id: null,
-              from_pin_code: row.from_pin_code,
-              to_pin_code: row.to_pin_code,
-              weight_kg: String(packageTotal.weight),
-              quantity: String(packageTotal.quantity),
-            },
-          );
+          const charges = manifestCharges(contract, entry, {
+            from_location_id: null,
+            to_location_id: null,
+            from_pin_code: row.from_pin_code,
+            to_pin_code: row.to_pin_code,
+            weight_kg: String(packageTotal.weight),
+            quantity: String(packageTotal.quantity),
+          });
           return {
             ...row,
             total_quantity: packageTotal.quantity,
@@ -216,7 +218,11 @@ export function ConsignmentIncomeReport() {
         row.transport_mode,
         row.from_pin_code,
         row.to_pin_code,
-      ].some((value) => String(value ?? "").toLowerCase().includes(query)),
+      ].some((value) =>
+        String(value ?? "")
+          .toLowerCase()
+          .includes(query),
+      ),
     );
   }, [rows, search]);
 
@@ -281,11 +287,21 @@ export function ConsignmentIncomeReport() {
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">From Date</label>
-          <Input className="h-9 w-40" type="date" value={fromDate} onChange={(event) => setFromDate(event.target.value)} />
+          <Input
+            className="h-9 w-40"
+            type="date"
+            value={fromDate}
+            onChange={(event) => setFromDate(event.target.value)}
+          />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">To Date</label>
-          <Input className="h-9 w-40" type="date" value={toDate} onChange={(event) => setToDate(event.target.value)} />
+          <Input
+            className="h-9 w-40"
+            type="date"
+            value={toDate}
+            onChange={(event) => setToDate(event.target.value)}
+          />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium text-muted-foreground">Source</label>
@@ -304,10 +320,23 @@ export function ConsignmentIncomeReport() {
           </Select>
         </div>
         <div className="ml-auto flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={exportReport} disabled={!filtered.length} className="h-9 gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportReport}
+            disabled={!filtered.length}
+            className="h-9 gap-2"
+          >
             <Download className="size-4" /> Export
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => void loadData()} disabled={loading} className="size-9" title="Refresh">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => void loadData()}
+            disabled={loading}
+            className="size-9"
+            title="Refresh"
+          >
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
           </Button>
         </div>
@@ -321,8 +350,16 @@ export function ConsignmentIncomeReport() {
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
         {[
           { label: "Consignments", value: filtered.length.toLocaleString("en-IN"), color: "" },
-          { label: "Package Quantity", value: displayNumber(totals.quantity), color: "text-indigo-600" },
-          { label: "Package Weight", value: `${displayNumber(totals.weight)} kg`, color: "text-teal-600" },
+          {
+            label: "Package Quantity",
+            value: displayNumber(totals.quantity),
+            color: "text-indigo-600",
+          },
+          {
+            label: "Package Weight",
+            value: `${displayNumber(totals.weight)} kg`,
+            color: "text-teal-600",
+          },
           { label: "Freight", value: displayMoney(totals.freight), color: "text-blue-600" },
           { label: "Loading", value: displayMoney(totals.loading), color: "text-orange-600" },
         ].map((card) => (
@@ -371,19 +408,35 @@ export function ConsignmentIncomeReport() {
               ) : (
                 filtered.map((row) => (
                   <tr key={row.id} className="transition-colors hover:bg-muted/30">
-                    <td className="whitespace-nowrap px-4 py-3 font-medium">{row.consignment_number}</td>
-                    <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">{row.consignment_date ?? "—"}</td>
+                    <td className="whitespace-nowrap px-4 py-3 font-medium">
+                      {row.consignment_number}
+                    </td>
+                    <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                      {row.consignment_date ?? "—"}
+                    </td>
                     <td className="px-4 py-3">{row.source?.contract_name ?? "—"}</td>
                     <td className="px-4 py-3">{row.transport_mode ?? "—"}</td>
                     <td className="px-4 py-3 tabular-nums">{row.from_pin_code || "—"}</td>
                     <td className="px-4 py-3 tabular-nums">{row.to_pin_code || "—"}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{displayNumber(row.total_quantity)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{displayNumber(row.total_weight)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{displayMoney(row.freight)}</td>
-                    <td className="px-4 py-3 text-right tabular-nums">{displayMoney(row.loading)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {displayNumber(row.total_quantity)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {displayNumber(row.total_weight)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {displayMoney(row.freight)}
+                    </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {displayMoney(row.loading)}
+                    </td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums">
                       {displayMoney(row.total_income)}
-                      {!row.rateMatched && <span className="ml-1 text-xs font-normal text-muted-foreground">(no route)</span>}
+                      {!row.rateMatched && (
+                        <span className="ml-1 text-xs font-normal text-muted-foreground">
+                          (no route)
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -392,12 +445,24 @@ export function ConsignmentIncomeReport() {
             {!loading && filtered.length > 0 ? (
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <td className="px-4 py-3" colSpan={6}>Total ({filtered.length} consignments)</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{displayNumber(totals.quantity)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{displayNumber(totals.weight)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{displayMoney(totals.freight)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{displayMoney(totals.loading)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{displayMoney(totals.income)}</td>
+                  <td className="px-4 py-3" colSpan={6}>
+                    Total ({filtered.length} consignments)
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {displayNumber(totals.quantity)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {displayNumber(totals.weight)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {displayMoney(totals.freight)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {displayMoney(totals.loading)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {displayMoney(totals.income)}
+                  </td>
                 </tr>
               </tfoot>
             ) : null}
