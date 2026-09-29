@@ -603,7 +603,7 @@ export function ConsignmentList({
   const [driverId, setDriverId] = useState("");
   const [rentalId, setRentalId] = useState("");
   const [transporterId, setTransporterId] = useState("");
-  const [transporterSourceId, setTransporterSourceId] = useState("");
+  const [selectedTransporterSourceId, setSelectedTransporterSourceId] = useState("");
   const [transporterSources, setTransporterSources] = useState<Master[]>([]);
   const [transporterLrNumber, setTransporterLrNumber] = useState("");
   const [transporterLrDate, setTransporterLrDate] = useState("");
@@ -774,7 +774,7 @@ export function ConsignmentList({
   useEffect(() => {
     if (type !== "third_party" || !branchId || !transporterId) {
       setTransporterSources([]);
-      setTransporterSourceId("");
+      setSelectedTransporterSourceId("");
       return;
     }
     void db
@@ -788,7 +788,7 @@ export function ConsignmentList({
         if (error) toast.error(error.message);
         const options = (data ?? []).map((row: any) => ({ id: row.id, label: row.source_name }));
         setTransporterSources(options);
-        setTransporterSourceId((current) =>
+        setSelectedTransporterSourceId((current) =>
           options.some((option: Master) => option.id === current) ? current : "",
         );
       });
@@ -810,7 +810,7 @@ export function ConsignmentList({
     setDriverId("");
     setRentalId("");
     setTransporterId("");
-    setTransporterSourceId("");
+    setSelectedTransporterSourceId("");
     setTransporterSources([]);
     setTransporterLrNumber("");
     setTransporterLrDate("");
@@ -1008,7 +1008,8 @@ export function ConsignmentList({
     if (!billingStatus) return toast.error("Select a Billing status");
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
     if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
-    if (needsTransporter && !transporterSourceId) return toast.error("Select a Transporter Source");
+    if (needsTransporter && !selectedTransporterSourceId)
+      return toast.error("Select a Transporter Source");
     if (needsTransporter && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
       return toast.error("Transporter movement requires valid From and To Pincodes");
     if (!common) return toast.error("Add at least one E-Way Bill");
@@ -1031,7 +1032,7 @@ export function ConsignmentList({
       vehicle_id: needsOwnVehicle ? vehicleId || null : null,
       driver_id: type === "own" || movement === "drop" ? driverId || null : null,
       transporter_id: needsTransporter ? transporterId : "",
-      transporter_source_id: needsTransporter ? transporterSourceId : null,
+      transporter_source_id: needsTransporter ? selectedTransporterSourceId : null,
       transporter_lr_number: transporterLrNumber.trim() || null,
       transporter_lr_date: transporterLrDate || null,
       delivery_date: deliveryDate || null,
@@ -2010,8 +2011,8 @@ function ConsignmentForm(props: any) {
             <div className="col-span-1 min-w-0 sm:col-span-2 xl:col-span-2">
               <SelectField
                 label="Transporter Source *"
-                value={transporterSourceId}
-                onChange={setTransporterSourceId}
+                value={selectedTransporterSourceId}
+                onChange={setSelectedTransporterSourceId}
                 options={transporterSources}
                 placeholder={
                   transporterId ? "Select source for this transporter" : "Select transporter first"
