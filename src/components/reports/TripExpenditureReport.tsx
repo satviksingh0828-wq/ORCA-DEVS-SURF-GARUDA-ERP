@@ -75,7 +75,7 @@ function isEligibleMovement(trip: TripRow, consignment: ConsignmentRow) {
   const type = String(consignment.consignment_type ?? "").toLowerCase();
   const mode = String(consignment.movement_mode ?? "").toLowerCase();
   return (
-    (ownership === "own" && type === "own" && mode === "pickup") ||
+    ownership === "own" ||
     (ownership === "third_party" && type === "third_party" && mode === "drop")
   );
 }
@@ -362,9 +362,9 @@ export function TripExpenditureReport() {
         </div>
       </div>
       <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        Own pickup and Third Party Drop trips are included. Consignment Expenditure = (Trip
-        Expenditure ÷ Total assigned Package Information Weight) × Consignment Package Information
-        Weight.
+        All consignments assigned to Own trips and Third Party Drop trips are included. Consignment
+        Expenditure = (Trip Expenditure ÷ Total assigned Package Information Weight) × Consignment
+        Package Information Weight.
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
         <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
@@ -412,7 +412,7 @@ export function TripExpenditureReport() {
               ) : !filtered.length ? (
                 <tr>
                   <td colSpan={11} className="py-12 text-center text-muted-foreground">
-                    No own pickup or third-party drop trips found.
+                    No own or third-party drop trips found.
                   </td>
                 </tr>
               ) : (
