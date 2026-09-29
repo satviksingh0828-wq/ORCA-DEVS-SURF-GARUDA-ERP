@@ -42,8 +42,18 @@ type Movement = {
   transport_mode?: string | null;
   from_pin_code?: string | null;
   to_pin_code?: string | null;
-  from_details?: { trade_name?: string; legal_name?: string; pincode?: string } | null;
-  to_details?: { trade_name?: string; legal_name?: string; pincode?: string } | null;
+  from_details?: {
+    trade_name?: string;
+    legal_name?: string;
+    place?: string;
+    pincode?: string;
+  } | null;
+  to_details?: {
+    trade_name?: string;
+    legal_name?: string;
+    place?: string;
+    pincode?: string;
+  } | null;
   created_at?: string | null;
   trip_id?: string | null;
   trip?: { trip_code?: string | null } | null;
@@ -110,6 +120,7 @@ export function MovementList() {
   const [assignment, setAssignment] = useState("all");
   const [search, setSearch] = useState("");
   const [viewing, setViewing] = useState<Movement | null>(null);
+  const [completedLimit, setCompletedLimit] = useState(15);
   useEffect(() => {
     let active = true;
     void (async () => {
@@ -154,6 +165,53 @@ export function MovementList() {
       );
     });
   }, [rows, branchId, assignment, search]);
+  const pendingMovements = movements.filter((movement) => !movement.trip_id);
+  const completedMovements = movements.filter((movement) => Boolean(movement.trip_id));
+
+  const renderMovementRow = (m: Movement) => {
+    const r = routeLabels(m);
+    return (
+      <tr key={m.id} className="border-t border-border align-top hover:bg-muted/20">
+        <td className="px-4 py-3 font-medium">{show(m.consignment_number)}</td>
+        <td className="px-4 py-3 whitespace-nowrap">
+          {m.created_at ? new Date(m.created_at).toLocaleDateString("en-IN") : "—"}
+        </td>
+        <td className="px-4 py-3">
+          {isThirdPartyDrop(m)
+            ? "Transporter drop"
+            : m.own_transport_mode === "rental"
+              ? "Own · rental"
+              : "Own · vehicle"}
+        </td>
+        <td className="px-4 py-3">
+          <div>{show(r.fromPin)}</div>
+          <div className="text-xs text-muted-foreground">{r.from}</div>
+        </td>
+        <td className="px-4 py-3">
+          <div>{show(r.toPin)}</div>
+          <div className="text-xs text-muted-foreground">{r.to}</div>
+        </td>
+        <td className="px-4 py-3">{vehicleName(m)}</td>
+        <td className="px-4 py-3">{driverName(m)}</td>
+        <td className="px-4 py-3">{m.trip?.trip_code || "—"}</td>
+        <td className="px-4 py-3">
+          {m.trip_id ? (
+            <Badge variant="outline" className="border-emerald-300 text-emerald-700">
+              Assigned
+            </Badge>
+          ) : (
+            <Badge variant="outline">Unassigned</Badge>
+          )}
+        </td>
+        <td className="px-4 py-3 text-right">
+          <Button type="button" variant="outline" size="sm" onClick={() => setViewing(m)}>
+            <Eye className="mr-1 size-4" />
+            View
+          </Button>
+        </td>
+      </tr>
+    );
+  };
   return (
     <div className="space-y-5">
       <div>
@@ -252,55 +310,30 @@ export function MovementList() {
                 </td>
               </tr>
             ) : (
-              movements.map((m) => {
-                const r = routeLabels(m);
-                return (
-                  <tr key={m.id} className="border-t border-border align-top hover:bg-muted/20">
-                    <td className="px-4 py-3 font-medium">{show(m.consignment_number)}</td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {m.created_at ? new Date(m.created_at).toLocaleDateString("en-IN") : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {isThirdPartyDrop(m)
-                        ? "Transporter drop"
-                        : m.own_transport_mode === "rental"
-                          ? "Own · rental"
-                          : "Own · vehicle"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>{show(r.fromPin)}</div>
-                      <div className="text-xs text-muted-foreground">{r.from}</div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <div>{show(r.toPin)}</div>
-                      <div className="text-xs text-muted-foreground">{r.to}</div>
-                    </td>
-                    <td className="px-4 py-3">{vehicleName(m)}</td>
-                    <td className="px-4 py-3">{driverName(m)}</td>
-                    <td className="px-4 py-3">{m.trip?.trip_code || "—"}</td>
-                    <td className="px-4 py-3">
-                      {m.trip_id ? (
-                        <Badge variant="outline" className="border-emerald-300 text-emerald-700">
-                          Assigned
-                        </Badge>
-                      ) : (
-                        <Badge variant="outline">Unassigned</Badge>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setViewing(m)}
-                      >
-                        <Eye className="mr-1 size-4" />
-                        View
-                      </Button>
+              <>
+                {pendingMovements.length > 0 && (
+                  <tr className="border-t border-border bg-amber-50/50">
+                    <td
+                      colSpan={10}
+                      className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-800"
+                    >
+                      Pending — Trip not assigned ({pendingMovements.length})
                     </td>
                   </tr>
-                );
-              })
+                )}
+                {pendingMovements.map(renderMovementRow)}
+                {completedMovements.length > 0 && (
+                  <tr className="border-t border-border bg-emerald-50/50">
+                    <td
+                      colSpan={10}
+                      className="px-4 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-800"
+                    >
+                      Completed ({completedMovements.length})
+                    </td>
+                  </tr>
+                )}
+                {completedMovements.slice(0, completedLimit).map(renderMovementRow)}
+              </>
             )}
           </tbody>
         </table>
@@ -308,6 +341,13 @@ export function MovementList() {
       <p className="text-xs text-muted-foreground">
         {movements.length} movement{movements.length === 1 ? "" : "s"}
       </p>
+      {completedMovements.length > completedLimit && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={() => setCompletedLimit((limit) => limit + 15)}>
+            Load more completed movements
+          </Button>
+        </div>
+      )}
       <Dialog open={Boolean(viewing)} onOpenChange={(open) => !open && setViewing(null)}>
         <DialogContent className="max-h-[85vh] max-w-4xl overflow-y-auto">
           <DialogHeader>

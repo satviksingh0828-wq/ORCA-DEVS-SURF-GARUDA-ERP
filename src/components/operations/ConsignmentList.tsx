@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { Fragment, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { Eye, Pencil, Plus, Printer, Search, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -584,6 +584,7 @@ export function ConsignmentList({
   const [branchFilter, setBranchFilter] = useState("all");
   const [typeFilter, setTypeFilter] = useState("all");
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
+  const [completedLimit, setCompletedLimit] = useState(15);
   const [branchId, setBranchId] = useState("");
   const [sourceId, setSourceId] = useState("");
   const [consignmentDate, setConsignmentDate] = useState(new Date().toISOString().slice(0, 10));
@@ -635,6 +636,19 @@ export function ConsignmentList({
       ),
     [rows, search, branchFilter, typeFilter, monthFilter],
   );
+  const isPendingConsignment = (row: Record<string, any>) => {
+    const transporterPending =
+      row.consignment_type === "third_party" &&
+      ["pending", "partial", "failed"].includes(String(row.transporter_update_status ?? "pending"));
+    const tripAssignmentPending =
+      !row.trip_id &&
+      (row.consignment_type === "own" ||
+        (row.consignment_type === "third_party" && row.movement_mode === "drop"));
+    return transporterPending || tripAssignmentPending;
+  };
+  const pendingRows = filteredRows.filter(isPendingConsignment);
+  const completedRows = filteredRows.filter((row) => !isPendingConsignment(row));
+  const displayRows = [...pendingRows, ...completedRows.slice(0, completedLimit)];
 
   async function loadRows() {
     setLoading(true);
@@ -1318,76 +1332,109 @@ export function ConsignmentList({
                 </td>
               </tr>
             )}
-            {filteredRows.map((row) => (
-              <tr key={row.id} className="border-t border-border">
-                <td className="px-3 py-2 font-medium">{row.consignment_number}</td>
-                <td className="px-3 py-2">{row.branch?.branch_name ?? "—"}</td>
-                <td className="px-3 py-2">
-                  <Badge variant="outline">
-                    {row.consignment_type === "third_party" ? "Third Party" : "Own"}
-                  </Badge>
-                </td>
-                <td className="px-3 py-2">
-                  {row.movement_mode} · {row.transport_mode}
-                </td>
-                <td className="px-3 py-2">
-                  {row.consignment_type === "third_party" ? (
+            {displayRows.map((row, index) => (
+              <Fragment key={row.id}>
+                {index === 0 && pendingRows.length > 0 && (
+                  <tr className="border-t border-border bg-amber-50/50">
+                    <td
+                      colSpan={7}
+                      className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-amber-800"
+                    >
+                      Pending ({pendingRows.length})
+                    </td>
+                  </tr>
+                )}
+                {index === pendingRows.length && completedRows.length > 0 && (
+                  <tr className="border-t border-border bg-emerald-50/50">
+                    <td
+                      colSpan={7}
+                      className="px-3 py-2 text-xs font-semibold uppercase tracking-wide text-emerald-800"
+                    >
+                      Completed ({completedRows.length})
+                    </td>
+                  </tr>
+                )}
+                <tr className="border-t border-border">
+                  <td className="px-3 py-2 font-medium">{row.consignment_number}</td>
+                  <td className="px-3 py-2">{row.branch?.branch_name ?? "—"}</td>
+                  <td className="px-3 py-2">
                     <Badge variant="outline">
-                      {row.transporter_update_status === "updated"
-                        ? "Transporter Updated"
-                        : row.transporter_update_status === "partial"
-                          ? "Partially Updated — Retry"
-                          : "Transporter Update Pending"}
+                      {row.consignment_type === "third_party" ? "Third Party" : "Own"}
                     </Badge>
-                  ) : (
-                    "—"
-                  )}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2">
-                  {new Date(row.created_at).toLocaleDateString("en-IN")}
-                </td>
-                <td className="whitespace-nowrap px-3 py-2 text-right">
-                  <Button variant="ghost" size="sm" onClick={() => void openView(row)}>
-                    <Eye className="mr-1 size-4" /> View
-                  </Button>
-                  {row.consignment_type === "third_party" && (
+                  </td>
+                  <td className="px-3 py-2">
+                    {row.movement_mode} · {row.transport_mode}
+                  </td>
+                  <td className="px-3 py-2">
+                    {row.consignment_type === "third_party" ? (
+                      <Badge variant="outline">
+                        {row.transporter_update_status === "updated"
+                          ? "Transporter Updated"
+                          : row.transporter_update_status === "partial"
+                            ? "Partially Updated — Retry"
+                            : "Transporter Update Pending"}
+                      </Badge>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2">
+                    {new Date(row.created_at).toLocaleDateString("en-IN")}
+                  </td>
+                  <td className="whitespace-nowrap px-3 py-2 text-right">
+                    <Button variant="ghost" size="sm" onClick={() => void openView(row)}>
+                      <Eye className="mr-1 size-4" /> View
+                    </Button>
+                    {row.consignment_type === "third_party" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void openTransporterUpdate(row)}
+                        title="Update the transporter stored on this Consignment"
+                      >
+                        <Pencil className="mr-1 size-4" /> Update Transporter
+                      </Button>
+                    )}
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => void openTransporterUpdate(row)}
-                      title="Update the transporter stored on this Consignment"
+                      disabled={
+                        Boolean(row.trip_id) ||
+                        ["partial", "updated"].includes(
+                          String(row.transporter_update_status ?? "pending"),
+                        )
+                      }
+                      title={
+                        row.trip_id
+                          ? "Assigned to a Trip — unassign it before deleting"
+                          : ["partial", "updated"].includes(
+                                String(row.transporter_update_status ?? "pending"),
+                              )
+                            ? "Transporter update exists — cannot delete"
+                            : "Delete Consignment"
+                      }
+                      onClick={() => void deleteRow(row)}
                     >
-                      <Pencil className="mr-1 size-4" /> Update Transporter
+                      <Trash2 className="mr-1 size-4 text-destructive" /> Delete
                     </Button>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    disabled={
-                      Boolean(row.trip_id) ||
-                      ["partial", "updated"].includes(
-                        String(row.transporter_update_status ?? "pending"),
-                      )
-                    }
-                    title={
-                      row.trip_id
-                        ? "Assigned to a Trip — unassign it before deleting"
-                        : ["partial", "updated"].includes(
-                              String(row.transporter_update_status ?? "pending"),
-                            )
-                          ? "Transporter update exists — cannot delete"
-                          : "Delete Consignment"
-                    }
-                    onClick={() => void deleteRow(row)}
-                  >
-                    <Trash2 className="mr-1 size-4 text-destructive" /> Delete
-                  </Button>
-                </td>
-              </tr>
+                  </td>
+                </tr>
+              </Fragment>
             ))}
           </tbody>
         </table>
       </div>
+      {!loading && completedRows.length > completedLimit && (
+        <div className="flex justify-center">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setCompletedLimit((limit) => limit + 15)}
+          >
+            Load more completed consignments
+          </Button>
+        </div>
+      )}
       <Dialog
         open={transporterUpdateRow !== null}
         onOpenChange={(open) => !open && setTransporterUpdateRow(null)}

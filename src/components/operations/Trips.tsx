@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
-import { Building2, Plus, Search, Trash2, Truck } from "lucide-react";
+import { Building2, CheckCircle2, Plus, Search, Trash2, Truck } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ export function Trips({
   const [searchTerm, setSearchTerm] = useState("");
   const [branchFilter, setBranchFilter] = useState<string>("all");
   const [branches, setBranches] = useState<BranchOption[]>([]);
+  const [closedLimit, setClosedLimit] = useState(15);
 
   const { user } = useSession();
   const isAdmin = isAdminLike(user?.role);
@@ -106,6 +107,22 @@ export function Trips({
     load();
   }
 
+  async function closeTrip(trip: TripRow) {
+    if (!trip.id || isViewer) return;
+    const { error } = await supabase
+      .from("trips")
+      .update({ closed: true } as never)
+      .eq("id", trip.id);
+    if (error) return toast.error(error.message);
+    logAction("updated", "trip", {
+      entityId: trip.id,
+      entityLabel: trip.trip_code,
+      details: { closed: true },
+    });
+    toast.success("Trip marked closed");
+    load();
+  }
+
   const normalizedSearch = searchTerm.trim().toLowerCase();
   const matchesTripSearch = (
     id: string | null | undefined,
@@ -115,7 +132,7 @@ export function Trips({
     return [id, tripCode].some((value) => (value ?? "").toLowerCase().includes(normalizedSearch));
   };
 
-  const visibleTrips = useMemo(
+  const filteredTrips = useMemo(
     () =>
       trips.filter(
         (t) =>
@@ -125,6 +142,8 @@ export function Trips({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [trips, normalizedSearch, branchFilter],
   );
+  const openTrips = filteredTrips.filter((trip) => trip.closed !== true);
+  const closedTrips = filteredTrips.filter((trip) => trip.closed === true);
   // ── Inline detail views (replace the list) ────────────────────────────────
 
   if (editing)
@@ -193,58 +212,122 @@ export function Trips({
           <Skeleton className="h-16 w-full" />
           <Skeleton className="h-16 w-full" />
         </div>
-      ) : visibleTrips.length === 0 ? (
-        <p className="rounded-xl bg-muted px-4 py-8 text-center text-sm text-muted-foreground">
-          {isBasic && allowedBranchIds?.length === 0
-            ? "No branches assigned to your account. Contact your administrator."
-            : normalizedSearch
-              ? "No live trips match your search."
-              : "No trips yet. Create a trip to record manifests, income and expenses."}
-        </p>
       ) : (
-        <ul className="space-y-2">
-          {visibleTrips.map((t) => (
-            <li
-              key={t.id}
-              className="surface-card flex flex-wrap items-center gap-3 p-4 transition-colors hover:bg-muted/40"
-            >
-              <Truck className="size-4 shrink-0 text-primary" />
-              <button
-                type="button"
-                className="min-w-0 flex-1 text-left"
-                onClick={() => setEditing(t)}
-              >
-                <span className="block text-sm font-medium">{t.trip_code}</span>
-                <span className="block text-xs text-muted-foreground">
-                  {[t.ownership === "own" ? "Own vehicle" : "Rented", t.start_date, t.start_time]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </span>
-              </button>
-              {/* Admin-only: per-row logs */}
-              {isAdmin && t.id ? (
-                <ItemLogsButton entityType="trip" entityId={t.id} entityLabel={t.trip_code} />
-              ) : null}
-              {t.part_b_locked_at ? (
-                <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
-                  Part-B locked
-                </span>
-              ) : null}
-              <DriverTripActions trip={t} />
-              {!isViewer && !t.part_b_locked_at && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => remove(t)}
-                  title="Delete trip"
-                  aria-label="Delete trip"
-                >
-                  <Trash2 className="size-4" />
-                </Button>
-              )}
-            </li>
-          ))}
-        </ul>
+        <>
+          <section className="space-y-2">
+            <h2 className="text-sm font-semibold">Open trips</h2>
+            {openTrips.length === 0 ? (
+              <p className="rounded-xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
+                {isBasic && allowedBranchIds?.length === 0
+                  ? "No branches assigned to your account. Contact your administrator."
+                  : normalizedSearch
+                    ? "No open trips match your search."
+                    : "No open trips yet. Create a trip to record manifests, income and expenses."}
+              </p>
+            ) : (
+              <ul className="space-y-2">
+                {openTrips.map((t) => (
+                  <li
+                    key={t.id}
+                    className="surface-card flex flex-wrap items-center gap-3 p-4 transition-colors hover:bg-muted/40"
+                  >
+                    <Truck className="size-4 shrink-0 text-primary" />
+                    <button
+                      type="button"
+                      className="min-w-0 flex-1 text-left"
+                      onClick={() => setEditing(t)}
+                    >
+                      <span className="block text-sm font-medium">{t.trip_code}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        {[
+                          t.ownership === "own" ? "Own vehicle" : "Rented",
+                          t.start_date,
+                          t.start_time,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </span>
+                    </button>
+                    {/* Admin-only: per-row logs */}
+                    {isAdmin && t.id ? (
+                      <ItemLogsButton entityType="trip" entityId={t.id} entityLabel={t.trip_code} />
+                    ) : null}
+                    {t.part_b_locked_at ? (
+                      <span className="rounded-full border border-amber-300 bg-amber-50 px-2 py-1 text-[11px] font-medium text-amber-800">
+                        Part-B locked
+                      </span>
+                    ) : null}
+                    <DriverTripActions trip={t} />
+                    {!isViewer && (
+                      <Button variant="outline" size="sm" onClick={() => void closeTrip(t)}>
+                        <CheckCircle2 className="mr-1 size-4" /> Close trip
+                      </Button>
+                    )}
+                    {!isViewer && !t.part_b_locked_at && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => remove(t)}
+                        title="Delete trip"
+                        aria-label="Delete trip"
+                      >
+                        <Trash2 className="size-4" />
+                      </Button>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+          <section className="space-y-2 border-t border-border pt-4">
+            <h2 className="text-sm font-semibold">Closed trips</h2>
+            {closedTrips.length === 0 ? (
+              <p className="rounded-xl bg-muted px-4 py-6 text-center text-sm text-muted-foreground">
+                {normalizedSearch ? "No closed trips match your search." : "No closed trips."}
+              </p>
+            ) : (
+              <>
+                <ul className="space-y-2">
+                  {closedTrips.slice(0, closedLimit).map((t) => (
+                    <li key={t.id} className="surface-card flex flex-wrap items-center gap-3 p-4">
+                      <CheckCircle2 className="size-4 shrink-0 text-emerald-600" />
+                      <button
+                        type="button"
+                        className="min-w-0 flex-1 text-left"
+                        onClick={() => setEditing(t)}
+                      >
+                        <span className="block text-sm font-medium">{t.trip_code}</span>
+                        <span className="block text-xs text-muted-foreground">
+                          {[
+                            t.ownership === "own" ? "Own vehicle" : "Rented",
+                            t.start_date,
+                            t.start_time,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
+                        </span>
+                      </button>
+                      <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800">
+                        Closed
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                {closedTrips.length > closedLimit && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setClosedLimit((limit) => limit + 15)}
+                    >
+                      Load more closed trips
+                    </Button>
+                  </div>
+                )}
+              </>
+            )}
+          </section>
+        </>
       )}
     </div>
   );

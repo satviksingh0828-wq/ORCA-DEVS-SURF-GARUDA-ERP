@@ -88,6 +88,7 @@ export type TripRow = {
   third_party_vehicle_number: string;
   notes?: string | null;
   created_at?: string;
+  closed?: boolean | null;
   reopened_at?: string | null;
   part_b_locked_at?: string | null;
   part_b_locked_by?: string | null;

@@ -6,6 +6,7 @@ import { useBranches, type BranchOption } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
 import { serverUpdateShipmentTransporter } from "@/lib/manifest-transfer";
+import { fetchAll } from "@/lib/fetch-all";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -735,9 +736,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   const [transporterName, setTransporterName] = useState("");
   const [transporterGstin, setTransporterGstin] = useState("");
   const [updatingTransporter, setUpdatingTransporter] = useState(false);
-  const [hasMore, setHasMore] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const PAGE_SIZE = 30;
+  const [displayLimit, setDisplayLimit] = useState(15);
 
   const visibleBranches = useMemo(
     () => (allowed === null ? branches : branches.filter((b) => allowed.includes(b.id))),
@@ -745,21 +744,22 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
   );
   const branchName = (id: string) => branches.find((b) => b.id === id)?.branch_name ?? "—";
 
-  async function load(reset = true) {
-    if (reset) setLoading(true);
-    else setLoadingMore(true);
+  async function load() {
+    setLoading(true);
     try {
-      const offset = reset ? 0 : shipments.length;
-      let q = db
-        .from("shipments")
-        .select("*, shipment_items(count), consignment:consignments(consignment_number)")
-        .order("created_at", { ascending: false })
-        .range(offset, offset + PAGE_SIZE - 1);
-      if (allowed !== null)
-        q = q.in("branch_id", allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"]);
-      const { data, error } = await q;
-      if (error) throw error;
-      const page = ((data ?? []) as Array<Record<string, unknown>>).map(
+      const rows = await fetchAll<Record<string, unknown>>(() => {
+        let q = db
+          .from("shipments")
+          .select("*, shipment_items(count), consignment:consignments(consignment_number)")
+          .order("created_at", { ascending: false });
+        if (allowed !== null)
+          q = q.in(
+            "branch_id",
+            allowed.length ? allowed : ["00000000-0000-0000-0000-000000000000"],
+          );
+        return q;
+      });
+      const mapped = rows.map(
         (row) =>
           ({
             ...row,
@@ -770,13 +770,12 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
             ),
           }) as Shipment,
       );
-      setShipments((current) => (reset ? page : [...current, ...page]));
-      setHasMore(page.length === PAGE_SIZE);
+      setShipments(mapped);
+      setDisplayLimit(15);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load shipments");
     }
     setLoading(false);
-    setLoadingMore(false);
   }
   useEffect(() => {
     void load();
@@ -789,6 +788,9 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     if (monthFilter !== "all" && !s.eway_bill_date.startsWith(monthFilter)) return false;
     return !search.trim() || s.eway_bill_number.includes(search.trim());
   });
+  useEffect(() => {
+    setDisplayLimit(15);
+  }, [branchFilter, monthFilter, search]);
 
   function openCreate() {
     const f = blankForm();
@@ -1284,7 +1286,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((s) => (
+                  {filtered.slice(0, displayLimit).map((s) => (
                     <tr key={s.id} className="border-t border-border hover:bg-muted/20">
                       <td className="px-4 py-3 font-medium">{s.eway_bill_number}</td>
                       <td className="px-4 py-3">{s.consignment_number || "—"}</td>
@@ -1316,10 +1318,10 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
               </table>
             </div>
           )}
-          {!loading && filtered.length > 0 && hasMore && (
+          {!loading && filtered.length > displayLimit && (
             <div className="flex justify-center pt-3">
-              <Button variant="outline" onClick={() => void load(false)} disabled={loadingMore}>
-                {loadingMore ? "Loading…" : "Load More"}
+              <Button variant="outline" onClick={() => setDisplayLimit((limit) => limit + 15)}>
+                Load More
               </Button>
             </div>
           )}
