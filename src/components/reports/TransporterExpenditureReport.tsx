@@ -81,12 +81,11 @@ function monthEnd(date = new Date()) {
 }
 
 function transporterRoutePins(consignment: ConsignmentRow) {
-  const fromPin = String(consignment.from_pin_code ?? "").trim();
   const savedToPin = String(consignment.to_pin_code ?? "").trim();
   const firstEwayToPin = String(consignment.to_details?.pincode ?? savedToPin).trim();
   return consignment.movement_mode === "drop"
-    ? { fromPin, toPin: firstEwayToPin }
-    : { fromPin, toPin: savedToPin };
+    ? { fromPin: savedToPin, toPin: firstEwayToPin }
+    : { fromPin: String(consignment.from_pin_code ?? "").trim(), toPin: savedToPin };
 }
 function findTransporterEntry(
   entries: ConsignmentEntry[],
@@ -414,8 +413,8 @@ export function TransporterExpenditureReport() {
       </div>
 
       <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        Default period is the current month. Drop uses the saved consignment From PIN and the
-        first E-Way Bill To PIN. Pickup uses the saved per-consignment From/To PIN route.
+        Default period is the current month. Drop uses the saved transporter To PIN as From and
+        the first E-Way Bill To PIN as destination. Pickup uses the saved From/To PIN route.
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
