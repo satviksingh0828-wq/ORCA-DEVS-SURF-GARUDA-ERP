@@ -140,7 +140,9 @@ function SettingsPage() {
         </button>
       }
     >
-      <div className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}>
+      <div
+        className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
+      >
         {/* Desktop left nav */}
         {navOpen && (
           <SharedSidebar open={navOpen} width="220px" label="Settings">

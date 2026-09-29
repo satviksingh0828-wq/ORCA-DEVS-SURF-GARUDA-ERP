@@ -23,7 +23,9 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
             Workspace
           </Link>
           <ChevronRight className="size-3.5" />
-          <Link to="/hrms" className="hover:text-foreground">HRMS</Link>
+          <Link to="/hrms" className="hover:text-foreground">
+            HRMS
+          </Link>
           <ChevronRight className="size-3.5" />
           <span className="text-foreground">{label}</span>
         </span>
@@ -44,7 +46,9 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
         </button>
       }
     >
-      <div className={`grid gap-6 ${navOpen ? "xl:grid-cols-[220px_1fr]" : "grid-cols-1"}`}>
+      <div
+        className={`grid gap-6 ${navOpen ? "xl:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
+      >
         {navOpen && <HrSectionNav area={area} desktop />}
         <div className="min-w-0">
           <HrSectionNav area={area} />

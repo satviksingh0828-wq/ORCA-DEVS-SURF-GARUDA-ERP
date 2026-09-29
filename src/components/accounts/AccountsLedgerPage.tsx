@@ -31,14 +31,7 @@ import { openBrandedTablePdf } from "@/lib/branded-pdf";
 const db = supabase as any;
 
 type LedgerTab = "capital" | "create" | "list" | "view";
-type LedgerType =
-  | "asset"
-  | "liability"
-  | "income"
-  | "expenditure"
-  | "capital"
-  | "bank"
-  | "cash";
+type LedgerType = "asset" | "liability" | "income" | "expenditure" | "capital" | "bank" | "cash";
 type OpeningSide = "dr" | "cr";
 
 type LedgerRow = {
@@ -539,16 +532,18 @@ export function AccountsLedgerPage() {
           "Cr balance": report.openingNet < 0 ? Math.abs(report.openingNet) : "",
         });
       }
-      rows.push(...report.rows.map((row) => ({
-        "Dr Date": row.debit > 0 ? row.date : "",
-        "Dr Voucher": row.debit > 0 ? row.voucher : "",
-        "Dr Particulars": row.debit > 0 ? row.particulars : "",
-        "Dr balance": row.debit > 0 ? row.debit : "",
-        "Cr Date": row.credit > 0 ? row.date : "",
-        "Cr Voucher": row.credit > 0 ? row.voucher : "",
-        "Cr Particulars": row.credit > 0 ? row.particulars : "",
-        "Cr balance": row.credit > 0 ? row.credit : "",
-      })));
+      rows.push(
+        ...report.rows.map((row) => ({
+          "Dr Date": row.debit > 0 ? row.date : "",
+          "Dr Voucher": row.debit > 0 ? row.voucher : "",
+          "Dr Particulars": row.debit > 0 ? row.particulars : "",
+          "Dr balance": row.debit > 0 ? row.debit : "",
+          "Cr Date": row.credit > 0 ? row.date : "",
+          "Cr Voucher": row.credit > 0 ? row.voucher : "",
+          "Cr Particulars": row.credit > 0 ? row.particulars : "",
+          "Cr balance": row.credit > 0 ? row.credit : "",
+        })),
+      );
       if (report.closing !== 0) {
         rows.push({
           "Dr Date": report.closing > 0 ? viewEnd : "",
@@ -563,7 +558,10 @@ export function AccountsLedgerPage() {
       }
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(rows), "Ledger View");
-      XLSX.writeFile(workbook, `${report.ledger.account_name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${viewStart}-to-${viewEnd}.xlsx`);
+      XLSX.writeFile(
+        workbook,
+        `${report.ledger.account_name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-${viewStart}-to-${viewEnd}.xlsx`,
+      );
     } catch (error) {
       toast.error(`Excel export failed: ${error instanceof Error ? error.message : String(error)}`);
     }
@@ -574,16 +572,20 @@ export function AccountsLedgerPage() {
       const report = await getPeriodReport();
       if (!report || !report.ledger) return toast.error("Load a ledger first.");
       const rows = [
-        ...(report.openingNet !== 0 ? [[
-          report.openingNet > 0 ? dateText(viewStart) : "—",
-          report.openingNet > 0 ? "B/F" : "—",
-          report.openingNet > 0 ? "Balance brought forward" : "—",
-          report.openingNet > 0 ? pdfMoneyText(report.openingNet) : "—",
-          report.openingNet < 0 ? dateText(viewStart) : "—",
-          report.openingNet < 0 ? "B/F" : "—",
-          report.openingNet < 0 ? "Balance brought forward" : "—",
-          report.openingNet < 0 ? pdfMoneyText(Math.abs(report.openingNet)) : "—",
-        ]] : []),
+        ...(report.openingNet !== 0
+          ? [
+              [
+                report.openingNet > 0 ? dateText(viewStart) : "—",
+                report.openingNet > 0 ? "B/F" : "—",
+                report.openingNet > 0 ? "Balance brought forward" : "—",
+                report.openingNet > 0 ? pdfMoneyText(report.openingNet) : "—",
+                report.openingNet < 0 ? dateText(viewStart) : "—",
+                report.openingNet < 0 ? "B/F" : "—",
+                report.openingNet < 0 ? "Balance brought forward" : "—",
+                report.openingNet < 0 ? pdfMoneyText(Math.abs(report.openingNet)) : "—",
+              ],
+            ]
+          : []),
         ...report.rows.map((row) => [
           row.debit > 0 ? dateText(row.date) : "—",
           row.debit > 0 ? row.voucher : "—",
@@ -594,25 +596,49 @@ export function AccountsLedgerPage() {
           row.credit > 0 ? row.particulars : "—",
           row.credit > 0 ? pdfMoneyText(row.credit) : "—",
         ]),
-        ...(report.closing !== 0 ? [[
-          report.closing > 0 ? dateText(viewEnd) : "—",
-          report.closing > 0 ? "C/F" : "—",
-          report.closing > 0 ? "Balance carried forward" : "—",
-          report.closing > 0 ? pdfMoneyText(report.closing) : "—",
-          report.closing < 0 ? dateText(viewEnd) : "—",
-          report.closing < 0 ? "C/F" : "—",
-          report.closing < 0 ? "Balance carried forward" : "—",
-          report.closing < 0 ? pdfMoneyText(Math.abs(report.closing)) : "—",
-        ]] : []),
+        ...(report.closing !== 0
+          ? [
+              [
+                report.closing > 0 ? dateText(viewEnd) : "—",
+                report.closing > 0 ? "C/F" : "—",
+                report.closing > 0 ? "Balance carried forward" : "—",
+                report.closing > 0 ? pdfMoneyText(report.closing) : "—",
+                report.closing < 0 ? dateText(viewEnd) : "—",
+                report.closing < 0 ? "C/F" : "—",
+                report.closing < 0 ? "Balance carried forward" : "—",
+                report.closing < 0 ? pdfMoneyText(Math.abs(report.closing)) : "—",
+              ],
+            ]
+          : []),
       ];
       await openBrandedTablePdf({
         title: `Ledger — ${report.ledger.account_name}`,
         subtitle: `${report.branch?.branch_name ?? "Branch"} | ${dateText(viewStart)} to ${dateText(viewEnd)}`,
         filename: `${report.ledger.account_name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-ledger.pdf`,
         orientation: "landscape",
-        columns: ["Dr Date", "Dr Voucher", "Dr Particulars", "Dr balance", "Cr Date", "Cr Voucher", "Cr Particulars", "Cr balance"],
+        columns: [
+          "Dr Date",
+          "Dr Voucher",
+          "Dr Particulars",
+          "Dr balance",
+          "Cr Date",
+          "Cr Voucher",
+          "Cr Particulars",
+          "Cr balance",
+        ],
         rows,
-        summary: [["Opening balance", pdfMoneyText(Math.abs(report.openingNet)) + ` ${balanceSide(report.openingNet).toUpperCase()}`], ["Closing balance", pdfMoneyText(Math.abs(report.closing)) + ` ${balanceSide(report.closing).toUpperCase()}`]],
+        summary: [
+          [
+            "Opening balance",
+            pdfMoneyText(Math.abs(report.openingNet)) +
+              ` ${balanceSide(report.openingNet).toUpperCase()}`,
+          ],
+          [
+            "Closing balance",
+            pdfMoneyText(Math.abs(report.closing)) +
+              ` ${balanceSide(report.closing).toUpperCase()}`,
+          ],
+        ],
       });
     } catch (error) {
       toast.error(`PDF export failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -635,7 +661,7 @@ export function AccountsLedgerPage() {
         </span>
       }
     >
-      <div className="grid items-start gap-6 lg:grid-cols-[220px_1fr]">
+      <div className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         <AccountsSectionNav desktop mode="ledger" ledgerTab={tab} onLedgerTabChange={setTab} />
         <div className="min-w-0 lg:col-start-2">
           <AccountsSectionNav mode="ledger" ledgerTab={tab} onLedgerTabChange={setTab} />
@@ -792,9 +818,7 @@ export function AccountsLedgerPage() {
                           min="0"
                           step="0.01"
                           value={form.opening_balance}
-                          onChange={(event) =>
-                            updateForm("opening_balance", event.target.value)
-                          }
+                          onChange={(event) => updateForm("opening_balance", event.target.value)}
                           placeholder="0.00"
                         />
                       </label>
@@ -1122,24 +1146,190 @@ export function AccountsLedgerPage() {
   );
 }
 
-function LedgerStatement({ ledger, branch, rows, openingNet, start, end }: { ledger: LedgerRow | null; branch: BranchOption | undefined; rows: JournalLine[]; openingNet: number; start: string; end: string }) {
+function LedgerStatement({
+  ledger,
+  branch,
+  rows,
+  openingNet,
+  start,
+  end,
+}: {
+  ledger: LedgerRow | null;
+  branch: BranchOption | undefined;
+  rows: JournalLine[];
+  openingNet: number;
+  start: string;
+  end: string;
+}) {
   const opening = openingNet;
-  const closing = opening + rows.reduce((sum, row) => sum + money(row.debit) - money(row.credit), 0);
+  const closing =
+    opening + rows.reduce((sum, row) => sum + money(row.debit) - money(row.credit), 0);
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="border-b border-border bg-muted/30 px-5 py-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
-          <div><p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Ledger statement</p><h2 className="mt-1 text-xl font-semibold">{ledger?.account_name ?? "Select a ledger"}</h2><p className="mt-1 text-sm text-muted-foreground">{branch?.branch_name ?? "—"} · {dateText(start)} to {dateText(end)}</p></div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">
+              Ledger statement
+            </p>
+            <h2 className="mt-1 text-xl font-semibold">
+              {ledger?.account_name ?? "Select a ledger"}
+            </h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {branch?.branch_name ?? "—"} · {dateText(start)} to {dateText(end)}
+            </p>
+          </div>
           {ledger && <LedgerTypeBadge type={ledger.ledger_type} />}
         </div>
       </div>
-      {!ledger ? <div className="py-16 text-center text-sm text-muted-foreground"><BookOpen className="mx-auto mb-2 size-7 opacity-50" />Choose a branch and ledger to view the statement.</div> : <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-left text-sm"><thead><tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground"><th className="px-4 py-3">Dr Date</th><th className="px-4 py-3">Dr Voucher</th><th className="px-4 py-3">Dr Particulars</th><th className="px-4 py-3 text-right">Dr balance</th><th className="px-4 py-3">Cr Date</th><th className="px-4 py-3">Cr Voucher</th><th className="px-4 py-3">Cr Particulars</th><th className="px-4 py-3 text-right">Cr balance</th></tr></thead><tbody className="divide-y divide-border">
-        {opening !== 0 && <tr className="bg-primary/5"><td className="px-4 py-3 whitespace-nowrap">{opening > 0 ? dateText(start) : "—"}</td><td className="px-4 py-3 font-medium">{opening > 0 ? "B/F" : "—"}</td><td className="px-4 py-3 font-medium">{opening > 0 ? "Balance brought forward" : "—"}</td><td className="px-4 py-3 text-right font-semibold">{opening > 0 ? moneyText(opening) : "—"}</td><td className="px-4 py-3 whitespace-nowrap">{opening < 0 ? dateText(start) : "—"}</td><td className="px-4 py-3 font-medium">{opening < 0 ? "B/F" : "—"}</td><td className="px-4 py-3 font-medium">{opening < 0 ? "Balance brought forward" : "—"}</td><td className="px-4 py-3 text-right font-semibold">{opening < 0 ? moneyText(Math.abs(opening)) : "—"}</td></tr>}
-        {rows.map((row) => { const debit = money(row.debit); const credit = money(row.credit); return <tr key={row.id} className="hover:bg-muted/30"><td className="px-4 py-3 whitespace-nowrap">{debit ? dateText(row.journal_entry?.entry_date) : "—"}</td><td className="px-4 py-3">{debit ? row.journal_entry?.voucher_number ?? "—" : "—"}</td><td className="px-4 py-3">{debit ? <><p>{row.line_description || row.journal_entry?.description || "—"}</p>{row.journal_entry?.reference && <p className="text-xs text-muted-foreground">{row.journal_entry.reference}</p>}</> : "—"}</td><td className="px-4 py-3 text-right font-medium text-emerald-700">{debit ? moneyText(debit) : "—"}</td><td className="px-4 py-3 whitespace-nowrap">{credit ? dateText(row.journal_entry?.entry_date) : "—"}</td><td className="px-4 py-3">{credit ? row.journal_entry?.voucher_number ?? "—" : "—"}</td><td className="px-4 py-3">{credit ? <><p>{row.line_description || row.journal_entry?.description || "—"}</p>{row.journal_entry?.reference && <p className="text-xs text-muted-foreground">{row.journal_entry.reference}</p>}</> : "—"}</td><td className="px-4 py-3 text-right font-medium text-rose-700">{credit ? moneyText(credit) : "—"}</td></tr>; })}
-        {closing !== 0 && <tr className="border-t-2 border-border bg-muted/30 font-semibold"><td className="px-4 py-3 whitespace-nowrap">{closing > 0 ? dateText(end) : "—"}</td><td className="px-4 py-3">{closing > 0 ? "C/F" : "—"}</td><td className="px-4 py-3">{closing > 0 ? "Balance carried forward" : "—"}</td><td className="px-4 py-3 text-right">{closing > 0 ? moneyText(closing) : "—"}</td><td className="px-4 py-3 whitespace-nowrap">{closing < 0 ? dateText(end) : "—"}</td><td className="px-4 py-3">{closing < 0 ? "C/F" : "—"}</td><td className="px-4 py-3">{closing < 0 ? "Balance carried forward" : "—"}</td><td className="px-4 py-3 text-right">{closing < 0 ? moneyText(Math.abs(closing)) : "—"}</td></tr>}
-        {rows.length === 0 && opening === 0 && <tr><td colSpan={8} className="py-10 text-center text-muted-foreground">No entries in this period.</td></tr>}
-      </tbody></table></div>}
-      {ledger && <div className="grid gap-3 border-t border-border bg-muted/20 p-4 text-sm sm:grid-cols-3"><div><span className="text-muted-foreground">Opening balance</span><p className="mt-1 font-semibold">{moneyText(Math.abs(opening))} {balanceSide(opening).toUpperCase()}</p></div><div><span className="text-muted-foreground">Period entries</span><p className="mt-1 font-semibold">{rows.length}</p></div><div><span className="text-muted-foreground">Closing balance</span><p className="mt-1 font-semibold">{moneyText(Math.abs(closing))} {balanceSide(closing).toUpperCase()}</p></div></div>}
+      {!ledger ? (
+        <div className="py-16 text-center text-sm text-muted-foreground">
+          <BookOpen className="mx-auto mb-2 size-7 opacity-50" />
+          Choose a branch and ledger to view the statement.
+        </div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1100px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3">Dr Date</th>
+                <th className="px-4 py-3">Dr Voucher</th>
+                <th className="px-4 py-3">Dr Particulars</th>
+                <th className="px-4 py-3 text-right">Dr balance</th>
+                <th className="px-4 py-3">Cr Date</th>
+                <th className="px-4 py-3">Cr Voucher</th>
+                <th className="px-4 py-3">Cr Particulars</th>
+                <th className="px-4 py-3 text-right">Cr balance</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {opening !== 0 && (
+                <tr className="bg-primary/5">
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {opening > 0 ? dateText(start) : "—"}
+                  </td>
+                  <td className="px-4 py-3 font-medium">{opening > 0 ? "B/F" : "—"}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {opening > 0 ? "Balance brought forward" : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold">
+                    {opening > 0 ? moneyText(opening) : "—"}
+                  </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {opening < 0 ? dateText(start) : "—"}
+                  </td>
+                  <td className="px-4 py-3 font-medium">{opening < 0 ? "B/F" : "—"}</td>
+                  <td className="px-4 py-3 font-medium">
+                    {opening < 0 ? "Balance brought forward" : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-right font-semibold">
+                    {opening < 0 ? moneyText(Math.abs(opening)) : "—"}
+                  </td>
+                </tr>
+              )}
+              {rows.map((row) => {
+                const debit = money(row.debit);
+                const credit = money(row.credit);
+                return (
+                  <tr key={row.id} className="hover:bg-muted/30">
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {debit ? dateText(row.journal_entry?.entry_date) : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {debit ? (row.journal_entry?.voucher_number ?? "—") : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {debit ? (
+                        <>
+                          <p>{row.line_description || row.journal_entry?.description || "—"}</p>
+                          {row.journal_entry?.reference && (
+                            <p className="text-xs text-muted-foreground">
+                              {row.journal_entry.reference}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-emerald-700">
+                      {debit ? moneyText(debit) : "—"}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      {credit ? dateText(row.journal_entry?.entry_date) : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {credit ? (row.journal_entry?.voucher_number ?? "—") : "—"}
+                    </td>
+                    <td className="px-4 py-3">
+                      {credit ? (
+                        <>
+                          <p>{row.line_description || row.journal_entry?.description || "—"}</p>
+                          {row.journal_entry?.reference && (
+                            <p className="text-xs text-muted-foreground">
+                              {row.journal_entry.reference}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        "—"
+                      )}
+                    </td>
+                    <td className="px-4 py-3 text-right font-medium text-rose-700">
+                      {credit ? moneyText(credit) : "—"}
+                    </td>
+                  </tr>
+                );
+              })}
+              {closing !== 0 && (
+                <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {closing > 0 ? dateText(end) : "—"}
+                  </td>
+                  <td className="px-4 py-3">{closing > 0 ? "C/F" : "—"}</td>
+                  <td className="px-4 py-3">{closing > 0 ? "Balance carried forward" : "—"}</td>
+                  <td className="px-4 py-3 text-right">{closing > 0 ? moneyText(closing) : "—"}</td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    {closing < 0 ? dateText(end) : "—"}
+                  </td>
+                  <td className="px-4 py-3">{closing < 0 ? "C/F" : "—"}</td>
+                  <td className="px-4 py-3">{closing < 0 ? "Balance carried forward" : "—"}</td>
+                  <td className="px-4 py-3 text-right">
+                    {closing < 0 ? moneyText(Math.abs(closing)) : "—"}
+                  </td>
+                </tr>
+              )}
+              {rows.length === 0 && opening === 0 && (
+                <tr>
+                  <td colSpan={8} className="py-10 text-center text-muted-foreground">
+                    No entries in this period.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {ledger && (
+        <div className="grid gap-3 border-t border-border bg-muted/20 p-4 text-sm sm:grid-cols-3">
+          <div>
+            <span className="text-muted-foreground">Opening balance</span>
+            <p className="mt-1 font-semibold">
+              {moneyText(Math.abs(opening))} {balanceSide(opening).toUpperCase()}
+            </p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Period entries</span>
+            <p className="mt-1 font-semibold">{rows.length}</p>
+          </div>
+          <div>
+            <span className="text-muted-foreground">Closing balance</span>
+            <p className="mt-1 font-semibold">
+              {moneyText(Math.abs(closing))} {balanceSide(closing).toUpperCase()}
+            </p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

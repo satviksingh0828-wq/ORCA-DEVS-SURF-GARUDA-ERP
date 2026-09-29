@@ -131,7 +131,7 @@ export function AccountsSectionNav({
     if (!desktop) return;
     const layout = sidebarRef.current?.parentElement;
     if (!layout) return;
-    layout.style.gridTemplateColumns = sidebarOpen ? "220px 1fr" : "1fr";
+    layout.style.gridTemplateColumns = sidebarOpen ? "220px minmax(0, 1fr)" : "1fr";
     const content = layout.children[1] as HTMLElement | undefined;
     if (content) content.style.gridColumnStart = sidebarOpen ? "2" : "1";
     return () => {

@@ -496,7 +496,7 @@ function JournalPage() {
         </span>
       }
     >
-      <div className="grid items-start gap-6 lg:grid-cols-[220px_1fr]">
+      <div className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
         <AccountsSectionNav desktop mode="journal" journalTab={tab} onJournalTabChange={setTab} />
         <div className="min-w-0 lg:col-start-2">
           <AccountsSectionNav mode="journal" journalTab={tab} onJournalTabChange={setTab} />

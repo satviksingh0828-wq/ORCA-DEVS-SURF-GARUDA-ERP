@@ -68,7 +68,9 @@ function CashReportsPage() {
         </button>
       }
     >
-      <div className={`grid gap-6 ${navOpen ? "lg:grid-cols-[260px_1fr]" : "grid-cols-1"}`}>
+      <div
+        className={`grid gap-6 ${navOpen ? "lg:grid-cols-[260px_minmax(0,1fr)]" : "grid-cols-1"}`}
+      >
         {navOpen && (
           <SharedSidebar open={navOpen} width="260px" label="Cash reports">
             <ul className="space-y-1">

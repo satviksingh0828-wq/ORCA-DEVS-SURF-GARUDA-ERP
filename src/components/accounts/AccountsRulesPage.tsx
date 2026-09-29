@@ -157,7 +157,9 @@ export function AccountsRulesPage() {
     if (!debit || debit.branch_id !== branchId)
       return toast.error("Select a debit ledger from the selected branch.");
     if (rule.rule_key === "payroll_paid" && debit.ledger_type !== "expenditure")
-      return toast.error("Salary paid must debit an active expenditure ledger from the employee branch.");
+      return toast.error(
+        "Salary paid must debit an active expenditure ledger from the employee branch.",
+      );
     if (rule.rule_key !== "payroll_paid" && !["asset", "capital"].includes(debit.ledger_type))
       return toast.error("Loan and advance rules must debit an asset or capital ledger.");
     if (!credit || credit.branch_id !== branchId || !["bank", "cash"].includes(credit.ledger_type))
@@ -220,7 +222,7 @@ export function AccountsRulesPage() {
           </span>
         }
       >
-        <div className="grid items-start gap-6 lg:grid-cols-[220px_1fr]">
+        <div className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
           <AccountsSectionNav
             desktop
             mode="auto-rules"
