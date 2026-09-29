@@ -80,12 +80,9 @@ function monthEnd(date = new Date()) {
 }
 
 function transporterRoutePins(consignment: ConsignmentRow) {
-  const transporterPin = String(consignment.transporter?.pin_code ?? "").trim();
   const fromPin = String(consignment.from_pin_code ?? "").trim();
   const toPin = String(consignment.to_pin_code ?? "").trim();
-  return consignment.movement_mode === "drop"
-    ? { fromPin: transporterPin, toPin }
-    : { fromPin, toPin };
+  return { fromPin, toPin };
 }
 function findTransporterEntry(
   entries: ConsignmentEntry[],
@@ -413,9 +410,8 @@ export function TransporterExpenditureReport() {
       </div>
 
       <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        Default period is the current month. Freight and loading are calculated from transporter
-        route entries. Pickup uses the consignment From/To PINs; Drop uses the transporter PIN to
-        the consignment To PIN.
+        Default period is the current month. Freight and loading are calculated from the saved
+        per-consignment transporter From/To PIN route.
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">

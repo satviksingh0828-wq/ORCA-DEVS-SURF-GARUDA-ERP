@@ -730,7 +730,6 @@ export function ConsignmentList({
   }, []);
   useEffect(() => {
     if (branchId) {
-      setFromPin(branch?.pin_code ?? "");
       void loadPreview(branchId);
     }
   }, [branchId, branch?.pin_code]);
@@ -751,12 +750,19 @@ export function ConsignmentList({
       });
   }, [branchId]);
   useEffect(() => {
-    if (type === "third_party" && movement === "drop") {
-      setToPin(selectedTransporter?.pin_code ?? "");
+    if (type === "third_party") {
+      if (movement === "drop") {
+        setFromPin(branch?.pin_code ?? "");
+        setToPin(selectedTransporter?.pin_code ?? "");
+      } else {
+        setFromPin(selectedTransporter?.pin_code ?? "");
+        setToPin(branch?.pin_code ?? "");
+      }
     } else {
+      setFromPin("");
       setToPin("");
     }
-  }, [type, movement, selectedTransporter?.pin_code]);
+  }, [type, movement, branch?.pin_code, selectedTransporter?.pin_code]);
 
   function openCreate() {
     setScreen("create");
@@ -950,8 +956,8 @@ export function ConsignmentList({
     if (!billingStatus) return toast.error("Select a Billing status");
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
     if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
-    if (movement === "drop" && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
-      return toast.error("Drop mode requires valid From and To Pincodes");
+    if (needsTransporter && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
+      return toast.error("Transporter movement requires valid From and To Pincodes");
     if (!common) return toast.error("Add at least one E-Way Bill");
     if (
       packageEntries.some(
@@ -975,9 +981,9 @@ export function ConsignmentList({
       transporter_lr_number: transporterLrNumber.trim() || null,
       transporter_lr_date: transporterLrDate || null,
       delivery_date: deliveryDate || null,
-      // Keep the persisted route PINs identical to the visible Consignment From/To PIN fields.
-      from_pin_code: common.supplier_pin_code,
-      to_pin_code: common.recipient_pin_code,
+      // Persist the operational transporter route separately from E-Way Bill party PINs.
+      from_pin_code: needsTransporter ? fromPin : common.supplier_pin_code,
+      to_pin_code: needsTransporter ? toPin : common.recipient_pin_code,
       from_gstin: common.supplier_gstin,
       to_gstin: common.recipient_gstin,
       generation_mode: common.generation_mode,
@@ -3072,11 +3078,13 @@ function ConsignmentView({
       ? row.branch
       : row.transporter
     : null;
+  const transporterFromPin = isThirdParty ? row.from_pin_code : transporterFrom?.pin_code;
+  const transporterToPin = isThirdParty ? row.to_pin_code : transporterTo?.pin_code;
   const transporterFromLabel = transporterFrom
-    ? `${transporterFrom.branch_name || transporterFrom.transporter_name || "—"} · ${transporterFrom.pin_code || "—"}`
+    ? `${transporterFrom.branch_name || transporterFrom.transporter_name || "—"} · ${transporterFromPin || "—"}`
     : "—";
   const transporterToLabel = transporterTo
-    ? `${transporterTo.branch_name || transporterTo.transporter_name || "—"} · ${transporterTo.pin_code || "—"}`
+    ? `${transporterTo.branch_name || transporterTo.transporter_name || "—"} · ${transporterToPin || "—"}`
     : "—";
   return (
     <div className="space-y-5">
@@ -3199,11 +3207,9 @@ function ConsignmentView({
         <div className="grid gap-3 md:grid-cols-2">
           <ReadonlyField
             label={isThirdParty ? "Transporter From Pincode" : "Consignment From Pincode"}
-            value={isThirdParty ? transporterFrom?.pin_code : row.from_pin_code}
+            value={isThirdParty ? row.from_pin_code : row.from_pin_code}
           />
-          {isThirdParty && (
-            <ReadonlyField label="Transporter To Pincode" value={transporterTo?.pin_code} />
-          )}
+          {isThirdParty && <ReadonlyField label="Transporter To Pincode" value={row.to_pin_code} />}
         </div>
       </section>
       <section className="space-y-4 rounded-xl border border-border p-4">
