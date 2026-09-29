@@ -8,7 +8,7 @@ import {
   ChevronRight,
   CreditCard,
   FileText,
-  FileSearch,
+  FilePenLine,
   PanelLeftClose,
   PanelLeftOpen,
   Route as RouteIcon,
@@ -35,9 +35,9 @@ import { ShipmentList } from "@/components/operations/ShipmentList";
 import { ConsignmentList } from "@/components/operations/ConsignmentList";
 import { LorryReceiptList } from "@/components/operations/LorryReceiptList";
 import { MovementList } from "@/components/operations/MovementList";
-import { EwayBillList } from "@/components/operations/EwayBillList";
 import { ManifestList } from "@/components/operations/ManifestList";
 import { LtmsManifestList } from "@/components/operations/LtmsManifestList";
+import { OutwardPOD } from "@/components/operations/OutwardPOD";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -122,10 +122,10 @@ const ALL_TABS = [
     dividerBefore: false,
   },
   {
-    id: "eway-bill",
-    label: "E-Way Bill",
-    desc: "Saved daily assigned-EWB snapshots",
-    icon: FileSearch,
+    id: "outward-pod",
+    label: "Outward POD",
+    desc: "Create and view outward proof of delivery",
+    icon: FilePenLine,
     adminOnly: false,
     dividerBefore: false,
   },
@@ -187,8 +187,8 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       t.id === "shipments" ||
       t.id === "consignment" ||
       t.id === "movements" ||
-      t.id === "eway-bill" ||
       t.id === "ltms-manifest" ||
+      t.id === "outward-pod" ||
       t.id === "fastag-report" ||
       t.id === "rental-advance";
     if (mode === "ltms" && !isLtmsTab) return false;
@@ -338,9 +338,9 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
               <LtmsManifestList onSidebarVisibilityChange={setNavOpen} />
             </TabErrorBoundary>
           )}
-          {safeTab === "eway-bill" && (
-            <TabErrorBoundary label="E-Way Bill">
-              <EwayBillList />
+          {safeTab === "outward-pod" && (
+            <TabErrorBoundary label="Outward POD">
+              <OutwardPOD />
             </TabErrorBoundary>
           )}
           {safeTab === "trip-averages" && (isAdmin || isViewer) && (

@@ -5,6 +5,7 @@ import {
   ClipboardList,
   FileBarChart,
   FilePenLine,
+  FileSearch,
   Package,
   ReceiptText,
   Truck,
@@ -21,6 +22,7 @@ import { ConsignmentIncomeReport } from "@/components/reports/ConsignmentIncomeR
 import { TransporterExpenditureReport } from "@/components/reports/TransporterExpenditureReport";
 import { LoadingChargesReport } from "@/components/reports/LoadingChargesReport";
 import { TripExpenditureReport } from "@/components/reports/TripExpenditureReport";
+import { EwayBillList } from "@/components/operations/EwayBillList";
 
 const TABS = [
   {
@@ -34,6 +36,12 @@ const TABS = [
     label: "Monthly MIS",
     desc: "Branch-wise date-wise MIS submission calendar",
     icon: ClipboardList,
+  },
+  {
+    id: "eway-bill",
+    label: "E-Way Bill",
+    desc: "Saved daily assigned-EWB snapshots",
+    icon: FileSearch,
   },
   {
     id: "update-consignment",
@@ -167,6 +175,7 @@ function ReportsPage() {
           </header>
           {tab === "admin-mis" && <MonthlyMISReport />}
           {tab === "monthly-mis" && <MonthlyMIS />}
+          {tab === "eway-bill" && <EwayBillList />}
           {tab === "update-consignment" && <UpdateConsignmentReport />}
           {tab === "consignment-income" && <ConsignmentIncomeReport />}
           {tab === "transporter-expenditure" && <TransporterExpenditureReport />}
