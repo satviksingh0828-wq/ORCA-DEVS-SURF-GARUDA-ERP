@@ -39,6 +39,7 @@ type ConsignmentRow = {
 };
 type PackageRow = { consignment_id: string; weight_kg: number | string | null };
 type TripExpenseRow = { trip_id: string; amount: number | string | null };
+type TripIncomeRow = { trip_id: string; amount: number | string | null };
 
 type VehicleRow = { id: string; registration_number: string | null };
 type DriverRow = { id: string; full_name: string | null; driver_code?: string | null };
@@ -142,12 +143,17 @@ export function TripExpenditureReport() {
       const driverIds = [
         ...new Set(trips.map((trip) => trip.driver_id).filter(Boolean)),
       ] as string[];
-      const [tripExpenses, vehicles, drivers] = await Promise.all([
+      const [tripExpenses, tripOtherIncome, vehicles, drivers] = await Promise.all([
         tripIds.length
           ? fetchAll<TripExpenseRow>(() =>
               supabase.from("trip_expenses").select("trip_id,amount").in("trip_id", tripIds),
             )
           : Promise.resolve([] as TripExpenseRow[]),
+        tripIds.length
+          ? fetchAll<TripIncomeRow>(() =>
+              supabase.from("trip_other_income").select("trip_id,amount").in("trip_id", tripIds),
+            )
+          : Promise.resolve([] as TripIncomeRow[]),
         vehicleIds.length
           ? fetchAll<VehicleRow>(() =>
               supabase.from("vehicles").select("id,registration_number").in("id", vehicleIds),
@@ -180,6 +186,12 @@ export function TripExpenditureReport() {
           expense.trip_id,
           (expensesByTrip.get(expense.trip_id) ?? 0) + num(expense.amount),
         );
+      const otherIncomeByTrip = new Map<string, number>();
+      for (const income of tripOtherIncome)
+        otherIncomeByTrip.set(
+          income.trip_id,
+          (otherIncomeByTrip.get(income.trip_id) ?? 0) + num(income.amount),
+        );
       const vehicleMap = new Map(
         vehicles.map((vehicle) => [vehicle.id, vehicle.registration_number ?? "—"]),
       );
@@ -197,21 +209,9 @@ export function TripExpenditureReport() {
           weight: packagesByConsignment.get(consignment.id) ?? 0,
         }));
         const tripWeight = weights.reduce((sum, item) => sum + item.weight, 0);
-        const structuredExpense = [
-          "expense_hire_charges",
-          "expense_toll_charges",
-          "expense_toll_cash",
-          "expense_fuel",
-          "expense_driver_bata",
-          "expense_morning",
-          "expense_night",
-          "expense_sunday",
-          "expense_parking",
-          "expense_dala",
-          "expense_unloading",
-        ].reduce((sum, key) => sum + num(trip[key]), 0);
-        const lineExpense = expensesByTrip.get(trip.id) ?? 0;
-        const tripExpenditure = Math.max(structuredExpense, lineExpense);
+        const directExpense = expensesByTrip.get(trip.id) ?? 0;
+        const otherIncome = otherIncomeByTrip.get(trip.id) ?? 0;
+        const tripExpenditure = directExpense - otherIncome;
         for (const item of weights) {
           nextRows.push({
             id: item.consignment.id,

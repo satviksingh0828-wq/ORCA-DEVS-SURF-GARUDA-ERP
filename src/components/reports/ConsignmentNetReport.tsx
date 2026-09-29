@@ -82,6 +82,7 @@ type TripRow = {
   expense_unloading?: number | string | null;
 };
 type TripExpenseRow = { trip_id: string; amount: number | string | null };
+type TripIncomeRow = { trip_id: string; amount: number | string | null };
 
 type ReportRow = {
   id: string;
@@ -226,6 +227,7 @@ export function ConsignmentNetReport() {
         loadingEntries,
         trips,
         tripExpenses,
+        tripOtherIncome,
       ] = await Promise.all([
         consignmentIds.length
           ? fetchAll<PackageRow>(() =>
@@ -300,6 +302,11 @@ export function ConsignmentNetReport() {
               supabase.from("trip_expenses").select("trip_id,amount").in("trip_id", tripIds),
             )
           : Promise.resolve([] as TripExpenseRow[]),
+        tripIds.length
+          ? fetchAll<TripIncomeRow>(() =>
+              supabase.from("trip_other_income").select("trip_id,amount").in("trip_id", tripIds),
+            )
+          : Promise.resolve([] as TripIncomeRow[]),
       ]);
 
       const packageMap = new Map<string, PackageRow[]>();
@@ -334,6 +341,12 @@ export function ConsignmentNetReport() {
           expense.trip_id,
           (expensesByTrip.get(expense.trip_id) ?? 0) + num(expense.amount),
         );
+      const otherIncomeByTrip = new Map<string, number>();
+      for (const income of tripOtherIncome)
+        otherIncomeByTrip.set(
+          income.trip_id,
+          (otherIncomeByTrip.get(income.trip_id) ?? 0) + num(income.amount),
+        );
       const tripMap = new Map(trips.map((trip) => [trip.id, trip]));
       const tripWeights = new Map<string, number>();
       const tripConsignmentCounts = new Map<string, number>();
@@ -354,20 +367,6 @@ export function ConsignmentNetReport() {
           );
         }
       }
-      const structuredKeys = [
-        "expense_hire_charges",
-        "expense_toll_charges",
-        "expense_toll_cash",
-        "expense_fuel",
-        "expense_driver_bata",
-        "expense_morning",
-        "expense_night",
-        "expense_sunday",
-        "expense_parking",
-        "expense_dala",
-        "expense_unloading",
-      ] as const;
-
       setRows(
         consignments.map((row) => {
           const items = packageMap.get(row.id) ?? [];
@@ -441,10 +440,9 @@ export function ConsignmentNetReport() {
             (String(trip.ownership).toLowerCase() === "own" ||
               (String(row.consignment_type).toLowerCase() === "third_party" &&
                 String(row.movement_mode).toLowerCase() === "drop"));
-          const structured = trip
-            ? structuredKeys.reduce((sum, key) => sum + num(trip[key]), 0)
-            : 0;
-          const tripTotal = trip ? Math.max(structured, expensesByTrip.get(trip.id) ?? 0) : 0;
+          const directExpense = trip ? (expensesByTrip.get(trip.id) ?? 0) : 0;
+          const otherIncome = trip ? (otherIncomeByTrip.get(trip.id) ?? 0) : 0;
+          const tripTotal = trip ? directExpense - otherIncome : 0;
           const weight = items.reduce((sum, item) => sum + num(item.weight_kg), 0);
           const totalTripWeight = tripWeights.get(trip?.id ?? "") ?? 0;
           const tripCount = tripConsignmentCounts.get(trip?.id ?? "") ?? 0;
