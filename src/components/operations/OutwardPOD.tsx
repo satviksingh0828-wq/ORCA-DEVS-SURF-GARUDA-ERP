@@ -169,6 +169,9 @@ export function OutwardPOD() {
   const [uploading, setUploading] = useState(false);
   const [creating, setCreating] = useState(false);
   const [screen, setScreen] = useState<"list" | "create">("list");
+  const [podSearch, setPodSearch] = useState("");
+  const [podMonth, setPodMonth] = useState("");
+  const [podVisibleCount, setPodVisibleCount] = useState(25);
 
   async function loadRows() {
     setLoading(true);
@@ -348,6 +351,16 @@ export function OutwardPOD() {
   const trip = selected?.trip;
   const isThirdParty = selected?.consignment_type === "third_party";
   const podRows = useMemo(() => rows.filter((row) => Boolean(first(row.outward_pod))), [rows]);
+  const filteredPodRows = useMemo(() => {
+    const search = podSearch.trim().toLowerCase();
+    return podRows.filter((row) => {
+      const pod = first(row.outward_pod);
+      const matchesSearch = !search || row.consignment_number.toLowerCase().includes(search);
+      const matchesMonth = !podMonth || pod?.created_at?.slice(0, 7) === podMonth;
+      return matchesSearch && matchesMonth;
+    });
+  }, [podRows, podSearch, podMonth]);
+  const visiblePodRows = filteredPodRows.slice(0, podVisibleCount);
 
   if (screen === "list") {
     return (
@@ -356,7 +369,8 @@ export function OutwardPOD() {
           <div>
             <h2 className="font-semibold">Outward POD List</h2>
             <p className="text-xs text-muted-foreground">
-              All created outward proof of delivery records.
+              Showing the latest 25 created PODs by default. Use filters or Load more for older
+              records.
             </p>
           </div>
           <Button
@@ -369,6 +383,29 @@ export function OutwardPOD() {
             <Upload className="mr-2 size-4" />
             Create POD
           </Button>
+        </div>
+        <div className="mt-4 grid gap-3 border-t border-border pt-4 sm:grid-cols-[minmax(0,1fr)_180px]">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={podSearch}
+              onChange={(event) => {
+                setPodSearch(event.target.value);
+                setPodVisibleCount(25);
+              }}
+              className="pl-9"
+              placeholder="Search consignment number"
+            />
+          </div>
+          <Input
+            type="month"
+            value={podMonth}
+            onChange={(event) => {
+              setPodMonth(event.target.value);
+              setPodVisibleCount(25);
+            }}
+            aria-label="Filter PODs by month"
+          />
         </div>
         <div className="overflow-x-auto rounded-xl border border-border bg-card">
           <table className="w-full text-sm">
@@ -383,14 +420,14 @@ export function OutwardPOD() {
               </tr>
             </thead>
             <tbody>
-              {podRows.length === 0 ? (
+              {filteredPodRows.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
                     No Outward POD records created yet.
                   </td>
                 </tr>
               ) : (
-                podRows.map((row) => {
+                visiblePodRows.map((row) => {
                   const pod = first(row.outward_pod) as POD;
                   return (
                     <tr key={row.id} className="border-t border-border">
@@ -422,6 +459,17 @@ export function OutwardPOD() {
             </tbody>
           </table>
         </div>
+        {visiblePodRows.length < filteredPodRows.length && (
+          <div className="flex justify-center">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setPodVisibleCount((count) => count + 25)}
+            >
+              Load more ({filteredPodRows.length - visiblePodRows.length} remaining)
+            </Button>
+          </div>
+        )}
       </div>
     );
   }
