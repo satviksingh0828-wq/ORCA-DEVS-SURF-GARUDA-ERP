@@ -3,7 +3,15 @@ import { Download, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -32,6 +40,7 @@ type PackageRow = {
   package_rate_type_id: string;
 };
 type ReportRow = ConsignmentRow & { package_types: string };
+type UpdateType = "source" | "transporter_source" | "package_type";
 
 function monthStart(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
@@ -48,6 +57,11 @@ export function SourcesReport() {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
+  const [updateOpen, setUpdateOpen] = useState(false);
+  const [updateType, setUpdateType] = useState<UpdateType>("source");
+  const [currentValue, setCurrentValue] = useState("");
+  const [replacementValue, setReplacementValue] = useState("");
+  const [updating, setUpdating] = useState(false);
 
   async function loadBranches() {
     const { data, error } = await supabase
@@ -101,6 +115,103 @@ export function SourcesReport() {
       toast.error(error instanceof Error ? error.message : "Could not load Sources report");
     } finally {
       setLoading(false);
+    }
+  }
+
+  const currentValues = useMemo(() => {
+    const values =
+      updateType === "source"
+        ? rows.map((row) => row.source?.contract_name)
+        : updateType === "transporter_source"
+          ? rows.map((row) => row.transporter_source?.source_name)
+          : rows.flatMap((row) => row.package_types.split(", "));
+    return [...new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))].sort();
+  }, [rows, updateType]);
+
+  useEffect(() => {
+    if (!currentValues.includes(currentValue)) setCurrentValue(currentValues[0] ?? "");
+  }, [currentValues, currentValue]);
+
+  async function replaceValue() {
+    const oldValue = currentValue.trim();
+    const newValue = replacementValue.trim();
+    if (!fromDate || !toDate || fromDate > toDate) {
+      return toast.error("Select a valid From Date and To Date");
+    }
+    if (!oldValue || !newValue)
+      return toast.error("Select the current value and enter a replacement value");
+    if (oldValue === newValue) return toast.error("Replacement value must be different");
+    const usedInPeriod = rows.some((row) => {
+      if (updateType === "source") return row.source?.contract_name === oldValue;
+      if (updateType === "transporter_source")
+        return row.transporter_source?.source_name === oldValue;
+      return row.package_types.split(", ").includes(oldValue);
+    });
+    if (!usedInPeriod)
+      return toast.error("The current value is not used in the selected date range");
+    setUpdating(true);
+    try {
+      if (updateType === "source") {
+        let query = supabase
+          .from("contracts")
+          .update({ contract_name: newValue })
+          .eq("contract_name", oldValue);
+        if (branchId !== "all") query = query.eq("branch_id", branchId);
+        const { error } = await query;
+        if (error) throw error;
+      } else if (updateType === "transporter_source") {
+        let query = supabase
+          .from("ltms_transporter_sources" as never)
+          .update({ source_name: newValue })
+          .eq("source_name", oldValue);
+        if (branchId !== "all") query = query.eq("branch_id", branchId);
+        const { error } = await query;
+        if (error) throw error;
+      } else {
+        const branchIds = [
+          ...new Set(rows.map((row) => row.branch_id).filter(Boolean)),
+        ] as string[];
+        let typeQuery = supabase
+          .from("package_rate_types")
+          .select("id,branch_id")
+          .eq("package_type", oldValue);
+        if (branchId !== "all") typeQuery = typeQuery.eq("branch_id", branchId);
+        else if (branchIds.length) typeQuery = typeQuery.in("branch_id", branchIds);
+        const { data: types, error: typeError } = await typeQuery;
+        if (typeError) throw typeError;
+        if (!types?.length) throw new Error("No matching package type master found");
+        for (const type of types as Array<{ id: string }>) {
+          const { error: masterError } = await supabase
+            .from("package_rate_types")
+            .update({ package_type: newValue })
+            .eq("id", type.id);
+          if (masterError) throw masterError;
+          const { error: entryError } = await supabase
+            .from("package_rate_entries")
+            .update({ package_type: newValue })
+            .eq("package_rate_type_id", type.id);
+          if (entryError) throw entryError;
+          const { error: packageError } = await supabase
+            .from("consignment_package_information")
+            .update({ package_type: newValue })
+            .eq("package_rate_type_id", type.id)
+            .in(
+              "consignment_id",
+              rows.map((row) => row.id),
+            );
+          if (packageError) throw packageError;
+        }
+      }
+      toast.success(
+        `${updateType === "source" ? "Source" : updateType === "transporter_source" ? "Transporter source" : "Package type"} updated safely`,
+      );
+      setReplacementValue("");
+      setUpdateOpen(false);
+      await loadData();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not update the selected value");
+    } finally {
+      setUpdating(false);
     }
   }
 
@@ -186,6 +297,9 @@ export function SourcesReport() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">{filtered.length} consignment(s)</p>
         <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => setUpdateOpen(true)}>
+            Update value
+          </Button>
           <Button variant="outline" size="sm" onClick={() => void loadData()} disabled={loading}>
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} /> Refresh
           </Button>
@@ -237,6 +351,92 @@ export function SourcesReport() {
           </tbody>
         </table>
       </div>
+      <Dialog open={updateOpen} onOpenChange={setUpdateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Update Sources value</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <div className="space-y-1.5">
+              <Label>Update Type</Label>
+              <Select
+                value={updateType}
+                onValueChange={(value) => setUpdateType(value as UpdateType)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="source">Source update</SelectItem>
+                  <SelectItem value="transporter_source">Transporter Source update</SelectItem>
+                  <SelectItem value="package_type">Package Type update</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label>From Date</Label>
+                <Input
+                  type="date"
+                  value={fromDate}
+                  onChange={(event) => setFromDate(event.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>To Date</Label>
+                <Input
+                  type="date"
+                  value={toDate}
+                  onChange={(event) => setToDate(event.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Current Value</Label>
+              <Select value={currentValue} onValueChange={setCurrentValue}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select current value" />
+                </SelectTrigger>
+                <SelectContent>
+                  {currentValues.map((value) => (
+                    <SelectItem key={value} value={value}>
+                      {value}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!currentValues.length && (
+                <p className="text-xs text-muted-foreground">
+                  No values of this type are used in the selected period.
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Replace With</Label>
+              <Input
+                value={replacementValue}
+                onChange={(event) => setReplacementValue(event.target.value)}
+                placeholder="Enter new value"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This renames the existing master value by ID; it does not create a new source.
+              Existing links and calculations are preserved.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUpdateOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={() => void replaceValue()}
+              disabled={updating || !currentValue || !replacementValue.trim()}
+            >
+              {updating ? "Updating…" : "Update / Replace"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
