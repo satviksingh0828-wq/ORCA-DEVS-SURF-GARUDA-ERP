@@ -25,6 +25,7 @@ import { LoadingChargesReport } from "@/components/reports/LoadingChargesReport"
 import { TripExpenditureReport } from "@/components/reports/TripExpenditureReport";
 import { EwayBillList } from "@/components/operations/EwayBillList";
 import { ConsignmentNetReport } from "@/components/reports/ConsignmentNetReport";
+import { SourcesReport } from "@/components/reports/SourcesReport";
 
 const TABS = [
   {
@@ -80,6 +81,12 @@ const TABS = [
     label: "Consignment Net",
     desc: "Income, expenditure and net by consignment",
     icon: Scale,
+  },
+  {
+    id: "sources",
+    label: "Sources",
+    desc: "Consignment source, transporter source and package types",
+    icon: FileSearch,
   },
 ] as const;
 
@@ -190,6 +197,7 @@ function ReportsPage() {
           {tab === "loading-charges" && <LoadingChargesReport />}
           {tab === "trip-expenditure" && <TripExpenditureReport />}
           {tab === "consignment-net" && <ConsignmentNetReport />}
+          {tab === "sources" && <SourcesReport />}
         </div>
       </div>
     </AppShell>

@@ -44,6 +44,7 @@ export function PackageRates() {
     basis: "quantity",
     charge_mode: "rate",
   });
+  const [renameValue, setRenameValue] = useState("");
   const [slabForm, setSlabForm] = useState(blankSlab);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -109,6 +110,45 @@ export function PackageRates() {
     setSelectedTypeId(data.id);
     setTypeForm({ package_type: "", basis: "quantity", charge_mode: "rate" });
     toast.success("Package type created. Add its slabs below.");
+  }
+  async function renameType(e: React.FormEvent) {
+    e.preventDefault();
+    if (!admin || !selectedType) return;
+    const nextName = renameValue.trim();
+    if (!nextName) return toast.error("Package type name is required");
+    if (nextName === selectedType.package_type) return toast.error("Enter a new package type name");
+    setSaving(true);
+    const typeResult = await db
+      .from("package_rate_types")
+      .update({ package_type: nextName, updated_at: new Date().toISOString() })
+      .eq("id", selectedType.id);
+    if (!typeResult.error) {
+      const slabResult = await db
+        .from("package_rate_entries")
+        .update({ package_type: nextName, updated_at: new Date().toISOString() })
+        .eq("package_rate_type_id", selectedType.id);
+      const packageResult = await db
+        .from("consignment_package_information")
+        .update({ package_type: nextName })
+        .eq("package_rate_type_id", selectedType.id);
+      if (slabResult.error || packageResult.error) {
+        setSaving(false);
+        return toast.error(
+          slabResult.error?.message ??
+            packageResult.error?.message ??
+            "Could not update linked package names",
+        );
+      }
+    }
+    setSaving(false);
+    if (typeResult.error) return toast.error(typeResult.error.message);
+    setTypes((current) =>
+      current.map((type) =>
+        type.id === selectedType.id ? { ...type, package_type: nextName } : type,
+      ),
+    );
+    setRenameValue("");
+    toast.success("Package type renamed and linked consignments updated");
   }
   function editSlab(row: Slab) {
     setSlabForm({
@@ -282,9 +322,22 @@ export function PackageRates() {
                       </p>
                     </div>
                     {admin && (
-                      <Button variant="ghost" size="sm" onClick={() => void removeType(type)}>
-                        <Trash2 className="size-4" />
-                      </Button>
+                      <div className="flex items-center gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setSelectedTypeId(type.id);
+                            setRenameValue(type.package_type);
+                          }}
+                          title="Rename package type"
+                        >
+                          <Pencil className="size-4" />
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => void removeType(type)}>
+                          <Trash2 className="size-4" />
+                        </Button>
+                      </div>
                     )}
                   </div>
                   <Button
@@ -318,6 +371,24 @@ export function PackageRates() {
               </p>
             </div>
           </div>
+          {admin && (
+            <form
+              onSubmit={renameType}
+              className="flex flex-wrap items-end gap-2 border-b border-border pb-4"
+            >
+              <div className="min-w-[260px] flex-1 space-y-1.5">
+                <Label>Rename Package Type</Label>
+                <Input
+                  value={renameValue || selectedType.package_type}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  placeholder="Package type name"
+                />
+              </div>
+              <Button type="submit" variant="outline" disabled={saving}>
+                <Pencil className="size-4" /> Rename
+              </Button>
+            </form>
+          )}
           {admin && (
             <form
               onSubmit={saveSlab}
