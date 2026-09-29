@@ -95,17 +95,19 @@ export function DashboardPage({
 }) {
   const { user } = useSession();
   const navigate = useNavigate();
-  const visibleTabs = scope === "hr"
-    ? TABS.filter((item) => "hr" in item && item.hr)
-    : TABS.filter((item) => !("hr" in item && item.hr));
+  const visibleTabs =
+    scope === "hr"
+      ? TABS.filter((item) => "hr" in item && item.hr)
+      : TABS.filter((item) => !("hr" in item && item.hr));
   const fallbackTab: DashboardTabId = scope === "hr" ? "employee" : "pnl";
   const requestedTab = initialTab ?? fallbackTab;
   const [tab, setTab] = useState<DashboardTabId>(requestedTab);
   const [navOpen, setNavOpen] = useState(true);
 
-  const canAccess = scope === "tms"
-    ? user?.role === "admin"
-    : user?.role === "admin" || user?.role === "semi_admin" || user?.role === "viewer";
+  const canAccess =
+    scope === "tms"
+      ? user?.role === "admin"
+      : user?.role === "admin" || user?.role === "semi_admin" || user?.role === "viewer";
 
   useEffect(() => {
     if (user && !canAccess) navigate({ to: "/home", replace: true });
@@ -124,11 +126,11 @@ export function DashboardPage({
             Workspace
           </Link>
           <ChevronRight className="size-3.5" />
-            <Link to={scope === "hr" ? "/hrms" : "/tms"} className="hover:text-foreground">
-              {scope === "hr" ? "HRMS" : "TMS"}
-            </Link>
-            <ChevronRight className="size-3.5" />
-            <span className="text-foreground">Dashboard</span>
+          <Link to={scope === "hr" ? "/hrms" : "/tms"} className="hover:text-foreground">
+            {scope === "hr" ? "HRMS" : "TMS"}
+          </Link>
+          <ChevronRight className="size-3.5" />
+          <span className="text-foreground">Dashboard</span>
         </span>
       }
       headerEnd={
@@ -155,7 +157,7 @@ export function DashboardPage({
       <div className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_1fr]" : "grid-cols-1"}`}>
         {/* ── Left nav (desktop) ── */}
         {navOpen && (
-          <nav className="app-sidebar-scroll hidden lg:block lg:fixed lg:left-[max(1.5rem,calc((100vw-1280px)/2+1.5rem))] lg:top-20 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
+          <nav className="app-sidebar-scroll hidden lg:block lg:sticky lg:top-0 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
             <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               Dashboard
             </p>
