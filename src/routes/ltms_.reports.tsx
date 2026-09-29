@@ -4,6 +4,7 @@ import {
   ChevronRight,
   FileBarChart,
   FilePenLine,
+  Package,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -12,6 +13,7 @@ import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { MonthlyMISReport } from "@/components/reports/MonthlyMISReport";
 import { UpdateConsignmentReport } from "@/components/reports/UpdateConsignmentReport";
+import { ConsignmentIncomeReport } from "@/components/reports/ConsignmentIncomeReport";
 
 const TABS = [
   {
@@ -25,6 +27,12 @@ const TABS = [
     label: "Update Consignment",
     desc: "Update delivery and transporter LR details",
     icon: FilePenLine,
+  },
+  {
+    id: "consignment-income",
+    label: "Consignment Income",
+    desc: "Freight and loading by source, mode and route",
+    icon: Package,
   },
 ] as const;
 
@@ -128,6 +136,7 @@ function ReportsPage() {
           </header>
           {tab === "admin-mis" && <MonthlyMISReport />}
           {tab === "update-consignment" && <UpdateConsignmentReport />}
+          {tab === "consignment-income" && <ConsignmentIncomeReport />}
         </div>
       </div>
     </AppShell>
