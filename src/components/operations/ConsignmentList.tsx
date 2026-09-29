@@ -66,6 +66,7 @@ type ShipmentDraft = {
   sub_type: string;
   sub_type_code: string;
   supplier_gstin: string;
+  supplier_phone: string;
   supplier_trade_name: string;
   supplier_legal_name: string;
   supplier_address_line_1: string;
@@ -95,6 +96,7 @@ type ShipmentDraft = {
   ship_to_address_line_2: string;
   ship_to_place: string;
   ship_to_state: string;
+  recipient_phone: string;
   transporter_id: string;
   approximate_distance_km: string;
   cgst_value: string;
@@ -253,6 +255,7 @@ function emptyManualShipment(ewayBillNumber = ""): ShipmentDraft {
     sub_type: "Supply",
     sub_type_code: "1",
     supplier_gstin: "URP",
+    supplier_phone: "",
     supplier_trade_name: "",
     supplier_legal_name: "",
     supplier_address_line_1: "",
@@ -262,6 +265,7 @@ function emptyManualShipment(ewayBillNumber = ""): ShipmentDraft {
     supplier_state: "",
     supplier_pin_code: "",
     recipient_gstin: "URP",
+    recipient_phone: "",
     recipient_trade_name: "",
     recipient_legal_name: "",
     recipient_address_line_1: "",
@@ -416,6 +420,7 @@ function mapEway(raw: unknown): ShipmentDraft {
     sub_type_code: subSupplyCode,
     sub_type: humanLabel(subSupplyTypeLabel, subSupplyCode),
     supplier_gstin: read(source, "fromGstin") || "URP",
+    supplier_phone: "",
     supplier_trade_name: read(source, "fromTrdName"),
     supplier_legal_name: read(source, "fromLegalName") || read(source, "fromTrdName"),
     supplier_address_line_1: from1,
@@ -425,6 +430,7 @@ function mapEway(raw: unknown): ShipmentDraft {
     supplier_state: read(source, "fromStateCode"),
     supplier_pin_code: read(source, "fromPincode"),
     recipient_gstin: read(source, "toGstin") || "URP",
+    recipient_phone: "",
     recipient_trade_name: read(source, "toTrdName"),
     recipient_legal_name: read(source, "toLegalName") || read(source, "toTrdName"),
     recipient_address_line_1: to1,
@@ -846,7 +852,7 @@ export function ConsignmentList({
       if (partyRows.length) {
         const { error: partyError } = await db
           .from("party_masters")
-          .upsert(partyRows, { onConflict: "party_type,gstin" });
+          .upsert(partyRows, { onConflict: "party_type,branch_id,gstin" });
         if (partyError) throw partyError;
       }
       if (!draft.items.length) throw new Error("The E-Way Bill has no goods details");
@@ -858,12 +864,14 @@ export function ConsignmentList({
           description: item.description || productName,
           hsn_code: item.hsn_code || "",
           unit: item.unit || "NOS",
+          branch_id: branchId,
           default_quantity: numberValue(item.quantity) || 1,
           default_weight_kg: numberValue(item.weight_kg),
         };
         const existingProduct = await db
           .from("products")
           .select("id")
+          .eq("branch_id", branchId)
           .eq("product_name", productName)
           .maybeSingle();
         if (existingProduct.error) throw existingProduct.error;
@@ -992,6 +1000,7 @@ export function ConsignmentList({
       sub_supply_type: common.sub_type,
       from_details: {
         gstin: common.supplier_gstin,
+        phone: common.supplier_phone,
         trade_name: common.supplier_trade_name,
         legal_name: common.supplier_legal_name,
         address1: common.supplier_address_line_1,
@@ -1002,6 +1011,7 @@ export function ConsignmentList({
       },
       to_details: {
         gstin: common.recipient_gstin,
+        phone: common.recipient_phone,
         trade_name: common.recipient_trade_name,
         legal_name: common.recipient_legal_name,
         address1: common.recipient_address_line_1,
@@ -2205,6 +2215,8 @@ function ConsignmentForm(props: any) {
       </div>
       <ManualShipmentDialog
         open={manualOpen}
+        branchId={branchId}
+        branchName={branch?.branch_name ?? ""}
         draft={manualDraft}
         setDraft={setManualDraft}
         saving={manualSaving}
@@ -2219,6 +2231,8 @@ type EditableShipmentField = Exclude<keyof ShipmentDraft, "items">;
 
 function ManualShipmentDialog({
   open,
+  branchId,
+  branchName,
   draft,
   setDraft,
   saving,
@@ -2226,6 +2240,8 @@ function ManualShipmentDialog({
   onSave,
 }: {
   open: boolean;
+  branchId: string;
+  branchName: string;
   draft: ShipmentDraft;
   setDraft: Dispatch<SetStateAction<ShipmentDraft>>;
   saving: boolean;
@@ -2302,12 +2318,14 @@ function ManualShipmentDialog({
   async function fetchParty(kind: "consignor" | "consignee") {
     const gstinKey = kind === "consignor" ? "supplier_gstin" : "recipient_gstin";
     const gstin = draft[gstinKey].trim().toUpperCase();
+    if (!branchId) return toast.error("Select a branch before fetching a party master");
     if (!gstin) return toast.error("Enter a GSTIN first");
     setPartyLoading(kind);
     const { data, error } = await db
       .from("party_masters")
       .select("*")
       .eq("party_type", kind)
+      .eq("branch_id", branchId)
       .eq("gstin", gstin)
       .maybeSingle();
     setPartyLoading(null);
@@ -2316,6 +2334,7 @@ function ManualShipmentDialog({
     const prefix = kind === "consignor" ? "supplier" : "recipient";
     const updates: Record<string, string> = {
       [`${prefix}_gstin`]: data.gstin ?? gstin,
+      [`${prefix}_phone`]: data.phone_number ?? "",
       [`${prefix}_trade_name`]: data.trade_name ?? "",
       [`${prefix}_legal_name`]: data.legal_name ?? "",
       [`${prefix}_address_line_1`]: data.address_1 ?? "",
@@ -2344,7 +2363,13 @@ function ManualShipmentDialog({
     toast.success(`${kind === "consignor" ? "Consignor" : "Consignee"} details fetched`);
   }
   async function openProductPicker(index = 0) {
-    const { data, error } = await db.from("products").select("*").order("product_name").limit(200);
+    if (!branchId) return toast.error("Select a branch before loading goods");
+    const { data, error } = await db
+      .from("products")
+      .select("*")
+      .eq("branch_id", branchId)
+      .order("product_name")
+      .limit(200);
     if (error) return toast.error(error.message);
     setProducts(data ?? []);
     setProductPickerIndex(index);
@@ -2370,11 +2395,13 @@ function ManualShipmentDialog({
     setProductPickerOpen(false);
   }
   async function createProduct() {
+    if (!branchId) return toast.error("Select a branch before creating a product");
     if (!newProduct.product_name.trim()) return toast.error("Product name is required");
     const { data, error } = await db
       .from("products")
       .insert({
         ...newProduct,
+        branch_id: branchId,
         default_quantity: Number(newProduct.default_quantity || 1),
         default_weight_kg: Number(newProduct.default_weight_kg || 0),
       })
@@ -2395,26 +2422,39 @@ function ManualShipmentDialog({
   }
   const partyField = (kind: "consignor" | "consignee") => {
     const key = kind === "consignor" ? "supplier_gstin" : "recipient_gstin";
+    const phoneKey = kind === "consignor" ? "supplier_phone" : "recipient_phone";
     return (
-      <div className="min-w-0 space-y-1">
-        <Label className="text-xs font-semibold">
-          {kind === "consignor" ? "Consignor" : "Consignee"} GSTIN
-        </Label>
+      <div className="min-w-0 space-y-2">
         <div className="flex gap-1">
-          <Input
-            className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
-            value={draft[key]}
-            onChange={(event) => setField(key, event.target.value.toUpperCase())}
-          />
+          <div className="min-w-0 flex-1 space-y-1">
+            <Label className="text-xs font-semibold">
+              {kind === "consignor" ? "Consignor" : "Consignee"} GSTIN
+            </Label>
+            <Input
+              className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+              value={draft[key]}
+              onChange={(event) => setField(key, event.target.value.toUpperCase())}
+            />
+          </div>
           <Button
             type="button"
             size="sm"
             variant="outline"
+            className="mt-6"
             onClick={() => void fetchParty(kind)}
             disabled={partyLoading !== null}
           >
             {partyLoading === kind ? "Fetching…" : "Fetch"}
           </Button>
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs font-semibold">Phone Number (manual)</Label>
+          <Input
+            type="tel"
+            className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
+            value={draft[phoneKey]}
+            onChange={(event) => setField(phoneKey, event.target.value)}
+          />
         </div>
       </div>
     );
@@ -2529,6 +2569,9 @@ function ManualShipmentDialog({
             <section className="consignment-section space-y-3 border-t-2 border-sky-700 pt-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <h3 className="text-sm font-semibold text-sky-800">Products / Goods</h3>
+                <p className="text-xs text-muted-foreground">
+                  Branch: {branchName || "Not selected"}
+                </p>
                 <div className="flex gap-2">
                   <Button type="button" variant="outline" onClick={() => void openProductPicker(0)}>
                     <Search className="mr-1 size-4" /> Products / Goods List
@@ -2802,6 +2845,7 @@ function CommonEwayDetails({ draft }: { draft?: ShipmentDraft }) {
           <h4>Consignor / From Party</h4>
           <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
             <ReadonlyField dense label="Consignor GSTIN" value={draft?.supplier_gstin} />
+            <ReadonlyField dense label="Consignor Phone" value={draft?.supplier_phone} />
             <ReadonlyField dense label="Consignor Trade Name" value={draft?.supplier_trade_name} />
             <ReadonlyField dense label="Consignor Legal Name" value={draft?.supplier_legal_name} />
             <ReadonlyField
@@ -2823,6 +2867,7 @@ function CommonEwayDetails({ draft }: { draft?: ShipmentDraft }) {
           <h4>Consignee / To Party</h4>
           <div className="grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2 xl:grid-cols-4">
             <ReadonlyField dense label="Consignee GSTIN" value={draft?.recipient_gstin} />
+            <ReadonlyField dense label="Consignee Phone" value={draft?.recipient_phone} />
             <ReadonlyField dense label="Consignee Trade Name" value={draft?.recipient_trade_name} />
             <ReadonlyField dense label="Consignee Legal Name" value={draft?.recipient_legal_name} />
             <ReadonlyField
