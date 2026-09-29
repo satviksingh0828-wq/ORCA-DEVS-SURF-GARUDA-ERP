@@ -44,6 +44,11 @@ type PackageRow = {
   quantity: number | string | null;
   weight_kg: number | string | null;
 };
+type ShipmentPinRow = {
+  consignment_id: string;
+  dispatch_from_pin_code: string | null;
+  ship_to_pin_code: string | null;
+};
 type ConsignmentEntry = EntryLite & { mode?: string | null };
 type LoadingRateType = {
   id: string;
@@ -212,6 +217,7 @@ export function ConsignmentNetReport() {
 
       const [
         packages,
+        shipments,
         contracts,
         incomeEntries,
         transporterEntries,
@@ -228,6 +234,15 @@ export function ConsignmentNetReport() {
                 .in("consignment_id", consignmentIds),
             )
           : Promise.resolve([] as PackageRow[]),
+        consignmentIds.length
+          ? fetchAll<ShipmentPinRow>(() =>
+              supabase
+                .from("shipments")
+                .select("consignment_id,dispatch_from_pin_code,ship_to_pin_code")
+                .in("consignment_id", consignmentIds)
+                .order("created_at", { ascending: true }),
+            )
+          : Promise.resolve([] as ShipmentPinRow[]),
         sourceIds.length
           ? fetchAll<ContractLite>(() =>
               supabase.from("contracts").select("id,contract_name").in("id", sourceIds),
@@ -289,6 +304,12 @@ export function ConsignmentNetReport() {
       const packageMap = new Map<string, PackageRow[]>();
       for (const item of packages)
         packageMap.set(item.consignment_id, [...(packageMap.get(item.consignment_id) ?? []), item]);
+      const firstShipmentPins = new Map<string, ShipmentPinRow>();
+      for (const shipment of shipments) {
+        if (shipment.consignment_id && !firstShipmentPins.has(shipment.consignment_id)) {
+          firstShipmentPins.set(shipment.consignment_id, shipment);
+        }
+      }
       const contractMap = new Map(contracts.map((contract) => [contract.id, contract]));
       const incomeEntriesBySource = new Map<string, ConsignmentEntry[]>();
       for (const entry of incomeEntries)
@@ -314,6 +335,7 @@ export function ConsignmentNetReport() {
         );
       const tripMap = new Map(trips.map((trip) => [trip.id, trip]));
       const tripWeights = new Map<string, number>();
+      const tripConsignmentCounts = new Map<string, number>();
       for (const row of consignments) {
         const tripId = row.trip_id;
         const trip = tripId ? tripMap.get(tripId) : undefined;
@@ -323,6 +345,7 @@ export function ConsignmentNetReport() {
             (String(row.consignment_type).toLowerCase() === "third_party" &&
               String(row.movement_mode).toLowerCase() === "drop"));
         if (tripId && eligible) {
+          tripConsignmentCounts.set(tripId, (tripConsignmentCounts.get(tripId) ?? 0) + 1);
           tripWeights.set(
             tripId,
             (tripWeights.get(tripId) ?? 0) +
@@ -347,6 +370,12 @@ export function ConsignmentNetReport() {
       setRows(
         consignments.map((row) => {
           const items = packageMap.get(row.id) ?? [];
+          const firstShipment = firstShipmentPins.get(row.id);
+          const incomeRow = {
+            ...row,
+            from_pin_code: firstShipment?.dispatch_from_pin_code || row.from_pin_code,
+            to_pin_code: firstShipment?.ship_to_pin_code || row.to_pin_code,
+          };
           const packageTotals = items.reduce(
             (result, item) => ({
               quantity: result.quantity + num(item.quantity),
@@ -357,13 +386,13 @@ export function ConsignmentNetReport() {
           const manifest: Manifest = {
             from_location_id: null,
             to_location_id: null,
-            from_pin_code: row.from_pin_code,
-            to_pin_code: row.to_pin_code,
+            from_pin_code: incomeRow.from_pin_code,
+            to_pin_code: incomeRow.to_pin_code,
             weight_kg: String(packageTotals.weight),
             quantity: String(packageTotals.quantity),
           };
           const incomeEntry = row.source_id
-            ? findEntry(incomeEntriesBySource.get(row.source_id) ?? [], row)
+            ? findEntry(incomeEntriesBySource.get(row.source_id) ?? [], incomeRow)
             : undefined;
           const income = manifestCharges(
             row.source_id ? contractMap.get(row.source_id) : undefined,
@@ -414,16 +443,16 @@ export function ConsignmentNetReport() {
           const structured = trip
             ? structuredKeys.reduce((sum, key) => sum + num(trip[key]), 0)
             : 0;
-          const tripTotal = trip
-            ? structured > 0
-              ? structured
-              : (expensesByTrip.get(trip.id) ?? 0)
-            : 0;
+          const tripTotal = trip ? Math.max(structured, expensesByTrip.get(trip.id) ?? 0) : 0;
           const weight = items.reduce((sum, item) => sum + num(item.weight_kg), 0);
+          const totalTripWeight = tripWeights.get(trip?.id ?? "") ?? 0;
+          const tripCount = tripConsignmentCounts.get(trip?.id ?? "") ?? 0;
           const tripExpenditure =
-            eligibleTrip && tripTotal > 0 && (tripWeights.get(trip.id) ?? 0) > 0
-              ? (tripTotal / (tripWeights.get(trip.id) ?? 1)) * weight
-              : null;
+            eligibleTrip && tripTotal > 0 && totalTripWeight > 0
+              ? (tripTotal / totalTripWeight) * weight
+              : eligibleTrip && tripTotal > 0 && tripCount > 0
+                ? tripTotal / tripCount
+                : null;
           const transporterExpenditure = transporter
             ? Math.max(
                 0,

@@ -35,6 +35,12 @@ type PackageRow = {
   weight_kg: number | string | null;
 };
 
+type ShipmentPinRow = {
+  consignment_id: string;
+  dispatch_from_pin_code: string | null;
+  ship_to_pin_code: string | null;
+};
+
 type ConsignmentEntry = EntryLite & { mode?: string | null };
 
 type ReportRow = ConsignmentRow & {
@@ -121,7 +127,7 @@ export function ConsignmentIncomeReport() {
       const sourceIds = [
         ...new Set(consignments.map((row) => row.source_id).filter(Boolean)),
       ] as string[];
-      const [packages, contracts, entries] = await Promise.all([
+      const [packages, shipments, contracts, entries] = await Promise.all([
         consignmentIds.length
           ? fetchAll<PackageRow>(() =>
               supabase
@@ -130,6 +136,15 @@ export function ConsignmentIncomeReport() {
                 .in("consignment_id", consignmentIds),
             )
           : Promise.resolve([] as PackageRow[]),
+        consignmentIds.length
+          ? fetchAll<ShipmentPinRow>(() =>
+              supabase
+                .from("shipments")
+                .select("consignment_id,dispatch_from_pin_code,ship_to_pin_code")
+                .in("consignment_id", consignmentIds)
+                .order("created_at", { ascending: true }),
+            )
+          : Promise.resolve([] as ShipmentPinRow[]),
         sourceIds.length
           ? fetchAll<ContractLite>(() =>
               supabase
@@ -152,6 +167,12 @@ export function ConsignmentIncomeReport() {
           : Promise.resolve([] as ConsignmentEntry[]),
       ]);
 
+      const firstShipmentPins = new Map<string, ShipmentPinRow>();
+      for (const shipment of shipments) {
+        if (shipment.consignment_id && !firstShipmentPins.has(shipment.consignment_id)) {
+          firstShipmentPins.set(shipment.consignment_id, shipment);
+        }
+      }
       const packageTotals = new Map<string, { quantity: number; weight: number }>();
       for (const item of packages) {
         const current = packageTotals.get(item.consignment_id) ?? { quantity: 0, weight: 0 };
@@ -170,15 +191,21 @@ export function ConsignmentIncomeReport() {
       setRows(
         consignments.map((row) => {
           const packageTotal = packageTotals.get(row.id) ?? { quantity: 0, weight: 0 };
+          const firstShipment = firstShipmentPins.get(row.id);
+          const incomeRow = {
+            ...row,
+            from_pin_code: firstShipment?.dispatch_from_pin_code || row.from_pin_code,
+            to_pin_code: firstShipment?.ship_to_pin_code || row.to_pin_code,
+          };
           const contract = row.source_id ? contractMap.get(row.source_id) : undefined;
           const entry = row.source_id
-            ? findConsignmentEntry(entriesBySource.get(row.source_id) ?? [], row)
+            ? findConsignmentEntry(entriesBySource.get(row.source_id) ?? [], incomeRow)
             : undefined;
           const charges = manifestCharges(contract, entry, {
             from_location_id: null,
             to_location_id: null,
-            from_pin_code: row.from_pin_code,
-            to_pin_code: row.to_pin_code,
+            from_pin_code: incomeRow.from_pin_code,
+            to_pin_code: incomeRow.to_pin_code,
             weight_kg: String(packageTotal.weight),
             quantity: String(packageTotal.quantity),
           });

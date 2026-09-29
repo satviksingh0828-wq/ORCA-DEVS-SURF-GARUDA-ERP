@@ -210,7 +210,7 @@ export function TripExpenditureReport() {
           "expense_unloading",
         ].reduce((sum, key) => sum + num(trip[key]), 0);
         const lineExpense = expensesByTrip.get(trip.id) ?? 0;
-        const tripExpenditure = structuredExpense > 0 ? structuredExpense : lineExpense;
+        const tripExpenditure = Math.max(structuredExpense, lineExpense);
         for (const item of weights) {
           nextRows.push({
             id: item.consignment.id,
@@ -230,7 +230,9 @@ export function TripExpenditureReport() {
             trip_weight: tripWeight,
             trip_expenditure: tripExpenditure,
             consignment_expenditure:
-              tripWeight > 0 ? (tripExpenditure / tripWeight) * item.weight : 0,
+              tripWeight > 0
+                ? (tripExpenditure / tripWeight) * item.weight
+                : tripExpenditure / weights.length,
           });
         }
       }
