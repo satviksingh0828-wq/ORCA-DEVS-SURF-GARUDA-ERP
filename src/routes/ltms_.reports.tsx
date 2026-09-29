@@ -16,6 +16,7 @@ import { MonthlyMISReport } from "@/components/reports/MonthlyMISReport";
 import { UpdateConsignmentReport } from "@/components/reports/UpdateConsignmentReport";
 import { ConsignmentIncomeReport } from "@/components/reports/ConsignmentIncomeReport";
 import { TransporterExpenditureReport } from "@/components/reports/TransporterExpenditureReport";
+import { LoadingChargesReport } from "@/components/reports/LoadingChargesReport";
 
 const TABS = [
   {
@@ -41,6 +42,12 @@ const TABS = [
     label: "Transporter Expenditure",
     desc: "Third-party freight and loading by transporter and route",
     icon: ReceiptText,
+  },
+  {
+    id: "loading-charges",
+    label: "Loading Charges",
+    desc: "Package-rate loading with deductions and additions",
+    icon: Package,
   },
 ] as const;
 
@@ -146,6 +153,7 @@ function ReportsPage() {
           {tab === "update-consignment" && <UpdateConsignmentReport />}
           {tab === "consignment-income" && <ConsignmentIncomeReport />}
           {tab === "transporter-expenditure" && <TransporterExpenditureReport />}
+          {tab === "loading-charges" && <LoadingChargesReport />}
         </div>
       </div>
     </AppShell>
