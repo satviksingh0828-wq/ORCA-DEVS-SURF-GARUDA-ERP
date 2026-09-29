@@ -1094,4 +1094,14 @@ table td {
     justify-content: flex-start;
     gap: 0.75rem;
   }
+
+  /* The content column follows the sidebar width instead of retaining a blank 220px gutter. */
+  div:has(> .app-sidebar-scroll) {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+  }
+
+  div:has(> .app-sidebar-scroll:hover),
+  div:has(> .app-sidebar-scroll:focus-within) {
+    grid-template-columns: 220px minmax(0, 1fr) !important;
+  }
 }
