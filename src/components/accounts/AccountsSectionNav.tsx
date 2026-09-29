@@ -151,9 +151,6 @@ export function AccountsSectionNav({
             aria-label={title}
             className="app-sidebar-scroll hidden lg:sticky lg:top-0 lg:block lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1"
           >
-            <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              {title}
-            </p>
             <div className="space-y-1">
               {mode === "masters" &&
                 masterLinks.map(({ label, description, to, icon: Icon }) => {

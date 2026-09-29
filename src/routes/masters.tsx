@@ -187,9 +187,6 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
         {/* Desktop left nav */}
         {navOpen && (
           <nav className="app-sidebar-scroll hidden lg:block lg:sticky lg:top-0 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-            <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Masters
-            </p>
             <ul className="space-y-1">
               {TABS.map((t) => {
                 const Icon = t.icon;

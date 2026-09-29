@@ -158,9 +158,6 @@ export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?
         aria-label={`${areaLabels[area]} sections`}
         className="app-sidebar-scroll hidden xl:block xl:sticky xl:top-24 xl:max-h-[calc(100dvh-7rem)] xl:self-start xl:overflow-y-auto xl:overscroll-contain xl:pr-1"
       >
-        <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          {areaLabels[area]}
-        </p>
         <ul className="space-y-1">
           {links.map(({ label, description, to, icon: Icon }) => {
             const active = linkIsActive(pathname, to);
@@ -226,7 +223,9 @@ export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?
                   aria-current={active ? "page" : undefined}
                   className={`min-h-12 flex cursor-pointer items-center gap-3 rounded-xl px-2.5 py-2.5 ${active ? "bg-primary/10" : ""}`}
                 >
-                  <span className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                  <span
+                    className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
+                  >
                     <Icon className="size-4" />
                   </span>
                   <span className="min-w-0 flex-1">

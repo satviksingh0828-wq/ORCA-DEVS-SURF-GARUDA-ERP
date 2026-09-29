@@ -70,9 +70,6 @@ function CashReportsPage() {
       <div className={`grid gap-6 ${navOpen ? "lg:grid-cols-[260px_1fr]" : "grid-cols-1"}`}>
         {navOpen && (
           <nav className="hidden lg:block">
-            <p className="mb-3 px-2 text-[11px] font-semibold tracking-[.18em] text-muted-foreground">
-              CASH REPORTS
-            </p>
             <ul className="space-y-1">
               {TABS.map((t) => {
                 const Icon = t.icon;
