@@ -1231,8 +1231,8 @@ export function ConsignmentList({
     );
 
   return (
-    <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
           <h2 className="text-lg font-semibold">Consignment</h2>
           <p className="text-sm text-muted-foreground">
@@ -1243,7 +1243,7 @@ export function ConsignmentList({
           <Plus className="mr-1 size-4" /> Create Consignment
         </Button>
       </div>
-      <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-muted/20 p-3">
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-muted/20 p-2">
         <div className="min-w-[220px] space-y-1.5">
           <Label>Search Consignment</Label>
           <Input
@@ -1291,46 +1291,46 @@ export function ConsignmentList({
         </div>
       </div>
       <div className="overflow-x-auto rounded-xl border border-border">
-        <table className="w-full text-sm">
+        <table className="min-w-max text-sm">
           <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
             <tr>
-              <th className="px-4 py-3">Consignment No.</th>
-              <th className="px-4 py-3">Branch</th>
-              <th className="px-4 py-3">Type</th>
-              <th className="px-4 py-3">Movement</th>
-              <th className="px-4 py-3">Transporter Update</th>
-              <th className="px-4 py-3">Created</th>
-              <th className="px-4 py-3 text-right">Actions</th>
+              <th className="px-3 py-2">Consignment No.</th>
+              <th className="px-3 py-2">Branch</th>
+              <th className="px-3 py-2">Type</th>
+              <th className="px-3 py-2">Movement</th>
+              <th className="px-3 py-2">Transporter Update</th>
+              <th className="px-3 py-2">Created</th>
+              <th className="px-3 py-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center">
+                <td colSpan={7} className="px-3 py-8 text-center">
                   Loading…
                 </td>
               </tr>
             )}
             {!loading && !filteredRows.length && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-muted-foreground">
+                <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
                   No consignments found.
                 </td>
               </tr>
             )}
             {filteredRows.map((row) => (
               <tr key={row.id} className="border-t border-border">
-                <td className="px-4 py-3 font-medium">{row.consignment_number}</td>
-                <td className="px-4 py-3">{row.branch?.branch_name ?? "—"}</td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2 font-medium">{row.consignment_number}</td>
+                <td className="px-3 py-2">{row.branch?.branch_name ?? "—"}</td>
+                <td className="px-3 py-2">
                   <Badge variant="outline">
                     {row.consignment_type === "third_party" ? "Third Party" : "Own"}
                   </Badge>
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2">
                   {row.movement_mode} · {row.transport_mode}
                 </td>
-                <td className="px-4 py-3">
+                <td className="px-3 py-2">
                   {row.consignment_type === "third_party" ? (
                     <Badge variant="outline">
                       {row.transporter_update_status === "updated"
@@ -1343,10 +1343,10 @@ export function ConsignmentList({
                     "—"
                   )}
                 </td>
-                <td className="px-4 py-3">
+                <td className="whitespace-nowrap px-3 py-2">
                   {new Date(row.created_at).toLocaleDateString("en-IN")}
                 </td>
-                <td className="px-4 py-3 text-right">
+                <td className="whitespace-nowrap px-3 py-2 text-right">
                   <Button variant="ghost" size="sm" onClick={() => void openView(row)}>
                     <Eye className="mr-1 size-4" /> View
                   </Button>

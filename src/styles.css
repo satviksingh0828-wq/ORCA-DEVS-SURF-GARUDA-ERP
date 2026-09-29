@@ -28,6 +28,13 @@
   background-clip: padding-box;
 }
 
+/* Keep dense data grids aligned on one row; overflow containers provide
+   horizontal scrolling instead of uneven multi-line rows. */
+table th,
+table td {
+  white-space: nowrap;
+}
+
 /*
  * Design system definition.
  *

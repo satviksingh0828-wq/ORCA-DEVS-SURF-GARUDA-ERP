@@ -199,7 +199,7 @@ export function AppShell({
         className={cn(
           "relative z-10",
           "min-h-0 flex-1 overflow-x-hidden overflow-y-auto [overflow-anchor:none]",
-          "mx-auto w-full max-w-screen-xl px-3 py-5 sm:px-6 sm:py-8",
+          "mx-auto w-full max-w-screen-xl px-2 py-4 sm:px-4 sm:py-6",
           mainClassName,
         )}
       >
