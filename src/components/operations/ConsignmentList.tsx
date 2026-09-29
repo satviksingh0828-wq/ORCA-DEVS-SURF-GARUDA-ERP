@@ -975,9 +975,9 @@ export function ConsignmentList({
       transporter_lr_number: transporterLrNumber.trim() || null,
       transporter_lr_date: transporterLrDate || null,
       delivery_date: deliveryDate || null,
-      from_pin_code: fromPin,
-      to_pin_code:
-        type === "third_party" && movement === "drop" ? toPin : common.recipient_pin_code,
+      // Keep the persisted route PINs identical to the visible Consignment From/To PIN fields.
+      from_pin_code: common.supplier_pin_code,
+      to_pin_code: common.recipient_pin_code,
       from_gstin: common.supplier_gstin,
       to_gstin: common.recipient_gstin,
       generation_mode: common.generation_mode,
