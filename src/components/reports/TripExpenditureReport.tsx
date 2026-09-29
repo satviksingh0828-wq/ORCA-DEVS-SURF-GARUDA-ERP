@@ -39,21 +39,7 @@ type ConsignmentRow = {
 };
 type PackageRow = { consignment_id: string; weight_kg: number | string | null };
 type TripExpenseRow = { trip_id: string; amount: number | string | null };
-type TripExpenseLogRow = {
-  trip_id: string | null;
-  fuel_expense?: number | string | null;
-  parking_charges?: number | string | null;
-  driver_bata?: number | string | null;
-  morning_exp?: number | string | null;
-  night_exp?: number | string | null;
-  hire_charges?: number | string | null;
-  approval_charge?: number | string | null;
-  dala_charges?: number | string | null;
-  unloading?: number | string | null;
-  sunday_exp?: number | string | null;
-  other_amount?: number | string | null;
-  amount?: number | string | null;
-};
+
 type VehicleRow = { id: string; registration_number: string | null };
 type DriverRow = { id: string; full_name: string | null; driver_code?: string | null };
 type ReportRow = {
@@ -156,58 +142,12 @@ export function TripExpenditureReport() {
       const driverIds = [
         ...new Set(trips.map((trip) => trip.driver_id).filter(Boolean)),
       ] as string[];
-      const [
-        tripExpenses,
-        vehicleLogs,
-        driverLogs,
-        transporterLogs,
-        otherLogs,
-        fastagLogs,
-        vehicles,
-        drivers,
-      ] = await Promise.all([
+      const [tripExpenses, vehicles, drivers] = await Promise.all([
         tripIds.length
           ? fetchAll<TripExpenseRow>(() =>
               supabase.from("trip_expenses").select("trip_id,amount").in("trip_id", tripIds),
             )
           : Promise.resolve([] as TripExpenseRow[]),
-        tripIds.length
-          ? fetchAll<TripExpenseLogRow>(() =>
-              supabase
-                .from("vehicle_trip_logs")
-                .select("trip_id,fuel_expense,parking_charges")
-                .in("trip_id", tripIds),
-            )
-          : Promise.resolve([] as TripExpenseLogRow[]),
-        tripIds.length
-          ? fetchAll<TripExpenseLogRow>(() =>
-              supabase
-                .from("driver_expense_logs")
-                .select("trip_id,driver_bata,morning_exp,night_exp")
-                .in("trip_id", tripIds),
-            )
-          : Promise.resolve([] as TripExpenseLogRow[]),
-        tripIds.length
-          ? fetchAll<TripExpenseLogRow>(() =>
-              supabase
-                .from("transporter_expense_logs")
-                .select("trip_id,hire_charges,approval_charge")
-                .in("trip_id", tripIds),
-            )
-          : Promise.resolve([] as TripExpenseLogRow[]),
-        tripIds.length
-          ? fetchAll<TripExpenseLogRow>(() =>
-              supabase
-                .from("other_expense_logs")
-                .select("trip_id,dala_charges,unloading,sunday_exp,other_amount")
-                .in("trip_id", tripIds),
-            )
-          : Promise.resolve([] as TripExpenseLogRow[]),
-        tripIds.length
-          ? fetchAll<TripExpenseLogRow>(() =>
-              supabase.from("fastag_transactions").select("trip_id,amount").in("trip_id", tripIds),
-            )
-          : Promise.resolve([] as TripExpenseLogRow[]),
         vehicleIds.length
           ? fetchAll<VehicleRow>(() =>
               supabase.from("vehicles").select("id,registration_number").in("id", vehicleIds),
@@ -240,22 +180,6 @@ export function TripExpenditureReport() {
           expense.trip_id,
           (expensesByTrip.get(expense.trip_id) ?? 0) + num(expense.amount),
         );
-      const loggedExpensesByTrip = new Map<string, number>();
-      const addLogExpenses = (rows: TripExpenseLogRow[], fields: (keyof TripExpenseLogRow)[]) => {
-        for (const row of rows) {
-          if (!row.trip_id) continue;
-          const amount = fields.reduce((sum, field) => sum + num(row[field]), 0);
-          loggedExpensesByTrip.set(
-            row.trip_id,
-            (loggedExpensesByTrip.get(row.trip_id) ?? 0) + amount,
-          );
-        }
-      };
-      addLogExpenses(vehicleLogs, ["fuel_expense", "parking_charges"]);
-      addLogExpenses(driverLogs, ["driver_bata", "morning_exp", "night_exp"]);
-      addLogExpenses(transporterLogs, ["hire_charges", "approval_charge"]);
-      addLogExpenses(otherLogs, ["dala_charges", "unloading", "sunday_exp", "other_amount"]);
-      addLogExpenses(fastagLogs, ["amount"]);
       const vehicleMap = new Map(
         vehicles.map((vehicle) => [vehicle.id, vehicle.registration_number ?? "—"]),
       );
@@ -287,11 +211,7 @@ export function TripExpenditureReport() {
           "expense_unloading",
         ].reduce((sum, key) => sum + num(trip[key]), 0);
         const lineExpense = expensesByTrip.get(trip.id) ?? 0;
-        const tripExpenditure = Math.max(
-          structuredExpense,
-          lineExpense,
-          loggedExpensesByTrip.get(trip.id) ?? 0,
-        );
+        const tripExpenditure = Math.max(structuredExpense, lineExpense);
         for (const item of weights) {
           nextRows.push({
             id: item.consignment.id,
