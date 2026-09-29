@@ -35,10 +35,13 @@ type ConsignmentRow = {
   transporter_source?: { source_name?: string | null } | null;
 };
 type PackageRow = {
+  id: string;
   consignment_id: string;
   package_type: string | null;
   package_rate_type_id: string;
+  basis: "quantity" | "weight";
 };
+type MasterOption = { id: string; name: string; branch_id: string; basis?: "quantity" | "weight" };
 type ReportRow = ConsignmentRow & { package_types: string };
 type UpdateType = "source" | "transporter_source" | "package_type";
 
@@ -55,6 +58,10 @@ export function SourcesReport() {
   const [branchId, setBranchId] = useState("all");
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [rows, setRows] = useState<ReportRow[]>([]);
+  const [packageRows, setPackageRows] = useState<PackageRow[]>([]);
+  const [sourceOptions, setSourceOptions] = useState<MasterOption[]>([]);
+  const [transporterSourceOptions, setTransporterSourceOptions] = useState<MasterOption[]>([]);
+  const [packageTypeOptions, setPackageTypeOptions] = useState<MasterOption[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [updateOpen, setUpdateOpen] = useState(false);
@@ -89,26 +96,78 @@ export function SourcesReport() {
       if (branchId !== "all") query = query.eq("branch_id", branchId);
       const consignments = await fetchAll<ConsignmentRow>(() => query);
       const ids = consignments.map((row) => row.id);
-      const packages = ids.length
-        ? await fetchAll<PackageRow>(() =>
-            supabase
-              .from("consignment_package_information")
-              .select("consignment_id,package_type,package_rate_type_id")
-              .in("consignment_id", ids),
-          )
-        : [];
-      const packageTypes = new Map<string, Set<string>>();
+      const [packages, sources, transporterSources, packageTypeMasters] = await Promise.all([
+        ids.length
+          ? fetchAll<PackageRow>(() =>
+              supabase
+                .from("consignment_package_information")
+                .select("id,consignment_id,package_type,package_rate_type_id,basis")
+                .in("consignment_id", ids),
+            )
+          : Promise.resolve([] as PackageRow[]),
+        fetchAll<{ id: string; contract_name: string; branch_id: string }>(() => {
+          let sourceQuery = supabase
+            .from("contracts")
+            .select("id,contract_name,branch_id")
+            .eq("status", "active");
+          if (branchId !== "all") sourceQuery = sourceQuery.eq("branch_id", branchId);
+          return sourceQuery.order("contract_name");
+        }),
+        fetchAll<{ id: string; source_name: string; branch_id: string }>(() => {
+          let sourceQuery = supabase
+            .from("ltms_transporter_sources" as never)
+            .select("id,source_name,branch_id");
+          if (branchId !== "all") sourceQuery = sourceQuery.eq("branch_id", branchId);
+          return sourceQuery.order("source_name");
+        }),
+        fetchAll<{
+          id: string;
+          package_type: string;
+          branch_id: string;
+          basis: "quantity" | "weight";
+        }>(() => {
+          let typeQuery = supabase
+            .from("package_rate_types")
+            .select("id,package_type,branch_id,basis");
+          if (branchId !== "all") typeQuery = typeQuery.eq("branch_id", branchId);
+          return typeQuery.order("package_type");
+        }),
+      ]);
+      const packageTypeNames = new Map<string, Set<string>>();
       for (const item of packages) {
         const type = String(item.package_type ?? "").trim();
         if (!type) continue;
-        const values = packageTypes.get(item.consignment_id) ?? new Set<string>();
+        const values = packageTypeNames.get(item.consignment_id) ?? new Set<string>();
         values.add(type);
-        packageTypes.set(item.consignment_id, values);
+        packageTypeNames.set(item.consignment_id, values);
       }
+      setPackageRows(packages);
+      setSourceOptions(
+        sources.map((item) => ({
+          id: item.id,
+          name: item.contract_name,
+          branch_id: item.branch_id,
+        })),
+      );
+      setTransporterSourceOptions(
+        transporterSources.map((item) => ({
+          id: item.id,
+          name: item.source_name,
+          branch_id: item.branch_id,
+        })),
+      );
+      setPackageTypeOptions(
+        packageTypeMasters.map((item) => ({
+          id: item.id,
+          name: item.package_type,
+          branch_id: item.branch_id,
+          basis: item.basis,
+        })),
+      );
       setRows(
         consignments.map((row) => ({
           ...row,
-          package_types: [...(packageTypes.get(row.id) ?? new Set<string>())].join(", "),
+          package_types: [...(packageTypeNames.get(row.id) ?? new Set<string>())].join(", "),
         })),
       );
     } catch (error) {
@@ -118,98 +177,93 @@ export function SourcesReport() {
     }
   }
 
-  const currentValues = useMemo(() => {
-    const values =
-      updateType === "source"
-        ? rows.map((row) => row.source?.contract_name)
-        : updateType === "transporter_source"
-          ? rows.map((row) => row.transporter_source?.source_name)
-          : rows.flatMap((row) => row.package_types.split(", "));
-    return [...new Set(values.map((value) => String(value ?? "").trim()).filter(Boolean))].sort();
-  }, [rows, updateType]);
+  const currentOptions = useMemo(() => {
+    if (updateType === "source") {
+      const ids = new Set(rows.map((row) => row.source_id).filter(Boolean));
+      return sourceOptions.filter((option) => ids.has(option.id));
+    }
+    if (updateType === "transporter_source") {
+      const ids = new Set(rows.map((row) => row.transporter_source_id).filter(Boolean));
+      return transporterSourceOptions.filter((option) => ids.has(option.id));
+    }
+    const ids = new Set(
+      packageRows
+        .filter((item) => rows.some((row) => row.id === item.consignment_id))
+        .map((item) => item.package_rate_type_id),
+    );
+    return packageTypeOptions.filter((option) => ids.has(option.id));
+  }, [packageRows, packageTypeOptions, rows, sourceOptions, transporterSourceOptions, updateType]);
+
+  const replacementOptions = useMemo(() => {
+    const currentId = currentValue;
+    if (updateType === "source") return sourceOptions.filter((option) => option.id !== currentId);
+    if (updateType === "transporter_source")
+      return transporterSourceOptions.filter((option) => option.id !== currentId);
+    return packageTypeOptions.filter((option) => option.id !== currentId);
+  }, [currentValue, packageTypeOptions, sourceOptions, transporterSourceOptions, updateType]);
 
   useEffect(() => {
-    if (!currentValues.includes(currentValue)) setCurrentValue(currentValues[0] ?? "");
-  }, [currentValues, currentValue]);
+    if (!currentOptions.some((option) => option.id === currentValue)) {
+      setCurrentValue(currentOptions[0]?.id ?? "");
+    }
+    setReplacementValue("");
+  }, [currentOptions, updateType]);
 
   async function replaceValue() {
-    const oldValue = currentValue.trim();
-    const newValue = replacementValue.trim();
-    if (!fromDate || !toDate || fromDate > toDate) {
+    if (branchId === "all") return toast.error("Select a branch before replacing values safely");
+    if (!fromDate || !toDate || fromDate > toDate)
       return toast.error("Select a valid From Date and To Date");
-    }
-    if (!oldValue || !newValue)
-      return toast.error("Select the current value and enter a replacement value");
-    if (oldValue === newValue) return toast.error("Replacement value must be different");
-    const usedInPeriod = rows.some((row) => {
-      if (updateType === "source") return row.source?.contract_name === oldValue;
-      if (updateType === "transporter_source")
-        return row.transporter_source?.source_name === oldValue;
-      return row.package_types.split(", ").includes(oldValue);
-    });
-    if (!usedInPeriod)
-      return toast.error("The current value is not used in the selected date range");
+    if (!currentValue || !replacementValue)
+      return toast.error("Select both the current and replacement values");
+    if (currentValue === replacementValue)
+      return toast.error("Replacement value must be different");
     setUpdating(true);
     try {
-      if (updateType === "source") {
-        let query = supabase
-          .from("contracts")
-          .update({ contract_name: newValue })
-          .eq("contract_name", oldValue);
-        if (branchId !== "all") query = query.eq("branch_id", branchId);
-        const { error } = await query;
-        if (error) throw error;
-      } else if (updateType === "transporter_source") {
-        let query = supabase
-          .from("ltms_transporter_sources" as never)
-          .update({ source_name: newValue })
-          .eq("source_name", oldValue);
-        if (branchId !== "all") query = query.eq("branch_id", branchId);
-        const { error } = await query;
+      if (updateType === "source" || updateType === "transporter_source") {
+        const affectedIds = rows
+          .filter(
+            (row) =>
+              (updateType === "source" ? row.source_id : row.transporter_source_id) ===
+              currentValue,
+          )
+          .map((row) => row.id);
+        if (!affectedIds.length)
+          throw new Error("The current value is not used in the selected date range");
+        const column = updateType === "source" ? "source_id" : "transporter_source_id";
+        const { error } = await supabase
+          .from("consignments")
+          .update({ [column]: replacementValue })
+          .in("id", affectedIds);
         if (error) throw error;
       } else {
-        const branchIds = [
-          ...new Set(rows.map((row) => row.branch_id).filter(Boolean)),
-        ] as string[];
-        let typeQuery = supabase
-          .from("package_rate_types")
-          .select("id,branch_id")
-          .eq("package_type", oldValue);
-        if (branchId !== "all") typeQuery = typeQuery.eq("branch_id", branchId);
-        else if (branchIds.length) typeQuery = typeQuery.in("branch_id", branchIds);
-        const { data: types, error: typeError } = await typeQuery;
-        if (typeError) throw typeError;
-        if (!types?.length) throw new Error("No matching package type master found");
-        for (const type of types as Array<{ id: string }>) {
-          const { error: masterError } = await supabase
-            .from("package_rate_types")
-            .update({ package_type: newValue })
-            .eq("id", type.id);
-          if (masterError) throw masterError;
-          const { error: entryError } = await supabase
-            .from("package_rate_entries")
-            .update({ package_type: newValue })
-            .eq("package_rate_type_id", type.id);
-          if (entryError) throw entryError;
-          const { error: packageError } = await supabase
-            .from("consignment_package_information")
-            .update({ package_type: newValue })
-            .eq("package_rate_type_id", type.id)
-            .in(
-              "consignment_id",
-              rows.map((row) => row.id),
-            );
-          if (packageError) throw packageError;
-        }
+        const affected = packageRows.filter(
+          (item) =>
+            item.package_rate_type_id === currentValue &&
+            rows.some((row) => row.id === item.consignment_id),
+        );
+        if (!affected.length)
+          throw new Error("The current package type is not used in the selected date range");
+        const replacement = packageTypeOptions.find((option) => option.id === replacementValue);
+        if (!replacement) throw new Error("Replacement package type was not found");
+        const { error } = await supabase
+          .from("consignment_package_information")
+          .update({
+            package_rate_type_id: replacement.id,
+            package_type: replacement.name,
+            basis: replacement.basis,
+          })
+          .in(
+            "id",
+            affected.map((item) => item.id),
+          );
+        if (error) throw error;
       }
-      toast.success(
-        `${updateType === "source" ? "Source" : updateType === "transporter_source" ? "Transporter source" : "Package type"} updated safely`,
-      );
+      toast.success("Selected consignments updated; calculations will use the replacement master");
       setReplacementValue("");
       setUpdateOpen(false);
       await loadData();
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not update the selected value");
+      toast.error(error instanceof Error ? error.message : "Could not replace the selected value");
     } finally {
       setUpdating(false);
     }
@@ -398,30 +452,43 @@ export function SourcesReport() {
                   <SelectValue placeholder="Select current value" />
                 </SelectTrigger>
                 <SelectContent>
-                  {currentValues.map((value) => (
-                    <SelectItem key={value} value={value}>
-                      {value}
+                  {currentOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
-              {!currentValues.length && (
+              {!currentOptions.length && (
                 <p className="text-xs text-muted-foreground">
                   No values of this type are used in the selected period.
                 </p>
               )}
             </div>
             <div className="space-y-1.5">
-              <Label>Replace With</Label>
-              <Input
-                value={replacementValue}
-                onChange={(event) => setReplacementValue(event.target.value)}
-                placeholder="Enter new value"
-              />
+              <Label>Replace With (existing master only)</Label>
+              <Select value={replacementValue} onValueChange={setReplacementValue}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select replacement value" />
+                </SelectTrigger>
+                <SelectContent>
+                  {replacementOptions.map((option) => (
+                    <SelectItem key={option.id} value={option.id}>
+                      {option.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!replacementOptions.length && (
+                <p className="text-xs text-muted-foreground">
+                  No other existing value is available for this branch.
+                </p>
+              )}
             </div>
             <p className="text-xs text-muted-foreground">
-              This renames the existing master value by ID; it does not create a new source.
-              Existing links and calculations are preserved.
+              Only existing masters can be selected. The replacement is applied directly to matching
+              consignments in the selected date range, preserving calculations through the
+              replacement master ID.
             </p>
           </div>
           <DialogFooter>
@@ -430,7 +497,7 @@ export function SourcesReport() {
             </Button>
             <Button
               onClick={() => void replaceValue()}
-              disabled={updating || !currentValue || !replacementValue.trim()}
+              disabled={updating || !currentValue || !replacementValue}
             >
               {updating ? "Updating…" : "Update / Replace"}
             </Button>
