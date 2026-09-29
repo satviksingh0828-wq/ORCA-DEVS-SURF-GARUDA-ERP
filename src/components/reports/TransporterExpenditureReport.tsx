@@ -34,6 +34,7 @@ type ConsignmentRow = {
   transport_mode: string | null;
   from_pin_code: string | null;
   to_pin_code: string | null;
+  to_details?: { pincode?: string | null } | null;
   transporter?: { transporter_name?: string | null; pin_code?: string | null } | null;
   freight_deduction: number | string | null;
   additional_freight: number | string | null;
@@ -80,12 +81,12 @@ function monthEnd(date = new Date()) {
 }
 
 function transporterRoutePins(consignment: ConsignmentRow) {
-  const transporterPin = String(consignment.transporter?.pin_code ?? "").trim();
   const fromPin = String(consignment.from_pin_code ?? "").trim();
-  const toPin = String(consignment.to_pin_code ?? "").trim();
+  const savedToPin = String(consignment.to_pin_code ?? "").trim();
+  const firstEwayToPin = String(consignment.to_details?.pincode ?? savedToPin).trim();
   return consignment.movement_mode === "drop"
-    ? { fromPin: transporterPin, toPin }
-    : { fromPin, toPin };
+    ? { fromPin, toPin: firstEwayToPin }
+    : { fromPin, toPin: savedToPin };
 }
 function findTransporterEntry(
   entries: ConsignmentEntry[],
@@ -162,7 +163,7 @@ export function TransporterExpenditureReport() {
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,transporter_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code)",
+          "id,consignment_number,transporter_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,to_details,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code)",
         )
         .eq("consignment_type", "third_party")
         .gte("consignment_date", fromDate)
@@ -413,8 +414,8 @@ export function TransporterExpenditureReport() {
       </div>
 
       <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        Default period is the current month. For Drop, the route is transporter PIN → saved
-        consignment To PIN. Pickup uses the saved per-consignment From/To PIN route.
+        Default period is the current month. Drop uses the saved consignment From PIN and the
+        first E-Way Bill To PIN. Pickup uses the saved per-consignment From/To PIN route.
       </div>
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
