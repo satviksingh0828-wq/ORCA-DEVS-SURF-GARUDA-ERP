@@ -139,7 +139,7 @@ export function AppShell({
     >
       <header className="relative z-30 shrink-0 border-b border-border bg-card/85 backdrop-blur">
         <div className="mx-auto flex h-16 max-w-screen-xl items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
-          <Link to="/home" className="shrink-0">
+          <Link to="/home" className="shrink-0 rounded-md bg-white px-1.5 py-1">
             <img
               src="/garuda-logo.png"
               alt="Garuda Logistics Solution"
