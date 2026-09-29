@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, FileText, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, FileText, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,7 @@ export function TransporterEntries({
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<EntryRow | null>(null);
   const [sourceDialog, setSourceDialog] = useState(false);
+  const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [sourceName, setSourceName] = useState("");
   const [liabilityLedgerId, setLiabilityLedgerId] = useState("");
   const [savingSource, setSavingSource] = useState(false);
@@ -113,39 +114,51 @@ export function TransporterEntries({
     if (sourceId) void loadEntries();
   }, [sourceId, transporter.id]);
 
-  function openSourceDialog() {
-    setSourceName("");
-    setLiabilityLedgerId("");
+  function openSourceDialog(source?: Source) {
+    setEditingSourceId(source?.id ?? null);
+    setSourceName(source?.source_name ?? "");
+    setLiabilityLedgerId(source?.liability_ledger_id ?? "");
     void loadLiabilityLedgers();
     setSourceDialog(true);
   }
 
-  async function createSource() {
+  async function saveSource() {
     if (!transporter.branch_id) return toast.error("Assign the transporter to a branch first");
     if (!sourceName.trim()) return toast.error("Source name is required");
     if (!liabilityLedgerId) return toast.error("Select the branch liability ledger");
     setSavingSource(true);
-    const { data, error } = await supabase
-      .from("ltms_transporter_sources" as never)
-      .insert({
-        transporter_id: transporter.id,
-        branch_id: transporter.branch_id,
-        source_name: sourceName.trim(),
-        liability_ledger_id: liabilityLedgerId,
-      })
+    const payload = {
+      transporter_id: transporter.id,
+      branch_id: transporter.branch_id,
+      source_name: sourceName.trim(),
+      liability_ledger_id: liabilityLedgerId,
+    };
+    const query = editingSourceId
+      ? supabase
+          .from("ltms_transporter_sources" as never)
+          .update(payload)
+          .eq("id", editingSourceId)
+      : supabase.from("ltms_transporter_sources" as never).insert(payload);
+    const { data, error } = await query
       .select(
         "id,source_name,branch_id,liability_ledger_id,liability_ledger:ledger_accounts(account_name)",
       )
       .single();
     setSavingSource(false);
     if (error) return toast.error(error.message);
-    const created = data as Source;
+    const saved = data as Source;
     setSources((current) =>
-      [...current, created].sort((a, b) => a.source_name.localeCompare(b.source_name)),
+      [...current.filter((source) => source.id !== saved.id), saved].sort((a, b) =>
+        a.source_name.localeCompare(b.source_name),
+      ),
     );
-    setSourceId(created.id);
     setSourceDialog(false);
-    toast.success("Transporter source created. Add route entries under this source.");
+    setEditingSourceId(null);
+    toast.success(
+      editingSourceId
+        ? "Transporter source updated"
+        : "Transporter source created. Add route entries under this source.",
+    );
   }
 
   async function remove(id: string) {
@@ -224,9 +237,19 @@ export function TransporterEntries({
                     Liability ledger: {source.liability_ledger?.account_name ?? "—"}
                   </p>
                 </div>
-                <Button size="sm" onClick={() => setSourceId(source.id)}>
-                  Open source
-                </Button>
+                <div className="flex shrink-0 items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => openSourceDialog(source)}
+                  >
+                    <Pencil className="mr-1.5 size-3.5" /> Edit
+                  </Button>
+                  <Button size="sm" onClick={() => setSourceId(source.id)}>
+                    Open source
+                  </Button>
+                </div>
               </li>
             ))}
           </ul>
@@ -234,7 +257,9 @@ export function TransporterEntries({
         <Dialog open={sourceDialog} onOpenChange={setSourceDialog}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create transporter source</DialogTitle>
+              <DialogTitle>
+                {editingSourceId ? "Edit transporter source" : "Create transporter source"}
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div className="space-y-1.5">
@@ -265,8 +290,8 @@ export function TransporterEntries({
               <Button variant="outline" onClick={() => setSourceDialog(false)}>
                 Cancel
               </Button>
-              <Button onClick={() => void createSource()} disabled={savingSource}>
-                {savingSource ? "Saving…" : "Create source"}
+              <Button onClick={() => void saveSource()} disabled={savingSource}>
+                {savingSource ? "Saving…" : editingSourceId ? "Save changes" : "Create source"}
               </Button>
             </DialogFooter>
           </DialogContent>
