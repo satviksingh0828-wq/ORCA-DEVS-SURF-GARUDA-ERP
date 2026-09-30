@@ -110,7 +110,16 @@ export type ManifestRow = {
   quantity: string;
 };
 
-type LineRow = { id?: string; name: string; amount: string; note: string; advance?: string };
+type LineRow = {
+  id?: string;
+  name: string;
+  amount: string;
+  note: string;
+  paymentLedgerId?: string;
+  advance?: string;
+};
+
+type PaymentLedger = { id: string; account_name: string; ledger_type: "cash" | "bank" };
 
 const DEFAULT_EXPENSES = [
   "Fuel Expense",
@@ -171,7 +180,8 @@ function validateTripBeforeClose(trip: TripRow): string | null {
   if (trip.ownership === "own" || trip.ownership === "owned") {
     if (!trip.vehicle_id) return "Vehicle is required before closing an own-vehicle trip";
     if (!trip.driver_id) return "Driver is required before closing an own-vehicle trip";
-    if (!String(trip.odometer_start ?? "").trim()) return "Odometer start is required before closing";
+    if (!String(trip.odometer_start ?? "").trim())
+      return "Odometer start is required before closing";
     if (!String(trip.odometer_end ?? "").trim()) return "Odometer end is required before closing";
     const start = Number(trip.odometer_start);
     const end = Number(trip.odometer_end);
@@ -276,7 +286,7 @@ export function TripForm({
   const [linkedLrIds, setLinkedLrIds] = useState<string[]>([]);
   const defaultIncomeList = DEFAULT_INCOMES;
   const [incomes, setIncomes] = useState<LineRow[]>(
-    defaultIncomeList.map((name) => ({ name, amount: "", note: "" })),
+    defaultIncomeList.map((name) => ({ name, amount: "", note: "", paymentLedgerId: "" })),
   );
   const defaultExpenseList =
     trip.ownership === "third_party" ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES;
@@ -285,11 +295,13 @@ export function TripForm({
       name,
       amount: "",
       note: "",
+      paymentLedgerId: "",
     })),
   );
 
   const { locations } = useLocations();
   const allBranches = useBranches();
+  const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
   const locationIdByPin = useMemo(
     () =>
       new Map(
@@ -323,6 +335,27 @@ export function TripForm({
   useEffect(() => {
     loadMasters();
   }, []);
+
+  useEffect(() => {
+    if (!trip.branch_id) {
+      setPaymentLedgers([]);
+      return;
+    }
+    void supabase
+      .from("ledger_accounts")
+      .select("id,account_name,ledger_type")
+      .eq("branch_id", trip.branch_id)
+      .eq("is_active", true)
+      .in("ledger_type", ["cash", "bank"])
+      .order("account_name")
+      .then(({ data, error }) => {
+        if (error) {
+          toast.error(`Could not load branch cash/bank accounts: ${error.message}`);
+          return;
+        }
+        setPaymentLedgers((data ?? []) as PaymentLedger[]);
+      });
+  }, [trip.branch_id]);
 
   async function branchLocationId(branchId: string | null): Promise<string | null> {
     const pin = allBranches.find((b) => b.id === branchId)?.pin_code?.trim() ?? "";
@@ -383,26 +416,38 @@ export function TripForm({
       ((approvalAdvance.data as { advance?: string | number } | null)?.advance ?? "") || "",
     );
     const incRows = (
-      (i.data as unknown as { id: string; income_name: string; amount: string; note: string }[]) ??
-      []
+      (i.data as unknown as {
+        id: string;
+        income_name: string;
+        amount: string;
+        note: string;
+        payment_ledger_id?: string | null;
+      }[]) ?? []
     ).map((r) => ({
       id: r.id,
       name: r.income_name,
       amount: r.amount ?? "",
       note: r.note ?? "",
+      paymentLedgerId: r.payment_ledger_id ?? "",
     }));
     const incDefList = DEFAULT_INCOMES;
     setIncomes(
       incRows.length > 0 ? incRows : incDefList.map((name) => ({ name, amount: "", note: "" })),
     );
     const exp = (
-      (e.data as unknown as { id: string; expense_name: string; amount: string; note: string }[]) ??
-      []
+      (e.data as unknown as {
+        id: string;
+        expense_name: string;
+        amount: string;
+        note: string;
+        payment_ledger_id?: string | null;
+      }[]) ?? []
     ).map((r) => ({
       id: r.id,
       name: r.expense_name,
       amount: r.amount ?? "",
       note: r.note ?? "",
+      paymentLedgerId: r.payment_ledger_id ?? "",
       ...(r.expense_name?.trim().toLowerCase() === "hire charges"
         ? { advance: savedApprovalAdvance }
         : {}),
@@ -416,7 +461,7 @@ export function TripForm({
     setExpenses(
       filteredExpenses.length > 0
         ? filteredExpenses
-        : allowedExpenses.map((name) => ({ name, amount: "", note: "" })),
+        : allowedExpenses.map((name) => ({ name, amount: "", note: "", paymentLedgerId: "" })),
     );
   }
   useEffect(() => {
@@ -583,15 +628,29 @@ export function TripForm({
 
     const incomeRows = (table === "trip_other_income" ? rows : incomes)
       .filter((row) => row.name.trim() !== "")
-      .map((row) => ({ income_name: row.name, amount: row.amount, note: row.note }));
+      .map((row) => ({
+        income_name: row.name,
+        amount: row.amount,
+        note: row.note,
+        payment_ledger_id: row.paymentLedgerId || null,
+      }));
     const expenseRows = (table === "trip_expenses" ? rows : expenses)
       .filter((row) => row.name.trim() !== "")
       .map((row, index) => ({
         expense_name: row.name,
         amount: row.amount,
         note: row.note,
+        payment_ledger_id: row.paymentLedgerId || null,
         sort_order: index,
       }));
+    const rowsToValidate = table === "trip_other_income" ? rows : expenses;
+    const missingPaymentAccount = rowsToValidate.find(
+      (row) => num(row.amount) > 0 && !row.paymentLedgerId,
+    );
+    if (missingPaymentAccount) {
+      toast.error(`Select a cash or bank account for ${missingPaymentAccount.name}`);
+      return false;
+    }
     const hireChargeRow = expenseRows.find(
       (row) => row.expense_name.trim().toLowerCase() === "hire charges",
     );
@@ -664,6 +723,18 @@ export function TripForm({
     if (!silent) toast.success("Saved");
     await loadChildren(tripId);
     return true;
+  }
+
+  async function saveTripWithLines(e?: React.FormEvent): Promise<string | null> {
+    if (!trip.id) return saveTrip(e);
+    e?.preventDefault();
+    if (tripClosed) {
+      toast.error("Closed trips are read-only. Reopen the trip before editing.");
+      return null;
+    }
+    if (!(await saveLines("trip_other_income", incomes, "income_name", true))) return null;
+    if (!(await saveLines("trip_expenses", expenses, "expense_name", true))) return null;
+    return saveTrip();
   }
 
   // Filter vehicles: by selected branch (if any), plus basic-user branch restriction
@@ -1008,14 +1079,14 @@ export function TripForm({
           </Button>
         ) : null}
         {!isViewer && (
-          <Button onClick={() => saveTrip()} disabled={saving || tripClosed}>
+          <Button onClick={() => void saveTripWithLines()} disabled={saving || tripClosed}>
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             {trip.id ? "Update trip" : "Save trip"}
           </Button>
         )}
       </div>
 
-      <form onSubmit={saveTrip} className="surface-card space-y-5 p-6">
+      <form onSubmit={saveTripWithLines} className="surface-card space-y-5 p-6">
         <h3 className="text-sm font-semibold tracking-tight">Trip details</h3>
         <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 xl:grid-cols-5">
           <div className="space-y-1.5">
@@ -1037,10 +1108,18 @@ export function TripForm({
                     name,
                     amount: "",
                     note: "",
+                    paymentLedgerId: "",
                   })),
                 );
                 const newDefaultIncomes = DEFAULT_INCOMES;
-                setIncomes(newDefaultIncomes.map((name) => ({ name, amount: "", note: "" })));
+                setIncomes(
+                  newDefaultIncomes.map((name) => ({
+                    name,
+                    amount: "",
+                    note: "",
+                    paymentLedgerId: "",
+                  })),
+                );
                 patch({
                   ownership: v,
                   ...(v === "own"
@@ -1270,6 +1349,7 @@ export function TripForm({
               onSave={() => saveLines("trip_other_income", incomes, "income_name")}
               isViewer={isViewer}
               tripClosed={tripClosed}
+              paymentLedgers={paymentLedgers}
             />
           ) : null}
           {activeTab === "expense" ? (
@@ -1283,6 +1363,7 @@ export function TripForm({
               isViewer={isViewer}
               tripClosed={tripClosed}
               showHireChargeFields={isRented}
+              paymentLedgers={paymentLedgers}
             />
           ) : null}
           {activeTab === "vehicle" ? (
@@ -1532,7 +1613,8 @@ function MovementTab({
   }, [branchId, vehicleId, tripId]);
 
   async function loadUnassignedMovements() {
-    if (tripClosed) return toast.error("Closed trips are read-only. Reopen the trip before editing.");
+    if (tripClosed)
+      return toast.error("Closed trips are read-only. Reopen the trip before editing.");
     if (!branchId || !tripId) return toast.error("Save the trip details first");
     setCandidateLoading(true);
     setPickerOpen(true);
@@ -1586,7 +1668,8 @@ function MovementTab({
     toast.success(`${additions.length} movement(s) added to this trip`);
   }
   async function save() {
-    if (tripClosed) return toast.error("Closed trips are read-only. Reopen the trip before editing.");
+    if (tripClosed)
+      return toast.error("Closed trips are read-only. Reopen the trip before editing.");
     const id = await requireTripId();
     if (!id) return;
     setSaving(true);
@@ -1682,7 +1765,8 @@ function MovementTab({
     }));
   }
   async function updateAllAssignedPartB() {
-    if (tripClosed) return toast.error("Closed trips are read-only. Reopen the trip before editing.");
+    if (tripClosed)
+      return toast.error("Closed trips are read-only. Reopen the trip before editing.");
     if (!user?.sessionToken || !tripId) return toast.error("Save the trip before updating Part-B");
     const assigned = rows.filter((m) => m.trip_id === tripId);
     if (!assigned.length) return toast.error("No movements are assigned to this trip");
@@ -1775,7 +1859,8 @@ function MovementTab({
   }
 
   async function submitPartB() {
-    if (tripClosed) return toast.error("Closed trips are read-only. Reopen the trip before editing.");
+    if (tripClosed)
+      return toast.error("Closed trips are read-only. Reopen the trip before editing.");
     if (!updating || !user?.sessionToken) return;
     const vehicleNo = form.vehicleNo.trim();
     const fromPin = form.fromPin.trim();
@@ -2708,6 +2793,7 @@ function LineTab({
   isViewer = false,
   tripClosed = false,
   showHireChargeFields = false,
+  paymentLedgers = [],
 }: {
   title: string;
   nameLabel: string;
@@ -2718,6 +2804,7 @@ function LineTab({
   isViewer?: boolean;
   tripClosed?: boolean;
   showHireChargeFields?: boolean;
+  paymentLedgers?: PaymentLedger[];
 }) {
   const update = (i: number, p: Partial<LineRow>) =>
     setRows(rows.map((r, idx) => (idx === i ? { ...r, ...p } : r)));
@@ -2744,7 +2831,7 @@ function LineTab({
           return (
             <div
               key={i}
-              className="grid grid-cols-1 items-end gap-3 rounded-xl bg-muted/50 p-3 sm:grid-cols-[1.2fr_0.8fr_1.4fr_auto]"
+              className="grid grid-cols-1 items-end gap-3 rounded-xl bg-muted/50 p-3 sm:grid-cols-[1.2fr_0.8fr_1.2fr_1.4fr_auto]"
             >
               <div className="space-y-1.5">
                 <Label className="text-xs font-medium text-muted-foreground">{nameLabel}</Label>
@@ -2757,7 +2844,9 @@ function LineTab({
                   type="number"
                   value={r.amount}
                   readOnly={isViewer || tripClosed}
-                  onChange={(e) => !isViewer && !tripClosed && update(i, { amount: e.target.value })}
+                  onChange={(e) =>
+                    !isViewer && !tripClosed && update(i, { amount: e.target.value })
+                  }
                 />
               </div>
               <div className="space-y-1.5">
@@ -2769,6 +2858,32 @@ function LineTab({
                   onChange={(e) => !isViewer && !tripClosed && update(i, { note: e.target.value })}
                 />
               </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  Cash / Bank Account
+                </Label>
+                <Select
+                  disabled={isViewer || tripClosed}
+                  value={r.paymentLedgerId || "__none__"}
+                  onValueChange={(value) =>
+                    !isViewer &&
+                    !tripClosed &&
+                    update(i, { paymentLedgerId: value === "__none__" ? "" : value })
+                  }
+                >
+                  <SelectTrigger className="h-10">
+                    <SelectValue placeholder="Select account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">Select account</SelectItem>
+                    {paymentLedgers.map((ledger) => (
+                      <SelectItem key={ledger.id} value={ledger.id}>
+                        {ledger.account_name} ({ledger.ledger_type})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               {isHireCharge ? (
                 <div className="grid grid-cols-1 gap-3 sm:col-span-4 sm:grid-cols-2">
@@ -2779,7 +2894,9 @@ function LineTab({
                       type="number"
                       value={r.advance ?? ""}
                       readOnly={isViewer || tripClosed}
-                      onChange={(e) => !isViewer && !tripClosed && update(i, { advance: e.target.value })}
+                      onChange={(e) =>
+                        !isViewer && !tripClosed && update(i, { advance: e.target.value })
+                      }
                     />
                   </div>
                   <div className="space-y-1.5">

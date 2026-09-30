@@ -7,12 +7,20 @@ export const serverSaveTripLines = createServerFn({ method: "POST" })
     z.object({
       sessionToken: z.string().min(1),
       tripId: z.string().uuid(),
-      income: z.array(z.object({ income_name: z.string(), amount: z.string(), note: z.string() })),
+      income: z.array(
+        z.object({
+          income_name: z.string(),
+          amount: z.string(),
+          note: z.string(),
+          payment_ledger_id: z.string().uuid().nullable(),
+        }),
+      ),
       expenses: z.array(
         z.object({
           expense_name: z.string(),
           amount: z.string(),
           note: z.string(),
+          payment_ledger_id: z.string().uuid().nullable(),
           sort_order: z.number().int(),
         }),
       ),
