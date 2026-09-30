@@ -48,7 +48,7 @@ function validateTripForClose(trip: Record<string, unknown>) {
   }
 
   if (ownership === "third_party") {
-    requiredText(trip.transporter_id, "Transporter");
+    requiredText(trip.rental_id, "Rental");
     requiredText(trip.third_party_vehicle_number, "Third-party vehicle number");
   }
 }

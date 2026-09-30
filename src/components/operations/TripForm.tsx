@@ -181,7 +181,6 @@ function validateTripBeforeClose(trip: TripRow): string | null {
   }
 
   if (trip.ownership === "third_party") {
-    if (!trip.transporter_id) return "Transporter is required before closing a rented trip";
     if (!trip.rental_id) return "Rental is required before closing a rented trip";
     if (!trip.third_party_vehicle_number.trim()) {
       return "Third-party vehicle number is required before closing";
