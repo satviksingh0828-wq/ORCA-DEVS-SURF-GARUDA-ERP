@@ -36,10 +36,23 @@ import { financialYearRange } from "@/lib/financial-year";
 import { useReportFilters } from "@/lib/report-filters";
 import { useSession } from "@/lib/session";
 
+// Generated Supabase types do not yet include the Accounts tables and Fastag payment column.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const db = supabase as any;
+
 interface Vehicle {
   id: string;
   registration_number: string;
   nickname?: string;
+  branch_id: string;
+}
+
+interface PaymentAccount {
+  id: string;
+  branch_id: string;
+  account_name: string;
+  account_kind: "bank" | "cash";
+  ledger_type: "bank" | "cash";
 }
 
 interface FastagBalance {
@@ -66,6 +79,7 @@ export function FastagLedger() {
   const isBasic = user?.role === "basic";
   const assignedBranchIds = user?.branchIds ?? [];
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [paymentAccounts, setPaymentAccounts] = useState<PaymentAccount[]>([]);
   const [balances, setBalances] = useState<FastagBalance[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
@@ -74,6 +88,7 @@ export function FastagLedger() {
   const [isRechargeOpen, setIsRechargeOpen] = useState(false);
   const [rechargeVehicleId, setRechargeVehicleId] = useState("");
   const [rechargeAmount, setRechargeAmount] = useState("");
+  const [rechargePaymentLedgerId, setRechargePaymentLedgerId] = useState("");
   const [rechargeDate, setRechargeDate] = useState(new Date().toISOString().split("T")[0]);
   const [rechargeNote, setRechargeNote] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -120,6 +135,17 @@ export function FastagLedger() {
         return query;
       });
       setVehicles(vehiclesData);
+      const paymentAccountsData = await fetchAll<PaymentAccount>(() => {
+        let query = db
+          .from("ledger_accounts")
+          .select("id,branch_id,account_name,account_kind,ledger_type")
+          .eq("is_active", true)
+          .in("ledger_type", ["bank", "cash"])
+          .order("account_name");
+        if (branchIds) query = query.in("branch_id", branchIds);
+        return query;
+      });
+      setPaymentAccounts(paymentAccountsData);
 
       // 2. Load all transactions from standalone table
       const transactions = await fetchAll<any>(() => {
@@ -192,17 +218,18 @@ export function FastagLedger() {
   }
 
   async function handleAddRecharge() {
-    if (!rechargeVehicleId || !rechargeAmount || !rechargeDate) {
+    if (!rechargeVehicleId || !rechargeAmount || !rechargeDate || !rechargePaymentLedgerId) {
       return toast.error("Please fill all required fields");
     }
     setSubmitting(true);
     try {
-      const { error } = await supabase.from("fastag_transactions").insert({
+      const { error } = await db.from("fastag_transactions").insert({
         vehicle_id: rechargeVehicleId,
         amount: Number(rechargeAmount),
         transaction_date: rechargeDate,
         transaction_type: "recharge",
         note: rechargeNote,
+        payment_ledger_id: rechargePaymentLedgerId,
       });
 
       if (error) throw error;
@@ -211,6 +238,7 @@ export function FastagLedger() {
       setIsRechargeOpen(false);
       setRechargeAmount("");
       setRechargeNote("");
+      setRechargePaymentLedgerId("");
       loadData();
     } catch (err: any) {
       toast.error("Failed to add recharge: " + err.message);
@@ -231,6 +259,11 @@ export function FastagLedger() {
         (b.nickname || "").toLowerCase().includes(s),
     );
   }, [balances, search]);
+
+  const rechargeVehicle = vehicles.find((vehicle) => vehicle.id === rechargeVehicleId);
+  const rechargePaymentAccounts = paymentAccounts.filter(
+    (account) => account.branch_id === rechargeVehicle?.branch_id,
+  );
 
   function handleExport() {
     const csv = toCsv(
@@ -278,7 +311,13 @@ export function FastagLedger() {
               <div className="space-y-4 py-4">
                 <div className="space-y-2">
                   <Label>Vehicle</Label>
-                  <Select value={rechargeVehicleId} onValueChange={setRechargeVehicleId}>
+                  <Select
+                    value={rechargeVehicleId}
+                    onValueChange={(value) => {
+                      setRechargeVehicleId(value);
+                      setRechargePaymentLedgerId("");
+                    }}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select Vehicle" />
                     </SelectTrigger>
@@ -290,6 +329,30 @@ export function FastagLedger() {
                       ))}
                     </SelectContent>
                   </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Payment Account (Cash / Bank)</Label>
+                  <Select
+                    value={rechargePaymentLedgerId}
+                    onValueChange={setRechargePaymentLedgerId}
+                    disabled={!rechargeVehicleId || rechargePaymentAccounts.length === 0}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select cash or bank account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rechargePaymentAccounts.map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.account_name} ({account.account_kind})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {rechargeVehicleId && rechargePaymentAccounts.length === 0 && (
+                    <p className="text-xs text-destructive">
+                      No active cash or bank account is configured for this vehicle&apos;s branch.
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label>Amount (₹)</Label>

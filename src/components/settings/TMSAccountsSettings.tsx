@@ -40,7 +40,7 @@ const FIELDS = [
   ["vehicle_insurance_expense_ledger_id", "Vehicle Insurance Expense", "expenditure"],
   ["vehicle_road_tax_advance_ledger_id", "Vehicle Road Tax Advance", "asset"],
   ["vehicle_road_tax_expense_ledger_id", "Vehicle Road Tax Expense", "expenditure"],
-  ["fastag_ledger_id", "Fastag Ledger", "expenditure"],
+  ["fastag_ledger_id", "Fastag Expenditure Account", "expenditure"],
   ["other_expenditure_ledger_id", "Other Expenditure", "expenditure"],
   ["other_expenditure_payable_ledger_id", "Other Expenditure Payable", "liability"],
   ["other_income_ledger_id", "Other Income", "income"],
@@ -123,7 +123,7 @@ export function TMSAccountsSettings() {
   return (
     <div className="animate-fade-up space-y-5">
       <section className="surface-card p-6">
-          <h3 className="text-sm font-semibold">TMS Accounts</h3>
+          <h3 className="text-sm font-semibold">LTMS Account</h3>
           <p className="mt-1 text-sm text-muted-foreground">
           Map the ledgers used for driver payroll, vehicle loans, and vehicle EMI accounting.
           Each mapping is branch-specific.
@@ -195,7 +195,7 @@ export function TMSAccountsSettings() {
         </section>
       ) : (
         <div className="surface-card p-8 text-center text-sm text-muted-foreground">
-          Select a branch to configure TMS accounts.
+          Select a branch to configure LTMS accounts.
         </div>
       )}
     </div>

@@ -80,7 +80,7 @@ const TABS = [
   },
   {
     id: "tms-accounts",
-    label: "TMS Accounts",
+    label: "LTMS Account",
     desc: "Driver payroll ledger mappings",
     icon: Building2,
   },
