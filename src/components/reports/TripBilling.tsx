@@ -105,7 +105,7 @@ export function TripBilling() {
       const active = await fetchAll<Record<string, unknown>>(() => activeQuery);
 
       const activeIds = active.map((row) => String(row.id));
-      const [activeIncome, activeExpenses] = await Promise.all([
+      const [activeIncome, activeExpenses, activeApprovals] = await Promise.all([
         activeIds.length
           ? fetchAll<Record<string, unknown>>(() =>
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -124,9 +124,19 @@ export function TripBilling() {
                 .in("trip_id", activeIds),
             )
           : Promise.resolve([]),
+        activeIds.length
+          ? fetchAll<Record<string, unknown>>(() =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (supabase as any)
+                .from("approval_charge_advances")
+                .select("trip_id,trip_code,advance,balance")
+                .in("trip_id", activeIds),
+            )
+          : Promise.resolve([]),
       ]);
       const incomeByTrip = new Map<string, Record<string, unknown>[]>();
       const expensesByTrip = new Map<string, Record<string, unknown>[]>();
+      const approvalByTrip = new Map<string, Record<string, unknown>>();
       for (const row of activeIncome) {
         const key = String(row.trip_id);
         incomeByTrip.set(key, [...(incomeByTrip.get(key) ?? []), row]);
@@ -134,6 +144,9 @@ export function TripBilling() {
       for (const row of activeExpenses) {
         const key = String(row.trip_id);
         expensesByTrip.set(key, [...(expensesByTrip.get(key) ?? []), row]);
+      }
+      for (const row of activeApprovals) {
+        approvalByTrip.set(String(row.trip_id), row);
       }
       const activeBilling = active.map((row) => {
         const id = String(row.id);
@@ -153,7 +166,11 @@ export function TripBilling() {
           total_income: totalIncome,
           total_expense: totalExpense,
           net_income: totalIncome - totalExpense,
-          snapshot: { other_income: income, expenses },
+          snapshot: {
+            other_income: income,
+            expenses,
+            approval_charge_advance: approvalByTrip.get(id) ?? null,
+          },
         });
       });
       setRows(
@@ -341,6 +358,7 @@ function BillingDetailsDialog({
   const snapshot = trip?.snapshot ?? {};
   const income = Array.isArray(snapshot.other_income) ? (snapshot.other_income as DetailRow[]) : [];
   const expenses = Array.isArray(snapshot.expenses) ? (snapshot.expenses as DetailRow[]) : [];
+  const approvalAdvance = (snapshot.approval_charge_advance as DetailRow | null) ?? null;
 
   return (
     <Dialog open={Boolean(trip)} onOpenChange={(open) => !open && onClose()}>
@@ -359,13 +377,14 @@ function BillingDetailsDialog({
             title="Other Income"
             rows={income}
             nameKey="income_name"
-            total={trip?.total_income ?? 0}
+            total={income.reduce((sum, row) => sum + num(row.amount), 0)}
           />
           <ReadOnlyLines
             title="Expenses"
             rows={expenses}
             nameKey="expense_name"
             total={trip?.total_expense ?? 0}
+            approvalAdvance={approvalAdvance}
             expense
           />
         </div>
@@ -379,12 +398,14 @@ function ReadOnlyLines({
   rows,
   nameKey,
   total,
+  approvalAdvance = null,
   expense = false,
 }: {
   title: string;
   rows: DetailRow[];
   nameKey: string;
   total: number;
+  approvalAdvance?: DetailRow | null;
   expense?: boolean;
 }) {
   const filled = rows.filter((row) => String(row[nameKey] ?? "").trim() !== "");
@@ -404,6 +425,8 @@ function ReadOnlyLines({
               <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2 text-right">Amount</th>
+                {approvalAdvance ? <th className="px-3 py-2 text-right">PAID AMOUNT</th> : null}
+                {approvalAdvance ? <th className="px-3 py-2 text-right">Balance</th> : null}
                 <th className="px-3 py-2">Note</th>
               </tr>
             </thead>
@@ -416,6 +439,24 @@ function ReadOnlyLines({
                   >
                     {inr(num(row.amount))}
                   </td>
+                  {approvalAdvance ? (
+                    <td className="px-3 py-2 text-right text-blue-600">
+                      {String(row[nameKey] ?? "")
+                        .trim()
+                        .toLowerCase() === "hire charges"
+                        ? inr(num(approvalAdvance.advance))
+                        : "—"}
+                    </td>
+                  ) : null}
+                  {approvalAdvance ? (
+                    <td className="px-3 py-2 text-right text-emerald-600">
+                      {String(row[nameKey] ?? "")
+                        .trim()
+                        .toLowerCase() === "hire charges"
+                        ? inr(num(approvalAdvance.balance))
+                        : "—"}
+                    </td>
+                  ) : null}
                   <td className="px-3 py-2 text-muted-foreground">
                     {String(row.note ?? "") || "—"}
                   </td>
@@ -428,6 +469,8 @@ function ReadOnlyLines({
                 >
                   {inr(total)}
                 </td>
+                {approvalAdvance ? <td /> : null}
+                {approvalAdvance ? <td /> : null}
                 <td />
               </tr>
             </tbody>
