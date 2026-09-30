@@ -22,6 +22,7 @@ type Mapping = {
   vehicle_insurance_expense_ledger_id?: string | null;
   vehicle_road_tax_advance_ledger_id?: string | null;
   vehicle_road_tax_expense_ledger_id?: string | null;
+  fastag_ledger_id?: string | null;
   other_expenditure_ledger_id?: string | null;
   other_expenditure_payable_ledger_id?: string | null;
   other_income_ledger_id?: string | null;
@@ -39,6 +40,7 @@ const FIELDS = [
   ["vehicle_insurance_expense_ledger_id", "Vehicle Insurance Expense", "expenditure"],
   ["vehicle_road_tax_advance_ledger_id", "Vehicle Road Tax Advance", "asset"],
   ["vehicle_road_tax_expense_ledger_id", "Vehicle Road Tax Expense", "expenditure"],
+  ["fastag_ledger_id", "Fastag Ledger", "expenditure"],
   ["other_expenditure_ledger_id", "Other Expenditure", "expenditure"],
   ["other_expenditure_payable_ledger_id", "Other Expenditure Payable", "liability"],
   ["other_income_ledger_id", "Other Income", "income"],
