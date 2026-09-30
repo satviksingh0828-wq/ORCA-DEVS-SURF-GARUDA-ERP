@@ -77,9 +77,11 @@ REVOKE ALL ON public.driver_gps_tracking_sessions, public.driver_gps_locations F
 GRANT ALL ON public.driver_gps_tracking_sessions, public.driver_gps_locations TO service_role;
 GRANT USAGE, SELECT ON SEQUENCE public.driver_gps_locations_id_seq TO service_role;
 
-CREATE OR REPLACE FUNCTION public.start_driver_gps_tracking(p_trip_id uuid)
+DROP FUNCTION IF EXISTS public.start_driver_gps_tracking(uuid, boolean);
+DROP FUNCTION IF EXISTS public.start_driver_gps_tracking(uuid);
+CREATE OR REPLACE FUNCTION public.start_driver_gps_tracking(p_trip_id uuid, p_end_existing boolean)
 RETURNS jsonb LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, extensions AS $$
-DECLARE v_trip record; v_session record;
+DECLARE v_trip record; v_session record; v_existing record;
 BEGIN
   SELECT id, driver_id, trip_code INTO v_trip FROM public.trips
   WHERE id = p_trip_id AND ownership = 'own' AND COALESCE(closed, false) = false AND driver_id IS NOT NULL;
@@ -87,10 +89,28 @@ BEGIN
   SELECT * INTO v_session FROM public.driver_gps_tracking_sessions
   WHERE trip_id = p_trip_id AND ended_at IS NULL FOR UPDATE;
   IF FOUND THEN RETURN jsonb_build_object('ok', true, 'active', true, 'session_id', v_session.id, 'started_at', v_session.started_at); END IF;
+  SELECT s.id, s.trip_id, t.trip_code INTO v_existing
+  FROM public.driver_gps_tracking_sessions s
+  JOIN public.trips t ON t.id = s.trip_id
+  WHERE s.driver_id = v_trip.driver_id AND s.trip_id <> p_trip_id AND s.ended_at IS NULL
+  FOR UPDATE;
+  IF FOUND AND NOT p_end_existing THEN
+    RETURN jsonb_build_object('ok', false, 'conflict', true, 'active_trip_id', v_existing.trip_id,
+      'active_trip_code', v_existing.trip_code,
+      'message', format('This driver is already recording trip %s.', v_existing.trip_code));
+  END IF;
+  IF FOUND THEN
+    UPDATE public.driver_gps_tracking_sessions SET ended_at = now() WHERE id = v_existing.id;
+  END IF;
   INSERT INTO public.driver_gps_tracking_sessions (trip_id, driver_id)
   VALUES (v_trip.id, v_trip.driver_id) RETURNING * INTO v_session;
   RETURN jsonb_build_object('ok', true, 'active', true, 'session_id', v_session.id, 'started_at', v_session.started_at);
 END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.start_driver_gps_tracking(p_trip_id uuid)
+RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path = public, extensions AS $$
+  SELECT public.start_driver_gps_tracking(p_trip_id, false);
 $$;
 
 CREATE OR REPLACE FUNCTION public.stop_driver_gps_tracking(p_trip_id uuid)
@@ -111,8 +131,8 @@ RETURNS jsonb LANGUAGE sql SECURITY DEFINER SET search_path = public, extensions
     jsonb_build_object('active', false));
 $$;
 
-REVOKE ALL ON FUNCTION public.start_driver_gps_tracking(uuid), public.stop_driver_gps_tracking(uuid), public.get_driver_gps_tracking_status(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.start_driver_gps_tracking(uuid), public.stop_driver_gps_tracking(uuid), public.get_driver_gps_tracking_status(uuid) TO anon, authenticated;
+REVOKE ALL ON FUNCTION public.start_driver_gps_tracking(uuid, boolean), public.start_driver_gps_tracking(uuid), public.stop_driver_gps_tracking(uuid), public.get_driver_gps_tracking_status(uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.start_driver_gps_tracking(uuid, boolean), public.start_driver_gps_tracking(uuid), public.stop_driver_gps_tracking(uuid), public.get_driver_gps_tracking_status(uuid) TO anon, authenticated;
 
 -- Closed trips retain the GPS history; only the active recording session is stopped.
 CREATE OR REPLACE FUNCTION public.stop_gps_tracking_when_trip_closes()
@@ -127,8 +147,24 @@ $$;
 DROP TRIGGER IF EXISTS trips_stop_gps_tracking_on_close ON public.trips;
 CREATE TRIGGER trips_stop_gps_tracking_on_close AFTER UPDATE OF closed ON public.trips FOR EACH ROW EXECUTE FUNCTION public.stop_gps_tracking_when_trip_closes();
 
+-- Supabase runs this once per day. Location history and ended sessions older
+-- than 15 days are permanently removed to keep the tracking tables bounded.
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'garuda-gps-retention-15-days') THEN
+    PERFORM cron.schedule('garuda-gps-retention-15-days', '0 3 * * *', $job$
+      DELETE FROM public.driver_gps_locations
+       WHERE recorded_at < now() - interval '15 days';
+      DELETE FROM public.driver_gps_tracking_sessions
+       WHERE ended_at IS NOT NULL AND ended_at < now() - interval '15 days';
+    $job$);
+  END IF;
+END;
+$$;
+
 -- Verification
 SELECT to_regclass('public.driver_gps_tracking_sessions') AS tracking_sessions,
        to_regclass('public.driver_gps_locations') AS gps_locations,
-       to_regprocedure('public.start_driver_gps_tracking(uuid)') AS start_function,
+       to_regprocedure('public.start_driver_gps_tracking(uuid,boolean)') AS start_function,
        to_regprocedure('public.stop_driver_gps_tracking(uuid)') AS stop_function;

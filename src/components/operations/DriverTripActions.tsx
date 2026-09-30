@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Loader2, Map, MapPin, Play, RefreshCw, Square } from "lucide-react";
+import { AlertTriangle, Loader2, Map, MapPin, Play, RefreshCw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { serverGetDriverTripLocationTrace, type DriverRouteTrace } from "@/lib/d
 import { useSession } from "@/lib/session";
 
 type LiveLocation = { latitude?: number; longitude?: number; accuracy_m?: number | null; recorded_at?: string; active?: boolean } | null;
+type TrackingConflict = { tripId: string; tripCode: string };
 const TRACKING_ENDPOINT = (import.meta.env.VITE_DRIVER_TRACKING_ENDPOINT as string | undefined) || "/gps/api";
 
 function formatTime(value?: string) {
@@ -24,6 +25,7 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
   const [recording, setRecording] = useState(false);
   const [location, setLocation] = useState<LiveLocation>(null);
   const [routeTrace, setRouteTrace] = useState<DriverRouteTrace | null>(null);
+  const [trackingConflict, setTrackingConflict] = useState<TrackingConflict | null>(null);
   const { user } = useSession();
   const ownTrip = trip.ownership === "own" && Boolean(trip.id);
   const closed = trip.closed === true;
@@ -46,13 +48,22 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
     } finally { setLoading(false); }
   }
 
-  async function setRecordingState(next: "start" | "stop") {
+  async function setRecordingState(next: "start" | "stop", endExisting = false) {
     if (!trip.id) return;
     setLoading(true);
     try {
-      const fn = next === "start" ? "start_driver_gps_tracking" : "stop_driver_gps_tracking";
-      const { error } = await supabase.rpc(fn as never, { p_trip_id: trip.id } as never);
-      if (error) throw error;
+      if (next === "start") {
+        const { data, error } = await supabase.rpc("start_driver_gps_tracking" as never, { p_trip_id: trip.id, p_end_existing: endExisting } as never);
+        if (error) throw error;
+        const result = data as { ok?: boolean; conflict?: boolean; active_trip_id?: string; active_trip_code?: string } | null;
+        if (result?.conflict && result.active_trip_id && result.active_trip_code) {
+          setTrackingConflict({ tripId: result.active_trip_id, tripCode: result.active_trip_code });
+          return;
+        }
+      } else {
+        const { error } = await supabase.rpc("stop_driver_gps_tracking" as never, { p_trip_id: trip.id } as never);
+        if (error) throw error;
+      }
       setRecording(next === "start");
       toast.success(next === "start" ? "GPS recording started" : "GPS recording stopped");
       await loadLocation();
@@ -80,6 +91,20 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
           <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm"><p className="font-medium">Driver app endpoint</p><p className="mt-1 break-all font-mono text-xs">{TRACKING_ENDPOINT}</p><p className="mt-2 text-muted-foreground">Use the Driver Master Tracking App ID and Tracking App Password with Basic Auth. Send GPS points by POST; only the assigned driver’s active trip recording is accepted.</p></div>
           <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => void loadLocation()} disabled={loading}><RefreshCw className="size-4" /> Refresh</Button>{!closed ? <Button className="flex-1" onClick={() => void setRecordingState(recording ? "stop" : "start")} disabled={loading}>{recording ? <><Square className="size-4" /> Stop recording</> : <><Play className="size-4" /> Start recording</>}</Button> : null}</div>
           {location?.latitude != null && location.longitude != null ? <a className="flex items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-medium text-primary hover:underline" href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`} target="_blank" rel="noreferrer"><Map className="size-3.5" /> Open in Google Maps</a> : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+    <Dialog open={Boolean(trackingConflict)} onOpenChange={(open) => { if (!open) setTrackingConflict(null); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2"><AlertTriangle className="size-5 text-amber-600" /> Driver already recording</DialogTitle>
+          <DialogDescription>
+            This driver’s GPS location is currently being recorded for trip <strong>{trackingConflict?.tripCode}</strong>. Do you want to end that recording and start it for trip <strong>{trip.trip_code}</strong>?
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button variant="outline" onClick={() => setTrackingConflict(null)}>Keep existing trip</Button>
+          <Button onClick={() => { setTrackingConflict(null); void setRecordingState("start", true); }}>End existing &amp; start here</Button>
         </div>
       </DialogContent>
     </Dialog>
