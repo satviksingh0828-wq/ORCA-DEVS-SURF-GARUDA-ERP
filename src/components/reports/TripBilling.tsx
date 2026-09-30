@@ -642,6 +642,26 @@ function PostEntryDialog({
 
   async function post() {
     if (!trip || !user?.sessionToken) return;
+    const missingIncomeAccount = income.find((row) => num(row.amount) > 0 && !row.paymentLedgerId);
+    if (missingIncomeAccount) {
+      toast.error(`Select a Cash / Bank Account for ${missingIncomeAccount.name}`);
+      return;
+    }
+    const missingExpenseAccount = expenses.find((row) => {
+      const name = row.name.trim().toLowerCase();
+      if (num(row.amount) <= 0 || name === "toll charges") return false;
+      if (name === "hire charges")
+        return num(row.advance || approval?.advance) > 0 && !row.paymentLedgerId;
+      return !row.paymentLedgerId;
+    });
+    if (missingExpenseAccount) {
+      const name =
+        missingExpenseAccount.name.trim().toLowerCase() === "hire charges"
+          ? "Hire Charges advance"
+          : missingExpenseAccount.name;
+      toast.error(`Select a Cash / Bank Account for ${name}`);
+      return;
+    }
     setLoading(true);
     try {
       const entryId = await serverPostTripBilling({
