@@ -259,16 +259,30 @@ export const RENTAL_CONFIG: MasterConfig = {
   singular: "rental",
   titleKey: "rental_name",
   emptyMsg: "Rental vehicle providers available for Own → Rental consignments.",
-  sections: TRANSPORTER_CONFIG.sections.map((section) => ({
-    ...section,
-    fields: section.fields.map((field) =>
-      field.key === "transporter_name"
-        ? { ...field, key: "rental_name", label: "Rental Name" }
-        : field.key === "pin_code"
-          ? { ...field, required: true }
-          : field,
-    ),
-  })) as any,
+  sections: [
+    ...(TRANSPORTER_CONFIG.sections.map((section) => ({
+      ...section,
+      fields: section.fields.map((field) =>
+        field.key === "transporter_name"
+          ? { ...field, key: "rental_name", label: "Rental Name" }
+          : field.key === "pin_code"
+            ? { ...field, required: true }
+            : field,
+      ),
+    })) as unknown as MasterConfig["sections"]),
+    {
+      title: "Accounting",
+      fields: [
+        {
+          key: "liability_ledger_id",
+          label: "Rental Liability Account",
+          type: "ledger",
+          required: true,
+          full: true,
+        },
+      ],
+    },
+  ],
 };
 
 export const LOCATION_CONFIG: MasterConfig = {

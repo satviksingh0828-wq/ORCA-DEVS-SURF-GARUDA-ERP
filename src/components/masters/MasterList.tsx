@@ -68,7 +68,7 @@ type PaymentLedger = {
   id: string;
   branch_id: string;
   account_name: string;
-  ledger_type: "bank" | "cash";
+  ledger_type: string;
 };
 
 function DriverPhotoField({
@@ -275,16 +275,21 @@ export function MasterList({
   }, [config.table, user?.id, locationSearch, locationSearchBy]);
 
   useEffect(() => {
-    if (config.table !== "vehicles") return;
+    if (config.table !== "vehicles" && config.table !== "rentals") return;
+    const ledgerTypes = config.table === "rentals" ? ["liability"] : ["bank", "cash"];
     void supabase
       .from("ledger_accounts")
       .select("id,branch_id,account_name,ledger_type")
-      .in("ledger_type", ["bank", "cash"])
+      .in("ledger_type", ledgerTypes)
       .eq("is_active", true)
       .order("account_name")
       .then(({ data, error }) => {
         if (error) {
-          toast.error("Could not load vehicle payment accounts");
+          toast.error(
+            config.table === "rentals"
+              ? "Could not load rental liability accounts"
+              : "Could not load vehicle payment accounts",
+          );
           return;
         }
         setPaymentLedgers((data ?? []) as PaymentLedger[]);
@@ -477,7 +482,11 @@ export function MasterList({
                         onChange={(e) => set(f.key)(e.target.value)}
                         className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                       >
-                        <option value="">Select cash or bank account</option>
+                        <option value="">
+                          {config.table === "rentals"
+                            ? "Select liability account"
+                            : "Select cash or bank account"}
+                        </option>
                         {choices.map((ledger) => (
                           <option key={ledger.id} value={ledger.id}>
                             {ledger.account_name} ({ledger.ledger_type})
@@ -586,7 +595,9 @@ export function MasterList({
                           branch_id: id,
                           ...(config.table === "vehicles"
                             ? { purchase_paid_by_ledger_id: null }
-                            : {}),
+                            : config.table === "rentals"
+                              ? { liability_ledger_id: null }
+                              : {}),
                         }
                       : f,
                   )
