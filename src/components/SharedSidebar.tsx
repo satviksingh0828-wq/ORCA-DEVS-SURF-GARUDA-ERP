@@ -22,7 +22,8 @@ export function SharedSidebar({
   return (
     <aside
       ref={containerRef}
-      className={cn("hidden shrink-0", breakpoint === "xl" ? "xl:block" : "lg:block", className)}
+      data-app-sidebar-container="true"
+      className={cn("app-sidebar-container hidden shrink-0", breakpoint === "xl" ? "xl:block" : "lg:block", className)}
       style={{ width }}
       aria-label={label}
     >

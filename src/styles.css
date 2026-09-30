@@ -1100,8 +1100,29 @@ table td {
     grid-template-columns: 44px minmax(0, 1fr) !important;
   }
 
+  /* SharedSidebar wraps its scrollable nav in an aside. Collapse that
+     wrapper too; otherwise the grid keeps reserving the original 220px. */
+  div:has(> .app-sidebar-container) {
+    grid-template-columns: 44px minmax(0, 1fr) !important;
+  }
+
+  .app-sidebar-container {
+    width: 44px !important;
+    transition: width 180ms ease;
+  }
+
+  .app-sidebar-container:hover,
+  .app-sidebar-container:focus-within {
+    width: 220px !important;
+  }
+
   div:has(> .app-sidebar-scroll:hover),
   div:has(> .app-sidebar-scroll:focus-within) {
+    grid-template-columns: 220px minmax(0, 1fr) !important;
+  }
+
+  div:has(> .app-sidebar-container:hover),
+  div:has(> .app-sidebar-container:focus-within) {
     grid-template-columns: 220px minmax(0, 1fr) !important;
   }
 }
