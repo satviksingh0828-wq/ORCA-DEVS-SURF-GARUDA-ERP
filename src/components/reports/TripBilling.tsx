@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { Eye, ReceiptText, RefreshCw, Search } from "lucide-react";
+import { BookOpenCheck, Eye, ReceiptText, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
 import { inr, num } from "@/lib/trip-calc";
 import { useBranches } from "@/lib/use-branches";
+import { useSession } from "@/lib/session";
+import { serverPostTripBilling } from "@/lib/trip-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -18,11 +20,14 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
 
 type DetailRow = Record<string, unknown>;
+type PaymentLedger = { id: string; account_name: string; ledger_type: "cash" | "bank" };
+type PostingStatus = "not_posted" | "posted" | "all";
 type BillingTrip = {
   id: string;
   trip_code: string;
@@ -34,6 +39,8 @@ type BillingTrip = {
   total_income: number;
   total_expense: number;
   net_income: number;
+  posted_at: string | null;
+  posted_journal_entry_id: string | null;
   snapshot: Record<string, unknown>;
 };
 
@@ -62,6 +69,8 @@ function toBillingTrip(row: Record<string, unknown>): BillingTrip {
     total_income: income,
     total_expense: expense,
     net_income: row.net_income == null ? income - expense : num(row.net_income),
+    posted_at: (row.posted_at as string | null) ?? null,
+    posted_journal_entry_id: (row.posted_journal_entry_id as string | null) ?? null,
     snapshot,
   };
 }
@@ -82,28 +91,31 @@ export function TripBilling() {
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<BillingTrip | null>(null);
+  const [postingTrip, setPostingTrip] = useState<BillingTrip | null>(null);
   const [branchId, setBranchId] = useState("all");
   const [fromDate, setFromDate] = useState(defaults.from);
   const [toDate, setToDate] = useState(defaults.to);
+  const [postingStatus, setPostingStatus] = useState<PostingStatus>("not_posted");
 
   async function load() {
     setLoading(true);
     try {
-      // The generated Supabase types predate the `closed` column migration.
+      // The generated Supabase types predate the LTMS posting columns.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      let activeQuery = (supabase as any)
+      let query = (supabase as any)
         .from("trips")
         .select(
-          "id,trip_code,branch_id,start_date,end_date,updated_at,branch:branches(branch_name)",
+          "id,trip_code,branch_id,start_date,end_date,updated_at,posted_at,posted_journal_entry_id,branch:branches(branch_name)",
         )
         .eq("closed", true)
         .gte("end_date", fromDate)
         .lte("end_date", toDate)
         .order("end_date", { ascending: false });
-      if (branchId !== "all") activeQuery = activeQuery.eq("branch_id", branchId);
+      if (branchId !== "all") query = query.eq("branch_id", branchId);
+      if (postingStatus === "posted") query = query.not("posted_journal_entry_id", "is", null);
+      if (postingStatus === "not_posted") query = query.is("posted_journal_entry_id", null);
 
-      const active = await fetchAll<Record<string, unknown>>(() => activeQuery);
-
+      const active = await fetchAll<Record<string, unknown>>(() => query);
       const activeIds = active.map((row) => String(row.id));
       const [activeIncome, activeExpenses, activeApprovals] = await Promise.all([
         activeIds.length
@@ -111,7 +123,7 @@ export function TripBilling() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (supabase as any)
                 .from("trip_other_income")
-                .select("id,trip_id,income_name,amount,note")
+                .select("id,trip_id,income_name,amount,note,payment_ledger_id")
                 .in("trip_id", activeIds),
             )
           : Promise.resolve([]),
@@ -120,7 +132,7 @@ export function TripBilling() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (supabase as any)
                 .from("trip_expenses")
-                .select("id,trip_id,expense_name,amount,note")
+                .select("id,trip_id,expense_name,amount,note,payment_ledger_id,sort_order")
                 .in("trip_id", activeIds),
             )
           : Promise.resolve([]),
@@ -129,7 +141,7 @@ export function TripBilling() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (supabase as any)
                 .from("approval_charge_advances")
-                .select("trip_id,trip_code,advance,balance")
+                .select("trip_id,trip_code,rental_id,advance,balance")
                 .in("trip_id", activeIds),
             )
           : Promise.resolve([]),
@@ -145,38 +157,40 @@ export function TripBilling() {
         const key = String(row.trip_id);
         expensesByTrip.set(key, [...(expensesByTrip.get(key) ?? []), row]);
       }
-      for (const row of activeApprovals) {
-        approvalByTrip.set(String(row.trip_id), row);
-      }
-      const activeBilling = active.map((row) => {
-        const id = String(row.id);
-        const income = incomeByTrip.get(id) ?? [];
-        const expenses = expensesByTrip.get(id) ?? [];
-        const totalIncome = income.reduce((sum, item) => sum + num(item.amount), 0);
-        const totalExpense = expenses.reduce((sum, item) => sum + num(item.amount), 0);
-        const branch = row.branch as Record<string, unknown> | null;
-        return toBillingTrip({
-          id: `active-${id}`,
-          trip_code: row.trip_code,
-          branch_id: row.branch_id,
-          branch_name: branch?.branch_name ?? null,
-          start_date: row.start_date,
-          end_date: row.end_date,
-          closed_at: row.updated_at,
-          total_income: totalIncome,
-          total_expense: totalExpense,
-          net_income: totalIncome - totalExpense,
-          snapshot: {
-            other_income: income,
-            expenses,
-            approval_charge_advance: approvalByTrip.get(id) ?? null,
-          },
-        });
-      });
+      for (const row of activeApprovals) approvalByTrip.set(String(row.trip_id), row);
+
       setRows(
-        activeBilling.sort((a, b) =>
-          String(b.end_date ?? b.closed_at).localeCompare(String(a.end_date ?? a.closed_at)),
-        ),
+        active
+          .map((row) => {
+            const id = String(row.id);
+            const income = incomeByTrip.get(id) ?? [];
+            const expenses = expensesByTrip.get(id) ?? [];
+            const totalIncome = income.reduce((sum, item) => sum + num(item.amount), 0);
+            const totalExpense = expenses.reduce((sum, item) => sum + num(item.amount), 0);
+            const branch = row.branch as Record<string, unknown> | null;
+            return toBillingTrip({
+              id,
+              trip_code: row.trip_code,
+              branch_id: row.branch_id,
+              branch_name: branch?.branch_name ?? null,
+              start_date: row.start_date,
+              end_date: row.end_date,
+              closed_at: row.updated_at,
+              posted_at: row.posted_at,
+              posted_journal_entry_id: row.posted_journal_entry_id,
+              total_income: totalIncome,
+              total_expense: totalExpense,
+              net_income: totalIncome - totalExpense,
+              snapshot: {
+                other_income: income,
+                expenses,
+                approval_charge_advance: approvalByTrip.get(id) ?? null,
+              },
+            });
+          })
+          .sort((a, b) =>
+            String(b.end_date ?? b.closed_at).localeCompare(String(a.end_date ?? a.closed_at)),
+          ),
       );
     } catch (error) {
       toast.error(
@@ -191,7 +205,7 @@ export function TripBilling() {
     void load();
     // `load` intentionally follows the filter values rather than being memoized.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, fromDate, toDate]);
+  }, [branchId, fromDate, toDate, postingStatus]);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -230,6 +244,19 @@ export function TripBilling() {
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
+        <Select
+          value={postingStatus}
+          onValueChange={(value) => setPostingStatus(value as PostingStatus)}
+        >
+          <SelectTrigger className="h-9 w-full sm:w-40">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="not_posted">Not Posted</SelectItem>
+            <SelectItem value="posted">Posted</SelectItem>
+            <SelectItem value="all">All</SelectItem>
+          </SelectContent>
+        </Select>
         <Select value={branchId} onValueChange={setBranchId}>
           <SelectTrigger className="h-9 w-full sm:w-52">
             <SelectValue placeholder="All Branches" />
@@ -269,7 +296,7 @@ export function TripBilling() {
       </div>
 
       <div className="overflow-x-auto rounded-xl border border-border bg-card">
-        <table className="w-full min-w-[760px] text-sm">
+        <table className="w-full min-w-[900px] text-sm">
           <thead>
             <tr className="border-b bg-muted/50 text-xs uppercase text-muted-foreground">
               <th className="px-4 py-3 text-left">Trip</th>
@@ -282,13 +309,14 @@ export function TripBilling() {
                 Total Expenditure
               </th>
               <th className="px-4 py-3 text-right">Net Income / Expenditure</th>
+              <th className="px-4 py-3 text-center">Status</th>
               <th className="px-4 py-3 text-center">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
             {visible.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-12 text-center text-muted-foreground">
+                <td colSpan={8} className="py-12 text-center text-muted-foreground">
                   {loading ? "Loading closed trips…" : "No closed trips found."}
                 </td>
               </tr>
@@ -310,10 +338,29 @@ export function TripBilling() {
                     {inr(row.net_income)}
                   </td>
                   <td className="px-4 py-3 text-center">
-                    <Button variant="outline" size="sm" onClick={() => setSelected(row)}>
-                      <Eye className="mr-1.5 size-3.5" />
-                      View
-                    </Button>
+                    <span
+                      className={
+                        row.posted_journal_entry_id
+                          ? "text-emerald-700 dark:text-emerald-400"
+                          : "text-amber-700 dark:text-amber-400"
+                      }
+                    >
+                      {row.posted_journal_entry_id ? "Posted" : "Not Posted"}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <div className="flex justify-center gap-2">
+                      <Button variant="outline" size="sm" onClick={() => setSelected(row)}>
+                        <Eye className="mr-1.5 size-3.5" />
+                        View
+                      </Button>
+                      {!row.posted_journal_entry_id ? (
+                        <Button size="sm" onClick={() => setPostingTrip(row)}>
+                          <BookOpenCheck className="mr-1.5 size-3.5" />
+                          Post Entry
+                        </Button>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -336,7 +383,7 @@ export function TripBilling() {
                 >
                   {inr(totals.net)}
                 </td>
-                <td />
+                <td colSpan={2} />
               </tr>
             </tfoot>
           )}
@@ -344,6 +391,14 @@ export function TripBilling() {
       </div>
 
       <BillingDetailsDialog trip={selected} onClose={() => setSelected(null)} />
+      <PostEntryDialog
+        trip={postingTrip}
+        onClose={() => setPostingTrip(null)}
+        onPosted={() => {
+          setPostingTrip(null);
+          void load();
+        }}
+      />
     </div>
   );
 }
@@ -359,7 +414,6 @@ function BillingDetailsDialog({
   const income = Array.isArray(snapshot.other_income) ? (snapshot.other_income as DetailRow[]) : [];
   const expenses = Array.isArray(snapshot.expenses) ? (snapshot.expenses as DetailRow[]) : [];
   const approvalAdvance = (snapshot.approval_charge_advance as DetailRow | null) ?? null;
-
   return (
     <Dialog open={Boolean(trip)} onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-h-[85vh] max-w-3xl overflow-y-auto">
@@ -425,8 +479,12 @@ function ReadOnlyLines({
               <tr className="border-b bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
                 <th className="px-3 py-2">Name</th>
                 <th className="px-3 py-2 text-right">Amount</th>
-                {approvalAdvance ? <th className="px-3 py-2 text-right">PAID AMOUNT</th> : null}
-                {approvalAdvance ? <th className="px-3 py-2 text-right">Balance</th> : null}
+                {approvalAdvance ? (
+                  <>
+                    <th className="px-3 py-2 text-right">PAID AMOUNT</th>
+                    <th className="px-3 py-2 text-right">Balance</th>
+                  </>
+                ) : null}
                 <th className="px-3 py-2">Note</th>
               </tr>
             </thead>
@@ -440,22 +498,22 @@ function ReadOnlyLines({
                     {inr(num(row.amount))}
                   </td>
                   {approvalAdvance ? (
-                    <td className="px-3 py-2 text-right text-blue-600">
-                      {String(row[nameKey] ?? "")
-                        .trim()
-                        .toLowerCase() === "hire charges"
-                        ? inr(num(approvalAdvance.advance))
-                        : "—"}
-                    </td>
-                  ) : null}
-                  {approvalAdvance ? (
-                    <td className="px-3 py-2 text-right text-emerald-600">
-                      {String(row[nameKey] ?? "")
-                        .trim()
-                        .toLowerCase() === "hire charges"
-                        ? inr(num(approvalAdvance.balance))
-                        : "—"}
-                    </td>
+                    <>
+                      <td className="px-3 py-2 text-right text-blue-600">
+                        {String(row[nameKey] ?? "")
+                          .trim()
+                          .toLowerCase() === "hire charges"
+                          ? inr(num(approvalAdvance.advance))
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right text-emerald-600">
+                        {String(row[nameKey] ?? "")
+                          .trim()
+                          .toLowerCase() === "hire charges"
+                          ? inr(num(approvalAdvance.balance))
+                          : "—"}
+                      </td>
+                    </>
                   ) : null}
                   <td className="px-3 py-2 text-muted-foreground">
                     {String(row.note ?? "") || "—"}
@@ -469,14 +527,306 @@ function ReadOnlyLines({
                 >
                   {inr(total)}
                 </td>
-                {approvalAdvance ? <td /> : null}
-                {approvalAdvance ? <td /> : null}
+                {approvalAdvance ? (
+                  <>
+                    <td />
+                    <td />
+                  </>
+                ) : null}
                 <td />
               </tr>
             </tbody>
           </table>
         </div>
       )}
+    </section>
+  );
+}
+
+type PostingLine = {
+  id?: string;
+  name: string;
+  amount: string;
+  note: string;
+  paymentLedgerId: string;
+  advance: string;
+};
+
+function PostEntryDialog({
+  trip,
+  onClose,
+  onPosted,
+}: {
+  trip: BillingTrip | null;
+  onClose: () => void;
+  onPosted: () => void;
+}) {
+  const { user } = useSession();
+  const [ledgers, setLedgers] = useState<PaymentLedger[]>([]);
+  const [income, setIncome] = useState<PostingLine[]>([]);
+  const [expenses, setExpenses] = useState<PostingLine[]>([]);
+  const [approval, setApproval] = useState<DetailRow | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!trip) return;
+    const incomeRows = Array.isArray(trip.snapshot.other_income)
+      ? (trip.snapshot.other_income as DetailRow[])
+      : [];
+    const expenseRows = Array.isArray(trip.snapshot.expenses)
+      ? (trip.snapshot.expenses as DetailRow[])
+      : [];
+    const approvalRow = (trip.snapshot.approval_charge_advance as DetailRow | null) ?? null;
+    setIncome(
+      incomeRows.map((row) => ({
+        id: String(row.id ?? ""),
+        name: String(row.income_name ?? ""),
+        amount: String(row.amount ?? ""),
+        note: String(row.note ?? ""),
+        paymentLedgerId: String(row.payment_ledger_id ?? ""),
+        advance: "",
+      })),
+    );
+    setExpenses(
+      expenseRows.map((row) => ({
+        id: String(row.id ?? ""),
+        name: String(row.expense_name ?? ""),
+        amount: String(row.amount ?? ""),
+        note: String(row.note ?? ""),
+        paymentLedgerId: String(row.payment_ledger_id ?? ""),
+        advance:
+          String(row.expense_name ?? "")
+            .trim()
+            .toLowerCase() === "hire charges"
+            ? String(approvalRow?.advance ?? "")
+            : "",
+      })),
+    );
+    setApproval(approvalRow);
+    setLoading(false);
+  }, [trip]);
+
+  useEffect(() => {
+    if (!trip?.branch_id) return;
+    let cancelled = false;
+    void (async () => {
+      // The generated Supabase types predate the Accounts tables.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data, error } = await (supabase as any)
+        .from("ledger_accounts")
+        .select("id,account_name,ledger_type")
+        .eq("branch_id", trip.branch_id)
+        .eq("is_active", true)
+        .in("ledger_type", ["cash", "bank"])
+        .order("account_name");
+      if (!cancelled) {
+        if (error) toast.error(`Could not load payment accounts: ${error.message}`);
+        setLedgers((data ?? []) as PaymentLedger[]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [trip?.branch_id]);
+
+  const updateLine = (kind: "income" | "expenses", index: number, patch: Partial<PostingLine>) => {
+    const setter = kind === "income" ? setIncome : setExpenses;
+    setter((current) =>
+      current.map((row, rowIndex) => (rowIndex === index ? { ...row, ...patch } : row)),
+    );
+  };
+  const hireRow = expenses.find((row) => row.name.trim().toLowerCase() === "hire charges");
+  const hireAmount = num(hireRow?.amount);
+  const advance = num(hireRow?.advance || approval?.advance);
+  const balance = Math.max(0, hireAmount - advance);
+
+  async function post() {
+    if (!trip || !user?.sessionToken) return;
+    setLoading(true);
+    try {
+      const entryId = await serverPostTripBilling({
+        data: {
+          sessionToken: user.sessionToken,
+          tripId: trip.id,
+          income: income.map((row) => ({
+            name: row.name,
+            amount: row.amount,
+            note: row.note,
+            payment_ledger_id: row.paymentLedgerId || null,
+            advance: null,
+          })),
+          expenses: expenses.map((row) => ({
+            name: row.name,
+            amount: row.amount,
+            note: row.note,
+            payment_ledger_id: row.paymentLedgerId || null,
+            advance:
+              row.name.trim().toLowerCase() === "hire charges"
+                ? row.advance || String(advance)
+                : null,
+          })),
+          approval: approval
+            ? {
+                trip_code: trip.trip_code,
+                rental_id: (approval.rental_id as string | null) ?? null,
+                advance,
+                balance,
+              }
+            : null,
+        },
+      });
+      toast.success(`Trip posted. Journal entry ${entryId} created.`);
+      onPosted();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : String(error));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Dialog open={Boolean(trip)} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="max-h-[90vh] max-w-5xl overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>{trip?.trip_code} — Post Entry</DialogTitle>
+          <DialogDescription>
+            Edit amounts and payment accounts. Posting saves the changes and creates one combined
+            journal entry. Regular Toll Charges are excluded.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-6">
+          <PostingSection
+            title="Other Income"
+            rows={income}
+            kind="income"
+            ledgers={ledgers}
+            onUpdate={updateLine}
+          />
+          <PostingSection
+            title="Expenses"
+            rows={expenses}
+            kind="expenses"
+            ledgers={ledgers}
+            onUpdate={updateLine}
+          />
+        </div>
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose} disabled={loading}>
+            Cancel
+          </Button>
+          <Button onClick={() => void post()} disabled={loading || !trip}>
+            {loading ? "Posting…" : "Post"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function PostingSection({
+  title,
+  rows,
+  kind,
+  ledgers,
+  onUpdate,
+}: {
+  title: string;
+  rows: PostingLine[];
+  kind: "income" | "expenses";
+  ledgers: PaymentLedger[];
+  onUpdate: (kind: "income" | "expenses", index: number, patch: Partial<PostingLine>) => void;
+}) {
+  const expense = kind === "expenses";
+  return (
+    <section className="space-y-3">
+      <h3
+        className={`text-sm font-semibold ${expense ? "text-red-700 dark:text-red-400" : "text-emerald-700 dark:text-emerald-400"}`}
+      >
+        {title}
+      </h3>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full min-w-[760px] text-sm">
+          <thead>
+            <tr className="border-b bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+              <th className="px-3 py-2">Name</th>
+              <th className="px-3 py-2">Amount</th>
+              {expense ? <th className="px-3 py-2">Hire Advance</th> : null}
+              <th className="px-3 py-2">Cash / Bank Account</th>
+              <th className="px-3 py-2">Note</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-border/60">
+            {rows
+              .filter((row) => row.name.trim())
+              .map((row, index) => {
+                const toll = row.name.trim().toLowerCase() === "toll charges";
+                const hire = row.name.trim().toLowerCase() === "hire charges";
+                return (
+                  <tr key={row.id || `${row.name}-${index}`}>
+                    <td className="px-3 py-2 font-medium">{row.name}</td>
+                    <td className="px-3 py-2">
+                      <Input
+                        className="h-9 w-32"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={row.amount}
+                        onChange={(event) => onUpdate(kind, index, { amount: event.target.value })}
+                      />
+                    </td>
+                    {expense ? (
+                      <td className="px-3 py-2">
+                        {hire ? (
+                          <Input
+                            className="h-9 w-32"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={row.advance}
+                            onChange={(event) =>
+                              onUpdate(kind, index, { advance: event.target.value })
+                            }
+                          />
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                    ) : null}
+                    <td className="px-3 py-2">
+                      {toll ? (
+                        <span className="text-xs text-muted-foreground">Not used in journal</span>
+                      ) : (
+                        <Select
+                          value={row.paymentLedgerId || "__none__"}
+                          onValueChange={(value) =>
+                            onUpdate(kind, index, {
+                              paymentLedgerId: value === "__none__" ? "" : value,
+                            })
+                          }
+                        >
+                          <SelectTrigger className="h-9 w-56">
+                            <SelectValue
+                              placeholder={hire ? "Advance account" : "Select account"}
+                            />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">Select account</SelectItem>
+                            {ledgers.map((ledger) => (
+                              <SelectItem key={ledger.id} value={ledger.id}>
+                                {ledger.account_name} ({ledger.ledger_type})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-muted-foreground">{row.note || "—"}</td>
+                  </tr>
+                );
+              })}
+          </tbody>
+        </table>
+      </div>
     </section>
   );
 }
