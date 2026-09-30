@@ -24,7 +24,17 @@ type Mapping = {
   vehicle_road_tax_expense_ledger_id?: string | null;
   fastag_ledger_id?: string | null;
   approval_charge_income_ledger_id?: string | null;
-  trip_expenditure_ledger_id?: string | null;
+  trip_fuel_expense_ledger_id?: string | null;
+  trip_toll_charges_ledger_id?: string | null;
+  trip_toll_cash_ledger_id?: string | null;
+  trip_driver_bata_ledger_id?: string | null;
+  trip_morning_exp_ledger_id?: string | null;
+  trip_night_exp_ledger_id?: string | null;
+  trip_sunday_ledger_id?: string | null;
+  trip_parking_charges_ledger_id?: string | null;
+  trip_dala_charges_ledger_id?: string | null;
+  trip_unloading_ledger_id?: string | null;
+  trip_hire_charges_ledger_id?: string | null;
   other_expenditure_ledger_id?: string | null;
   other_expenditure_payable_ledger_id?: string | null;
   other_income_ledger_id?: string | null;
@@ -44,7 +54,17 @@ const FIELDS = [
   ["vehicle_road_tax_expense_ledger_id", "Vehicle Road Tax Expense", "expenditure"],
   ["fastag_ledger_id", "Fastag Expenditure Account", "expenditure"],
   ["approval_charge_income_ledger_id", "Approval Charge Income", "income"],
-  ["trip_expenditure_ledger_id", "Trip Expenditure (All Trip Expenses)", "expenditure"],
+  ["trip_fuel_expense_ledger_id", "Fuel Expense", "expenditure"],
+  ["trip_toll_charges_ledger_id", "Toll Charges", "expenditure"],
+  ["trip_toll_cash_ledger_id", "Toll Charges (paid in cash)", "expenditure"],
+  ["trip_driver_bata_ledger_id", "Driver Bata", "expenditure"],
+  ["trip_morning_exp_ledger_id", "Morning Exp.", "expenditure"],
+  ["trip_night_exp_ledger_id", "Night Exp.", "expenditure"],
+  ["trip_sunday_ledger_id", "Sunday", "expenditure"],
+  ["trip_parking_charges_ledger_id", "Parking Charges", "expenditure"],
+  ["trip_dala_charges_ledger_id", "Dala Charges", "expenditure"],
+  ["trip_unloading_ledger_id", "Unloading", "expenditure"],
+  ["trip_hire_charges_ledger_id", "Hire Charges", "expenditure"],
   ["other_expenditure_ledger_id", "Other Expenditure", "expenditure"],
   ["other_expenditure_payable_ledger_id", "Other Expenditure Payable", "liability"],
   ["other_income_ledger_id", "Other Income", "income"],
@@ -159,10 +179,11 @@ export function TMSAccountsSettings() {
             expenditure ledgers. Driver Salary Payable, Vehicle Loan, and Vehicle EMI Payable use
             liability ledgers. Driver Advance, Insurance Advance, and Road Tax Advance use asset
             ledgers. Cash and bank payment accounts are selected at the time of payment. Approval
-            Charge Income is used for trip approval-charge income, and Trip Expenditure is the
-            common expenditure account for trip expenses. Other Expenditure and Other Expenditure
-            Payable are the defaults for general expenditure entries. Other Income and Other Income
-            Receivable are the defaults for general income entries.
+            Charge Income is used for trip approval-charge income. Each trip expenditure type has
+            its own expenditure ledger, including Fuel, Toll, Driver Bata, Hire Charges, and the
+            other trip-expense types below. Other Expenditure and Other Expenditure Payable are the
+            defaults for general expenditure entries. Other Income and Other Income Receivable are
+            the defaults for general income entries.
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map(([key, label, type]) => (
