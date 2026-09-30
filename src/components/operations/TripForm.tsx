@@ -7,6 +7,7 @@ import {
   Loader2,
   Plus,
   Printer,
+  RotateCcw,
   Save,
   Search,
   Trash2,
@@ -45,7 +46,7 @@ import { isDriverActive } from "@/lib/drivers";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
-import { serverSaveTripLines } from "@/lib/trip-actions";
+import { serverReopenMarkedTrip, serverSaveTripLines } from "@/lib/trip-actions";
 import { serverUpdateEwayBillPartB } from "@/lib/ewaybill-partb";
 import { logAction } from "@/lib/log-actions";
 import { ensureLocationForPin, ensureLocationsForPins } from "@/lib/ensure-location";
@@ -919,6 +920,36 @@ export function TripForm({
     onSaved();
   }
 
+  async function reopenTrip() {
+    if (!trip.id || isViewer || !tripClosed) return;
+    if (!window.confirm("Reopen this trip? You can edit it and close it again later.")) return;
+    if (!user?.sessionToken) {
+      toast.error("Your session has expired. Please sign in again before reopening this trip.");
+      return;
+    }
+    const { id: tripId } = trip;
+    const { error } = await (async () => {
+      try {
+        await serverReopenMarkedTrip({ data: { sessionToken: user.sessionToken, tripId } });
+        return { error: null };
+      } catch (err) {
+        return { error: err instanceof Error ? err : new Error("Could not reopen trip") };
+      }
+    })();
+    if (error) {
+      toast.error(error.message);
+      return;
+    }
+    setTrip((current) => ({ ...current, closed: false, reopened_at: new Date().toISOString() }));
+    logAction("reopened", "trip", {
+      entityId: trip.id,
+      entityLabel: trip.trip_code,
+      details: { closed: false },
+    });
+    toast.success("Trip reopened");
+    onSaved();
+  }
+
   // Ensure selected tab exists in TABS (e.g. basic user was on "summary")
   const activeTab = (TABS as readonly { id: string; label: string }[]).find((t) => t.id === tab)
     ? tab
@@ -972,9 +1003,10 @@ export function TripForm({
             Close Trip
           </Button>
         ) : trip.closed === true ? (
-          <Badge variant="outline" className="border-emerald-300 text-emerald-700">
-            Closed
-          </Badge>
+          <Button variant="outline" size="sm" onClick={() => void reopenTrip()}>
+            <RotateCcw className="size-4" />
+            Reopen Trip
+          </Button>
         ) : null}
         {!isViewer && (
           <Button onClick={() => saveTrip()} disabled={saving || tripClosed}>
