@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AlertTriangle, Loader2, Map, MapPin, Play, RefreshCw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,9 +31,9 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
   const ownTrip = trip.ownership === "own" && Boolean(trip.id);
   const closed = trip.closed === true;
 
-  async function loadLocation() {
+  async function loadLocation(silent = false) {
     if (!ownTrip || !trip.id) return;
-    setLoading(true);
+    if (!silent) setLoading(true);
     try {
       const [{ data: status, error: statusError }, trace] = await Promise.all([
         supabase.rpc("get_driver_gps_tracking_status" as never, { p_trip_id: trip.id } as never),
@@ -55,9 +55,17 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
         active,
       } : null);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not load GPS tracking");
-    } finally { setLoading(false); }
+      if (!silent) toast.error(error instanceof Error ? error.message : "Could not load GPS tracking");
+    } finally { if (!silent) setLoading(false); }
   }
+
+  useEffect(() => {
+    if (!locationOpen || !ownTrip || !trip.id) return;
+    const refreshTimer = window.setInterval(() => void loadLocation(true), 2_000);
+    return () => window.clearInterval(refreshTimer);
+    // loadLocation intentionally stays out of the dependency list; this timer is tied to the open trip dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationOpen, ownTrip, trip.id, user?.sessionToken]);
 
   async function setRecordingState(next: "start" | "stop", endExisting = false) {
     if (!trip.id) return;
