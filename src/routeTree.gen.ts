@@ -58,6 +58,7 @@ import { Route as DashboardPayrollRouteImport } from './routes/dashboard.payroll
 import { Route as EmployeesIndexRouteImport } from './routes/employees.index'
 import { Route as EmployeesDepartmentsRouteImport } from './routes/employees.departments'
 import { Route as EmployeesNewRouteImport } from './routes/employees.new'
+import { Route as LtmsBillingRouteImport } from './routes/ltms_.billing'
 import { Route as LtmsMastersRouteImport } from './routes/ltms_.masters'
 import { Route as LtmsOperationsRouteImport } from './routes/ltms_.operations'
 import { Route as LtmsReportsRouteImport } from './routes/ltms_.reports'
@@ -342,6 +343,11 @@ const EmployeesNewRoute = EmployeesNewRouteImport.update({
   path: '/new',
   getParentRoute: () => EmployeesRoute,
 } as any)
+const LtmsBillingRoute = LtmsBillingRouteImport.update({
+  id: '/ltms_/billing',
+  path: '/ltms/billing',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LtmsMastersRoute = LtmsMastersRouteImport.update({
   id: '/ltms_/masters',
   path: '/ltms/masters',
@@ -588,6 +594,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/employees/departments': typeof EmployeesDepartmentsRouteWithChildren
   '/employees/new': typeof EmployeesNewRoute
+  '/ltms/billing': typeof LtmsBillingRoute
   '/ltms/masters': typeof LtmsMastersRoute
   '/ltms/operations': typeof LtmsOperationsRoute
   '/ltms/reports': typeof LtmsReportsRoute
@@ -669,6 +676,7 @@ export interface FileRoutesByTo {
   '/dashboard/hierarchy': typeof DashboardHierarchyRoute
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/employees/new': typeof EmployeesNewRoute
+  '/ltms/billing': typeof LtmsBillingRoute
   '/ltms/masters': typeof LtmsMastersRoute
   '/ltms/operations': typeof LtmsOperationsRoute
   '/ltms/reports': typeof LtmsReportsRoute
@@ -759,6 +767,7 @@ export interface FileRoutesById {
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/employees/departments': typeof EmployeesDepartmentsRouteWithChildren
   '/employees/new': typeof EmployeesNewRoute
+  '/ltms_/billing': typeof LtmsBillingRoute
   '/ltms_/masters': typeof LtmsMastersRoute
   '/ltms_/operations': typeof LtmsOperationsRoute
   '/ltms_/reports': typeof LtmsReportsRoute
@@ -850,6 +859,7 @@ export interface FileRouteTypes {
     | '/dashboard/payroll'
     | '/employees/departments'
     | '/employees/new'
+    | '/ltms/billing'
     | '/ltms/masters'
     | '/ltms/operations'
     | '/ltms/reports'
@@ -931,6 +941,7 @@ export interface FileRouteTypes {
     | '/dashboard/hierarchy'
     | '/dashboard/payroll'
     | '/employees/new'
+    | '/ltms/billing'
     | '/ltms/masters'
     | '/ltms/operations'
     | '/ltms/reports'
@@ -1020,6 +1031,7 @@ export interface FileRouteTypes {
     | '/dashboard/payroll'
     | '/employees/departments'
     | '/employees/new'
+    | '/ltms_/billing'
     | '/ltms_/masters'
     | '/ltms_/operations'
     | '/ltms_/reports'
@@ -1093,6 +1105,7 @@ export interface RootRouteChildren {
   ApiNotifyExpiryRoute: typeof ApiNotifyExpiryRoute
   ApiNotifyOpenTripsRoute: typeof ApiNotifyOpenTripsRoute
   ApiPixabayVideosRoute: typeof ApiPixabayVideosRoute
+  LtmsBillingRoute: typeof LtmsBillingRoute
   LtmsMastersRoute: typeof LtmsMastersRoute
   LtmsOperationsRoute: typeof LtmsOperationsRoute
   LtmsReportsRoute: typeof LtmsReportsRoute
@@ -1455,6 +1468,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/employees/new'
       preLoaderRoute: typeof EmployeesNewRouteImport
       parentRoute: typeof EmployeesRoute
+    }
+    '/ltms_/billing': {
+      id: '/ltms_/billing'
+      path: '/ltms/billing'
+      fullPath: '/ltms/billing'
+      preLoaderRoute: typeof LtmsBillingRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/ltms_/masters': {
       id: '/ltms_/masters'
@@ -1927,6 +1947,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiNotifyExpiryRoute: ApiNotifyExpiryRoute,
   ApiNotifyOpenTripsRoute: ApiNotifyOpenTripsRoute,
   ApiPixabayVideosRoute: ApiPixabayVideosRoute,
+  LtmsBillingRoute: LtmsBillingRoute,
   LtmsMastersRoute: LtmsMastersRoute,
   LtmsOperationsRoute: LtmsOperationsRoute,
   LtmsReportsRoute: LtmsReportsRoute,

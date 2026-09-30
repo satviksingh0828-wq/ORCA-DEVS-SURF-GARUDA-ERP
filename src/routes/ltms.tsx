@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { ClipboardList, Database, DollarSign, FileText } from "lucide-react";
+import { ClipboardList, Database, DollarSign, FileText, ReceiptText } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { WorkspaceModulePage } from "@/components/WorkspaceModulePage";
 
@@ -25,6 +25,13 @@ export const Route = createFileRoute("/ltms")({
             desc: "ADMIN MIS and management reports",
             icon: FileText,
             to: "/ltms/reports",
+          },
+          {
+            key: "billing",
+            label: "Billing",
+            desc: "Closed-trip income and expenditure",
+            icon: ReceiptText,
+            to: "/ltms/billing",
           },
           {
             key: "finance",
