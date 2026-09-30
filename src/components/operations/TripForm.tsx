@@ -1249,6 +1249,8 @@ export function TripForm({
               branchId={trip.branch_id}
               vehicleId={trip.vehicle_id}
               driverId={trip.driver_id}
+              ownership={trip.ownership}
+              thirdPartyVehicleNumber={trip.third_party_vehicle_number}
               requireTripId={requireTripId}
               tripLocked={Boolean(trip.part_b_locked_at)}
               tripClosed={tripClosed}
@@ -1453,6 +1455,8 @@ function MovementTab({
   branchId,
   vehicleId,
   driverId,
+  ownership,
+  thirdPartyVehicleNumber,
   requireTripId,
   isViewer = false,
   tripLocked = false,
@@ -1463,6 +1467,8 @@ function MovementTab({
   branchId: string | null;
   vehicleId: string | null;
   driverId: string | null;
+  ownership: string;
+  thirdPartyVehicleNumber: string;
   requireTripId: () => Promise<string | null>;
   isViewer?: boolean;
   tripLocked?: boolean;
@@ -1631,7 +1637,12 @@ function MovementTab({
     const pin = m.part_b_from_pin_code || m.from_pin_code || "";
     setUpdating(m);
     setForm({
-      vehicleNo: m.part_b_vehicle_no || m.vehicle?.registration_number || "",
+      vehicleNo:
+        m.part_b_vehicle_no ||
+        (ownership === "third_party"
+          ? thirdPartyVehicleNumber
+          : m.vehicle?.registration_number || "") ||
+        "",
       fromPin: pin,
       fromPlace:
         m.part_b_from_place ||
@@ -1696,7 +1707,13 @@ function MovementTab({
           m.from_details?.legal_name ||
           ""
         ).trim();
-        const vehicleNo = (m.vehicle?.registration_number || m.part_b_vehicle_no || "").trim();
+        const vehicleNo = (
+          m.part_b_vehicle_no ||
+          (ownership === "third_party"
+            ? thirdPartyVehicleNumber
+            : m.vehicle?.registration_number || "") ||
+          ""
+        ).trim();
         if (!vehicleNo || !fromPlace || !/^\d{6}$/.test(fromPin)) {
           failed++;
           messages.push(`${m.consignment_number}: missing Vehicle, From Place or From PIN`);
