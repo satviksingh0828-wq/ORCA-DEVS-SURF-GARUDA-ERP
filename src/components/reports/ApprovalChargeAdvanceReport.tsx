@@ -10,9 +10,9 @@ import { downloadCsv, toCsv } from "@/lib/csv";
 import { financialYearRange } from "@/lib/financial-year";
 import { tripCodesForBranch, useReportFilters } from "@/lib/report-filters";
 
-interface TransporterRow {
-  transporter_id: string;
-  transporter_name: string;
+interface RentalRow {
+  rental_id: string;
+  rental_name: string;
   total_paid: number;
   total_balance: number;
   trip_count: number;
@@ -22,7 +22,7 @@ interface AdvanceLog {
   id: string;
   trip_id: string;
   trip_code: string | null;
-  transporter_id: string;
+  rental_id: string | null;
   created_at: string;
   advance: number;
   balance: number;
@@ -57,7 +57,7 @@ export function ApprovalChargeAdvanceReport() {
   const [startDate, setStartDate] = useState(defaults.start);
   const [endDate, setEndDate] = useState(defaults.end);
   const [month, setMonth] = useState(defaults.start.slice(0, 7));
-  const [rows, setRows] = useState<TransporterRow[]>([]);
+  const [rows, setRows] = useState<RentalRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -79,14 +79,14 @@ export function ApprovalChargeAdvanceReport() {
     setLoading(true);
     try {
       const { start, endExclusive } = range();
-      const transporters = await fetchAll<Record<string, unknown>>(() =>
-        supabase.from("transporters").select("id,transporter_name").order("transporter_name"),
+      const rentals = await fetchAll<Record<string, unknown>>(() =>
+        supabase.from("rentals").select("id,rental_name").order("rental_name"),
       );
       const branchTripCodes = await tripCodesForBranch(branchId);
       const allLogs = await fetchAll<Record<string, unknown>>(() =>
         supabase
           .from("approval_charge_advances" as never)
-          .select("transporter_id,advance,balance,created_at,trip_code")
+          .select("rental_id,advance,balance,created_at,trip_code")
           .gte("created_at", start)
           .lt("created_at", endExclusive),
       );
@@ -95,21 +95,21 @@ export function ApprovalChargeAdvanceReport() {
         : allLogs;
 
       const agg: Record<string, { paid: number; balance: number; trips: number }> = {};
-      transporters.forEach((t) => {
+      rentals.forEach((t) => {
         agg[String(t.id)] = { paid: 0, balance: 0, trips: 0 };
       });
       logs.forEach((l) => {
-        const transporterId = String(l.transporter_id ?? "");
-        if (!transporterId || !agg[transporterId]) return;
-        agg[transporterId].paid += Number(l.advance ?? 0);
-        agg[transporterId].balance += Number(l.balance ?? 0);
-        agg[transporterId].trips += 1;
+        const rentalId = String(l.rental_id ?? "");
+        if (!rentalId || !agg[rentalId]) return;
+        agg[rentalId].paid += Number(l.advance ?? 0);
+        agg[rentalId].balance += Number(l.balance ?? 0);
+        agg[rentalId].trips += 1;
       });
 
       setRows(
-        transporters.map((t) => ({
-          transporter_id: String(t.id),
-          transporter_name: String(t.transporter_name ?? "—"),
+        rentals.map((t) => ({
+          rental_id: String(t.id),
+          rental_name: String(t.rental_name ?? "—"),
           total_paid: agg[String(t.id)].paid,
           total_balance: agg[String(t.id)].balance,
           trip_count: agg[String(t.id)].trips,
@@ -123,9 +123,9 @@ export function ApprovalChargeAdvanceReport() {
     }
   }
 
-  async function loadHistory(transporterId: string) {
+  async function loadHistory(rentalId: string) {
     setLoadingHistory(true);
-    setSelectedId(transporterId);
+    setSelectedId(rentalId);
     setSelectedTripIds([]);
     setPayAmount("");
     try {
@@ -133,7 +133,7 @@ export function ApprovalChargeAdvanceReport() {
       const { data, error } = await supabase
         .from("approval_charge_advances" as never)
         .select("*")
-        .eq("transporter_id", transporterId)
+        .eq("rental_id", rentalId)
         .gte("created_at", start)
         .lt("created_at", endExclusive)
         .order("created_at", { ascending: false });
@@ -157,7 +157,7 @@ export function ApprovalChargeAdvanceReport() {
 
   const filtered = useMemo(() => {
     const s = search.toLowerCase();
-    return rows.filter((r) => (r.transporter_name ?? "").toLowerCase().includes(s));
+    return rows.filter((r) => (r.rental_name ?? "").toLowerCase().includes(s));
   }, [rows, search]);
   const visible = filtered.filter((r) => r.trip_count > 0);
   const payableHistory = history.filter((h) => Number(h.balance ?? 0) > 0);
@@ -220,12 +220,12 @@ export function ApprovalChargeAdvanceReport() {
   function handleExport() {
     const csv = toCsv(
       visible.map((r) => ({
-        Transporter: r.transporter_name,
+        Rental: r.rental_name,
         Trips: r.trip_count,
         "PAID AMOUNT (₹)": r.total_paid,
         "Balance (₹)": r.total_balance,
       })),
-      ["Transporter", "Trips", "PAID AMOUNT (₹)", "Balance (₹)"],
+      ["Rental", "Trips", "PAID AMOUNT (₹)", "Balance (₹)"],
     );
     const period =
       financialYear !== "none"
@@ -240,7 +240,7 @@ export function ApprovalChargeAdvanceReport() {
         <div className="relative w-full sm:w-56">
           <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
           <Input
-            placeholder="Search transporter…"
+            placeholder="Search rental…"
             className="h-9 pl-9"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -300,7 +300,7 @@ export function ApprovalChargeAdvanceReport() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-3">Transporter</th>
+                <th className="px-4 py-3">Rental</th>
                 <th className="px-4 py-3 text-right">Trips</th>
                 <th className="px-4 py-3 text-right">PAID AMOUNT</th>
                 <th className="px-4 py-3 text-right">Balance</th>
@@ -324,11 +324,11 @@ export function ApprovalChargeAdvanceReport() {
               ) : (
                 <>
                   {visible.map((row) => {
-                    const isExpanded = selectedId === row.transporter_id;
+                    const isExpanded = selectedId === row.rental_id;
                     return (
-                      <Fragment key={row.transporter_id}>
+                      <Fragment key={row.rental_id}>
                         <tr className="transition-colors hover:bg-muted/30">
-                          <td className="px-4 py-3 font-medium">{row.transporter_name}</td>
+                          <td className="px-4 py-3 font-medium">{row.rental_name}</td>
                           <td className="px-4 py-3 text-right text-muted-foreground">
                             {row.trip_count}
                           </td>
@@ -344,7 +344,7 @@ export function ApprovalChargeAdvanceReport() {
                               size="sm"
                               className="h-8 gap-1 text-xs"
                               onClick={() =>
-                                isExpanded ? setSelectedId(null) : loadHistory(row.transporter_id)
+                                isExpanded ? setSelectedId(null) : loadHistory(row.rental_id)
                               }
                             >
                               {isExpanded ? (
