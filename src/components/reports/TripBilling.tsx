@@ -4,8 +4,16 @@ import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
 import { inr, num } from "@/lib/trip-calc";
+import { useBranches } from "@/lib/use-branches";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +26,7 @@ type DetailRow = Record<string, unknown>;
 type BillingTrip = {
   id: string;
   trip_code: string;
+  branch_id: string | null;
   branch_name: string | null;
   start_date: string | null;
   end_date: string | null;
@@ -45,6 +54,7 @@ function toBillingTrip(row: Record<string, unknown>): BillingTrip {
   return {
     id: String(row.id),
     trip_code: String(row.trip_code ?? "—"),
+    branch_id: (row.branch_id as string | null) ?? null,
     branch_name: (row.branch_name as string | null) ?? null,
     start_date: (row.start_date as string | null) ?? null,
     end_date: (row.end_date as string | null) ?? null,
@@ -56,24 +66,101 @@ function toBillingTrip(row: Record<string, unknown>): BillingTrip {
   };
 }
 
+function currentMonthRange() {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, "0");
+  return {
+    from: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`,
+    to: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate())}`,
+  };
+}
+
 export function TripBilling() {
+  const branches = useBranches();
+  const defaults = currentMonthRange();
   const [rows, setRows] = useState<BillingTrip[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<BillingTrip | null>(null);
+  const [branchId, setBranchId] = useState("all");
+  const [fromDate, setFromDate] = useState(defaults.from);
+  const [toDate, setToDate] = useState(defaults.to);
 
   async function load() {
     setLoading(true);
     try {
-      const data = await fetchAll<Record<string, unknown>>(() =>
-        supabase
-          .from("closed_trips")
-          .select(
-            "id,trip_code,branch_name,start_date,end_date,closed_at,total_income,total_expense,net_income,snapshot",
-          )
-          .order("closed_at", { ascending: false }),
+      // The generated Supabase types predate the `closed` column migration.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let activeQuery = (supabase as any)
+        .from("trips")
+        .select(
+          "id,trip_code,branch_id,start_date,end_date,updated_at,branch:branches(branch_name)",
+        )
+        .eq("closed", true)
+        .gte("end_date", fromDate)
+        .lte("end_date", toDate)
+        .order("end_date", { ascending: false });
+      if (branchId !== "all") activeQuery = activeQuery.eq("branch_id", branchId);
+
+      const active = await fetchAll<Record<string, unknown>>(() => activeQuery);
+
+      const activeIds = active.map((row) => String(row.id));
+      const [activeIncome, activeExpenses] = await Promise.all([
+        activeIds.length
+          ? fetchAll<Record<string, unknown>>(() =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (supabase as any)
+                .from("trip_other_income")
+                .select("id,trip_id,income_name,amount,note")
+                .in("trip_id", activeIds),
+            )
+          : Promise.resolve([]),
+        activeIds.length
+          ? fetchAll<Record<string, unknown>>(() =>
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              (supabase as any)
+                .from("trip_expenses")
+                .select("id,trip_id,expense_name,amount,note")
+                .in("trip_id", activeIds),
+            )
+          : Promise.resolve([]),
+      ]);
+      const incomeByTrip = new Map<string, Record<string, unknown>[]>();
+      const expensesByTrip = new Map<string, Record<string, unknown>[]>();
+      for (const row of activeIncome) {
+        const key = String(row.trip_id);
+        incomeByTrip.set(key, [...(incomeByTrip.get(key) ?? []), row]);
+      }
+      for (const row of activeExpenses) {
+        const key = String(row.trip_id);
+        expensesByTrip.set(key, [...(expensesByTrip.get(key) ?? []), row]);
+      }
+      const activeBilling = active.map((row) => {
+        const id = String(row.id);
+        const income = incomeByTrip.get(id) ?? [];
+        const expenses = expensesByTrip.get(id) ?? [];
+        const totalIncome = income.reduce((sum, item) => sum + num(item.amount), 0);
+        const totalExpense = expenses.reduce((sum, item) => sum + num(item.amount), 0);
+        const branch = row.branch as Record<string, unknown> | null;
+        return toBillingTrip({
+          id: `active-${id}`,
+          trip_code: row.trip_code,
+          branch_id: row.branch_id,
+          branch_name: branch?.branch_name ?? null,
+          start_date: row.start_date,
+          end_date: row.end_date,
+          closed_at: row.updated_at,
+          total_income: totalIncome,
+          total_expense: totalExpense,
+          net_income: totalIncome - totalExpense,
+          snapshot: { other_income: income, expenses },
+        });
+      });
+      setRows(
+        activeBilling.sort((a, b) =>
+          String(b.end_date ?? b.closed_at).localeCompare(String(a.end_date ?? a.closed_at)),
+        ),
       );
-      setRows(data.map(toBillingTrip));
     } catch (error) {
       toast.error(
         `Could not load trip billing: ${error instanceof Error ? error.message : String(error)}`,
@@ -85,7 +172,9 @@ export function TripBilling() {
 
   useEffect(() => {
     void load();
-  }, []);
+    // `load` intentionally follows the filter values rather than being memoized.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [branchId, fromDate, toDate]);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -124,6 +213,33 @@ export function TripBilling() {
             onChange={(event) => setSearch(event.target.value)}
           />
         </div>
+        <Select value={branchId} onValueChange={setBranchId}>
+          <SelectTrigger className="h-9 w-full sm:w-52">
+            <SelectValue placeholder="All Branches" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Branches</SelectItem>
+            {branches.map((branch) => (
+              <SelectItem key={branch.id} value={branch.id}>
+                {branch.branch_name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Input
+          aria-label="From date"
+          className="h-9 w-full sm:w-40"
+          type="date"
+          value={fromDate}
+          onChange={(event) => setFromDate(event.target.value)}
+        />
+        <Input
+          aria-label="To date"
+          className="h-9 w-full sm:w-40"
+          type="date"
+          value={toDate}
+          onChange={(event) => setToDate(event.target.value)}
+        />
         <Button
           className="ml-auto h-9"
           variant="ghost"
