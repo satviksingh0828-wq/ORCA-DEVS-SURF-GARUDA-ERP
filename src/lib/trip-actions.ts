@@ -235,3 +235,62 @@ export const serverPostTripBilling = createServerFn({ method: "POST" })
     if (error || !entryId) throw new Error(error?.message ?? "Could not post trip billing");
     return String(entryId);
   });
+
+export const serverSettleRentalBalance = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      sessionToken: z.string().min(1),
+      advanceId: z.string().uuid(),
+      paymentLedgerId: z.string().uuid(),
+    }),
+  )
+  .handler(async ({ data }): Promise<string | null> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+    const session = await verifyAppToken(data.sessionToken);
+    if (!session) throw new Error("Your session has expired. Please sign in again.");
+
+    const { data: user, error: userError } = await db
+      .from("app_users")
+      .select("id,role,is_active")
+      .eq("id", session.uid)
+      .maybeSingle();
+    if (userError || !user?.is_active || user.role !== session.role || user.role === "viewer") {
+      throw new Error("Forbidden: active editor access is required.");
+    }
+
+    const { data: advance, error: advanceError } = await db
+      .from("approval_charge_advances")
+      .select("trip_id")
+      .eq("id", data.advanceId)
+      .maybeSingle();
+    if (advanceError || !advance) throw new Error("Rental advance was not found");
+
+    const { data: trip, error: tripError } = await db
+      .from("trips")
+      .select("branch_id")
+      .eq("id", advance.trip_id)
+      .maybeSingle();
+    if (tripError || !trip) throw new Error("Live trip was not found");
+    if (user.role === "basic") {
+      const { data: accessRows, error: accessError } = await db
+        .from("user_branch_access")
+        .select("branch_id")
+        .eq("user_id", session.uid);
+      if (
+        accessError ||
+        !accessRows?.some((row: { branch_id: string }) => row.branch_id === trip.branch_id)
+      ) {
+        throw new Error("Forbidden: your account does not have access to this trip.");
+      }
+    }
+
+    const { data: entryId, error } = await db.rpc("settle_rental_balance_atomic", {
+      p_advance_id: data.advanceId,
+      p_payment_ledger_id: data.paymentLedgerId,
+      p_user_id: session.uid,
+    });
+    if (error) throw new Error(error.message);
+    return entryId ? String(entryId) : null;
+  });

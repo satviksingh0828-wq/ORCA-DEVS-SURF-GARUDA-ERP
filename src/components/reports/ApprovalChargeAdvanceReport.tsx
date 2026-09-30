@@ -5,10 +5,19 @@ import { supabase } from "@/integrations/supabase/client";
 import { inr } from "@/lib/trip-calc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { fetchAll } from "@/lib/fetch-all";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { financialYearRange } from "@/lib/financial-year";
-import { tripCodesForBranch, useReportFilters } from "@/lib/report-filters";
+import { useReportFilters } from "@/lib/report-filters";
+import { useSession } from "@/lib/session";
+import { serverSettleRentalBalance } from "@/lib/trip-actions";
 
 interface RentalRow {
   rental_id: string;
@@ -26,6 +35,16 @@ interface AdvanceLog {
   created_at: string;
   advance: number;
   balance: number;
+  branch_id: string | null;
+  posted_journal_entry_id: string | null;
+  payment_ledger_id: string | null;
+}
+
+interface PaymentLedger {
+  id: string;
+  branch_id: string;
+  account_name: string;
+  ledger_type: string;
 }
 
 function formatDateInput(date: Date) {
@@ -53,6 +72,7 @@ function logTripLabel(log: AdvanceLog) {
 
 export function ApprovalChargeAdvanceReport() {
   const { branchId, financialYear } = useReportFilters();
+  const { user } = useSession();
   const defaults = currentMonthRange();
   const [startDate, setStartDate] = useState(defaults.start);
   const [endDate, setEndDate] = useState(defaults.end);
@@ -66,6 +86,9 @@ export function ApprovalChargeAdvanceReport() {
   const [selectedTripIds, setSelectedTripIds] = useState<string[]>([]);
   const [payAmount, setPayAmount] = useState("");
   const [paying, setPaying] = useState(false);
+  const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
+  const [accountSelections, setAccountSelections] = useState<Record<string, string>>({});
+  const [savingAccountId, setSavingAccountId] = useState<string | null>(null);
 
   function range() {
     if (financialYear !== "none") {
@@ -79,20 +102,71 @@ export function ApprovalChargeAdvanceReport() {
     setLoading(true);
     try {
       const { start, endExclusive } = range();
-      const rentals = await fetchAll<Record<string, unknown>>(() =>
-        supabase.from("rentals").select("id,rental_name").order("rental_name"),
+      let liveTripsQuery = supabase
+        .from("trips")
+        .select("id,trip_code,rental_id,branch_id,posted_journal_entry_id")
+        .not("rental_id", "is", null);
+      if (branchId !== "all") liveTripsQuery = liveTripsQuery.eq("branch_id", branchId);
+      const liveTrips = await fetchAll<Record<string, unknown>>(() => liveTripsQuery);
+      const liveTripIds = liveTrips.map((trip) => String(trip.id));
+      const rentalIds = Array.from(
+        new Set(liveTrips.map((trip) => String(trip.rental_id ?? "")).filter(Boolean)),
       );
-      const branchTripCodes = await tripCodesForBranch(branchId);
-      const allLogs = await fetchAll<Record<string, unknown>>(() =>
-        supabase
-          .from("approval_charge_advances" as never)
-          .select("rental_id,advance,balance,created_at,trip_code")
-          .gte("created_at", start)
-          .lt("created_at", endExclusive),
+      const [rentals, allLogs, hireRows, ledgers] = await Promise.all([
+        rentalIds.length
+          ? fetchAll<Record<string, unknown>>(() =>
+              supabase.from("rentals").select("id,rental_name").in("id", rentalIds),
+            )
+          : Promise.resolve([]),
+        liveTripIds.length
+          ? fetchAll<Record<string, unknown>>(() =>
+              supabase
+                .from("approval_charge_advances" as never)
+                .select("id,trip_id,trip_code,rental_id,advance,balance,created_at")
+                .in("trip_id", liveTripIds)
+                .gte("created_at", start)
+                .lt("created_at", endExclusive),
+            )
+          : Promise.resolve([]),
+        liveTripIds.length
+          ? fetchAll<Record<string, unknown>>(() =>
+              supabase
+                .from("trip_expenses" as never)
+                .select("trip_id,expense_name,payment_ledger_id")
+                .in("trip_id", liveTripIds),
+            )
+          : Promise.resolve([]),
+        fetchAll<PaymentLedger>(() =>
+          supabase
+            .from("ledger_accounts" as never)
+            .select("id,branch_id,account_name,ledger_type")
+            .eq("is_active", true)
+            .in("ledger_type", ["cash", "bank"])
+            .order("account_name"),
+        ),
+      ]);
+      setPaymentLedgers(ledgers);
+      const tripById = new Map(liveTrips.map((trip) => [String(trip.id), trip]));
+      const hireAccountByTrip = new Map(
+        hireRows
+          .filter(
+            (row) =>
+              String(row.expense_name ?? "")
+                .trim()
+                .toLowerCase() === "hire charges",
+          )
+          .map((row) => [String(row.trip_id), String(row.payment_ledger_id ?? "")]),
       );
-      const logs = branchTripCodes
-        ? allLogs.filter((log) => branchTripCodes.has(String(log.trip_code ?? "")))
-        : allLogs;
+      const logs = allLogs.map((log) => {
+        const trip = tripById.get(String(log.trip_id));
+        return {
+          ...log,
+          rental_id: String(log.rental_id ?? trip?.rental_id ?? "") || null,
+          branch_id: String(trip?.branch_id ?? "") || null,
+          posted_journal_entry_id: String(trip?.posted_journal_entry_id ?? "") || null,
+          payment_ledger_id: hireAccountByTrip.get(String(log.trip_id)) || null,
+        };
+      });
 
       const agg: Record<string, { paid: number; balance: number; trips: number }> = {};
       rentals.forEach((t) => {
@@ -110,10 +184,15 @@ export function ApprovalChargeAdvanceReport() {
         rentals.map((t) => ({
           rental_id: String(t.id),
           rental_name: String(t.rental_name ?? "—"),
-          total_paid: agg[String(t.id)].paid,
-          total_balance: agg[String(t.id)].balance,
-          trip_count: agg[String(t.id)].trips,
+          total_paid: agg[String(t.id)]?.paid ?? 0,
+          total_balance: agg[String(t.id)]?.balance ?? 0,
+          trip_count: agg[String(t.id)]?.trips ?? 0,
         })),
+      );
+      setAccountSelections(
+        Object.fromEntries(
+          logs.map((log) => [String(log.id), String(log.payment_ledger_id ?? "")]),
+        ),
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -130,19 +209,60 @@ export function ApprovalChargeAdvanceReport() {
     setPayAmount("");
     try {
       const { start, endExclusive } = range();
-      const { data, error } = await supabase
-        .from("approval_charge_advances" as never)
-        .select("*")
-        .eq("rental_id", rentalId)
-        .gte("created_at", start)
-        .lt("created_at", endExclusive)
-        .order("created_at", { ascending: false });
-      if (error) throw error;
-      const branchTripCodes = await tripCodesForBranch(branchId);
-      const rows = (data as unknown as AdvanceLog[]) ?? [];
-      setHistory(
-        branchTripCodes ? rows.filter((log) => branchTripCodes.has(log.trip_code ?? "")) : rows,
+      let liveTripsQuery = supabase
+        .from("trips")
+        .select("id,trip_code,rental_id,branch_id,posted_journal_entry_id")
+        .eq("rental_id", rentalId);
+      if (branchId !== "all") liveTripsQuery = liveTripsQuery.eq("branch_id", branchId);
+      const liveTrips = await fetchAll<Record<string, unknown>>(() => liveTripsQuery);
+      const liveTripIds = liveTrips.map((trip) => String(trip.id));
+      if (!liveTripIds.length) {
+        setHistory([]);
+        return;
+      }
+      const [advanceRows, hireRows] = await Promise.all([
+        fetchAll<Record<string, unknown>>(() =>
+          supabase
+            .from("approval_charge_advances" as never)
+            .select("*")
+            .in("trip_id", liveTripIds)
+            .gte("created_at", start)
+            .lt("created_at", endExclusive)
+            .order("created_at", { ascending: false }),
+        ),
+        fetchAll<Record<string, unknown>>(() =>
+          supabase
+            .from("trip_expenses" as never)
+            .select("trip_id,expense_name,payment_ledger_id")
+            .in("trip_id", liveTripIds),
+        ),
+      ]);
+      const tripById = new Map(liveTrips.map((trip) => [String(trip.id), trip]));
+      const hireAccountByTrip = new Map(
+        hireRows
+          .filter(
+            (row) =>
+              String(row.expense_name ?? "")
+                .trim()
+                .toLowerCase() === "hire charges",
+          )
+          .map((row) => [String(row.trip_id), String(row.payment_ledger_id ?? "")]),
       );
+      const rows = advanceRows.map((row) => {
+        const trip = tripById.get(String(row.trip_id));
+        return {
+          ...row,
+          rental_id: String(row.rental_id ?? trip?.rental_id ?? "") || null,
+          branch_id: String(trip?.branch_id ?? "") || null,
+          posted_journal_entry_id: String(trip?.posted_journal_entry_id ?? "") || null,
+          payment_ledger_id: hireAccountByTrip.get(String(row.trip_id)) || null,
+        } as AdvanceLog;
+      });
+      setHistory(rows);
+      setAccountSelections((current) => ({
+        ...current,
+        ...Object.fromEntries(rows.map((row) => [row.id, row.payment_ledger_id ?? ""])),
+      }));
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
       toast.error("Failed to load history: " + message);
@@ -177,6 +297,38 @@ export function ApprovalChargeAdvanceReport() {
       return;
     }
     setSelectedTripIds(payableHistory.map((h) => h.id));
+  }
+
+  async function saveAccount(log: AdvanceLog) {
+    const paymentLedgerId = accountSelections[log.id] ?? "";
+    if (!log.posted_journal_entry_id) {
+      toast.error("Post the trip in Trip Billing before changing its Cash / Bank Account");
+      return;
+    }
+    if (!paymentLedgerId) return toast.error("Select a Cash / Bank Account first");
+    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+
+    setSavingAccountId(log.id);
+    try {
+      const entryId = await serverSettleRentalBalance({
+        data: {
+          sessionToken: user.sessionToken,
+          advanceId: log.id,
+          paymentLedgerId,
+        },
+      });
+      toast.success(
+        entryId
+          ? "Rental account updated and remaining balance journal posted"
+          : "Rental account updated; no balance remained to post",
+      );
+      await loadData();
+      if (selectedId) await loadHistory(selectedId);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not update rental account");
+    } finally {
+      setSavingAccountId(null);
+    }
   }
 
   async function handlePay() {
@@ -415,6 +567,10 @@ export function ApprovalChargeAdvanceReport() {
                                           PAID AMOUNT
                                         </th>
                                         <th className="pb-2 text-right font-semibold">Balance</th>
+                                        <th className="pb-2 text-left font-semibold">
+                                          Cash / Bank Account
+                                        </th>
+                                        <th className="pb-2 text-right font-semibold">Action</th>
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border/50">
@@ -439,6 +595,54 @@ export function ApprovalChargeAdvanceReport() {
                                             </td>
                                             <td className="py-2 text-right text-emerald-600">
                                               {balance > 0 ? inr(balance) : "—"}
+                                            </td>
+                                            <td className="py-2 pr-2">
+                                              <Select
+                                                value={accountSelections[h.id] || "none"}
+                                                onValueChange={(value) =>
+                                                  setAccountSelections((current) => ({
+                                                    ...current,
+                                                    [h.id]: value === "none" ? "" : value,
+                                                  }))
+                                                }
+                                                disabled={!h.posted_journal_entry_id}
+                                              >
+                                                <SelectTrigger className="h-8 min-w-44 text-xs">
+                                                  <SelectValue placeholder="Select account" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                  <SelectItem value="none">Not selected</SelectItem>
+                                                  {paymentLedgers
+                                                    .filter(
+                                                      (ledger) => ledger.branch_id === h.branch_id,
+                                                    )
+                                                    .map((ledger) => (
+                                                      <SelectItem key={ledger.id} value={ledger.id}>
+                                                        {ledger.account_name} ({ledger.ledger_type})
+                                                      </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                              </Select>
+                                              {!h.posted_journal_entry_id && (
+                                                <p className="mt-1 text-[10px] text-muted-foreground">
+                                                  Locked until posted
+                                                </p>
+                                              )}
+                                            </td>
+                                            <td className="py-2 text-right">
+                                              <Button
+                                                size="sm"
+                                                variant="outline"
+                                                className="h-8 text-xs"
+                                                disabled={
+                                                  !h.posted_journal_entry_id ||
+                                                  !accountSelections[h.id] ||
+                                                  savingAccountId === h.id
+                                                }
+                                                onClick={() => void saveAccount(h)}
+                                              >
+                                                {savingAccountId === h.id ? "Saving…" : "Save"}
+                                              </Button>
                                             </td>
                                           </tr>
                                         );
