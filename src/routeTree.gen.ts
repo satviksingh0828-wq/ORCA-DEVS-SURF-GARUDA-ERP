@@ -58,6 +58,7 @@ import { Route as DashboardPayrollRouteImport } from './routes/dashboard.payroll
 import { Route as EmployeesIndexRouteImport } from './routes/employees.index'
 import { Route as EmployeesDepartmentsRouteImport } from './routes/employees.departments'
 import { Route as EmployeesNewRouteImport } from './routes/employees.new'
+import { Route as GpsApiRouteImport } from './routes/gps/api'
 import { Route as LtmsBillingRouteImport } from './routes/ltms_.billing'
 import { Route as LtmsMastersRouteImport } from './routes/ltms_.masters'
 import { Route as LtmsOperationsRouteImport } from './routes/ltms_.operations'
@@ -343,6 +344,11 @@ const EmployeesNewRoute = EmployeesNewRouteImport.update({
   path: '/new',
   getParentRoute: () => EmployeesRoute,
 } as any)
+const GpsApiRoute = GpsApiRouteImport.update({
+  id: '/gps/api',
+  path: '/gps/api',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LtmsBillingRoute = LtmsBillingRouteImport.update({
   id: '/ltms_/billing',
   path: '/ltms/billing',
@@ -594,6 +600,7 @@ export interface FileRoutesByFullPath {
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/employees/departments': typeof EmployeesDepartmentsRouteWithChildren
   '/employees/new': typeof EmployeesNewRoute
+  '/gps/api': typeof GpsApiRoute
   '/ltms/billing': typeof LtmsBillingRoute
   '/ltms/masters': typeof LtmsMastersRoute
   '/ltms/operations': typeof LtmsOperationsRoute
@@ -676,6 +683,7 @@ export interface FileRoutesByTo {
   '/dashboard/hierarchy': typeof DashboardHierarchyRoute
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/employees/new': typeof EmployeesNewRoute
+  '/gps/api': typeof GpsApiRoute
   '/ltms/billing': typeof LtmsBillingRoute
   '/ltms/masters': typeof LtmsMastersRoute
   '/ltms/operations': typeof LtmsOperationsRoute
@@ -767,6 +775,7 @@ export interface FileRoutesById {
   '/dashboard/payroll': typeof DashboardPayrollRoute
   '/employees/departments': typeof EmployeesDepartmentsRouteWithChildren
   '/employees/new': typeof EmployeesNewRoute
+  '/gps/api': typeof GpsApiRoute
   '/ltms_/billing': typeof LtmsBillingRoute
   '/ltms_/masters': typeof LtmsMastersRoute
   '/ltms_/operations': typeof LtmsOperationsRoute
@@ -859,6 +868,7 @@ export interface FileRouteTypes {
     | '/dashboard/payroll'
     | '/employees/departments'
     | '/employees/new'
+    | '/gps/api'
     | '/ltms/billing'
     | '/ltms/masters'
     | '/ltms/operations'
@@ -941,6 +951,7 @@ export interface FileRouteTypes {
     | '/dashboard/hierarchy'
     | '/dashboard/payroll'
     | '/employees/new'
+    | '/gps/api'
     | '/ltms/billing'
     | '/ltms/masters'
     | '/ltms/operations'
@@ -1031,6 +1042,7 @@ export interface FileRouteTypes {
     | '/dashboard/payroll'
     | '/employees/departments'
     | '/employees/new'
+    | '/gps/api'
     | '/ltms_/billing'
     | '/ltms_/masters'
     | '/ltms_/operations'
@@ -1105,6 +1117,7 @@ export interface RootRouteChildren {
   ApiNotifyExpiryRoute: typeof ApiNotifyExpiryRoute
   ApiNotifyOpenTripsRoute: typeof ApiNotifyOpenTripsRoute
   ApiPixabayVideosRoute: typeof ApiPixabayVideosRoute
+  GpsApiRoute: typeof GpsApiRoute
   LtmsBillingRoute: typeof LtmsBillingRoute
   LtmsMastersRoute: typeof LtmsMastersRoute
   LtmsOperationsRoute: typeof LtmsOperationsRoute
@@ -1468,6 +1481,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/employees/new'
       preLoaderRoute: typeof EmployeesNewRouteImport
       parentRoute: typeof EmployeesRoute
+    }
+    '/gps/api': {
+      id: '/gps/api'
+      path: '/gps/api'
+      fullPath: '/gps/api'
+      preLoaderRoute: typeof GpsApiRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/ltms_/billing': {
       id: '/ltms_/billing'
@@ -1947,6 +1967,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiNotifyExpiryRoute: ApiNotifyExpiryRoute,
   ApiNotifyOpenTripsRoute: ApiNotifyOpenTripsRoute,
   ApiPixabayVideosRoute: ApiPixabayVideosRoute,
+  GpsApiRoute: GpsApiRoute,
   LtmsBillingRoute: LtmsBillingRoute,
   LtmsMastersRoute: LtmsMastersRoute,
   LtmsOperationsRoute: LtmsOperationsRoute,

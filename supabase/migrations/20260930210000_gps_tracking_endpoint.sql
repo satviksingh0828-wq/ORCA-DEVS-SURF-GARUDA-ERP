@@ -38,6 +38,24 @@ CREATE TRIGGER drivers_tracking_app_password_hash
   ON public.drivers
   FOR EACH ROW EXECUTE FUNCTION public.sync_tracking_app_password_hash();
 
+CREATE OR REPLACE FUNCTION public.authenticate_driver_tracking_app(
+  p_tracking_app_id text,
+  p_tracking_app_password text
+)
+RETURNS uuid
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public, extensions
+AS $$
+  SELECT id
+  FROM public.drivers
+  WHERE tracking_app_id = NULLIF(trim(p_tracking_app_id), '')
+    AND tracking_app_password_hash IS NOT NULL
+    AND tracking_app_password_hash = crypt(p_tracking_app_password, tracking_app_password_hash)
+    AND (ending_date IS NULL OR ending_date >= current_date)
+  LIMIT 1;
+$$;
+
 CREATE TABLE IF NOT EXISTS public.driver_gps_tracking_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   trip_id uuid NOT NULL REFERENCES public.trips(id) ON DELETE CASCADE,
@@ -133,6 +151,7 @@ $$;
 
 REVOKE ALL ON FUNCTION public.start_driver_gps_tracking(uuid, boolean), public.start_driver_gps_tracking(uuid), public.stop_driver_gps_tracking(uuid), public.get_driver_gps_tracking_status(uuid) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.start_driver_gps_tracking(uuid, boolean), public.start_driver_gps_tracking(uuid), public.stop_driver_gps_tracking(uuid), public.get_driver_gps_tracking_status(uuid) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.authenticate_driver_tracking_app(text, text) TO anon, authenticated, service_role;
 
 -- Closed trips retain the GPS history; only the active recording session is stopped.
 CREATE OR REPLACE FUNCTION public.stop_gps_tracking_when_trip_closes()
