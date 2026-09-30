@@ -2288,6 +2288,10 @@ function ConsignmentForm(props: any) {
           transportMode={transportMode}
           fromPin={fromPin}
           toPin={toPin}
+          freightDeduction={0}
+          additionalFreight={0}
+          loadingDeduction={0}
+          additionalLoading={0}
         />
         <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
           <Button variant="outline" onClick={onBack}>
@@ -2368,6 +2372,10 @@ function ConsignmentCalculationPreview({
   transportMode,
   fromPin,
   toPin,
+  freightDeduction,
+  additionalFreight,
+  loadingDeduction,
+  additionalLoading,
 }: {
   branchId: string;
   sourceId: string;
@@ -2382,6 +2390,10 @@ function ConsignmentCalculationPreview({
   transportMode: string;
   fromPin: string;
   toPin: string;
+  freightDeduction: number;
+  additionalFreight: number;
+  loadingDeduction: number;
+  additionalLoading: number;
 }) {
   const [sourceEntries, setSourceEntries] = useState<PreviewEntry[]>([]);
   const [transporterEntries, setTransporterEntries] = useState<PreviewEntry[]>([]);
@@ -2476,12 +2488,12 @@ function ConsignmentCalculationPreview({
 
   const incomeFrom = common?.dispatch_from_pin_code || common?.supplier_pin_code || "";
   const incomeTo = common?.ship_to_pin_code || common?.recipient_pin_code || "";
-  const weight = drafts.reduce(
-    (total, draft) => total + draft.items.reduce((sum, item) => sum + num(item.weight_kg), 0),
+  const weight = packageEntries.reduce(
+    (total, item) => total + num(item.weight_kg),
     0,
   );
-  const quantity = drafts.reduce(
-    (total, draft) => total + draft.items.reduce((sum, item) => sum + num(item.quantity), 0),
+  const quantity = packageEntries.reduce(
+    (total, item) => total + num(item.quantity),
     0,
   );
   const packageLoading = packageEntries.reduce(
@@ -2513,7 +2525,8 @@ function ConsignmentCalculationPreview({
     },
   );
   const transporterFrom = movement === "drop" ? toPin : fromPin;
-  const transporterTo = movement === "drop" ? incomeTo : toPin;
+  const transporterTo =
+    movement === "drop" ? common?.recipient_pin_code || incomeTo : toPin;
   const transporter =
     type === "third_party"
       ? manifestCharges(
@@ -2530,11 +2543,28 @@ function ConsignmentCalculationPreview({
         )
       : { freight: 0, loading: 0, fixed: 0, matched: false };
   const sourceIncome = source.freight + source.loading;
-  const net = sourceIncome - transporter.freight - transporter.loading - packageLoading;
+  const adjustedTransporterFreight = Math.max(
+    0,
+    transporter.freight - freightDeduction + additionalFreight,
+  );
+  const adjustedTransporterLoading = Math.max(
+    0,
+    transporter.loading - loadingDeduction + additionalLoading,
+  );
+  const adjustedPackageLoading = Math.max(
+    0,
+    packageLoading - loadingDeduction + additionalLoading,
+  );
+  const net =
+    sourceIncome - adjustedTransporterFreight - adjustedTransporterLoading - adjustedPackageLoading;
   const rows = [
-    { label: "Transporter Freight", value: transporter.freight, tone: "text-rose-700" },
-    { label: "Transporter Loading (if any)", value: transporter.loading, tone: "text-orange-700" },
-    { label: "Loading Charge (Package Rate)", value: packageLoading, tone: "text-amber-700" },
+    { label: "Transporter Freight", value: adjustedTransporterFreight, tone: "text-rose-700" },
+    {
+      label: "Transporter Loading (if any)",
+      value: adjustedTransporterLoading,
+      tone: "text-orange-700",
+    },
+    { label: "Loading Charge (Package Rate)", value: adjustedPackageLoading, tone: "text-amber-700" },
     { label: "Source Income", value: sourceIncome, tone: "text-emerald-700" },
     { label: "NET", value: net, tone: net >= 0 ? "text-emerald-700" : "text-rose-700" },
   ];
@@ -3693,6 +3723,10 @@ function ConsignmentView({
         transportMode={String(row.transport_mode ?? "")}
         fromPin={String(row.from_pin_code ?? "")}
         toPin={String(row.to_pin_code ?? "")}
+        freightDeduction={num(row.freight_deduction)}
+        additionalFreight={num(row.additional_freight)}
+        loadingDeduction={num(row.loading_deduction)}
+        additionalLoading={num(row.additional_loading)}
       />
     </div>
   );
