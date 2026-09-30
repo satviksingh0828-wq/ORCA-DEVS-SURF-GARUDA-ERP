@@ -23,6 +23,8 @@ type Mapping = {
   vehicle_road_tax_advance_ledger_id?: string | null;
   vehicle_road_tax_expense_ledger_id?: string | null;
   fastag_ledger_id?: string | null;
+  approval_charge_income_ledger_id?: string | null;
+  trip_expenditure_ledger_id?: string | null;
   other_expenditure_ledger_id?: string | null;
   other_expenditure_payable_ledger_id?: string | null;
   other_income_ledger_id?: string | null;
@@ -41,6 +43,8 @@ const FIELDS = [
   ["vehicle_road_tax_advance_ledger_id", "Vehicle Road Tax Advance", "asset"],
   ["vehicle_road_tax_expense_ledger_id", "Vehicle Road Tax Expense", "expenditure"],
   ["fastag_ledger_id", "Fastag Expenditure Account", "expenditure"],
+  ["approval_charge_income_ledger_id", "Approval Charge Income", "income"],
+  ["trip_expenditure_ledger_id", "Trip Expenditure (All Trip Expenses)", "expenditure"],
   ["other_expenditure_ledger_id", "Other Expenditure", "expenditure"],
   ["other_expenditure_payable_ledger_id", "Other Expenditure Payable", "liability"],
   ["other_income_ledger_id", "Other Income", "income"],
@@ -123,10 +127,10 @@ export function TMSAccountsSettings() {
   return (
     <div className="animate-fade-up space-y-5">
       <section className="surface-card p-6">
-          <h3 className="text-sm font-semibold">LTMS Account</h3>
-          <p className="mt-1 text-sm text-muted-foreground">
-          Map the ledgers used for driver payroll, vehicle loans, and vehicle EMI accounting.
-          Each mapping is branch-specific.
+        <h3 className="text-sm font-semibold">LTMS Account</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Map the ledgers used for driver payroll, vehicle loans, and vehicle EMI accounting. Each
+          mapping is branch-specific.
         </p>
         <div className="mt-5 space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">Branch</label>
@@ -151,12 +155,14 @@ export function TMSAccountsSettings() {
       ) : mapping ? (
         <section className="surface-card p-6">
           <div className="mb-4 rounded-md border border-dashed border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-            Driver Salary, Vehicle Loan Interest, Insurance Expense, and Road Tax Expense use expenditure
-            ledgers. Driver Salary Payable, Vehicle Loan, and Vehicle EMI Payable use liability ledgers.
-            Driver Advance, Insurance Advance, and Road Tax Advance use asset ledgers. Cash and bank
-            payment accounts are selected at the time of payment. Other Expenditure and Other
-            Expenditure Payable are the defaults for general expenditure entries. Other Income and
-            Other Income Receivable are the defaults for general income entries.
+            Driver Salary, Vehicle Loan Interest, Insurance Expense, and Road Tax Expense use
+            expenditure ledgers. Driver Salary Payable, Vehicle Loan, and Vehicle EMI Payable use
+            liability ledgers. Driver Advance, Insurance Advance, and Road Tax Advance use asset
+            ledgers. Cash and bank payment accounts are selected at the time of payment. Approval
+            Charge Income is used for trip approval-charge income, and Trip Expenditure is the
+            common expenditure account for trip expenses. Other Expenditure and Other Expenditure
+            Payable are the defaults for general expenditure entries. Other Income and Other Income
+            Receivable are the defaults for general income entries.
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map(([key, label, type]) => (
