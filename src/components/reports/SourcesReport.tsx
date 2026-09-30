@@ -412,6 +412,27 @@ export function SourcesReport() {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <div className="space-y-1.5">
+              <Label>Branch</Label>
+              <Select value={branchId} onValueChange={setBranchId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Branches</SelectItem>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.branch_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {branchId === "all" && (
+                <p className="text-xs text-amber-600">
+                  Select one branch to enable a safe replacement.
+                </p>
+              )}
+            </div>
+            <div className="space-y-1.5">
               <Label>Update Type</Label>
               <Select
                 value={updateType}
@@ -497,7 +518,7 @@ export function SourcesReport() {
             </Button>
             <Button
               onClick={() => void replaceValue()}
-              disabled={updating || !currentValue || !replacementValue}
+              disabled={branchId === "all" || updating || !currentValue || !replacementValue}
             >
               {updating ? "Updating…" : "Update / Replace"}
             </Button>

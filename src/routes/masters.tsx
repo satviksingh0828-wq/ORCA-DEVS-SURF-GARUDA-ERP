@@ -221,7 +221,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
         {/* Mobile dropdown navigation */}
         <MobileTabDropdown tabs={TABS} activeId={safeTab} label="Masters" onChange={setTab} />
 
-        <div key={safeTab} className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>
+        <div key={safeTab} className="animate-fade-in min-w-0">
           <header className="mb-6">
             <h1 className="text-2xl font-semibold tracking-tight">{active?.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active?.desc}</p>

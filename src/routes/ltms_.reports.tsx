@@ -183,7 +183,7 @@ function ReportsPage() {
         )}
 
         <MobileTabDropdown tabs={TABS} activeId={tab} label="Reports" onChange={setTab} />
-        <div className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>
+        <div className="animate-fade-in min-w-0">
           <header className="mb-6">
             <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>

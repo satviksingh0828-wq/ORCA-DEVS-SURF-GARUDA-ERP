@@ -286,7 +286,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           <MobileTabDropdown tabs={TABS} activeId={safeTab} label="Operations" onChange={setTab} />
         )}
 
-        <div className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>
+        <div className="animate-fade-in min-w-0">
           {!fullBleed && (
             <header className="mb-6">
               <h1 className="text-2xl font-semibold tracking-tight">{active?.label}</h1>

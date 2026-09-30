@@ -177,7 +177,7 @@ function SettingsPage() {
         {/* Mobile dropdown navigation */}
         <MobileTabDropdown tabs={TABS} activeId={tab} label="Settings" onChange={setTab} />
 
-        <div key={tab} className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>
+        <div key={tab} className="animate-fade-in min-w-0">
           <header className="mb-6">
             <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>

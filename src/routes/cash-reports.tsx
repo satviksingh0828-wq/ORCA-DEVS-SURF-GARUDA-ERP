@@ -98,7 +98,7 @@ function CashReportsPage() {
         )}
         <MobileTabDropdown tabs={TABS} activeId={tab} label="CASH REPORTS" onChange={setTab} />
         <ReportFiltersContext.Provider value={{ branchId, financialYear: "none" }}>
-          <main className={navOpen ? "min-w-0 lg:col-start-2" : "min-w-0"}>
+          <main className="min-w-0">
             <header className="mb-6">
               <h1 className="text-2xl font-semibold">{active.label}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>

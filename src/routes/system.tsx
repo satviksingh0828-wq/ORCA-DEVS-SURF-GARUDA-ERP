@@ -171,7 +171,7 @@ function SystemPage() {
         <MobileTabDropdown tabs={TABS} activeId={safeTab} label="System" onChange={setTab} />
 
         {/* Content area */}
-        <div key={tab} className={`animate-fade-in min-w-0 ${navOpen ? "lg:col-start-2" : ""}`}>
+        <div key={tab} className="animate-fade-in min-w-0">
           <header className="mb-6">
             <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
