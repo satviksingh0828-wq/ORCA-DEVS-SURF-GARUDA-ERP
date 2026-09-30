@@ -6,6 +6,7 @@ import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
 import { printConsignorCopyPdf } from "@/lib/consignment-pdf";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
+import { manifestCharges, num, type ContractLite, type EntryLite } from "@/lib/trip-calc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -32,6 +33,7 @@ type PackageTypeOption = {
   branch_id: string;
   package_type: string;
   basis: "quantity" | "weight";
+  charge_mode?: "fixed" | "rate";
 };
 type PackageEntry = {
   id?: string;
@@ -749,7 +751,7 @@ export function ConsignmentList({
     }
     void db
       .from("package_rate_types")
-      .select("id,branch_id,package_type,basis")
+      .select("id,branch_id,package_type,basis,charge_mode")
       .eq("branch_id", branchId)
       .order("package_type")
       .then(({ data, error }: any) => {
@@ -1285,6 +1287,9 @@ export function ConsignmentList({
             packageTypes,
             packageEntries,
             setPackageEntries,
+            transportMode,
+            fromPin,
+            toPin,
             save,
             loading,
             openPartner: (kind: "rental" | "transporter") => {
@@ -2269,6 +2274,21 @@ function ConsignmentForm(props: any) {
             </div>
           )}
         </section>
+        <ConsignmentCalculationPreview
+          branchId={branchId}
+          sourceId={sourceId}
+          contracts={contracts}
+          drafts={drafts}
+          packageTypes={packageTypes}
+          packageEntries={packageEntries}
+          type={type}
+          movement={movement}
+          transporterId={transporterId}
+          selectedTransporterSourceId={selectedTransporterSourceId}
+          transportMode={transportMode}
+          fromPin={fromPin}
+          toPin={toPin}
+        />
         <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
           <Button variant="outline" onClick={onBack}>
             Cancel
@@ -2289,6 +2309,272 @@ function ConsignmentForm(props: any) {
         onSave={() => void addManualShipment()}
       />
     </>
+  );
+}
+
+type PreviewEntry = EntryLite & {
+  mode?: string | null;
+  source_id?: string | null;
+  transporter_id?: string | null;
+};
+type PreviewRateEntry = {
+  package_rate_type_id: string;
+  from_value: number | string;
+  to_value: number | string | null;
+  amount: number | string;
+};
+function previewMode(value: unknown) {
+  return String(value ?? "")
+    .trim()
+    .toUpperCase();
+}
+function previewEntry(entries: PreviewEntry[], mode: string, fromPin: string, toPin: string) {
+  return entries.find(
+    (entry) =>
+      previewMode(entry.mode) === previewMode(mode) &&
+      String(entry.from_pin_code ?? "").trim() === String(fromPin).trim() &&
+      String(entry.to_pin_code ?? "").trim() === String(toPin).trim(),
+  );
+}
+function previewPackageCharge(
+  item: PackageEntry,
+  type: PackageTypeOption | undefined,
+  entries: PreviewRateEntry[],
+) {
+  if (!type) return 0;
+  const measure = type.basis === "weight" ? num(item.weight_kg) : num(item.quantity);
+  const slab = entries
+    .filter((entry) => entry.package_rate_type_id === type.id)
+    .sort((a, b) => num(b.from_value) - num(a.from_value))
+    .find(
+      (entry) =>
+        num(entry.from_value) <= measure &&
+        (entry.to_value == null || measure <= num(entry.to_value)),
+    );
+  if (!slab) return 0;
+  return type.charge_mode === "rate" ? num(slab.amount) * measure : num(slab.amount);
+}
+function ConsignmentCalculationPreview({
+  branchId,
+  sourceId,
+  contracts,
+  drafts,
+  packageTypes,
+  packageEntries,
+  type,
+  movement,
+  transporterId,
+  selectedTransporterSourceId,
+  transportMode,
+  fromPin,
+  toPin,
+}: {
+  branchId: string;
+  sourceId: string;
+  contracts: Master[];
+  drafts: ShipmentDraft[];
+  packageTypes: PackageTypeOption[];
+  packageEntries: PackageEntry[];
+  type: string;
+  movement: string;
+  transporterId: string;
+  selectedTransporterSourceId: string;
+  transportMode: string;
+  fromPin: string;
+  toPin: string;
+}) {
+  const [sourceEntries, setSourceEntries] = useState<PreviewEntry[]>([]);
+  const [transporterEntries, setTransporterEntries] = useState<PreviewEntry[]>([]);
+  const [packageRateEntries, setPackageRateEntries] = useState<PreviewRateEntry[]>([]);
+  const [loadedPackageTypes, setLoadedPackageTypes] = useState<PackageTypeOption[]>([]);
+  const [ratesLoading, setRatesLoading] = useState(false);
+  const common = drafts[0];
+  const activePackageTypes = packageTypes.length ? packageTypes : loadedPackageTypes;
+
+  useEffect(() => {
+    if (packageTypes.length || !branchId) {
+      setLoadedPackageTypes([]);
+      return;
+    }
+    let cancelled = false;
+    void db
+      .from("package_rate_types")
+      .select("id,branch_id,package_type,basis,charge_mode")
+      .eq("branch_id", branchId)
+      .order("package_type")
+      .then(({ data }: any) => {
+        if (!cancelled) setLoadedPackageTypes((data ?? []) as PackageTypeOption[]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [branchId, packageTypes.length]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPreviewRates() {
+      if (!branchId) {
+        setSourceEntries([]);
+        setTransporterEntries([]);
+        setPackageRateEntries([]);
+        setRatesLoading(false);
+        return;
+      }
+      setRatesLoading(true);
+      const sourceQuery = sourceId
+        ? db
+            .from("contract_entries")
+            .select(
+              "id,contract_id,mode,from_location_id,to_location_id,from_pin_code,to_pin_code,freight_route_range_type,freight_route_ranges,loading_route_range_type,loading_route_ranges,per_manifest_amount",
+            )
+            .eq("contract_id", sourceId)
+        : Promise.resolve({ data: [], error: null });
+      const transporterQuery =
+        type === "third_party" && transporterId
+          ? (() => {
+              let query = db
+                .from("ltms_transporter_entries")
+                .select(
+                  "id,transporter_id,source_id,mode,from_location_id,to_location_id,from_pin_code,to_pin_code,freight_route_range_type,freight_route_ranges,loading_route_range_type,loading_route_ranges",
+                )
+                .eq("transporter_id", transporterId);
+              if (selectedTransporterSourceId)
+                query = query.eq("source_id", selectedTransporterSourceId);
+              return query;
+            })()
+          : Promise.resolve({ data: [], error: null });
+      const packageQuery = activePackageTypes.length
+        ? db
+            .from("package_rate_entries")
+            .select("package_rate_type_id,from_value,to_value,amount")
+            .eq("branch_id", branchId)
+        : Promise.resolve({ data: [], error: null });
+      const [sourceResult, transporterResult, packageResult] = await Promise.all([
+        sourceQuery,
+        transporterQuery,
+        packageQuery,
+      ]);
+      if (!cancelled) {
+        setSourceEntries((sourceResult.data ?? []) as PreviewEntry[]);
+        setTransporterEntries((transporterResult.data ?? []) as PreviewEntry[]);
+        setPackageRateEntries((packageResult.data ?? []) as PreviewRateEntry[]);
+        setRatesLoading(false);
+      }
+    }
+    void loadPreviewRates();
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    branchId,
+    sourceId,
+    activePackageTypes.length,
+    transporterId,
+    selectedTransporterSourceId,
+    type,
+  ]);
+
+  const incomeFrom = common?.dispatch_from_pin_code || common?.supplier_pin_code || "";
+  const incomeTo = common?.ship_to_pin_code || common?.recipient_pin_code || "";
+  const weight = drafts.reduce(
+    (total, draft) => total + draft.items.reduce((sum, item) => sum + num(item.weight_kg), 0),
+    0,
+  );
+  const quantity = drafts.reduce(
+    (total, draft) => total + draft.items.reduce((sum, item) => sum + num(item.quantity), 0),
+    0,
+  );
+  const packageLoading = packageEntries.reduce(
+    (total, item) =>
+      total +
+      previewPackageCharge(
+        item,
+        activePackageTypes.find((rateType) => rateType.id === item.package_rate_type_id),
+        packageRateEntries,
+      ),
+    0,
+  );
+  const sourceContract = sourceId
+    ? ({
+        id: sourceId,
+        contract_name: contracts.find((contract) => contract.id === sourceId)?.label ?? "Source",
+      } satisfies ContractLite)
+    : undefined;
+  const source = manifestCharges(
+    sourceContract,
+    previewEntry(sourceEntries, transportMode, incomeFrom, incomeTo),
+    {
+      from_location_id: null,
+      to_location_id: null,
+      from_pin_code: incomeFrom,
+      to_pin_code: incomeTo,
+      weight_kg: String(weight),
+      quantity: String(quantity),
+    },
+  );
+  const transporterFrom = movement === "drop" ? toPin : fromPin;
+  const transporterTo = movement === "drop" ? incomeTo : toPin;
+  const transporter =
+    type === "third_party"
+      ? manifestCharges(
+          { id: transporterId || "transporter", contract_name: "Transporter" },
+          previewEntry(transporterEntries, transportMode, transporterFrom, transporterTo),
+          {
+            from_location_id: null,
+            to_location_id: null,
+            from_pin_code: transporterFrom,
+            to_pin_code: transporterTo,
+            weight_kg: String(weight),
+            quantity: String(quantity),
+          },
+        )
+      : { freight: 0, loading: 0, fixed: 0, matched: false };
+  const sourceIncome = source.freight + source.loading;
+  const net = sourceIncome - transporter.freight - transporter.loading - packageLoading;
+  const rows = [
+    { label: "Transporter Freight", value: transporter.freight, tone: "text-rose-700" },
+    { label: "Transporter Loading (if any)", value: transporter.loading, tone: "text-orange-700" },
+    { label: "Loading Charge (Package Rate)", value: packageLoading, tone: "text-amber-700" },
+    { label: "Source Income", value: sourceIncome, tone: "text-emerald-700" },
+    { label: "NET", value: net, tone: net >= 0 ? "text-emerald-700" : "text-rose-700" },
+  ];
+  return (
+    <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold text-sky-800">Live Calculation Preview</h3>
+          <p className="text-xs text-muted-foreground">
+            Preview only — uses the selected source, transporter route and package rate.
+          </p>
+        </div>
+        {ratesLoading && <span className="text-xs text-muted-foreground">Loading rates…</span>}
+      </div>
+      <div className="overflow-x-auto rounded-lg border border-border bg-card">
+        <table className="w-full min-w-[760px] text-sm">
+          <thead className="bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            <tr>
+              {rows.map((row) => (
+                <th key={row.label} className="border-r border-border px-3 py-2 last:border-r-0">
+                  {row.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr className="divide-x divide-border">
+              {rows.map((row) => (
+                <td
+                  key={row.label}
+                  className={`px-3 py-3 text-base font-semibold tabular-nums ${row.tone}`}
+                >
+                  {money(row.value)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
   );
 }
 
@@ -3384,6 +3670,30 @@ function ConsignmentView({
           />
         </div>
       </section>
+      <ConsignmentCalculationPreview
+        branchId={String(row.branch_id ?? "")}
+        sourceId={String(row.source_id ?? "")}
+        contracts={
+          row.source_id
+            ? [
+                {
+                  id: String(row.source_id),
+                  label: row.source?.contract_name ?? String(row.source_id),
+                },
+              ]
+            : []
+        }
+        drafts={drafts}
+        packageTypes={[]}
+        packageEntries={packages}
+        type={String(row.consignment_type ?? "own")}
+        movement={String(row.movement_mode ?? "pickup")}
+        transporterId={String(row.transporter_id ?? "")}
+        selectedTransporterSourceId={String(row.transporter_source_id ?? "")}
+        transportMode={String(row.transport_mode ?? "")}
+        fromPin={String(row.from_pin_code ?? "")}
+        toPin={String(row.to_pin_code ?? "")}
+      />
     </div>
   );
 }
