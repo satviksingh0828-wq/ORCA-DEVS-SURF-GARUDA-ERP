@@ -22,6 +22,8 @@ type PackageType = {
   package_type: string;
   basis: "quantity" | "weight";
   charge_mode: "fixed" | "rate";
+  is_active: boolean;
+  inactive_at: string | null;
 };
 type RateKind = "loading" | "unloading";
 type Slab = {
@@ -41,6 +43,7 @@ export function PackageRates() {
   const [slabs, setSlabs] = useState<Slab[]>([]);
   const [branchId, setBranchId] = useState("");
   const [selectedTypeId, setSelectedTypeId] = useState("");
+  const [filter, setFilter] = useState<"active" | "inactive" | "all">("active");
   const [typeForm, setTypeForm] = useState({
     package_type: "",
     basis: "quantity",
@@ -57,10 +60,24 @@ export function PackageRates() {
   const allowed = user?.role === "basic" ? (user.branchIds ?? []) : null;
   const db = supabase as any;
   const branchTypes = useMemo(
-    () => types.filter((t) => t.branch_id === branchId),
-    [types, branchId],
+    () =>
+      types.filter((t) => {
+        if (t.branch_id !== branchId) return false;
+        if (filter === "active") return t.is_active !== false;
+        if (filter === "inactive") return t.is_active === false;
+        return true;
+      }),
+    [types, branchId, filter],
   );
   const selectedType = types.find((t) => t.id === selectedTypeId) ?? null;
+  const branchTypeCounts = useMemo(() => {
+    const all = types.filter((t) => t.branch_id === branchId);
+    return {
+      active: all.filter((t) => t.is_active !== false).length,
+      inactive: all.filter((t) => t.is_active === false).length,
+      all: all.length,
+    };
+  }, [types, branchId]);
 
   async function load() {
     setLoading(true);
@@ -111,6 +128,33 @@ export function PackageRates() {
     setSelectedTypeId(data.id);
     setTypeForm({ package_type: "", basis: "quantity", charge_mode: "rate" });
     toast.success("Package type created. Add its slabs below.");
+  }
+  async function toggleType(type: PackageType) {
+    if (!admin) return;
+    const isActive = type.is_active === false;
+    const nextActive = isActive;
+    const { error } = await db
+      .from("package_rate_types")
+      .update({
+        is_active: nextActive,
+        inactive_at: nextActive ? null : new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", type.id);
+    if (error) return toast.error(error.message);
+    setTypes((current) =>
+      current.map((item) =>
+        item.id === type.id
+          ? {
+              ...item,
+              is_active: nextActive,
+              inactive_at: nextActive ? null : new Date().toISOString(),
+            }
+          : item,
+      ),
+    );
+    if (!nextActive && selectedTypeId === type.id) setSelectedTypeId("");
+    toast.success(nextActive ? "Package type reactivated" : "Package type marked inactive");
   }
   async function renameType(e: React.FormEvent) {
     e.preventDefault();
@@ -306,9 +350,21 @@ export function PackageRates() {
       </section>
       {branchId && (
         <section className="space-y-3">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h4 className="font-semibold">Package types in selected branch</h4>
-            <span className="text-xs text-muted-foreground">{branchTypes.length} type(s)</span>
+            <span className="text-xs text-muted-foreground">{branchTypes.length} shown</span>
+          </div>
+          <div className="flex gap-1 rounded-xl bg-muted/50 p-1 w-fit">
+            {(["active", "inactive", "all"] as const).map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setFilter(value)}
+                className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize ${filter === value ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {value} ({branchTypeCounts[value]})
+              </button>
+            ))}
           </div>
           {loading ? (
             <p className="p-6 text-center text-sm text-muted-foreground">Loading…</p>
@@ -321,11 +377,23 @@ export function PackageRates() {
               {branchTypes.map((type) => (
                 <div
                   key={type.id}
-                  className={`rounded-xl border p-4 ${selectedTypeId === type.id ? "border-primary bg-primary/5" : "border-border"}`}
+                  className={`rounded-xl border p-4 ${type.is_active === false ? "opacity-60" : ""} ${selectedTypeId === type.id ? "border-primary bg-primary/5" : "border-border"}`}
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
-                      <h5 className="font-semibold">{type.package_type}</h5>
+                      <div className="flex items-center gap-2">
+                        <h5 className="font-semibold">{type.package_type}</h5>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${type.is_active === false ? "bg-muted text-muted-foreground" : "bg-emerald-100 text-emerald-700"}`}
+                        >
+                          {type.is_active === false ? "Inactive" : "Active"}
+                        </span>
+                        {type.is_active === false && type.inactive_at ? (
+                          <span className="text-[10px] text-muted-foreground">
+                            since {new Date(type.inactive_at).toLocaleDateString("en-IN")}
+                          </span>
+                        ) : null}
+                      </div>
                       <p className="text-xs text-muted-foreground">
                         {type.basis === "weight" ? "Weight-wise (KG)" : "Quantity-wise"} ·{" "}
                         {type.charge_mode === "fixed" ? "Fixed ₹" : "Rate × units"}
@@ -344,7 +412,15 @@ export function PackageRates() {
                         >
                           <Pencil className="size-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => void removeType(type)}>
+                        <Button variant="outline" size="sm" onClick={() => void toggleType(type)}>
+                          {type.is_active === false ? "Reactivate" : "Deactivate"}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => void removeType(type)}
+                          disabled={type.is_active === false}
+                        >
                           <Trash2 className="size-4" />
                         </Button>
                       </div>
@@ -358,7 +434,11 @@ export function PackageRates() {
                       setSlabForms({ loading: { ...blankSlab }, unloading: { ...blankSlab } });
                     }}
                   >
-                    {selectedTypeId === type.id ? "Package Type Open" : "Open Package Type"}
+                    {selectedTypeId === type.id
+                      ? "Package Type Open"
+                      : type.is_active === false
+                        ? "View Package Type"
+                        : "Open Package Type"}
                   </Button>
                 </div>
               ))}
@@ -381,7 +461,7 @@ export function PackageRates() {
               </p>
             </div>
           </div>
-          {admin && (
+          {admin && selectedType.is_active !== false && (
             <form
               onSubmit={renameType}
               className="flex flex-wrap items-end gap-2 border-b border-border pb-4"
@@ -416,7 +496,7 @@ export function PackageRates() {
                       : "Add unloading slabs separately from the existing loading slabs."}
                   </p>
                 </div>
-                {admin && (
+                {admin && selectedType.is_active !== false && (
                   <form
                     onSubmit={(event) => void saveSlab(event, rateKind)}
                     className="grid gap-3 border-y border-border py-4 md:grid-cols-4"
@@ -535,6 +615,7 @@ export function PackageRates() {
                                 <Button
                                   variant="ghost"
                                   size="sm"
+                                  disabled={selectedType.is_active === false}
                                   onClick={() => void removeSlab(slab.id)}
                                 >
                                   <Trash2 className="size-4" />

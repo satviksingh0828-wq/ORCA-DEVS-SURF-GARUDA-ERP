@@ -30,6 +30,8 @@ type Source = {
   branch_id: string;
   liability_ledger_id: string | null;
   liability_ledger?: { account_name?: string | null } | null;
+  is_active: boolean;
+  inactive_at: string | null;
 };
 type Ledger = { id: string; account_name: string };
 const TABLE = "ltms_transporter_entries" as never;
@@ -52,6 +54,7 @@ export function TransporterEntries({
   const [sourceName, setSourceName] = useState("");
   const [liabilityLedgerId, setLiabilityLedgerId] = useState("");
   const [savingSource, setSavingSource] = useState(false);
+  const [filter, setFilter] = useState<"active" | "inactive" | "all">("active");
   const selectedSource = sources.find((source) => source.id === sourceId) ?? null;
   const owner = selectedSource
     ? ({
@@ -65,7 +68,7 @@ export function TransporterEntries({
     let query = supabase
       .from("ltms_transporter_sources" as never)
       .select(
-        "id,source_name,branch_id,liability_ledger_id,liability_ledger:ledger_accounts(account_name)",
+        "id,source_name,branch_id,liability_ledger_id,is_active,inactive_at,liability_ledger:ledger_accounts(account_name)",
       )
       .eq("transporter_id", transporter.id)
       .order("source_name");
@@ -78,6 +81,29 @@ export function TransporterEntries({
       current && nextSources.some((source) => source.id === current) ? current : null,
     );
     setLoading(false);
+  }
+
+  async function toggleSource(source: Source) {
+    const nextActive = source.is_active === false;
+    const inactiveAt = nextActive ? null : new Date().toISOString();
+    const { error } = await supabase
+      .from("ltms_transporter_sources" as never)
+      .update({
+        is_active: nextActive,
+        inactive_at: inactiveAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", source.id);
+    if (error) return toast.error(error.message);
+    setSources((current) =>
+      current.map((item) =>
+        item.id === source.id ? { ...item, is_active: nextActive, inactive_at: inactiveAt } : item,
+      ),
+    );
+    if (!nextActive && sourceId === source.id) setSourceId(null);
+    toast.success(
+      nextActive ? "Transporter source reactivated" : "Transporter source marked inactive",
+    );
   }
 
   async function loadEntries() {
@@ -141,7 +167,7 @@ export function TransporterEntries({
       : supabase.from("ltms_transporter_sources" as never).insert(payload);
     const { data, error } = await query
       .select(
-        "id,source_name,branch_id,liability_ledger_id,liability_ledger:ledger_accounts(account_name)",
+        "id,source_name,branch_id,liability_ledger_id,is_active,inactive_at,liability_ledger:ledger_accounts(account_name)",
       )
       .single();
     setSavingSource(false);
@@ -225,34 +251,88 @@ export function TransporterEntries({
             </Button>
           </div>
         ) : (
-          <ul className="space-y-3">
-            {sources.map((source) => (
-              <li key={source.id} className="surface-card flex items-center gap-4 p-4">
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
-                  <FileText className="size-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold">{source.source_name}</p>
-                  <p className="truncate text-xs text-muted-foreground">
-                    Liability ledger: {source.liability_ledger?.account_name ?? "—"}
-                  </p>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => openSourceDialog(source)}
+          <>
+            <div className="flex gap-1 rounded-xl bg-muted/50 p-1 w-fit">
+              {(["active", "inactive", "all"] as const).map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setFilter(value)}
+                  className={`rounded-lg px-3 py-1.5 text-xs font-medium capitalize ${filter === value ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  {value} (
+                  {
+                    sources.filter(
+                      (item) =>
+                        value === "all" ||
+                        (value === "active" ? item.is_active !== false : item.is_active === false),
+                    ).length
+                  }
+                  )
+                </button>
+              ))}
+            </div>
+            <ul className="space-y-3">
+              {sources
+                .filter(
+                  (source) =>
+                    filter === "all" ||
+                    (filter === "active" ? source.is_active !== false : source.is_active === false),
+                )
+                .map((source) => (
+                  <li
+                    key={source.id}
+                    className={`surface-card flex items-center gap-4 p-4 ${source.is_active === false ? "opacity-60" : ""}`}
                   >
-                    <Pencil className="mr-1.5 size-3.5" /> Edit
-                  </Button>
-                  <Button size="sm" onClick={() => setSourceId(source.id)}>
-                    Open source
-                  </Button>
-                </div>
-              </li>
-            ))}
-          </ul>
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
+                      <FileText className="size-5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-semibold">{source.source_name}</p>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase ${source.is_active === false ? "bg-muted text-muted-foreground" : "bg-emerald-100 text-emerald-700"}`}
+                        >
+                          {source.is_active === false ? "Inactive" : "Active"}
+                        </span>
+                        {source.is_active === false && source.inactive_at ? (
+                          <span className="text-[10px] text-muted-foreground">
+                            since {new Date(source.inactive_at).toLocaleDateString("en-IN")}
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="truncate text-xs text-muted-foreground">
+                        Liability ledger: {source.liability_ledger?.account_name ?? "—"}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={() => void toggleSource(source)}
+                      >
+                        {source.is_active === false ? "Reactivate" : "Deactivate"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openSourceDialog(source)}
+                      >
+                        <Pencil className="mr-1.5 size-3.5" /> Edit
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant={source.is_active === false ? "outline" : "default"}
+                        onClick={() => setSourceId(source.id)}
+                      >
+                        Open source
+                      </Button>
+                    </div>
+                  </li>
+                ))}
+            </ul>
+          </>
         )}
         <Dialog open={sourceDialog} onOpenChange={setSourceDialog}>
           <DialogContent>
@@ -316,18 +396,20 @@ export function TransporterEntries({
             </p>
           </div>
         </div>
-        <Button
-          onClick={() =>
-            setEditing({
-              ...emptyEntry(transporter.id),
-              contract_id: undefined,
-              transporter_id: transporter.id,
-              source_id: selectedSource.id,
-            })
-          }
-        >
-          <Plus className="size-4" /> New entry
-        </Button>
+        {selectedSource.is_active !== false && (
+          <Button
+            onClick={() =>
+              setEditing({
+                ...emptyEntry(transporter.id),
+                contract_id: undefined,
+                transporter_id: transporter.id,
+                source_id: selectedSource.id,
+              })
+            }
+          >
+            <Plus className="size-4" /> New entry
+          </Button>
+        )}
       </div>
       {loading ? (
         <div className="space-y-3">

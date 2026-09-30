@@ -753,6 +753,7 @@ export function ConsignmentList({
       .from("package_rate_types")
       .select("id,branch_id,package_type,basis,charge_mode")
       .eq("branch_id", branchId)
+      .eq("is_active", true)
       .order("package_type")
       .then(({ data, error }: any) => {
         if (error) toast.error(error.message);
@@ -2413,6 +2414,7 @@ function ConsignmentCalculationPreview({
       .from("package_rate_types")
       .select("id,branch_id,package_type,basis,charge_mode")
       .eq("branch_id", branchId)
+      .eq("is_active", true)
       .order("package_type")
       .then(({ data }: any) => {
         if (!cancelled) setLoadedPackageTypes((data ?? []) as PackageTypeOption[]);
