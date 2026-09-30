@@ -25,7 +25,6 @@ type Mapping = {
   fastag_ledger_id?: string | null;
   approval_charge_income_ledger_id?: string | null;
   trip_fuel_expense_ledger_id?: string | null;
-  trip_toll_charges_ledger_id?: string | null;
   trip_toll_cash_ledger_id?: string | null;
   trip_driver_bata_ledger_id?: string | null;
   trip_morning_exp_ledger_id?: string | null;
@@ -55,7 +54,6 @@ const FIELDS = [
   ["fastag_ledger_id", "Fastag Expenditure Account", "expenditure"],
   ["approval_charge_income_ledger_id", "Approval Charge Income", "income"],
   ["trip_fuel_expense_ledger_id", "Fuel Expense", "expenditure"],
-  ["trip_toll_charges_ledger_id", "Toll Charges", "expenditure"],
   ["trip_toll_cash_ledger_id", "Toll Charges (paid in cash)", "expenditure"],
   ["trip_driver_bata_ledger_id", "Driver Bata", "expenditure"],
   ["trip_morning_exp_ledger_id", "Morning Exp.", "expenditure"],

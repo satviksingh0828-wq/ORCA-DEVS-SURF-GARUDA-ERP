@@ -5,8 +5,6 @@ ALTER TABLE public.tms_account_ledger_mappings
     REFERENCES public.ledger_accounts(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS trip_fuel_expense_ledger_id UUID
     REFERENCES public.ledger_accounts(id) ON DELETE SET NULL,
-  ADD COLUMN IF NOT EXISTS trip_toll_charges_ledger_id UUID
-    REFERENCES public.ledger_accounts(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS trip_toll_cash_ledger_id UUID
     REFERENCES public.ledger_accounts(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS trip_driver_bata_ledger_id UUID
@@ -29,41 +27,25 @@ ALTER TABLE public.tms_account_ledger_mappings
 DO $$
 DECLARE
   v_branch_id UUID;
-  v_branch_count INTEGER;
   v_account_id UUID;
   v_item RECORD;
 BEGIN
-  SELECT count(*) INTO v_branch_count
-  FROM public.branches
-  WHERE lower(trim(branch_name)) = 'a';
-
-  IF v_branch_count = 0 THEN
-    RAISE EXCEPTION 'Branch named A was not found; create it before applying the LTMS account seed';
-  ELSIF v_branch_count > 1 THEN
-    RAISE EXCEPTION 'More than one branch is named A; rename duplicates before applying the LTMS account seed';
-  END IF;
-
   SELECT id INTO v_branch_id
   FROM public.branches
-  WHERE lower(trim(branch_name)) = 'a';
+  WHERE id = 'ae9207a2-72f6-498c-be42-5ebedea2d359'::UUID;
+
+  IF v_branch_id IS NULL THEN
+    RAISE EXCEPTION 'Branch ID ae9207a2-72f6-498c-be42-5ebedea2d359 was not found';
+  END IF;
 
   INSERT INTO public.tms_account_ledger_mappings (branch_id)
   VALUES (v_branch_id)
   ON CONFLICT (branch_id) DO NOTHING;
 
-  -- The earlier single common Trip Expenditure mapping is superseded by the
-  -- individual mappings below. Keep the old column for compatibility, but
-  -- do not leave it active for Branch A.
-  UPDATE public.tms_account_ledger_mappings
-  SET trip_expenditure_ledger_id = NULL,
-      updated_at = now()
-  WHERE branch_id = v_branch_id;
-
   FOR v_item IN
     SELECT * FROM (VALUES
       ('approval_charge_income_ledger_id', 'Approval Charge Income', 'income', 'LTMS income ledger for Approval Charge'),
       ('trip_fuel_expense_ledger_id', 'Fuel Expense', 'expenditure', 'LTMS trip expenditure ledger for Fuel Expense'),
-      ('trip_toll_charges_ledger_id', 'Toll Charges', 'expenditure', 'LTMS trip expenditure ledger for Toll Charges'),
       ('trip_toll_cash_ledger_id', 'Toll Charges (paid in cash)', 'expenditure', 'LTMS trip expenditure ledger for cash-paid Toll Charges'),
       ('trip_driver_bata_ledger_id', 'Driver Bata', 'expenditure', 'LTMS trip expenditure ledger for Driver Bata'),
       ('trip_morning_exp_ledger_id', 'Morning Exp.', 'expenditure', 'LTMS trip expenditure ledger for Morning Exp.'),
@@ -122,8 +104,6 @@ SELECT
   ai.account_name AS approval_charge_income_account,
   m.trip_fuel_expense_ledger_id,
   fuel.account_name AS fuel_expense_account,
-  m.trip_toll_charges_ledger_id,
-  toll.account_name AS toll_charges_account,
   m.trip_toll_cash_ledger_id,
   toll_cash.account_name AS toll_cash_account,
   m.trip_driver_bata_ledger_id,
@@ -146,7 +126,6 @@ FROM public.tms_account_ledger_mappings m
 JOIN public.branches b ON b.id = m.branch_id
 LEFT JOIN public.ledger_accounts ai ON ai.id = m.approval_charge_income_ledger_id
 LEFT JOIN public.ledger_accounts fuel ON fuel.id = m.trip_fuel_expense_ledger_id
-LEFT JOIN public.ledger_accounts toll ON toll.id = m.trip_toll_charges_ledger_id
 LEFT JOIN public.ledger_accounts toll_cash ON toll_cash.id = m.trip_toll_cash_ledger_id
 LEFT JOIN public.ledger_accounts bata ON bata.id = m.trip_driver_bata_ledger_id
 LEFT JOIN public.ledger_accounts morning ON morning.id = m.trip_morning_exp_ledger_id
@@ -156,4 +135,4 @@ LEFT JOIN public.ledger_accounts parking ON parking.id = m.trip_parking_charges_
 LEFT JOIN public.ledger_accounts dala ON dala.id = m.trip_dala_charges_ledger_id
 LEFT JOIN public.ledger_accounts unloading ON unloading.id = m.trip_unloading_ledger_id
 LEFT JOIN public.ledger_accounts hire ON hire.id = m.trip_hire_charges_ledger_id
-WHERE lower(trim(b.branch_name)) = 'a';
+WHERE b.id = 'ae9207a2-72f6-498c-be42-5ebedea2d359'::UUID;
