@@ -19,7 +19,7 @@ export async function openBrandedTablePdf(options: {
   });
   let logo: string | null = null;
   try {
-    const blob = await fetch("/garuda-logo.png").then((response) => response.blob());
+    const blob = await fetch("/orca-logo.svg").then((response) => response.blob());
     logo = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(String(reader.result));
@@ -43,7 +43,7 @@ export async function openBrandedTablePdf(options: {
     pdf.setTextColor(15, 23, 42);
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(14);
-    pdf.text("GARUDA LOGISTICS SOLUTIONS", logo ? 40 : left, 16);
+    pdf.text("ORCA DEVS SURF", logo ? 40 : left, 16);
     pdf.setFont("helvetica", "normal");
     pdf.setFontSize(7.5);
     pdf.setTextColor(100, 116, 139);

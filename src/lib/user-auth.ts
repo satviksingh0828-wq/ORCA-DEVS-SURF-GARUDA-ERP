@@ -148,7 +148,7 @@ export const serverSignIn = createServerFn({ method: "POST" })
 
           const recipients = adminAlertEmails();
           if (process.env.RESEND_API_KEY && recipients.length) {
-            sendResendEmail({ to: recipients, subject: "⚠️ Admin account paused — Garuda Logistics", html: emailTemplate({
+            sendResendEmail({ to: recipients, subject: "⚠️ Admin account paused — ORCA DEVS SURF", html: emailTemplate({
               title: "Admin account paused", eyebrow: "Security alert", accent: "#dc2626",
               intro: `The admin account <strong>${user.username as string}</strong> was paused after three consecutive failed login attempts.`,
               content: `<p style="font-size:14px;line-height:1.6;color:#475569">Enter this one-time code in the Users panel to unpause the account:</p>
@@ -588,7 +588,7 @@ export const serverRequestUnpauseOtp = createServerFn({ method: "POST" })
     try {
       await sendResendEmail({
           to: recipients,
-          subject: "Your account unlock code — Garuda Logistics",
+          subject: "Your account unlock code — ORCA DEVS SURF",
           html: emailTemplate({ title: "Account unlock code", eyebrow: "Security verification", accent: "#b45309",
             intro: `A verification code was requested for the admin account <strong>${user.username as string}</strong>.`, content: `
   <p style="font-size:14px;color:#475569">Enter this code on the login page:</p>

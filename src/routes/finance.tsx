@@ -27,7 +27,7 @@ import { CoverageLedger } from "@/components/reports/CoverageLedger";
 export const Route = createFileRoute("/finance")({
   head: () => ({
     meta: [
-      { title: "Finance — Garuda Logistics Solutions | ORCA DEVS SURF" },
+      { title: "Finance — ORCA DEVS SURF" },
       {
         name: "description",
         content:

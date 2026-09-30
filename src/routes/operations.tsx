@@ -43,16 +43,16 @@ import { OutwardPOD } from "@/components/operations/OutwardPOD";
 export const Route = createFileRoute("/operations")({
   head: () => ({
     meta: [
-      { title: "Operations — Garuda Logistics Solutions | ORCA DEVS SURF" },
+      { title: "Operations — ORCA DEVS SURF" },
       {
         name: "description",
         content:
           "Plan and record trips with manifests, contract-based freight, other income, expenses and a profit summary.",
       },
-      { property: "og:title", content: "Operations — Garuda Logistics Solutions" },
+      { property: "og:title", content: "Operations — ORCA DEVS SURF" },
       {
         property: "og:description",
-        content: "Trips, manifests, income and expenses for Garuda Logistics Solutions.",
+        content: "Trips, manifests, income and expenses for ORCA DEVS SURF.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

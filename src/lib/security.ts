@@ -1,7 +1,7 @@
 /**
  * security.ts
  *
- * Client-side security hardening for Garuda Logistics Solutions:
+ * Client-side security hardening for ORCA DEVS SURF:
  *   • Suppresses all browser console output in production
  *   • Blocks common DevTools keyboard shortcuts (F12, Ctrl+Shift+I, etc.)
  *   • Disables right-click context menu

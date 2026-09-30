@@ -26,12 +26,12 @@ import { useSession } from "@/lib/session";
 export const Route = createFileRoute("/dashboard/")({
   head: () => ({
     meta: [
-      { title: "Dashboard — Garuda Logistics Solutions | ORCA DEVS SURF" },
+      { title: "Dashboard — ORCA DEVS SURF" },
       {
         name: "description",
         content: "Profit & Loss overview with branch-wise breakdown and monthly trend charts.",
       },
-      { property: "og:title", content: "Dashboard — Garuda Logistics Solutions" },
+      { property: "og:title", content: "Dashboard — ORCA DEVS SURF" },
       { property: "og:type", content: "website" },
     ],
   }),

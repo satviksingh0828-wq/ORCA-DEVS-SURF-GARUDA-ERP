@@ -184,7 +184,7 @@ async function emailPendingNotifications(db: any): Promise<{ sent: number; faile
     await sendResendEmail({
       to: recipients,
       cc: withPriyanshiCc(branchEmails),
-      subject: `${eligible.length} pending admin notification${eligible.length === 1 ? "" : "s"} — Garuda Logistics`,
+      subject: `${eligible.length} pending admin notification${eligible.length === 1 ? "" : "s"} — ORCA DEVS SURF`,
       html: emailTemplate({
         title: "Pending dashboard notifications",
         eyebrow: "Consolidated alert",

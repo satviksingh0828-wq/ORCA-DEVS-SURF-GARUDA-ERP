@@ -39,17 +39,17 @@ import { TMSAccountsSettings } from "@/components/settings/TMSAccountsSettings";
 export const Route = createFileRoute("/settings")({
   head: () => ({
     meta: [
-      { title: "Settings — Garuda Logistics Solutions | ORCA DEVS SURF" },
+      { title: "Settings — ORCA DEVS SURF" },
       {
         name: "description",
         content:
-          "Manage company profile, branches, departments and application appearance for Garuda Logistics Solutions.",
+          "Manage company profile, branches, departments and application appearance for ORCA DEVS SURF.",
       },
-      { property: "og:title", content: "Settings — Garuda Logistics Solutions" },
+      { property: "og:title", content: "Settings — ORCA DEVS SURF" },
       {
         property: "og:description",
         content:
-          "Company profile, branches, departments and theme settings for Garuda Logistics Solutions.",
+          "Company profile, branches, departments and theme settings for ORCA DEVS SURF.",
       },
     ],
   }),
@@ -755,7 +755,7 @@ function ThemePanel() {
               style={{ backgroundImage: "var(--gradient-brand)" }}
             >
               <div className="rounded-xl bg-white/20 px-5 py-2 text-[11px] font-semibold uppercase tracking-widest text-white">
-                Garuda Logistics Solutions
+                ORCA DEVS SURF
               </div>
             </div>
             <div className="flex items-center justify-between p-4">
@@ -784,7 +784,7 @@ function ThemePanel() {
             <div className="h-28 w-full overflow-hidden">
               <img
                 src="/garuda-banner.jpeg"
-                alt="Garuda banner preview"
+                alt="ORCA DEVS SURF banner preview"
                 className="h-full w-full object-cover"
               />
             </div>
@@ -792,7 +792,7 @@ function ThemePanel() {
               <span className="min-w-0">
                 <span className="block text-sm font-medium">Image UI</span>
                 <span className="block text-xs text-muted-foreground">
-                  Garuda banner as background
+                  ORCA DEVS SURF banner as background
                 </span>
               </span>
               {loginUi === "image" ? <Check className="size-4 shrink-0 text-primary" /> : null}
@@ -827,7 +827,7 @@ function ThemePanel() {
               <span className="min-w-0">
                 <span className="block text-sm font-medium">Video UI</span>
                 <span className="block text-xs text-muted-foreground">
-                  Same Garuda banner layout with the configured video
+                  Same ORCA DEVS SURF layout with the configured video
                 </span>
               </span>
               {loginUi === "video" ? <Check className="size-4 shrink-0 text-primary" /> : null}
@@ -846,7 +846,7 @@ function ThemePanel() {
           >
             <div className="flex h-28 w-full items-center justify-center bg-gradient-to-br from-sky-50 via-white to-blue-100">
               <div className="rounded-lg border border-sky-100 bg-white px-5 py-2.5 text-[11px] font-semibold tracking-wide text-sky-700 shadow-sm">
-                GARUDA · WORKSPACE
+                ORCA DEVS SURF · WORKSPACE
               </div>
             </div>
             <div className="flex items-center justify-between p-4">

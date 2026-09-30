@@ -1,7 +1,7 @@
 /**
  * log-actions.ts
  *
- * Centralized audit logging for Garuda Logistics Solutions.
+ * Centralized audit logging for ORCA DEVS SURF.
  *
  * Server functions (serverAddLog, serverListLogs, serverDeleteLogs) run
  * with the service-role key — logs are never exposed to anon clients.

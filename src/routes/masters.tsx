@@ -38,16 +38,16 @@ import {
 export const Route = createFileRoute("/masters")({
   head: () => ({
     meta: [
-      { title: "Masters — Garuda Logistics Solutions | ORCA DEVS SURF" },
+      { title: "Masters — ORCA DEVS SURF" },
       {
         name: "description",
         content:
-          "Manage vehicles, drivers, transporters and locations for Garuda Logistics Solutions with Excel-friendly import and export.",
+          "Manage vehicles, drivers, transporters and locations for ORCA DEVS SURF with Excel-friendly import and export.",
       },
-      { property: "og:title", content: "Masters — Garuda Logistics Solutions" },
+      { property: "og:title", content: "Masters — ORCA DEVS SURF" },
       {
         property: "og:description",
-        content: "Vehicles, drivers, transporters and locations for Garuda Logistics Solutions.",
+        content: "Vehicles, drivers, transporters and locations for ORCA DEVS SURF.",
       },
     ],
   }),

@@ -96,7 +96,7 @@ type TabId = (typeof TABS)[number]["id"];
 export const Route = createFileRoute("/ltms_/reports")({
   head: () => ({
     meta: [
-      { title: "LTMS Reports — Garuda Logistics Solutions | ORCA DEVS SURF" },
+      { title: "LTMS Reports — ORCA DEVS SURF" },
       {
         name: "description",
         content: "LTMS ADMIN MIS and management reports.",

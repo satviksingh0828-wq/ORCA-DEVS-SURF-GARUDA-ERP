@@ -21,7 +21,7 @@ export function getLogoBase64(): string | null {
 /** Load the fixed Garuda header logo once so every synchronous PDF exporter can embed it. */
 export async function preloadLogo(): Promise<void> {
   if (_activeLogo || typeof window === "undefined") return;
-  const response = await fetch("/garuda-logo.png");
+  const response = await fetch("/orca-logo.svg");
   if (!response.ok) throw new Error("Could not load Garuda logo");
   const blob = await response.blob();
   _activeLogo = await new Promise<string>((resolve, reject) => {

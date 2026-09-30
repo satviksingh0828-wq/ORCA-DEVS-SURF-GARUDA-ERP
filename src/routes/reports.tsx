@@ -36,12 +36,12 @@ import {
 export const Route = createFileRoute("/reports")({
   head: () => ({
     meta: [
-      { title: "Reports — Garuda Logistics Solutions | ORCA DEVS SURF" },
+      { title: "Reports — ORCA DEVS SURF" },
       {
         name: "description",
         content: "Compare P&L between two periods with detailed charts and breakdowns.",
       },
-      { property: "og:title", content: "Reports — Garuda Logistics Solutions" },
+      { property: "og:title", content: "Reports — ORCA DEVS SURF" },
       { property: "og:type", content: "website" },
     ],
   }),

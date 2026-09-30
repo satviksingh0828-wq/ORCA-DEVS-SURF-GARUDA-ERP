@@ -32,8 +32,8 @@ import type { AppRole } from "@/lib/roles";
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Sign in — Garuda Logistics Solutions | ORCA DEVS SURF" },
-      { name: "description", content: "Secure operator sign-in for Garuda Logistics Solutions." },
+      { title: "Sign in — ORCA DEVS SURF" },
+      { name: "description", content: "Secure operator sign-in for ORCA DEVS SURF." },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
     links: [{ rel: "preload", href: "/garuda-banner.webp", as: "image", type: "image/webp" }],
@@ -481,13 +481,13 @@ function LoginPage() {
             <div className="relative w-full max-w-lg animate-fade-up text-white">
               <div className="inline-flex rounded-xl bg-white px-4 py-2.5 shadow-lg">
                 <img
-                  src="/garuda-logo.png"
-                  alt="Garuda Logistics Solution"
+                  src="/orca-logo.svg"
+                  alt="ORCA DEVS SURF"
                   className="h-10 w-auto"
                 />
               </div>
               <p className="mt-12 text-xs font-semibold uppercase tracking-[0.24em] text-white/75">
-                GARUDA · LOGISTICS WORKSPACE
+                ORCA DEVS SURF · WORKSPACE
               </p>
               <h1 className="mt-4 text-4xl font-semibold tracking-tight xl:text-5xl">
                 Everything moving, in one place.
@@ -505,7 +505,7 @@ function LoginPage() {
               <source srcSet="/garuda-banner.webp" type="image/webp" />
               <img
                 src="/garuda-banner.jpeg"
-                alt="Garuda Logistics Solution"
+                alt="ORCA DEVS SURF"
                 className="block size-full object-cover"
                 fetchPriority="high"
                 decoding="async"
@@ -515,8 +515,8 @@ function LoginPage() {
             <div className="absolute left-6 top-6 flex flex-col items-center">
               <div className="rounded-xl bg-white/85 px-4 py-2.5 backdrop-blur-sm shadow-md">
                 <img
-                  src="/garuda-logo.png"
-                  alt="Garuda Logistics Solution"
+                  src="/orca-logo.svg"
+                  alt="ORCA DEVS SURF"
                   className="h-10 w-auto"
                 />
               </div>
@@ -551,14 +551,14 @@ function LoginPage() {
             <div className="pointer-events-none absolute -bottom-32 -right-16 size-[26rem] rounded-full bg-white/10 blur-3xl" />
             <div className="relative animate-fade-up text-center text-primary-foreground">
               <div className="mx-auto w-52 rounded-2xl bg-white p-3 xl:w-60">
-                <img src="/garuda-logo.png" alt="Garuda Logistics Solution" className="w-full" />
+                <img src="/orca-logo.svg" alt="ORCA DEVS SURF" className="w-full" />
                 <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-900">
-                  Garuda ERP
+                  ORCA DEVS SURF
                 </p>
               </div>
               <div className="mx-auto my-6 h-px w-24 bg-white/40" />
               <p className="text-lg font-medium uppercase tracking-[0.42em] opacity-90">
-                Garuda Logistics Solutions
+                ORCA DEVS SURF
               </p>
               <p className="mx-auto mt-8 max-w-sm text-sm leading-relaxed opacity-80">
                 Transport management, masters and operations — unified in one clean workspace.

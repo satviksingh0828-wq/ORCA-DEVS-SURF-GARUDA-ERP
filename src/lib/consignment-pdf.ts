@@ -113,10 +113,10 @@ export async function printConsignorCopyPdf({
 }: ConsignmentPdfOptions) {
   const [companyResult, logo] = await Promise.all([
     supabase.from("company").select("company_name").limit(1).maybeSingle(),
-    safeImageData("/garuda-logo.png"),
+    safeImageData("/orca-logo.svg"),
   ]);
   const companyName =
-    text(companyResult.data?.company_name) || "GARUDA LOGISTICS SOLUTION PRIVATE LIMITED";
+    text(companyResult.data?.company_name) || "ORCA DEVS SURF";
   const branch = (consignment.branch ?? {}) as AnyRecord;
   const branchAddress = [
     text(branch.address_line1),

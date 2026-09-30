@@ -23,13 +23,13 @@ import { PoweredBy } from "@/components/PoweredBy";
 export const Route = createFileRoute("/home")({
   head: () => ({
     meta: [
-      { title: "Workspace — Garuda Logistics Solutions | ORCA DEVS SURF" },
+      { title: "Workspace — ORCA DEVS SURF" },
       {
         name: "description",
         content:
-          "Garuda Logistics Solutions workspace: operations, masters, dashboard, reports, users and settings modules.",
+          "ORCA DEVS SURF workspace: operations, masters, dashboard, reports, users and settings modules.",
       },
-      { property: "og:title", content: "Workspace — Garuda Logistics Solutions" },
+      { property: "og:title", content: "Workspace — ORCA DEVS SURF" },
       {
         property: "og:description",
         content: "Operations, masters, dashboard, reports, users and settings in one workspace.",
@@ -211,7 +211,7 @@ function HomePage() {
     <AppShell>
       <div className="animate-fade-up">
         <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">Workspace</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Garuda Logistics Solutions</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">ORCA DEVS SURF</h1>
         <p className="mt-2 max-w-xl text-sm text-muted-foreground">
           {role === "admin" ? "Select a module" : "Select a module"}
         </p>

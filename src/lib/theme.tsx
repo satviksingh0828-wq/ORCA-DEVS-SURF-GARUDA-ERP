@@ -29,7 +29,7 @@ export const THEMES = [
   { id: "amber", label: "Warm Amber", swatch: "#d38b1b", hint: "Bright & energetic", dark: false },
   { id: "rose", label: "Signal Rose", swatch: "#d94f5c", hint: "High visibility", dark: false },
   { id: "graphite", label: "Graphite", swatch: "#4a4f57", hint: "Neutral monochrome", dark: false },
-  { id: "garuda", label: "Garuda", swatch: "#8b1a2c", hint: "Crimson & gold", dark: false },
+  { id: "garuda", label: "ORCA DEVS SURF", swatch: "#8b1a2c", hint: "Crimson & gold", dark: false },
   { id: "ocean", label: "Deep Ocean", swatch: "#1e3a6e", hint: "Professional navy", dark: false },
   { id: "blaze", label: "Blaze", swatch: "#e06820", hint: "Orange on blue-tint", dark: false },
   {

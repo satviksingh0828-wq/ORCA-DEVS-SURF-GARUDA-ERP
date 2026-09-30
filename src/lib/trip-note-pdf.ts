@@ -648,7 +648,7 @@ async function printTripDocument(
   document.body.appendChild(iframe);
 
   try {
-    const logoDataUri = await toDataUri(`${window.location.origin}/garuda-logo.png`);
+    const logoDataUri = await toDataUri(`${window.location.origin}/orca-logo.svg`);
 
     // Write a standalone HTML document into the iframe — no app stylesheets.
     const iframeDoc = iframe.contentDocument!;

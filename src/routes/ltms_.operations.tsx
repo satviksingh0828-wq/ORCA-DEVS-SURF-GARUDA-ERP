@@ -5,7 +5,7 @@ import { OperationsPage } from "@/routes/operations";
 export const Route = createFileRoute("/ltms_/operations")({
   head: () => ({
     meta: [
-      { title: "LTMS Operations — Garuda Logistics Solutions | ORCA DEVS SURF" },
+      { title: "LTMS Operations — ORCA DEVS SURF" },
       {
         name: "description",
         content: "E-Way Bill management for logistics operations.",

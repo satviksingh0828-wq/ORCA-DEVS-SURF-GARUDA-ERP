@@ -143,10 +143,10 @@ export function AppShell({
             <img
               src={
                 theme === "neon" || theme === "midnight" || theme === "forest" || theme === "storm"
-                  ? "/garuda-logo.png"
-                  : "/garuda-logo-light.png"
+                  ? "/orca-logo.svg"
+                  : "/orca-logo-light.svg"
               }
-              alt="Garuda Logistics Solution"
+              alt="ORCA DEVS SURF"
               className="h-8 w-auto sm:h-10"
             />
           </Link>

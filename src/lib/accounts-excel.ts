@@ -118,7 +118,7 @@ export function downloadAccountsTemplate(kind: AccountKind) {
       ? [
           {
             Branch: "Main Branch",
-            "Account Holder Name": "Garuda Logistics",
+            "Account Holder Name": "ORCA DEVS SURF",
             "Bank Name": "State Bank of India",
             "Account Number": "000000000000",
             "IFSC Code": "SBIN0000000",

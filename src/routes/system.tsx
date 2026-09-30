@@ -26,7 +26,7 @@ import { TemporaryEwayBillPanel } from "@/components/system/TemporaryEwayBillPan
 export const Route = createFileRoute("/system")({
   head: () => ({
     meta: [
-      { title: "System — Garuda Logistics Solutions" },
+      { title: "System — ORCA DEVS SURF" },
       {
         name: "description",
         content: "Admin system panel: error detection, database stats, and project info.",
