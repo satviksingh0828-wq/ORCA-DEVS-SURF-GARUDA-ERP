@@ -173,7 +173,7 @@ export const serverCheckCredential = createServerFn({ method: "POST" })
 // ── 4. Start authentication (generate challenge) ──────────────────────────────
 
 export const serverStartAuthentication = createServerFn({ method: "POST" })
-  .validator((input: { credentialId: string; origin: string }) => input)
+  .validator((input: { credentialId?: string; origin: string }) => input)
   .handler(async ({ data }) => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -182,9 +182,23 @@ export const serverStartAuthentication = createServerFn({ method: "POST" })
     const { generateAuthenticationOptions } = await import("@simplewebauthn/server");
     const rpID = originToRpId(data.origin);
 
+    let allowCredentials: Array<{ id: string }> | undefined;
+    if (data.credentialId) {
+      allowCredentials = [{ id: data.credentialId }];
+    } else {
+      const { data: approvedDevices } = await db
+        .from("device_registrations")
+        .select("credential_id")
+        .eq("status", "approved");
+      const ids = ((approvedDevices ?? []) as Array<{ credential_id?: string }>)
+        .map((device) => device.credential_id)
+        .filter((id): id is string => Boolean(id));
+      if (ids.length > 0) allowCredentials = ids.map((id) => ({ id }));
+    }
+
     const options = await generateAuthenticationOptions({
       rpID,
-      allowCredentials: [{ id: data.credentialId }],
+      allowCredentials,
       userVerification: "required",
       timeout: 120000,
     });
@@ -204,11 +218,11 @@ export const serverStartAuthentication = createServerFn({ method: "POST" })
 export const serverFinishAuthentication = createServerFn({ method: "POST" })
   .validator((input: {
     challengeId: string;
-    credentialId: string;
+    credentialId?: string;
     response: unknown;
     origin: string;
   }) => input)
-  .handler(async ({ data }): Promise<{ ok: boolean; allowedUserIds: string[]; error?: string }> => {
+  .handler(async ({ data }): Promise<{ ok: boolean; credentialId?: string; allowedUserIds: string[]; error?: string }> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabaseAdmin as any;
@@ -225,11 +239,14 @@ export const serverFinishAuthentication = createServerFn({ method: "POST" })
     if (chRow.used) return { ok: false, allowedUserIds: [], error: "Challenge already used." };
     if (new Date(chRow.expires_at) < new Date()) return { ok: false, allowedUserIds: [], error: "Challenge expired." };
 
+    const responseCredentialId = data.credentialId || String((data.response as { id?: unknown })?.id ?? "");
+    if (!responseCredentialId) return { ok: false, allowedUserIds: [], error: "Credential ID missing." };
+
     // Fetch stored credential
     const { data: credRow, error: credErr } = await db
       .from("device_registrations")
       .select("id, public_key_bytes, counter, transports, status")
-      .eq("credential_id", data.credentialId)
+      .eq("credential_id", responseCredentialId)
       .maybeSingle();
     if (credErr || !credRow) return { ok: false, allowedUserIds: [], error: "Credential not found." };
     if (credRow.status !== "approved") return { ok: false, allowedUserIds: [], error: "Device not approved." };
@@ -244,7 +261,7 @@ export const serverFinishAuthentication = createServerFn({ method: "POST" })
         expectedOrigin: data.origin,
         expectedRPID: rpID,
         credential: {
-          id: data.credentialId,
+          id: responseCredentialId,
           publicKey: base64urlToUint8(credRow.public_key_bytes as string) as Uint8Array<ArrayBuffer>,
           counter: Number(credRow.counter ?? 0),
           transports: (JSON.parse(credRow.transports as string ?? "[]")) as never,
@@ -262,7 +279,7 @@ export const serverFinishAuthentication = createServerFn({ method: "POST" })
       db.from("passkey_challenges").update({ used: true }).eq("id", data.challengeId),
       db.from("device_registrations")
         .update({ counter: verification.authenticationInfo.newCounter, last_used_at: new Date().toISOString() })
-        .eq("credential_id", data.credentialId),
+        .eq("credential_id", responseCredentialId),
     ]);
 
     // Fetch allowed user IDs from junction table
@@ -273,7 +290,7 @@ export const serverFinishAuthentication = createServerFn({ method: "POST" })
 
     const allowedUserIds = ((assignments ?? []) as { app_user_id: string }[]).map(a => a.app_user_id);
 
-    return { ok: true, allowedUserIds };
+    return { ok: true, credentialId: responseCredentialId, allowedUserIds };
   });
 
 // ── 6. Admin: list all devices ────────────────────────────────────────────────

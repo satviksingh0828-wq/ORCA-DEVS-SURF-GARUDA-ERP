@@ -406,19 +406,20 @@ export function PasskeyGate({ children }: { children: ReactNode }) {
       });
       const assertion = await startAuthentication({ optionsJSON: options as never });
       const result = await serverFinishAuthentication({
-        data: { challengeId, credentialId: credId, response: assertion, origin },
+        data: { challengeId, credentialId: credId || undefined, response: assertion, origin },
       });
       if (result.ok) {
+        if (result.credentialId) secureStorage.setItem(CRED_KEY, result.credentialId);
         secureSession.setItem(SESSION_KEY, "1");
         setAllowed(result.allowedUserIds);
         setState("authenticated");
       } else {
-        setState("auth-failed");
+        setState(credId ? "auth-failed" : "no-credential");
       }
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       void msg;
-      setState("auth-failed");
+      setState(credId ? "auth-failed" : "no-credential");
     }
   }
 
@@ -450,7 +451,10 @@ export function PasskeyGate({ children }: { children: ReactNode }) {
       // 3. Check stored credential ID
       const credId = secureStorage.getItem(CRED_KEY);
       if (!credId) {
-        setState("no-credential");
+        // The credential may still exist in Windows Hello even when localStorage
+        // was cleared. Ask the server for approved credentials and let WebAuthn
+        // discover/use the existing passkey before offering registration.
+        await runAuth("");
         return;
       }
 
