@@ -86,9 +86,6 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
   if (!ownTrip) return null;
   return <>
     <div className="flex items-center gap-1">
-      {!closed ? <Button variant="ghost" size="sm" onClick={() => void setRecordingState(recording ? "stop" : "start")} disabled={loading} title={recording ? "Stop GPS recording" : "Start GPS recording"} aria-label={`${recording ? "Stop" : "Start"} GPS recording for ${trip.trip_code}`}>
-        {loading ? <Loader2 className="size-4 animate-spin" /> : recording ? <Square className="size-4 text-destructive" /> : <Play className="size-4 text-emerald-600" />}
-      </Button> : null}
       <Button variant="ghost" size="sm" onClick={() => { setLocationOpen(true); void loadLocation(); }} title="View GPS route" aria-label={`View GPS route for ${trip.trip_code}`}><MapPin className="size-4" /></Button>
     </div>
     <Dialog open={locationOpen} onOpenChange={setLocationOpen}>
