@@ -1,7 +1,6 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  AlertTriangle,
   ChevronRight,
   Database,
   PanelLeftClose,
@@ -9,16 +8,13 @@ import {
   Server,
   ShieldCheck,
   ScrollText,
-  Wrench,
   Zap,
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
-import { ErrorPanel } from "@/components/system/ErrorPanel";
 import { DatabaseStats } from "@/components/system/DatabaseStats";
 import { SecurityPanel } from "@/components/system/SecurityPanel";
-import { CorrectionPanel } from "@/components/system/CorrectionPanel";
 import { LogsPanel } from "@/components/users/LogsPanel";
 import { useSession } from "@/lib/session";
 import { TemporaryEwayBillPanel } from "@/components/system/TemporaryEwayBillPanel";
@@ -29,7 +25,7 @@ export const Route = createFileRoute("/system")({
       { title: "System — ORCA DEVS SURF" },
       {
         name: "description",
-        content: "Admin system panel: error detection, database stats, and project info.",
+        content: "Admin system panel: database stats, security, logs, and project tools.",
       },
     ],
   }),
@@ -41,18 +37,6 @@ export const Route = createFileRoute("/system")({
 });
 
 const TABS = [
-  {
-    id: "corrections",
-    label: "Correction Panel",
-    desc: "Safely correct archived trip data",
-    icon: Wrench,
-  },
-  {
-    id: "errors",
-    label: "Error Panel",
-    desc: "Timestamp inconsistencies in closed trips",
-    icon: AlertTriangle,
-  },
   {
     id: "temporary-eway",
     label: "Temporary E-Way Bill",
@@ -84,7 +68,7 @@ type TabId = (typeof TABS)[number]["id"];
 function SystemPage() {
   const { user } = useSession();
   const navigate = useNavigate();
-  const [tab, setTab] = useState<TabId>("errors");
+  const [tab, setTab] = useState<TabId>("temporary-eway");
   const [navOpen, setNavOpen] = useState(true);
 
   // Admin-equivalent guard; Settings and Users remain separate Admin-only routes.
@@ -177,9 +161,7 @@ function SystemPage() {
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>
 
-          {tab === "errors" && <ErrorPanel />}
           {tab === "temporary-eway" && <TemporaryEwayBillPanel />}
-          {tab === "corrections" && <CorrectionPanel />}
           {tab === "db" && <DatabaseStats />}
           {tab === "security" && <SecurityPanel />}
           {tab === "logs" && <LogsPanel />}
