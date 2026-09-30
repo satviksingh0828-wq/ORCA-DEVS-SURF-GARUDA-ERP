@@ -284,6 +284,7 @@ export function ConsignmentNetReport() {
               supabase
                 .from("package_rate_entries")
                 .select("package_rate_type_id,from_value,to_value,amount")
+                .eq("rate_kind", "loading")
                 .in("branch_id", branchIds),
             )
           : Promise.resolve([] as LoadingRateEntry[]),

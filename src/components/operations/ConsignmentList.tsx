@@ -2459,6 +2459,7 @@ function ConsignmentCalculationPreview({
         ? db
             .from("package_rate_entries")
             .select("package_rate_type_id,from_value,to_value,amount")
+            .eq("rate_kind", "loading")
             .eq("branch_id", branchId)
         : Promise.resolve({ data: [], error: null });
       const [sourceResult, transporterResult, packageResult] = await Promise.all([
@@ -2488,14 +2489,8 @@ function ConsignmentCalculationPreview({
 
   const incomeFrom = common?.dispatch_from_pin_code || common?.supplier_pin_code || "";
   const incomeTo = common?.ship_to_pin_code || common?.recipient_pin_code || "";
-  const weight = packageEntries.reduce(
-    (total, item) => total + num(item.weight_kg),
-    0,
-  );
-  const quantity = packageEntries.reduce(
-    (total, item) => total + num(item.quantity),
-    0,
-  );
+  const weight = packageEntries.reduce((total, item) => total + num(item.weight_kg), 0);
+  const quantity = packageEntries.reduce((total, item) => total + num(item.quantity), 0);
   const packageLoading = packageEntries.reduce(
     (total, item) =>
       total +
@@ -2525,8 +2520,7 @@ function ConsignmentCalculationPreview({
     },
   );
   const transporterFrom = movement === "drop" ? toPin : fromPin;
-  const transporterTo =
-    movement === "drop" ? common?.recipient_pin_code || incomeTo : toPin;
+  const transporterTo = movement === "drop" ? common?.recipient_pin_code || incomeTo : toPin;
   const transporter =
     type === "third_party"
       ? manifestCharges(
@@ -2551,10 +2545,7 @@ function ConsignmentCalculationPreview({
     0,
     transporter.loading - loadingDeduction + additionalLoading,
   );
-  const adjustedPackageLoading = Math.max(
-    0,
-    packageLoading - loadingDeduction + additionalLoading,
-  );
+  const adjustedPackageLoading = Math.max(0, packageLoading - loadingDeduction + additionalLoading);
   const net =
     sourceIncome - adjustedTransporterFreight - adjustedTransporterLoading - adjustedPackageLoading;
   const rows = [
@@ -2564,7 +2555,11 @@ function ConsignmentCalculationPreview({
       value: adjustedTransporterLoading,
       tone: "text-orange-700",
     },
-    { label: "Loading Charge (Package Rate)", value: adjustedPackageLoading, tone: "text-amber-700" },
+    {
+      label: "Loading Charge (Package Rate)",
+      value: adjustedPackageLoading,
+      tone: "text-amber-700",
+    },
     { label: "Source Income", value: sourceIncome, tone: "text-emerald-700" },
     { label: "NET", value: net, tone: net >= 0 ? "text-emerald-700" : "text-rose-700" },
   ];
