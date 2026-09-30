@@ -289,6 +289,7 @@ export function Trips({
                       <span className="rounded-full border border-emerald-300 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-800">
                         Closed
                       </span>
+                      <DriverTripActions trip={t} />
                     </li>
                   ))}
                 </ul>

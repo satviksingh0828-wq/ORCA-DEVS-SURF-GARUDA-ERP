@@ -1,329 +1,87 @@
-import { useEffect, useState } from "react";
-import QRCode from "qrcode";
-import { Loader2, Map, MapPin, QrCode, RefreshCw } from "lucide-react";
+import { useState } from "react";
+import { Loader2, Map, MapPin, Play, RefreshCw, Square } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { TripRow } from "./TripForm";
 import { DriverRouteMap } from "./DriverRouteMap";
-import {
-  serverGetDriverTripLocationTrace,
-  type DriverRouteTrace,
-} from "@/lib/driver-location-trace";
-import { serverGetTripCheckpointStatus, type TripCheckpointStatus } from "@/lib/driver-checkpoint-status";
+import { serverGetDriverTripLocationTrace, type DriverRouteTrace } from "@/lib/driver-location-trace";
 import { useSession } from "@/lib/session";
 
-type QrPayload = {
-  token: string;
-  trip_code: string;
-  expires_at?: string | null;
-  stable?: boolean;
-};
+type LiveLocation = { latitude?: number; longitude?: number; accuracy_m?: number | null; recorded_at?: string; active?: boolean } | null;
+const TRACKING_ENDPOINT = (import.meta.env.VITE_DRIVER_TRACKING_ENDPOINT as string | undefined) || "/gps/api";
 
-type LiveLocation = {
-  trip_code?: string;
-  latitude?: number;
-  longitude?: number;
-  accuracy_m?: number | null;
-  recorded_at?: string;
-  last_seen_at?: string;
-  active?: boolean;
-} | null;
-
-function isOwnTrip(trip: TripRow) {
-  return trip.ownership === "own" && Boolean(trip.id);
-}
-
-function formatLocationTime(value?: string) {
+function formatTime(value?: string) {
   if (!value) return "No location received yet";
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
 
-function supabaseErrorMessage(error: unknown, fallback: string) {
-  const value = error as {
-    message?: string;
-    details?: string;
-    hint?: string;
-    code?: string;
-  } | null;
-  const message = [value?.message, value?.details, value?.hint].filter(Boolean).join(" — ");
-  if (!message) return fallback;
-  if (value?.code === "42883" || /does not exist|schema cache/i.test(message)) {
-    return "Driver App SQL is not installed in Supabase. Apply 20260814000000_driver_app_links.sql, then retry.";
-  }
-  return message;
-}
-
 export function DriverTripActions({ trip }: { trip: TripRow }) {
-  const [qrOpen, setQrOpen] = useState(false);
   const [locationOpen, setLocationOpen] = useState(false);
-  const [qr, setQr] = useState<QrPayload | null>(null);
-  const [qrImage, setQrImage] = useState<string | null>(null);
-  const [loadingQr, setLoadingQr] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [recording, setRecording] = useState(false);
   const [location, setLocation] = useState<LiveLocation>(null);
   const [routeTrace, setRouteTrace] = useState<DriverRouteTrace | null>(null);
-  const [checkpointStatus, setCheckpointStatus] = useState<TripCheckpointStatus | null>(null);
-  const [loadingLocation, setLoadingLocation] = useState(false);
   const { user } = useSession();
-
-  const ownTrip = isOwnTrip(trip);
-
-  useEffect(() => {
-    if (!qr) {
-      setQrImage(null);
-      return;
-    }
-    const qrValue = JSON.stringify({
-      type: "garuda-driver-trip",
-      token: qr.token,
-      tripCode: qr.trip_code,
-    });
-    QRCode.toDataURL(qrValue, { width: 320, margin: 2, errorCorrectionLevel: "M" })
-      .then(setQrImage)
-      .catch(() => toast.error("Could not render the trip QR code"));
-  }, [qr]);
-
-  async function issueQr() {
-    if (!ownTrip || !trip.id) return;
-    setLoadingQr(true);
-    try {
-      const { data, error } = await supabase.rpc(
-        "issue_driver_trip_qr" as never,
-        {
-          p_trip_id: trip.id,
-        } as never,
-      );
-      if (error) throw error;
-      setQr(data as unknown as QrPayload);
-      setQrOpen(true);
-    } catch (error) {
-      toast.error(supabaseErrorMessage(error, "Could not create a trip QR code"));
-    } finally {
-      setLoadingQr(false);
-    }
-  }
+  const ownTrip = trip.ownership === "own" && Boolean(trip.id);
+  const closed = trip.closed === true;
 
   async function loadLocation() {
     if (!ownTrip || !trip.id) return;
-    setLoadingLocation(true);
+    setLoading(true);
     try {
-      const { data, error } = await supabase.rpc(
-        "get_trip_live_location" as never,
-        {
-          p_trip_id: trip.id,
-        } as never,
-      );
-      if (error) throw error;
-      setLocation(data as unknown as LiveLocation);
-      if (!user?.sessionToken) {
-        setRouteTrace(null);
-        setCheckpointStatus(null);
-        return;
-      }
-      const [trace, status] = await Promise.all([
-        serverGetDriverTripLocationTrace({ data: { sessionToken: user.sessionToken, tripId: trip.id } }),
-        serverGetTripCheckpointStatus({ data: { sessionToken: user.sessionToken, tripId: trip.id } }),
-      ]);
-      setRouteTrace(trace);
-      setCheckpointStatus(status);
+      const { data: latest, error: latestError } = await supabase.from("driver_gps_locations" as never).select("latitude,longitude,accuracy_m,recorded_at").eq("trip_id", trip.id).order("recorded_at", { ascending: false }).limit(1).maybeSingle();
+      if (latestError) throw latestError;
+      const { data: status, error: statusError } = await supabase.rpc("get_driver_gps_tracking_status" as never, { p_trip_id: trip.id } as never);
+      if (statusError) throw statusError;
+      const row = latest as { latitude?: number; longitude?: number; accuracy_m?: number | null; recorded_at?: string } | null;
+      const active = Boolean((status as { active?: boolean } | null)?.active);
+      setRecording(active);
+      setLocation(row ? { ...row, active } : null);
+      if (user?.sessionToken) setRouteTrace(await serverGetDriverTripLocationTrace({ data: { sessionToken: user.sessionToken, tripId: trip.id } }));
     } catch (error) {
-      toast.error(supabaseErrorMessage(error, "Could not load live location"));
-    } finally {
-      setLoadingLocation(false);
-    }
+      toast.error(error instanceof Error ? error.message : "Could not load GPS tracking");
+    } finally { setLoading(false); }
   }
 
-  function openLocation() {
-    setLocationOpen(true);
-    void loadLocation();
+  async function setRecordingState(next: "start" | "stop") {
+    if (!trip.id) return;
+    setLoading(true);
+    try {
+      const fn = next === "start" ? "start_driver_gps_tracking" : "stop_driver_gps_tracking";
+      const { error } = await supabase.rpc(fn as never, { p_trip_id: trip.id } as never);
+      if (error) throw error;
+      setRecording(next === "start");
+      toast.success(next === "start" ? "GPS recording started" : "GPS recording stopped");
+      await loadLocation();
+    } catch (error) { toast.error(error instanceof Error ? error.message : "Could not change GPS recording state"); }
+    finally { setLoading(false); }
   }
 
   if (!ownTrip) return null;
-
-  return (
-    <>
-      <div className="flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => void issueQr()}
-          disabled={loadingQr}
-          title="Show Trip QR Code"
-          aria-label={`Show Trip QR Code for ${trip.trip_code}`}
-        >
-          {loadingQr ? <Loader2 className="size-4 animate-spin" /> : <QrCode className="size-4" />}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={openLocation}
-          title="View live driver location"
-          aria-label={`View live driver location for ${trip.trip_code}`}
-        >
-          <MapPin className="size-4" />
-        </Button>
-      </div>
-
-      <Dialog open={qrOpen} onOpenChange={setQrOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <QrCode className="size-5 text-primary" />
-              Trip QR Code
-            </DialogTitle>
-            <DialogDescription>
-              Scan this permanent Trip QR Code. It remains the same for this own-vehicle trip.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col items-center gap-4">
-            {qrImage ? (
-              <img
-                src={qrImage}
-                alt={`Trip QR Code for trip ${trip.trip_code}`}
-                className="size-72 rounded-xl border border-border p-2"
-              />
-            ) : (
-              <div className="flex size-72 items-center justify-center rounded-xl border border-dashed border-border text-sm text-muted-foreground">
-                Preparing QR code…
-              </div>
-            )}
-            <div className="w-full rounded-xl bg-muted/50 p-3 text-center">
-              <p className="text-xs uppercase tracking-[0.16em] text-muted-foreground">Trip code</p>
-              <p className="mt-1 text-lg font-semibold tracking-tight">{trip.trip_code}</p>
-              <p className="mt-1 text-xs text-muted-foreground">Permanent trip QR code</p>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={locationOpen} onOpenChange={setLocationOpen}>
-        <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100dvw-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:w-full">
-          <DialogHeader className="shrink-0 px-5 pb-3 pt-6 pr-12 sm:px-7 sm:pt-7">
-            <DialogTitle className="flex items-center gap-2">
-              <MapPin className="size-5 text-primary" />
-              Driver location and route
-            </DialogTitle>
-            <DialogDescription>
-              Own-vehicle trip {trip.trip_code}. The map shows the latest location and recorded
-              route trace from the linked device.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-5 sm:space-y-5 sm:px-7 sm:pb-7">
-            {loadingLocation ? (
-              <div className="flex min-h-52 items-center justify-center gap-2 rounded-2xl bg-muted/50 p-8 text-sm text-muted-foreground sm:min-h-72">
-                <Loader2 className="size-4 animate-spin" /> Loading latest location…
-              </div>
-            ) : location?.latitude != null && location.longitude != null ? (
-              <>
-                {routeTrace?.points.length ? (
-                  <DriverRouteMap
-                    points={routeTrace.points}
-                    tripCode={trip.trip_code}
-                    totalStoredPoints={routeTrace.totalStoredPoints}
-                  />
-                ) : (
-                  <div className="overflow-hidden rounded-2xl border border-border bg-muted/30 p-1.5 shadow-sm sm:p-2">
-                    <iframe
-                      title={`Live location map for trip ${trip.trip_code}`}
-                      className="h-52 w-full rounded-xl border-0 bg-muted sm:h-[min(52dvh,420px)] sm:min-h-72"
-                      loading="lazy"
-                      src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.longitude - 0.01}%2C${location.latitude - 0.01}%2C${location.longitude + 0.01}%2C${location.latitude + 0.01}&layer=mapnik&marker=${location.latitude}%2C${location.longitude}`}
-                    />
-                  </div>
-                )}
-                <a
-                  className="mt-1.5 flex items-center justify-center gap-1 rounded-xl px-3 py-2.5 text-xs font-medium text-primary hover:bg-primary/5 hover:underline"
-                  href={`https://www.openstreetmap.org/?mlat=${location.latitude}&mlon=${location.longitude}#map=16/${location.latitude}/${location.longitude}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  <Map className="size-3.5" /> Open full map
-                </a>
-                {routeTrace?.truncated ? (
-                  <p className="text-xs text-muted-foreground">
-                    The route contains more than 5,000 checkpoints. The map preserves the route
-                    order and samples the latest stored trace for readability.
-                  </p>
-                ) : null}
-                {routeTrace?.totalStoredPoints ? (
-                  <p className="text-xs text-muted-foreground">
-                    Route trace based on {routeTrace.totalStoredPoints.toLocaleString()} recorded
-                    location point{routeTrace.totalStoredPoints === 1 ? "" : "s"}.
-                  </p>
-                ) : null}
-                {checkpointStatus ? (
-                  <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm sm:p-5">
-                    <p className="font-medium">
-                      {!checkpointStatus.linked
-                        ? "No Driver App session linked"
-                        : checkpointStatus.active
-                          ? "Driver verification pending"
-                          : checkpointStatus.verified
-                            ? "All driver checkpoints verified"
-                            : "Driver verification needs attention"}
-                    </p>
-                    <p className="mt-1 text-muted-foreground">
-                      {!checkpointStatus.linked
-                        ? "This trip can be closed normally if its standard closing requirements are complete."
-                        : checkpointStatus.active
-                          ? "The driver must use Verify and End Trip in the Driver App before the web trip can be closed."
-                          : checkpointStatus.verified
-                            ? `${checkpointStatus.recordedCount.toLocaleString()} checkpoint${checkpointStatus.recordedCount === 1 ? "" : "s"} confirmed by Sparrow${checkpointStatus.verifiedAt ? ` at ${formatLocationTime(checkpointStatus.verifiedAt)}` : ""}.`
-                            : "The web trip remains open until every device checkpoint is confirmed by Sparrow."}
-                    </p>
-                  </div>
-                ) : null}
-                <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-stretch">
-                  <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm sm:p-5">
-                    <p className="font-medium">
-                      {location.active ? "Tracking active" : "Tracking ended"}
-                    </p>
-                    <p className="mt-1 text-muted-foreground">
-                      Last GPS update: {formatLocationTime(location.recorded_at)}
-                    </p>
-                    {location.accuracy_m != null ? (
-                      <p className="text-muted-foreground">
-                        Accuracy: ±{Math.round(location.accuracy_m)} m
-                      </p>
-                    ) : null}
-                    <p className="mt-3 break-all font-mono text-xs">
-                      {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
-                    </p>
-                  </div>
-                  <a
-                    className="flex min-h-12 items-center justify-center rounded-xl bg-primary px-4 py-3 text-center text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 sm:w-44"
-                    href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Open in Google Maps
-                  </a>
-                </div>
-              </>
-            ) : (
-              <div className="flex min-h-52 items-center justify-center rounded-2xl bg-muted/50 p-8 text-center text-sm text-muted-foreground sm:min-h-72">
-                No live location has been received for this trip yet.
-              </div>
-            )}
-            <Button
-              variant="outline"
-              className="w-full"
-              onClick={() => void loadLocation()}
-              disabled={loadingLocation}
-            >
-              <RefreshCw className="size-4" /> Refresh location
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+  return <>
+    <div className="flex items-center gap-1">
+      {!closed ? <Button variant="ghost" size="sm" onClick={() => void setRecordingState(recording ? "stop" : "start")} disabled={loading} title={recording ? "Stop GPS recording" : "Start GPS recording"} aria-label={`${recording ? "Stop" : "Start"} GPS recording for ${trip.trip_code}`}>
+        {loading ? <Loader2 className="size-4 animate-spin" /> : recording ? <Square className="size-4 text-destructive" /> : <Play className="size-4 text-emerald-600" />}
+      </Button> : null}
+      <Button variant="ghost" size="sm" onClick={() => { setLocationOpen(true); void loadLocation(); }} title="View GPS route" aria-label={`View GPS route for ${trip.trip_code}`}><MapPin className="size-4" /></Button>
+    </div>
+    <Dialog open={locationOpen} onOpenChange={setLocationOpen}>
+      <DialogContent className="flex max-h-[calc(100dvh-1rem)] w-[calc(100dvw-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:max-h-[calc(100dvh-2rem)] sm:w-full">
+        <DialogHeader className="shrink-0 px-5 pb-3 pt-6 pr-12 sm:px-7 sm:pt-7">
+          <DialogTitle className="flex items-center gap-2"><MapPin className="size-5 text-primary" /> Driver GPS tracking</DialogTitle>
+          <DialogDescription>{closed ? "Closed trip history is read-only; its recorded GPS route remains available." : "Start recording before the driver app sends points. Points sent without an assigned driver and active recording session are not saved."}</DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-5 sm:px-7 sm:pb-7">
+          {loading ? <div className="flex min-h-52 items-center justify-center gap-2 rounded-2xl bg-muted/50 p-8 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading GPS data…</div> : routeTrace?.points.length ? <DriverRouteMap points={routeTrace.points} tripCode={trip.trip_code} totalStoredPoints={routeTrace.totalStoredPoints} /> : location?.latitude != null && location.longitude != null ? <div className="overflow-hidden rounded-2xl border border-border bg-muted/30 p-1.5"><iframe title={`GPS map for trip ${trip.trip_code}`} className="h-72 w-full rounded-xl border-0 bg-muted" loading="lazy" src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.longitude - .01}%2C${location.latitude - .01}%2C${location.longitude + .01}%2C${location.latitude + .01}&layer=mapnik&marker=${location.latitude}%2C${location.longitude}`} /></div> : <div className="flex min-h-52 items-center justify-center rounded-2xl bg-muted/50 p-8 text-center text-sm text-muted-foreground">No GPS location has been saved for this trip yet.</div>}
+          {location ? <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm"><p className="font-medium">{location.active ? "Recording active" : "Recording stopped"}</p><p className="mt-1 text-muted-foreground">Last GPS update: {formatTime(location.recorded_at)}</p><p className="mt-2 break-all font-mono text-xs">{location.latitude?.toFixed(6)}, {location.longitude?.toFixed(6)}</p></div> : null}
+          <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm"><p className="font-medium">Driver app endpoint</p><p className="mt-1 break-all font-mono text-xs">{TRACKING_ENDPOINT}</p><p className="mt-2 text-muted-foreground">Use the Driver Master Tracking App ID and Tracking App Password with Basic Auth. Send GPS points by POST; only the assigned driver’s active trip recording is accepted.</p></div>
+          <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => void loadLocation()} disabled={loading}><RefreshCw className="size-4" /> Refresh</Button>{!closed ? <Button className="flex-1" onClick={() => void setRecordingState(recording ? "stop" : "start")} disabled={loading}>{recording ? <><Square className="size-4" /> Stop recording</> : <><Play className="size-4" /> Start recording</>}</Button> : null}</div>
+          {location?.latitude != null && location.longitude != null ? <a className="flex items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-medium text-primary hover:underline" href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`} target="_blank" rel="noreferrer"><Map className="size-3.5" /> Open in Google Maps</a> : null}
+        </div>
+      </DialogContent>
+    </Dialog>
+  </>;
 }

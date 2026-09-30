@@ -12,7 +12,6 @@ import {
   Search,
   Trash2,
 } from "lucide-react";
-import QRCode from "qrcode";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -819,27 +818,6 @@ export function TripForm({
   async function handleTripNote(internal = false) {
     setGeneratingPdf(true);
     try {
-      let tripQrDataUri: string | null = null;
-      if (trip.ownership === "own" && trip.id) {
-        const { data: qrData, error: qrError } = await supabase.rpc(
-          "issue_driver_trip_qr" as never,
-          { p_trip_id: trip.id } as never,
-        );
-        if (qrError) {
-          toast.error(qrError.message || "Could not create the Trip QR Code");
-          return;
-        }
-        const qr = qrData as unknown as { token?: string; trip_code?: string };
-        if (!qr?.token) {
-          toast.error("Supabase returned an invalid Trip QR Code response");
-          return;
-        }
-        tripQrDataUri = await QRCode.toDataURL(
-          JSON.stringify({ type: "garuda-driver-trip", token: qr.token, tripCode: qr.trip_code }),
-          { width: 240, margin: 1, errorCorrectionLevel: "M" },
-        );
-      }
-
       // Resolve insurance number for the trip's start-date month (own vehicles only)
       let insuranceNumber: string | null = null;
       if (vehicle && trip.ownership === "own" && trip.start_date) {
@@ -937,7 +915,6 @@ export function TripForm({
             }
           : null,
         third_party_vehicle_number: trip.third_party_vehicle_number || null,
-        trip_qr_data_uri: tripQrDataUri,
         movements: ((movementResult.data ?? []) as Array<Record<string, any>>).map((m) => {
           const from = (m.from_details ?? {}) as Record<string, any>;
           const to = (m.to_details ?? {}) as Record<string, any>;

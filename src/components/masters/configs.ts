@@ -68,7 +68,7 @@ export const DRIVER_CONFIG: MasterConfig = {
   icon: User,
   hasBranch: true,
   titleKey: "full_name",
-  subtitleKeys: ["driver_code", "mobile_number", "branch_name"],
+  subtitleKeys: ["driver_code", "mobile_number", "tracking_app_id", "branch_name"],
   emptyMsg: "Driving staff with licence, contact and payroll details.",
   sections: [
     {
@@ -101,6 +101,13 @@ export const DRIVER_CONFIG: MasterConfig = {
         { key: "emergency_contact_name", label: "Emergency Contact Name", required: true },
         { key: "emergency_contact_number", label: "Emergency Contact Number", required: true },
         { key: "emergency_contact_relationship", label: "Emergency Contact Relationship" },
+      ],
+    },
+    {
+      title: "GPS tracking app access",
+      fields: [
+        { key: "tracking_app_id", label: "Tracking App ID", required: true },
+        { key: "tracking_app_password", label: "Tracking App Password", required: true },
       ],
     },
     {
