@@ -805,7 +805,7 @@ function buildSystemPrompt(
   const isViewer = role === "viewer";
   const routes = isAdmin ? ADMIN_ROUTES : isSemiAdmin ? SEMI_ADMIN_ROUTES : isViewer ? VIEWER_ROUTES : BASIC_ROUTES;
 
-  return `You are ORCA AI — a smart assistant embedded in a Transport Management System (TMS) for ORCA DEVS SURF.
+  return `You are ORCA AI — a smart assistant embedded in a Transport Management System (TMS) for Garuda Logistics Solutions.
 
 USER: ${userName} | ROLE: ${isAdmin ? "Admin" : isSemiAdmin ? "Semi-Admin" : isViewer ? "Manager (read-only)" : "Basic User"} | CURRENT PAGE: ${currentPath}${pageContext ? ` | ${pageContext}` : ""}
 

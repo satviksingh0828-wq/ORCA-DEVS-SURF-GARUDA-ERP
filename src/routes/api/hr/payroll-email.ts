@@ -63,7 +63,7 @@ export const Route = createFileRoute("/api/hr/payroll-email")({
               eyebrow: "HR payroll",
               intro: `Hello ${escapeHtml(employeeName)}, your payslip for <strong>${escapeHtml(periodLabel)}</strong> is attached to this email.`,
               content: `<p style="font-size:14px;line-height:1.6;color:#475569">Please keep this payslip for your records. For any questions, contact the HR team.</p>`,
-              notice: "This is an automated message from ORCA DEVS SURF.",
+              notice: "This is an automated message from Garuda Logistics Solutions.",
             }),
             attachments: [{ filename, content: pdfBase64 }],
             idempotencyKey: `payroll-payslip-${to}-${filename}`,

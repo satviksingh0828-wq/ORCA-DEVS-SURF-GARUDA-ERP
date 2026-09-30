@@ -755,7 +755,7 @@ function ThemePanel() {
               style={{ backgroundImage: "var(--gradient-brand)" }}
             >
               <div className="rounded-xl bg-white/20 px-5 py-2 text-[11px] font-semibold uppercase tracking-widest text-white">
-                ORCA DEVS SURF
+                Garuda Logistics Solutions
               </div>
             </div>
             <div className="flex items-center justify-between p-4">
@@ -784,7 +784,7 @@ function ThemePanel() {
             <div className="h-28 w-full overflow-hidden">
               <img
                 src="/garuda-banner.jpeg"
-                alt="ORCA DEVS SURF banner preview"
+                alt="Garuda banner preview"
                 className="h-full w-full object-cover"
               />
             </div>
@@ -792,7 +792,7 @@ function ThemePanel() {
               <span className="min-w-0">
                 <span className="block text-sm font-medium">Image UI</span>
                 <span className="block text-xs text-muted-foreground">
-                  ORCA DEVS SURF banner as background
+                  Garuda banner as background
                 </span>
               </span>
               {loginUi === "image" ? <Check className="size-4 shrink-0 text-primary" /> : null}
@@ -827,7 +827,7 @@ function ThemePanel() {
               <span className="min-w-0">
                 <span className="block text-sm font-medium">Video UI</span>
                 <span className="block text-xs text-muted-foreground">
-                  Same ORCA DEVS SURF layout with the configured video
+                  Same Garuda banner layout with the configured video
                 </span>
               </span>
               {loginUi === "video" ? <Check className="size-4 shrink-0 text-primary" /> : null}
@@ -846,7 +846,7 @@ function ThemePanel() {
           >
             <div className="flex h-28 w-full items-center justify-center bg-gradient-to-br from-sky-50 via-white to-blue-100">
               <div className="rounded-lg border border-sky-100 bg-white px-5 py-2.5 text-[11px] font-semibold tracking-wide text-sky-700 shadow-sm">
-                ORCA DEVS SURF · WORKSPACE
+                GARUDA · WORKSPACE
               </div>
             </div>
             <div className="flex items-center justify-between p-4">

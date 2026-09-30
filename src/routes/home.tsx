@@ -211,7 +211,7 @@ function HomePage() {
     <AppShell>
       <div className="animate-fade-up">
         <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">Workspace</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">ORCA DEVS SURF</h1>
+        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Garuda Logistics Solutions</h1>
         <p className="mt-2 max-w-xl text-sm text-muted-foreground">
           {role === "admin" ? "Select a module" : "Select a module"}
         </p>

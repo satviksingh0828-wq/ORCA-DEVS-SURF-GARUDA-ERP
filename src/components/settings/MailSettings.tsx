@@ -100,7 +100,7 @@ export function MailSettings() {
           <div>
             <h2 className="text-lg font-semibold tracking-tight">Mail notifications</h2>
             <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
-              Control every automated email independently. All enabled mail uses the same ORCA DEVS SURF
+              Control every automated email independently. All enabled mail uses the same Garuda
               branded format.
             </p>
           </div>
