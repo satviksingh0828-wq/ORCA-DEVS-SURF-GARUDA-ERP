@@ -23,6 +23,7 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
   const [locationOpen, setLocationOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [recording, setRecording] = useState(false);
+  const [trackingStatusLoaded, setTrackingStatusLoaded] = useState(false);
   const [location, setLocation] = useState<LiveLocation>(null);
   const [routeTrace, setRouteTrace] = useState<DriverRouteTrace | null>(null);
   const [trackingConflict, setTrackingConflict] = useState<TrackingConflict | null>(null);
@@ -34,15 +35,25 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
     if (!ownTrip || !trip.id) return;
     setLoading(true);
     try {
-      const { data: latest, error: latestError } = await supabase.from("driver_gps_locations" as never).select("latitude,longitude,accuracy_m,recorded_at").eq("trip_id", trip.id).order("recorded_at", { ascending: false }).limit(1).maybeSingle();
-      if (latestError) throw latestError;
-      const { data: status, error: statusError } = await supabase.rpc("get_driver_gps_tracking_status" as never, { p_trip_id: trip.id } as never);
+      const [{ data: status, error: statusError }, trace] = await Promise.all([
+        supabase.rpc("get_driver_gps_tracking_status" as never, { p_trip_id: trip.id } as never),
+        user?.sessionToken
+          ? serverGetDriverTripLocationTrace({ data: { sessionToken: user.sessionToken, tripId: trip.id } })
+          : Promise.resolve(null),
+      ]);
       if (statusError) throw statusError;
-      const row = latest as { latitude?: number; longitude?: number; accuracy_m?: number | null; recorded_at?: string } | null;
       const active = Boolean((status as { active?: boolean } | null)?.active);
       setRecording(active);
-      setLocation(row ? { ...row, active } : null);
-      if (user?.sessionToken) setRouteTrace(await serverGetDriverTripLocationTrace({ data: { sessionToken: user.sessionToken, tripId: trip.id } }));
+      setTrackingStatusLoaded(true);
+      setRouteTrace(trace);
+      const latest = trace?.points.at(-1);
+      setLocation(latest ? {
+        latitude: latest.latitude,
+        longitude: latest.longitude,
+        accuracy_m: latest.accuracyM,
+        recorded_at: latest.recordedAt,
+        active,
+      } : null);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load GPS tracking");
     } finally { setLoading(false); }
@@ -65,6 +76,7 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
         if (error) throw error;
       }
       setRecording(next === "start");
+      setTrackingStatusLoaded(true);
       toast.success(next === "start" ? "GPS recording started" : "GPS recording stopped");
       await loadLocation();
     } catch (error) { toast.error(error instanceof Error ? error.message : "Could not change GPS recording state"); }
@@ -87,7 +99,7 @@ export function DriverTripActions({ trip }: { trip: TripRow }) {
         </DialogHeader>
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 pb-5 sm:px-7 sm:pb-7">
           {loading ? <div className="flex min-h-52 items-center justify-center gap-2 rounded-2xl bg-muted/50 p-8 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading GPS data…</div> : routeTrace?.points.length ? <DriverRouteMap points={routeTrace.points} tripCode={trip.trip_code} totalStoredPoints={routeTrace.totalStoredPoints} /> : location?.latitude != null && location.longitude != null ? <div className="overflow-hidden rounded-2xl border border-border bg-muted/30 p-1.5"><iframe title={`GPS map for trip ${trip.trip_code}`} className="h-72 w-full rounded-xl border-0 bg-muted" loading="lazy" src={`https://www.openstreetmap.org/export/embed.html?bbox=${location.longitude - .01}%2C${location.latitude - .01}%2C${location.longitude + .01}%2C${location.latitude + .01}&layer=mapnik&marker=${location.latitude}%2C${location.longitude}`} /></div> : <div className="flex min-h-52 items-center justify-center rounded-2xl bg-muted/50 p-8 text-center text-sm text-muted-foreground">No GPS location has been saved for this trip yet.</div>}
-          {location ? <div className="rounded-2xl border border-border bg-muted/30 p-4 text-sm"><p className="font-medium">{location.active ? "Recording active" : "Recording stopped"}</p><p className="mt-1 text-muted-foreground">Last GPS update: {formatTime(location.recorded_at)}</p><p className="mt-2 break-all font-mono text-xs">{location.latitude?.toFixed(6)}, {location.longitude?.toFixed(6)}</p></div> : null}
+          {trackingStatusLoaded ? <div className={`rounded-2xl border p-4 text-sm ${recording ? "border-emerald-300 bg-emerald-50/70" : "border-border bg-muted/30"}`}><p className="font-medium">GPS tracking: {recording ? "Started" : "Ended"}</p><p className="mt-1 text-muted-foreground">{location ? `Last GPS update: ${formatTime(location.recorded_at)}` : recording ? "Waiting for the first GPS point from the driver app." : "No active recording session."}</p>{location ? <p className="mt-2 break-all font-mono text-xs">{location.latitude?.toFixed(6)}, {location.longitude?.toFixed(6)}</p> : null}</div> : null}
           <div className="rounded-2xl border border-primary/20 bg-primary/5 p-4 text-sm"><p className="font-medium">Driver app endpoint</p><p className="mt-1 break-all font-mono text-xs">{TRACKING_ENDPOINT}</p><p className="mt-2 text-muted-foreground">Use the Driver Master Tracking App ID and Tracking App Password with Basic Auth. Send GPS points by POST; only the assigned driver’s active trip recording is accepted.</p></div>
           <div className="flex gap-2"><Button variant="outline" className="flex-1" onClick={() => void loadLocation()} disabled={loading}><RefreshCw className="size-4" /> Refresh</Button>{!closed ? <Button className="flex-1" onClick={() => void setRecordingState(recording ? "stop" : "start")} disabled={loading}>{recording ? <><Square className="size-4" /> Stop recording</> : <><Play className="size-4" /> Start recording</>}</Button> : null}</div>
           {location?.latitude != null && location.longitude != null ? <a className="flex items-center justify-center gap-1 rounded-xl px-3 py-2 text-xs font-medium text-primary hover:underline" href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`} target="_blank" rel="noreferrer"><Map className="size-3.5" /> Open in Google Maps</a> : null}
