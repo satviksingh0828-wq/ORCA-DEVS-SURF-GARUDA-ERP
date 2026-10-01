@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "ORCA DEVS SURF",
+    "slug": "orca-devs-surf",
+    "version": "1.0.0",
+    "scheme": "orca-documents",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "ios": {
+      "bundleIdentifier": "com.orcadevssurf.documents",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.orcadevssurf.documents",
+      "adaptiveIcon": {
+        "backgroundColor": "#060B12",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow ORCA DEVS SURF to scan QR codes and take document photos.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Allow ORCA DEVS SURF to take a document photo.",
+          "photosPermission": false,
+          "microphonePermission": false
+        }
+      ],
+      [
+        "expo-secure-store",
+        {
+          "configureAndroidBackup": true
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 190,
+          "resizeMode": "contain",
+          "backgroundColor": "#060B12"
+        }
+      ],
+      "expo-sharing"
+    ]
+  }
+}

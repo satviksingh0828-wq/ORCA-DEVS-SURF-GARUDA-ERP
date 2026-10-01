@@ -1,0 +1,28 @@
+{
+  "schema": "orca.document.v1",
+  "recordId": "TRIP-42",
+  "title": "Trip documents",
+  "uploads": [
+    {
+      "id": "invoice",
+      "label": "Invoice",
+      "mimeType": "application/pdf",
+      "value": "https://documents.example.com/files/TRIP-42/invoice.pdf",
+      "viewUrl": "https://documents.example.com/files/TRIP-42/invoice.pdf",
+      "allowView": true,
+      "allowAdd": true,
+      "addUrl": "https://documents.example.com/api/TRIP-42/invoice",
+      "allowReplace": true,
+      "replaceUrl": "https://documents.example.com/api/TRIP-42/invoice/replace"
+    },
+    {
+      "id": "identity-photo",
+      "label": "Identity photo",
+      "mimeType": "image/jpeg",
+      "allowView": false,
+      "allowAdd": true,
+      "addUrl": "https://documents.example.com/api/TRIP-42/identity-photo",
+      "allowReplace": false
+    }
+  ]
+}
