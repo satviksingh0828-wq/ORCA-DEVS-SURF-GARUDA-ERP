@@ -18,6 +18,7 @@ import QRCode from "qrcode";
 import { supabase } from "@/integrations/supabase/client";
 import { useSession } from "@/lib/session";
 import { canManageOutwardPODDocument } from "@/lib/outward-pod-document-access";
+import { printOutwardPOD } from "@/lib/outward-pod-pdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -116,10 +117,11 @@ function consignmentManifestUrl(consignmentId: string) {
   return url.toString();
 }
 
-function podManifestUrl(podId: string) {
+function podManifestUrl(podId: string, mode?: "view") {
   const url = new URL("/api/mobile/outward-pod", window.location.origin);
   url.searchParams.set("operation", "manifest");
   url.searchParams.set("podId", podId);
+  if (mode) url.searchParams.set("mode", mode);
   return url.toString();
 }
 
@@ -232,7 +234,9 @@ export function OutwardPOD() {
   const [selected, setSelected] = useState<Consignment | null>(null);
   const selectedRef = useRef<Consignment | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [viewQrDataUrl, setViewQrDataUrl] = useState<string | null>(null);
   const [mobileEditQrDataUrl, setMobileEditQrDataUrl] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
   const [mobileEditQrLoading, setMobileEditQrLoading] = useState(false);
   const [form, setForm] = useState<FormState>({
     delivery_date: "",
@@ -282,6 +286,7 @@ export function OutwardPOD() {
       setSelected(row);
       setSearchOpen(false);
       setQrDataUrl(null);
+      setViewQrDataUrl(null);
       setMobileEditQrDataUrl(null);
       const existing = first(row.outward_pod);
       setForm({
@@ -307,6 +312,18 @@ export function OutwardPOD() {
         }
       }
 
+      if (existing && canManageOutwardPODDocument(user?.role, "view")) {
+        try {
+          const dataUrl = await QRCode.toDataURL(podManifestUrl(existing.id, "view"), {
+            width: 256,
+            margin: 2,
+            errorCorrectionLevel: "M",
+          });
+          if (selectedRef.current?.id === row.id) setViewQrDataUrl(dataUrl);
+        } catch {
+          toast.error("Could not create the view-only POD QR code");
+        }
+      }
       if (existing || !canAddPODDocuments) return;
 
       try {
@@ -504,6 +521,30 @@ export function OutwardPOD() {
     }
   }
   const existing = first(selected?.outward_pod);
+  async function exportExistingPODPdf() {
+    if (!selected || !existing || !viewQrDataUrl) return;
+    setPdfLoading(true);
+    try {
+      await printOutwardPOD({
+        consignmentNumber: selected.consignment_number,
+        consignmentDate: selected.consignment_date,
+        consignor: party(selected, "consignor"),
+        consignee: party(selected, "consignee"),
+        destination: destination(selected),
+        branchName: selected.branch?.branch_name,
+        consignmentType: selected.consignment_type,
+        deliveryDate: existing.delivery_date,
+        transporterLrNumber: existing.transporter_lr_number,
+        transporterLrDate: existing.transporter_lr_date,
+        createdAt: existing.created_at,
+        viewQrUrl: podManifestUrl(existing.id, "view"),
+      });
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not export the Outward POD PDF");
+    } finally {
+      setPdfLoading(false);
+    }
+  }
   const totals = selected ? shipmentTotals(selected) : { quantity: 0, weight: 0 };
   const packageCount =
     selected?.consignment_package_information?.reduce(
@@ -778,6 +819,22 @@ export function OutwardPOD() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center justify-end gap-2">
+                {existing ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={pdfLoading || !viewQrDataUrl}
+                    onClick={() => void exportExistingPODPdf()}
+                  >
+                    {pdfLoading ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <Download className="mr-2 size-4" />
+                    )}
+                    Export PDF
+                  </Button>
+                ) : null}
                 {existing && canEditMobileMetadata ? (
                   <Button
                     type="button"
@@ -875,6 +932,25 @@ export function OutwardPOD() {
                   >
                     <QrCode className="mr-2 size-4" /> Refresh QR
                   </Button>
+                </div>
+              </div>
+            ) : null}
+            {existing && viewQrDataUrl ? (
+              <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/20 p-3">
+                <img
+                  src={viewQrDataUrl}
+                  alt={`View-only QR for ${selected.consignment_number}`}
+                  className="size-36 rounded bg-white p-2"
+                />
+                <div className="min-w-48 flex-1">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold">
+                    <QrCode className="size-4" />
+                    View-only QR
+                  </h4>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Scan in ORCA Documents to view this existing Outward POD and its documents. This
+                    QR cannot replace files or edit any data.
+                  </p>
                 </div>
               </div>
             ) : null}

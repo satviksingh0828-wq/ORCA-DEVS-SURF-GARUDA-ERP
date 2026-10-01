@@ -369,10 +369,17 @@ function manifestFor(
   actor: Actor,
   pod: PodRecord,
   consignment: ConsignmentRecord,
+  readOnly = false,
 ) {
   const uploads = (Object.keys(DOCUMENT_COLUMNS) as DocumentKind[]).map((kind) => {
     const path = getPath(pod, kind);
-    const permissions = outwardPODDocumentActions(actor.role, Boolean(path));
+    const permissions = readOnly
+      ? {
+          allowView: Boolean(path) && canManageOutwardPODDocument(actor.role, "view"),
+          allowAdd: false,
+          allowReplace: false,
+        }
+      : outwardPODDocumentActions(actor.role, Boolean(path));
     const name = nameFromPath(path, kind);
     const fileUrl =
       path && permissions.allowView ? operationUrl(request, "file", pod.id, kind) : undefined;
@@ -397,20 +404,23 @@ function manifestFor(
     "update",
     pod,
     consignment,
-    canManageOutwardPODDocument(actor.role, "add"),
-    canManageOutwardPODDocument(actor.role, "replace"),
+    readOnly ? false : canManageOutwardPODDocument(actor.role, "add"),
+    readOnly ? false : canManageOutwardPODDocument(actor.role, "replace"),
   );
   const metadata = {
     mode: "update" as const,
-    fields: metadataFields,
-    ...(metadataFields.some((field) => field.editable || field.syncOnly)
+    fields: readOnly
+      ? metadataFields.map((field) => ({ ...field, editable: false, syncOnly: false }))
+      : metadataFields,
+    ...(!readOnly && metadataFields.some((field) => field.editable || field.syncOnly)
       ? { updateUrl: metadataUpdateUrl(request, pod.id) }
       : {}),
   };
   return {
     schema: "orca.document.v1",
     recordId: pod.id,
-    title: `Outward POD · ${consignment.consignment_number}`,
+    title: `${readOnly ? "View Outward POD" : "Outward POD"} · ${consignment.consignment_number}`,
+    readOnly,
     uploads,
     metadata,
   };
@@ -418,7 +428,8 @@ function manifestFor(
 
 async function manifestRequest(request: Request, admin: AdminClient, actor: Actor, podId: string) {
   const { pod, consignment } = await authorizePodManifest(admin, actor, podId);
-  return json(manifestFor(request, actor, pod, consignment));
+  const readOnly = new URL(request.url).searchParams.get("mode") === "view";
+  return json(manifestFor(request, actor, pod, consignment, readOnly));
 }
 
 async function creationManifestRequest(
