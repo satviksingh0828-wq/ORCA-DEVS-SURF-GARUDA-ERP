@@ -23,6 +23,7 @@ import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -263,11 +264,15 @@ export function TripForm({
   const { user } = useSession();
   const isAdmin = isAdminLike(user?.role);
   const isBasic = user?.role === "basic";
+  const isExistingTrip = Boolean(initial.id);
   // Viewers may operate on existing trips; New trip creation remains blocked in Trips.tsx.
   const isViewer = false;
   const allowedBranchIds = isBasic ? (user?.branchIds ?? []) : null;
 
-  const TABS = isBasic ? TABS_BASIC : TABS_ALL;
+  const availableTabs = isBasic ? TABS_BASIC : TABS_ALL;
+  const TABS = isExistingTrip
+    ? availableTabs.filter((item) => item.id === "income" || item.id === "expense")
+    : availableTabs;
   const basicStartDateBounds = getBasicStartDateBounds();
 
   const [trip, setTrip] = useState<TripRow>({ ...initial, mode: initial.mode ?? "ROAD" });
@@ -277,7 +282,7 @@ export function TripForm({
   const [tripQrDataUrl, setTripQrDataUrl] = useState<string | null>(null);
   const [tripQrLoading, setTripQrLoading] = useState(false);
   const [tripQrOpen, setTripQrOpen] = useState(false);
-  const [tab, setTab] = useState<TabId>("movement");
+  const [tab, setTab] = useState<TabId>(initial.id ? "income" : "movement");
 
   const [vehicles, setVehicles] = useState<AnyRow[]>([]);
   const [drivers, setDrivers] = useState<AnyRow[]>([]);
@@ -827,7 +832,7 @@ export function TripForm({
     try {
       let tripQrDataUri: string | null = null;
       if (trip.id) {
-        const qrUrl = new URL("/operations", window.location.origin);
+        const qrUrl = new URL("/ltms/operations", window.location.origin);
         qrUrl.searchParams.set("tripId", trip.id);
         tripQrDataUri = await QRCode.toDataURL(qrUrl.toString(), {
           width: 320,
@@ -997,7 +1002,7 @@ export function TripForm({
     setTripQrOpen(true);
     setTripQrLoading(true);
     try {
-      const url = new URL("/operations", window.location.origin);
+      const url = new URL("/ltms/operations", window.location.origin);
       url.searchParams.set("tripId", trip.id);
       const dataUrl = await QRCode.toDataURL(url.toString(), {
         width: 320,
@@ -1045,7 +1050,9 @@ export function TripForm({
   // Ensure selected tab exists in TABS (e.g. basic user was on "summary")
   const activeTab = (TABS as readonly { id: string; label: string }[]).find((t) => t.id === tab)
     ? tab
-    : "movement";
+    : initial.id
+      ? "income"
+      : "movement";
 
   return (
     <div className="animate-fade-up space-y-5">
@@ -1111,7 +1118,7 @@ export function TripForm({
             Reopen Trip
           </Button>
         ) : null}
-        {!isViewer && (
+        {!isViewer && !isExistingTrip && (
           <Button onClick={() => void saveTripWithLines()} disabled={saving || tripClosed}>
             {saving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
             {trip.id ? "Update trip" : "Save trip"}
@@ -1119,7 +1126,40 @@ export function TripForm({
         )}
       </div>
 
-      <form onSubmit={saveTripWithLines} className="surface-card space-y-5 p-6">
+      {isExistingTrip && (
+        <div className="surface-card space-y-3 p-6">
+          <div>
+            <h3 className="text-sm font-semibold tracking-tight">Trip details — read only</h3>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Only Other Income and Expenses can be edited for an existing trip. Trip details,
+              movements, vehicle, driver, and rental information are read-only.
+            </p>
+          </div>
+          <div className="grid gap-3 text-sm sm:grid-cols-2 lg:grid-cols-4">
+            <p>
+              <span className="text-muted-foreground">Trip ID: </span>
+              {trip.trip_code}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Branch: </span>
+              {allBranches.find((branch) => branch.id === trip.branch_id)?.branch_name ?? "—"}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Start date: </span>
+              {trip.start_date || "—"}
+            </p>
+            <p>
+              <span className="text-muted-foreground">Status: </span>
+              {tripClosed ? "Closed — view only" : "Open"}
+            </p>
+          </div>
+        </div>
+      )}
+      <form
+        hidden={isExistingTrip}
+        onSubmit={saveTripWithLines}
+        className="surface-card space-y-5 p-6"
+      >
         <h3 className="text-sm font-semibold tracking-tight">Trip details</h3>
         <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 xl:grid-cols-5">
           <div className="space-y-1.5">
@@ -1443,6 +1483,33 @@ export function TripForm({
           patch({ transporter_id: id });
         }}
       />
+      <Dialog open={tripQrOpen} onOpenChange={setTripQrOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="size-5" />
+              {tripClosed ? "Closed trip view QR" : "Trip income and expenses QR"}
+            </DialogTitle>
+            <DialogDescription>
+              {tripClosed
+                ? "This QR opens the closed trip in view-only mode."
+                : "This QR opens the trip in LTMS Operations. Only Other Income and Expenses can be edited."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex min-h-80 items-center justify-center rounded-xl border border-border bg-white p-4">
+            {tripQrLoading ? (
+              <Loader2 className="size-7 animate-spin text-muted-foreground" />
+            ) : tripQrDataUrl ? (
+              <img src={tripQrDataUrl} alt={`Trip QR for ${trip.trip_code}`} className="size-72" />
+            ) : (
+              <p className="text-sm text-muted-foreground">QR code unavailable.</p>
+            )}
+          </div>
+          <p className="break-all text-center font-mono text-[11px] text-muted-foreground">
+            {trip.trip_code} · {tripClosed ? "View only" : "Other Income / Expenses only"}
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -2360,33 +2427,6 @@ function MovementTab({
         open={detailsConsignmentId !== null}
         onOpenChange={(open) => !open && setDetailsConsignmentId(null)}
       />
-      <Dialog open={tripQrOpen} onOpenChange={setTripQrOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <QrCode className="size-5" />
-              {tripClosed ? "Closed trip view QR" : "Trip edit QR"}
-            </DialogTitle>
-            <DialogDescription>
-              {tripClosed
-                ? "Scan this QR to open the closed trip in view-only mode. Reopen the trip before making changes."
-                : "Scan this QR to open the trip in the system. Open trips allow editing and replacement; the same QR becomes view-only after closure."}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex min-h-80 items-center justify-center rounded-xl border border-border bg-white p-4">
-            {tripQrLoading ? (
-              <Loader2 className="size-7 animate-spin text-muted-foreground" />
-            ) : tripQrDataUrl ? (
-              <img src={tripQrDataUrl} alt={`Trip QR for ${trip.trip_code}`} className="size-72" />
-            ) : (
-              <p className="text-sm text-muted-foreground">QR code unavailable.</p>
-            )}
-          </div>
-          <p className="break-all text-center font-mono text-[11px] text-muted-foreground">
-            {trip.trip_code} · {tripClosed ? "View only" : "Edit / replace / view"}
-          </p>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
