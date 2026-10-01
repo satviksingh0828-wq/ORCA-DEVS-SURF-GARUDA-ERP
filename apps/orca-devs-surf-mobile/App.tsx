@@ -37,6 +37,7 @@ import {
   downloadForPreview,
   fetchManifest,
   originOf,
+  syncMetadata,
   uploadFile,
   validateHttpUrl,
   verifyCredentials,
@@ -56,7 +57,6 @@ import type {
   FileSource,
   HistoryAction,
   HistoryEntry,
-  PODCreationMetadata,
   PickedFile,
   QrManifest,
   UploadField,
@@ -164,6 +164,7 @@ export default function App() {
   const [scanError, setScanError] = useState<string>();
   const [manifest, setManifest] = useState<QrManifest | null>(null);
   const [busyUploadId, setBusyUploadId] = useState<string>();
+  const [metadataSaving, setMetadataSaving] = useState(false);
   const [preview, setPreview] = useState<{ uri: string; label: string } | null>(null);
   const trustedOrigins = useRef(new Set<string>());
   const finishSplash = useCallback(() => setShowSplash(false), []);
@@ -330,23 +331,41 @@ export default function App() {
       field: UploadField,
       action: FileAction,
       source: FileSource,
-      creation?: PODCreationMetadata,
+      metadataValues?: Record<string, string>,
     ) => {
       if (!credentials || !manifest) return;
-      if (manifest.creation?.deliveryDateRequired && !creation?.deliveryDate) {
+      const isCreationManifest =
+        manifest.metadata?.mode === "create" || (!manifest.metadata && Boolean(manifest.creation));
+      if (isCreationManifest && manifest.metadata?.fields) {
+        const invalidField = manifest.metadata.fields.find((metadataField) => {
+          if (!metadataField.required) return false;
+          const value = metadataValues?.[metadataField.id]?.trim() ?? metadataField.value.trim();
+          if (!value) return true;
+          if (metadataField.type === "date") return !/^\d{4}-\d{2}-\d{2}$/.test(value);
+          if (metadataField.type === "number") return !Number.isFinite(Number(value));
+          if (metadataField.type === "select" && metadataField.options?.length) {
+            return !metadataField.options.some((option) => option.value === value);
+          }
+          return false;
+        });
+        if (invalidField) {
+          Alert.alert("Required field missing", `Complete ${invalidField.label} before uploading.`);
+          return;
+        }
+      } else if (manifest.creation?.deliveryDateRequired && !metadataValues?.deliveryDate?.trim()) {
         Alert.alert(
           "Delivery date required",
-          "Enter the delivery date before uploading the first POD file.",
+          "Select the delivery date before uploading the first POD file.",
         );
         return;
-      }
-      if (
+      } else if (
+        !manifest.metadata &&
         manifest.creation?.transporterLrRequired &&
-        (!creation?.transporterLrNumber?.trim() || !creation.transporterLrDate)
+        (!metadataValues?.transporterLrNumber?.trim() || !metadataValues?.transporterLrDate?.trim())
       ) {
         Alert.alert(
           "Transporter details required",
-          "Enter the transporter LR number and date before uploading the first POD file.",
+          "Enter the transporter LR number and select its date before uploading.",
         );
         return;
       }
@@ -422,7 +441,7 @@ export default function App() {
           field.id,
           action,
           file,
-          manifest.creation ? creation : undefined,
+          isCreationManifest ? metadataValues : undefined,
         );
         const returnedUrl = response.url ?? response.fileUrl ?? response.value;
         if (response.manifest) {
@@ -475,6 +494,69 @@ export default function App() {
           await FileSystem.deleteAsync(file.uri, { idempotent: true }).catch(() => undefined);
         }
         setBusyUploadId(undefined);
+      }
+    },
+    [confirmRequestOrigin, credentials, manifest, recordHistory],
+  );
+
+  const handleMetadataSave = useCallback(
+    async (values: Record<string, string>) => {
+      if (!credentials || !manifest?.metadata?.updateUrl) return;
+      const fields: Record<string, string> = {};
+      for (const field of manifest.metadata.fields) {
+        if (!field.editable && !field.syncOnly) continue;
+        const value = (values[field.id] ?? field.value).trim();
+        const original = field.value.trim();
+        if (value === original && !field.syncOnly) continue;
+        if (value && field.type === "date" && !/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+          Alert.alert("Invalid date", `Choose a valid date for ${field.label}.`);
+          return;
+        }
+        if (value && field.type === "number" && !Number.isFinite(Number(value))) {
+          Alert.alert("Invalid number", `Enter a valid number for ${field.label}.`);
+          return;
+        }
+        if (value && field.type === "select" && field.options?.length) {
+          if (!field.options.some((option) => option.value === value)) {
+            Alert.alert("Invalid selection", `Choose an allowed value for ${field.label}.`);
+            return;
+          }
+        }
+        fields[field.id] = value;
+      }
+      if (!Object.keys(fields).length) {
+        Alert.alert("No changes to sync", "Change at least one POD field before syncing.");
+        return;
+      }
+
+      const targetUrl = manifest.metadata.updateUrl;
+      if (!(await confirmRequestOrigin(targetUrl))) return;
+      setMetadataSaving(true);
+      try {
+        const response = await syncMetadata(targetUrl, credentials, manifest.recordId, fields);
+        if (!response.manifest) throw new Error("The ERP did not return the updated POD details.");
+        const updatedManifest = normalizeManifest(response.manifest, targetUrl);
+        setManifest(updatedManifest);
+        await recordHistory({
+          action: "update",
+          recordId: manifest.recordId,
+          recordTitle: manifest.title,
+          status: "success",
+          message: response.message ?? "POD details were synchronized with the ERP.",
+        });
+        Alert.alert("Details synchronized", response.message ?? "POD details saved to the ERP.");
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "POD details could not be synced.";
+        await recordHistory({
+          action: "update",
+          recordId: manifest.recordId,
+          recordTitle: manifest.title,
+          status: "failed",
+          message,
+        });
+        Alert.alert("Sync failed", message);
+      } finally {
+        setMetadataSaving(false);
       }
     },
     [confirmRequestOrigin, credentials, manifest, recordHistory],
@@ -621,6 +703,8 @@ export default function App() {
                   onRescan={handleRescan}
                   onView={handleView}
                   onFileAction={handleFileAction}
+                  onMetadataSave={handleMetadataSave}
+                  metadataSaving={metadataSaving}
                 />
               ) : activeTab === "history" ? (
                 <HistoryScreen entries={history} onClear={handleClearHistory} />

@@ -114,3 +114,56 @@ test("preserves delivery and transporter requirements from a create-form QR", ()
   });
   assert.equal(manifest.uploads[0].allowAdd, true);
 });
+
+test("normalizes server-defined editable metadata fields and ERP sync URLs", () => {
+  const manifest = normalizeManifest(
+    {
+      recordId: "POD-42",
+      metadata: {
+        mode: "update",
+        updateUrl: "./metadata",
+        fields: [
+          {
+            id: "deliveryDate",
+            label: "Delivery date",
+            type: "date",
+            value: "2025-03-13",
+            required: false,
+            editable: true,
+          },
+          {
+            id: "condition",
+            label: "Condition",
+            type: "select",
+            value: "sealed",
+            editable: true,
+            options: [{ label: "Sealed", value: "sealed" }],
+          },
+          {
+            id: "transporterLrDate",
+            label: "Transporter LR date",
+            type: "date",
+            value: "2025-03-14",
+            editable: true,
+            syncOnly: true,
+          },
+        ],
+      },
+      uploads: [],
+    },
+    "https://erp.example.test/api/mobile/outward-pod?operation=manifest&podId=POD-42",
+  );
+
+  assert.equal(manifest.metadata?.mode, "update");
+  assert.equal(manifest.metadata?.updateUrl, "https://erp.example.test/api/mobile/metadata");
+  assert.deepEqual(manifest.metadata?.fields[0], {
+    id: "deliveryDate",
+    label: "Delivery date",
+    type: "date",
+    value: "2025-03-13",
+    required: false,
+    editable: true,
+  });
+  assert.deepEqual(manifest.metadata?.fields[1].options, [{ label: "Sealed", value: "sealed" }]);
+  assert.equal(manifest.metadata?.fields[2].syncOnly, true);
+});

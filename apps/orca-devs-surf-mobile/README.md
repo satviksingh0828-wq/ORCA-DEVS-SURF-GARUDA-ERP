@@ -44,6 +44,7 @@ Then deploy the ERP web/server build. Its routes are:
 | `/api/mobile/outward-pod?operation=manifest&consignmentId=…`                 | `GET`  | Return add-only fields for a new-POD create-form QR.                 |
 | `/api/mobile/outward-pod?operation=file&podId=…&kind=front\|back\|signature` | `GET`  | Authenticated file preview/download.                                 |
 | `/api/mobile/outward-pod?operation=upload&podId=…&kind=…`                    | `POST` | Add to an empty image/PDF slot or replace an existing one.           |
+| `/api/mobile/outward-pod?operation=metadata&podId=…`                         | `POST` | Update or clear schema-defined POD/consignment metadata fields.      |
 | `/api/mobile/outward-pod?operation=create-upload&consignmentId=…&kind=…`     | `POST` | Create the POD on its first mobile file; return its normal manifest. |
 | `/api/mobile/outward-pod?operation=links&podId=…`                            | `GET`  | Issue short-lived signed previews for the ERP web UI.                |
 | `/api/mobile/outward-pod?operation=create`                                   | `POST` | Used by the ERP UI to create a POD record and initial files.         |
@@ -54,7 +55,9 @@ The login request uses `Authorization: Basic base64(userId:password)` and sends 
 
 The role/action matrix is centralized in `src/lib/outward-pod-document-access.ts`. All four existing roles (`admin`, `semi_admin`, `basic`, `viewer`) can currently view, add, and replace documents, as requested. The API enforces the rule independently of what the QR/UI displays, so later role restrictions can be added in one place. Empty fields receive **add**; fields containing a file receive **view/replace**. Each PDF/image is limited to 20 MB; allowed formats are JPEG, PNG, WEBP, HEIC, HEIF, and PDF.
 
-The Outward POD web page shows a QR for both an existing POD and a selected consignment in the create form. The create QR asks the mobile user for the delivery date, plus transporter LR number/date for third-party consignments. Its first mobile file upload creates the POD; the app then switches to the normal manifest so the other fields can be added or replaced. Existing POD previews remain private and the web UI refreshes after mobile uploads using Supabase Realtime where configured plus a 12-second fallback refresh.
+The Outward POD web page shows a QR in the new-POD create form. Existing-POD view mode is QR-free by default; an explicit **Edit on mobile** action reveals a separate edit-mode QR when an authorized user requests it. The create QR asks for the delivery date and, for third-party consignments, transporter LR number/date. Its first mobile file upload creates the POD; the app then switches to the normal manifest. For existing PODs, the manifest includes server-defined metadata fields: authorized users can edit or clear mapped values and sync changes to both the POD and consignment records with their ERP credentials. Dates use a native calendar picker and are stored in ISO `YYYY-MM-DD` form (shown as `DD-MM-YYYY`).
+
+Metadata input controls are schema-driven (`text`, `number`, `date`, and `select`). Adding more fields of these supported types can be done server-side, including the ERP field mapping and validation, without replacing the Android app. A new control type or new file action would require an app update. The web UI refreshes after mobile uploads or metadata syncs using Supabase Realtime where configured plus a 12-second fallback refresh.
 
 Set a public endpoint URL at build time if you want the field prefilled (URL only; do not put secrets in the app build):
 

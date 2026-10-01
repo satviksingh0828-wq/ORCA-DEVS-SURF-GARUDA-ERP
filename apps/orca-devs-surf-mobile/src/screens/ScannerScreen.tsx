@@ -9,14 +9,9 @@ import {
   TextInput,
   View,
 } from "react-native";
+import DateTimePicker, { type DateTimePickerEvent } from "@react-native-community/datetimepicker";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import type {
-  FileAction,
-  FileSource,
-  PODCreationMetadata,
-  QrManifest,
-  UploadField,
-} from "../types";
+import type { FileAction, FileSource, MetadataField, QrManifest, UploadField } from "../types";
 import { actionUrl, displayFileType } from "../lib/qr";
 import { fontFamilies, fontSizes, radius, space, useAppTheme, type ThemeColors } from "../theme";
 
@@ -34,14 +29,72 @@ interface ScannerScreenProps {
     field: UploadField,
     action: FileAction,
     source: FileSource,
-    creation?: PODCreationMetadata,
+    metadataValues?: Record<string, string>,
   ) => void;
+  onMetadataSave: (values: Record<string, string>) => void;
+  metadataSaving: boolean;
 }
 
 function validIsoDate(value: string) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
   const date = new Date(`${value}T00:00:00.000Z`);
   return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
+}
+
+function dateForPicker(value?: string) {
+  if (value && validIsoDate(value)) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day, 12, 0, 0, 0);
+  }
+  return new Date();
+}
+
+function pickerDateToIso(value: Date) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function displayIsoDate(value: string) {
+  if (!validIsoDate(value)) return value;
+  const [year, month, day] = value.split("-");
+  return `${day}-${month}-${year}`;
+}
+
+function legacyMetadataFields(creation: QrManifest["creation"]): MetadataField[] {
+  if (!creation) return [];
+  const fields: MetadataField[] = [
+    {
+      id: "deliveryDate",
+      label: "Delivery date",
+      type: "date",
+      value: "",
+      required: creation.deliveryDateRequired,
+      editable: true,
+    },
+  ];
+  if (creation.transporterLrRequired) {
+    fields.push(
+      {
+        id: "transporterLrNumber",
+        label: "Transporter LR number",
+        type: "text",
+        value: "",
+        required: true,
+        editable: true,
+      },
+      {
+        id: "transporterLrDate",
+        label: "Transporter LR date",
+        type: "date",
+        value: "",
+        required: true,
+        editable: true,
+      },
+    );
+  }
+  return fields;
 }
 
 function fileNameFromUrl(url?: string): string | undefined {
@@ -220,21 +273,34 @@ export function ScannerScreen({
   onRescan,
   onView,
   onFileAction,
+  onMetadataSave,
+  metadataSaving,
 }: ScannerScreenProps) {
   const { colors } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
   const [permission, requestPermission] = useCameraPermissions();
   const [scanLocked, setScanLocked] = useState(false);
   const [torch, setTorch] = useState(false);
-  const [creationValues, setCreationValues] = useState<PODCreationMetadata>({
-    deliveryDate: "",
-    transporterLrNumber: "",
-    transporterLrDate: "",
-  });
+  const [datePickerField, setDatePickerField] = useState<string | null>(null);
+  const [metadataValues, setMetadataValues] = useState<Record<string, string>>({});
+  const metadataFields = useMemo(
+    () => manifest?.metadata?.fields ?? legacyMetadataFields(manifest?.creation),
+    [manifest?.creation, manifest?.metadata?.fields],
+  );
 
   useEffect(() => {
-    setCreationValues({ deliveryDate: "", transporterLrNumber: "", transporterLrDate: "" });
-  }, [manifest?.recordId]);
+    setMetadataValues(Object.fromEntries(metadataFields.map((field) => [field.id, field.value])));
+    setDatePickerField(null);
+  }, [metadataFields]);
+
+  const onDateChange = (event: DateTimePickerEvent, selectedDate?: Date) => {
+    const field = datePickerField;
+    setDatePickerField(null);
+    if (event.type === "set" && selectedDate && field) {
+      const formattedDate = pickerDateToIso(selectedDate);
+      setMetadataValues((current) => ({ ...current, [field]: formattedDate }));
+    }
+  };
 
   useEffect(() => {
     if (!manifest && !scanning) setScanLocked(false);
@@ -245,12 +311,27 @@ export function ScannerScreen({
     setScanLocked(true);
     onScan(data);
   };
-  const creationComplete =
-    !manifest?.creation ||
-    ((!manifest.creation.deliveryDateRequired || validIsoDate(creationValues.deliveryDate)) &&
-      (!manifest.creation.transporterLrRequired ||
-        (Boolean(creationValues.transporterLrNumber?.trim()) &&
-          validIsoDate(creationValues.transporterLrDate ?? ""))));
+  const creationComplete = metadataFields
+    .filter((field) => field.required)
+    .every((field) => {
+      const value = (metadataValues[field.id] ?? field.value).trim();
+      if (!value) return false;
+      if (field.type === "date") return validIsoDate(value);
+      if (field.type === "number") return Number.isFinite(Number(value));
+      if (field.type === "select" && field.options?.length) {
+        return field.options.some((option) => option.value === value);
+      }
+      return true;
+    });
+  const metadataMode = manifest?.metadata?.mode ?? (manifest?.creation ? "create" : undefined);
+  const metadataCanSync = Boolean(
+    manifest?.metadata?.updateUrl &&
+    metadataFields.some((field) => {
+      const value = (metadataValues[field.id] ?? field.value).trim();
+      const original = field.value.trim();
+      return (field.editable || field.syncOnly) && (Boolean(field.syncOnly) || value !== original);
+    }),
+  );
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -353,66 +434,118 @@ export function ScannerScreen({
             </View>
             <SmallAction label="SCAN ANOTHER QR" onPress={onRescan} />
           </View>
-          {manifest.creation ? (
+          {metadataFields.length ? (
             <View style={styles.creationCard}>
-              <Text style={styles.creationTitle}>Create Outward POD</Text>
-              <Text style={styles.creationDescription}>
-                Enter the POD details. The first successful file upload creates the record; you can
-                then add the remaining files.
+              <Text style={styles.creationTitle}>
+                {metadataMode === "create" ? "Create Outward POD" : "Outward POD details"}
               </Text>
-              {manifest.creation.deliveryDateRequired ? (
-                <View style={styles.creationField}>
-                  <Text style={styles.creationLabel}>Delivery date · required</Text>
-                  <TextInput
-                    value={creationValues.deliveryDate}
-                    onChangeText={(deliveryDate) =>
-                      setCreationValues((current) => ({ ...current, deliveryDate }))
-                    }
-                    placeholder="YYYY-MM-DD"
-                    placeholderTextColor={colors.muted}
-                    keyboardType="numbers-and-punctuation"
-                    maxLength={10}
-                    autoCapitalize="none"
-                    style={styles.creationInput}
-                  />
-                </View>
-              ) : null}
-              {manifest.creation.transporterLrRequired ? (
-                <>
-                  <View style={styles.creationField}>
-                    <Text style={styles.creationLabel}>Transporter LR number · required</Text>
-                    <TextInput
-                      value={creationValues.transporterLrNumber}
-                      onChangeText={(transporterLrNumber) =>
-                        setCreationValues((current) => ({ ...current, transporterLrNumber }))
-                      }
-                      placeholder="Enter LR number"
-                      placeholderTextColor={colors.muted}
-                      autoCapitalize="characters"
-                      style={styles.creationInput}
-                    />
+              <Text style={styles.creationDescription}>
+                {metadataMode === "create"
+                  ? "Complete the fields below. The first successful file upload creates the POD and saves these details to the ERP."
+                  : "Edit, clear, or fill supported fields and sync your changes to the ERP."}
+              </Text>
+              {metadataFields.map((field) => {
+                const value = metadataValues[field.id] ?? field.value;
+                const displayValue =
+                  field.type === "date" && value ? displayIsoDate(value) : value || "Not set";
+                return (
+                  <View key={field.id} style={styles.creationField}>
+                    <Text style={styles.creationLabel}>
+                      {field.label}
+                      {field.required ? " · required" : ""}
+                      {field.syncOnly ? " · ERP value ready to sync" : ""}
+                      {!field.editable && !field.syncOnly ? " · saved" : ""}
+                    </Text>
+                    {!field.editable ? (
+                      <View style={styles.creationReadOnly}>
+                        <Text style={styles.creationDateText}>{displayValue}</Text>
+                      </View>
+                    ) : field.type === "date" ? (
+                      <Pressable
+                        accessibilityRole="button"
+                        accessibilityLabel={`Select ${field.label}`}
+                        onPress={() => setDatePickerField(field.id)}
+                        style={styles.creationDateButton}
+                      >
+                        <Text
+                          style={[
+                            styles.creationDateText,
+                            !value && styles.creationDatePlaceholder,
+                          ]}
+                        >
+                          {value ? displayIsoDate(value) : `Select ${field.label.toLowerCase()}`}
+                        </Text>
+                      </Pressable>
+                    ) : field.type === "select" && field.options?.length ? (
+                      <View style={styles.metadataOptions}>
+                        {field.options.map((option) => {
+                          const selected = value === option.value;
+                          return (
+                            <Pressable
+                              key={option.value}
+                              accessibilityRole="button"
+                              accessibilityState={{ selected }}
+                              onPress={() =>
+                                setMetadataValues((current) => ({
+                                  ...current,
+                                  [field.id]: option.value,
+                                }))
+                              }
+                              style={[
+                                styles.metadataOption,
+                                selected && styles.metadataOptionSelected,
+                              ]}
+                            >
+                              <Text
+                                style={[
+                                  styles.metadataOptionText,
+                                  selected && styles.metadataOptionTextSelected,
+                                ]}
+                              >
+                                {option.label}
+                              </Text>
+                            </Pressable>
+                          );
+                        })}
+                      </View>
+                    ) : (
+                      <TextInput
+                        value={value}
+                        onChangeText={(nextValue) =>
+                          setMetadataValues((current) => ({ ...current, [field.id]: nextValue }))
+                        }
+                        placeholder={`Enter ${field.label.toLowerCase()}`}
+                        placeholderTextColor={colors.muted}
+                        keyboardType={field.type === "number" ? "numeric" : "default"}
+                        style={styles.creationInput}
+                      />
+                    )}
                   </View>
-                  <View style={styles.creationField}>
-                    <Text style={styles.creationLabel}>Transporter LR date · required</Text>
-                    <TextInput
-                      value={creationValues.transporterLrDate}
-                      onChangeText={(transporterLrDate) =>
-                        setCreationValues((current) => ({ ...current, transporterLrDate }))
-                      }
-                      placeholder="YYYY-MM-DD"
-                      placeholderTextColor={colors.muted}
-                      keyboardType="numbers-and-punctuation"
-                      maxLength={10}
-                      autoCapitalize="none"
-                      style={styles.creationInput}
-                    />
-                  </View>
-                </>
+                );
+              })}
+              {datePickerField &&
+              metadataFields.some(
+                (field) => field.id === datePickerField && field.type === "date",
+              ) ? (
+                <DateTimePicker
+                  value={dateForPicker(metadataValues[datePickerField])}
+                  mode="date"
+                  display="default"
+                  onChange={onDateChange}
+                />
               ) : null}
-              {!creationComplete ? (
+              {metadataMode === "create" && !creationComplete ? (
                 <Text style={styles.creationHint}>
-                  Complete the required dates and transporter details to enable upload.
+                  Complete the required fields to enable the first POD upload.
                 </Text>
+              ) : null}
+              {metadataMode === "update" && manifest.metadata?.updateUrl ? (
+                <SmallAction
+                  label={metadataSaving ? "SYNCING TO ERP…" : "SYNC DETAILS TO ERP"}
+                  kind="primary"
+                  disabled={metadataSaving || !metadataCanSync}
+                  onPress={() => onMetadataSave(metadataValues)}
+                />
               ) : null}
             </View>
           ) : null}
@@ -437,7 +570,7 @@ export function ScannerScreen({
                       selectedField,
                       action,
                       source,
-                      manifest.creation ? creationValues : undefined,
+                      metadataMode === "create" ? metadataValues : undefined,
                     )
                   }
                 />
@@ -621,6 +754,49 @@ function createStyles(colors: ThemeColors) {
       fontFamily: fontFamilies.regular,
       fontSize: fontSizes.description,
     },
+    creationDateButton: {
+      minHeight: 44,
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      backgroundColor: colors.input,
+      paddingHorizontal: space.md,
+    },
+    creationDateText: {
+      color: colors.text,
+      fontFamily: fontFamilies.regular,
+      fontSize: fontSizes.description,
+    },
+    creationDatePlaceholder: { color: colors.muted },
+    creationReadOnly: {
+      minHeight: 44,
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      backgroundColor: colors.surface,
+      paddingHorizontal: space.md,
+    },
+    metadataOptions: { flexDirection: "row", flexWrap: "wrap", gap: space.sm },
+    metadataOption: {
+      minHeight: 40,
+      justifyContent: "center",
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.pill,
+      paddingHorizontal: space.md,
+    },
+    metadataOptionSelected: {
+      backgroundColor: colors.text,
+      borderColor: colors.text,
+    },
+    metadataOptionText: {
+      color: colors.text,
+      fontFamily: fontFamilies.medium,
+      fontSize: fontSizes.caption,
+    },
+    metadataOptionTextSelected: { color: colors.background },
     creationHint: {
       color: colors.muted,
       fontFamily: fontFamilies.regular,

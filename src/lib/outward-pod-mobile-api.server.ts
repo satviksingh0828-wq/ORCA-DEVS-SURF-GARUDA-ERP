@@ -14,24 +14,71 @@ const DOCUMENT_COLUMNS = {
 } as const;
 type DocumentKind = keyof typeof DOCUMENT_COLUMNS;
 type RequestAction = "view" | "add" | "replace";
+type MetadataFieldType = "text" | "date" | "number" | "select";
 type Actor = { userId: string; username: string; role: string; authType: "basic" | "bearer" };
 type BasicCredentials = { username: string; password: string };
 type PodRecord = {
   id: string;
   consignment_id: string;
-  delivery_date: string;
+  delivery_date: string | null;
   transporter_lr_number: string | null;
   transporter_lr_date: string | null;
   front_copy_path: string | null;
   back_copy_path: string | null;
   signature_copy_path: string | null;
+  updated_at?: string | null;
+  updated_by?: string | null;
 };
 type ConsignmentRecord = {
   id: string;
   consignment_number: string;
   branch_id: string;
   consignment_type: string;
+  delivery_date: string | null;
+  transporter_lr_number: string | null;
+  transporter_lr_date: string | null;
 };
+
+type PODMetadataDefinition = {
+  id: string;
+  label: string;
+  type: MetadataFieldType;
+  podColumn: keyof PodRecord;
+  consignmentColumn: keyof ConsignmentRecord;
+  options?: Array<{ label: string; value: string }>;
+  requiredForCreate: (consignment: ConsignmentRecord) => boolean;
+  applicable: (consignment: ConsignmentRecord) => boolean;
+};
+
+const POD_METADATA_DEFINITIONS: PODMetadataDefinition[] = [
+  {
+    id: "deliveryDate",
+    label: "Delivery date",
+    type: "date",
+    podColumn: "delivery_date",
+    consignmentColumn: "delivery_date",
+    requiredForCreate: () => true,
+    applicable: () => true,
+  },
+  {
+    id: "transporterLrNumber",
+    label: "Transporter LR number",
+    type: "text",
+    podColumn: "transporter_lr_number",
+    consignmentColumn: "transporter_lr_number",
+    requiredForCreate: (consignment) => consignment.consignment_type === "third_party",
+    applicable: (consignment) => consignment.consignment_type === "third_party",
+  },
+  {
+    id: "transporterLrDate",
+    label: "Transporter LR date",
+    type: "date",
+    podColumn: "transporter_lr_date",
+    consignmentColumn: "transporter_lr_date",
+    requiredForCreate: (consignment) => consignment.consignment_type === "third_party",
+    applicable: (consignment) => consignment.consignment_type === "third_party",
+  },
+];
 
 // The generated Supabase client types predate outward_pods and the custom user tables.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -224,11 +271,43 @@ function createUploadUrl(request: Request, consignmentId: string, kind: Document
   return url.toString();
 }
 
+function metadataUpdateUrl(request: Request, podId: string) {
+  const url = new URL("/api/mobile/outward-pod", new URL(request.url).origin);
+  url.searchParams.set("operation", "metadata");
+  url.searchParams.set("podId", podId);
+  return url.toString();
+}
+
+function metadataFieldsFor(
+  mode: "create" | "update",
+  pod: PodRecord | null,
+  consignment: ConsignmentRecord,
+  canAdd: boolean,
+  canReplace: boolean,
+) {
+  return POD_METADATA_DEFINITIONS.filter((definition) => definition.applicable(consignment)).map(
+    (definition) => {
+      const podValue = pod ? String(pod[definition.podColumn] ?? "").trim() : "";
+      const consignmentValue = String(consignment[definition.consignmentColumn] ?? "").trim();
+      return {
+        id: definition.id,
+        label: definition.label,
+        type: definition.type,
+        value: podValue || consignmentValue,
+        required: mode === "create" && definition.requiredForCreate(consignment),
+        editable: mode === "create" || (podValue ? canReplace : canAdd),
+        syncOnly: mode === "update" && !podValue && canAdd && Boolean(consignmentValue),
+        ...(definition.options ? { options: definition.options } : {}),
+      };
+    },
+  );
+}
+
 async function loadPodAndConsignment(admin: AdminClient, podId: string) {
   const { data: pod, error: podError } = await admin
     .from("outward_pods")
     .select(
-      "id,consignment_id,delivery_date,transporter_lr_number,transporter_lr_date,front_copy_path,back_copy_path,signature_copy_path",
+      "id,consignment_id,delivery_date,transporter_lr_number,transporter_lr_date,front_copy_path,back_copy_path,signature_copy_path,updated_at,updated_by",
     )
     .eq("id", podId)
     .maybeSingle();
@@ -237,7 +316,9 @@ async function loadPodAndConsignment(admin: AdminClient, podId: string) {
 
   const { data: consignment, error: consignmentError } = await admin
     .from("consignments")
-    .select("id,consignment_number,branch_id,consignment_type")
+    .select(
+      "id,consignment_number,branch_id,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date",
+    )
     .eq("id", pod.consignment_id)
     .maybeSingle();
   if (consignmentError) throw new ApiError(503, "The POD service is temporarily unavailable.");
@@ -312,11 +393,26 @@ function manifestFor(
       fileName: path && permissions.allowView ? name : undefined,
     };
   });
+  const metadataFields = metadataFieldsFor(
+    "update",
+    pod,
+    consignment,
+    canManageOutwardPODDocument(actor.role, "add"),
+    canManageOutwardPODDocument(actor.role, "replace"),
+  );
+  const metadata = {
+    mode: "update" as const,
+    fields: metadataFields,
+    ...(metadataFields.some((field) => field.editable || field.syncOnly)
+      ? { updateUrl: metadataUpdateUrl(request, pod.id) }
+      : {}),
+  };
   return {
     schema: "orca.document.v1",
     recordId: pod.id,
     title: `Outward POD · ${consignment.consignment_number}`,
     uploads,
+    metadata,
   };
 }
 
@@ -333,7 +429,9 @@ async function creationManifestRequest(
 ) {
   const { data: consignment, error } = await admin
     .from("consignments")
-    .select("id,consignment_number,branch_id,consignment_type")
+    .select(
+      "id,consignment_number,branch_id,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date",
+    )
     .eq("id", consignmentId)
     .maybeSingle();
   if (error) throw new ApiError(503, "The consignment service is temporarily unavailable.");
@@ -361,6 +459,13 @@ async function creationManifestRequest(
     allowAdd: true,
     allowReplace: false,
   }));
+  const metadataFields = metadataFieldsFor(
+    "create",
+    null,
+    consignment as ConsignmentRecord,
+    true,
+    true,
+  );
   return json({
     schema: "orca.document.v1",
     recordId: consignmentId,
@@ -369,6 +474,7 @@ async function creationManifestRequest(
       deliveryDateRequired: true,
       transporterLrRequired: consignment.consignment_type === "third_party",
     },
+    metadata: { mode: "create", fields: metadataFields },
     uploads,
   });
 }
@@ -541,6 +647,169 @@ async function uploadRequest(
   });
 }
 
+async function updatePODMetadataRequest(
+  request: Request,
+  admin: AdminClient,
+  actor: Actor,
+  podId: string,
+) {
+  if (
+    !canManageOutwardPODDocument(actor.role, "add") &&
+    !canManageOutwardPODDocument(actor.role, "replace")
+  ) {
+    throw new ApiError(403, "This account type is not permitted to update POD details.");
+  }
+  if (Number(request.headers.get("content-length") ?? 0) > 8192) {
+    throw new ApiError(413, "POD details request is too large.");
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new ApiError(400, "Send POD details as JSON.");
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ApiError(400, "Invalid POD details request.");
+  }
+  const payload = body as Record<string, unknown>;
+  if (String(payload.recordId ?? "") !== podId) {
+    throw new ApiError(400, "POD record does not match the metadata update URL.");
+  }
+  const submittedFields = payload.fields;
+  if (!submittedFields || typeof submittedFields !== "object" || Array.isArray(submittedFields)) {
+    throw new ApiError(400, "POD details must be an object of field values.");
+  }
+  if (!Object.keys(submittedFields).length) {
+    throw new ApiError(400, "Provide at least one POD detail field to sync.");
+  }
+
+  const { pod, consignment } = await loadPodAndConsignment(admin, podId);
+  await ensureBranchAccess(admin, actor, consignment.branch_id);
+  const definitions = new Map(
+    POD_METADATA_DEFINITIONS.filter((definition) => definition.applicable(consignment)).map(
+      (definition) => [definition.id, definition],
+    ),
+  );
+  const updates: Array<{ definition: PODMetadataDefinition; value: string | null }> = [];
+
+  for (const [id, rawValue] of Object.entries(submittedFields as Record<string, unknown>)) {
+    const definition = definitions.get(id);
+    if (!definition) throw new ApiError(400, `Unknown POD detail field: ${id}.`);
+    const currentPodValue = String(pod[definition.podColumn] ?? "").trim();
+    const fieldAction = currentPodValue ? "replace" : "add";
+    if (!canManageOutwardPODDocument(actor.role, fieldAction)) {
+      throw new ApiError(403, `This account type cannot update ${definition.label}.`);
+    }
+    if (typeof rawValue !== "string") {
+      throw new ApiError(400, `${definition.label} must be sent as text.`);
+    }
+    const trimmedValue = rawValue.trim();
+    if (trimmedValue.length > 500) throw new ApiError(400, `${definition.label} is too long.`);
+    if (trimmedValue && definition.type === "date" && !isIsoDate(trimmedValue)) {
+      throw new ApiError(400, `Choose a valid date for ${definition.label} (YYYY-MM-DD).`);
+    }
+    if (trimmedValue && definition.type === "number" && !Number.isFinite(Number(trimmedValue))) {
+      throw new ApiError(400, `Enter a valid number for ${definition.label}.`);
+    }
+    if (
+      trimmedValue &&
+      definition.type === "select" &&
+      definition.options &&
+      !definition.options.some((option) => option.value === trimmedValue)
+    ) {
+      throw new ApiError(400, `Choose an allowed value for ${definition.label}.`);
+    }
+    const currentConsignmentValue = String(consignment[definition.consignmentColumn] ?? "").trim();
+    const value = trimmedValue || null;
+    if (currentPodValue === trimmedValue && currentConsignmentValue === trimmedValue) continue;
+    updates.push({ definition, value });
+  }
+  if (!updates.length) {
+    return json({
+      ok: true,
+      message: "POD details are already up to date.",
+      manifest: manifestFor(request, actor, pod, consignment),
+    });
+  }
+
+  const now = new Date().toISOString();
+  const podPatch: Record<string, unknown> = { updated_at: now, updated_by: actor.userId };
+  for (const { definition, value } of updates) podPatch[definition.podColumn] = value;
+  let podUpdate = admin.from("outward_pods").update(podPatch).eq("id", pod.id);
+  for (const { definition } of updates) {
+    const currentValue = pod[definition.podColumn];
+    podUpdate =
+      currentValue == null
+        ? podUpdate.is(definition.podColumn, null)
+        : podUpdate.eq(definition.podColumn, currentValue);
+  }
+  const { data: updatedPod, error: podUpdateError } = await podUpdate.select("id").maybeSingle();
+  if (podUpdateError) throw new ApiError(503, "The POD details could not be saved.");
+  if (!updatedPod) {
+    throw new ApiError(
+      409,
+      "These POD details changed while you were editing. Reload and try again.",
+    );
+  }
+
+  const consignmentUpdates = updates;
+  if (consignmentUpdates.length) {
+    const consignmentPatch: Record<string, string | null> = {};
+    for (const { definition, value } of consignmentUpdates) {
+      consignmentPatch[definition.consignmentColumn] = value;
+    }
+    let consignmentUpdate = admin
+      .from("consignments")
+      .update(consignmentPatch)
+      .eq("id", consignment.id);
+    for (const { definition } of consignmentUpdates) {
+      const currentValue = consignment[definition.consignmentColumn];
+      consignmentUpdate =
+        currentValue == null
+          ? consignmentUpdate.is(definition.consignmentColumn, null)
+          : consignmentUpdate.eq(definition.consignmentColumn, currentValue);
+    }
+    const { data: updatedConsignment, error: consignmentUpdateError } = await consignmentUpdate
+      .select("id")
+      .maybeSingle();
+    if (consignmentUpdateError || !updatedConsignment) {
+      let rollback = admin
+        .from("outward_pods")
+        .update({
+          ...Object.fromEntries(
+            updates.map(({ definition }) => [
+              definition.podColumn,
+              pod[definition.podColumn] ?? null,
+            ]),
+          ),
+          updated_at: pod.updated_at ?? null,
+          updated_by: pod.updated_by ?? null,
+        })
+        .eq("id", pod.id)
+        .eq("updated_at", now);
+      for (const { definition, value } of updates) {
+        rollback =
+          value == null
+            ? rollback.is(definition.podColumn, null)
+            : rollback.eq(definition.podColumn, value);
+      }
+      await rollback;
+      if (consignmentUpdateError) {
+        throw new ApiError(503, "The consignment details could not be synchronized.");
+      }
+      throw new ApiError(409, "Consignment details changed while syncing. Reload and try again.");
+    }
+  }
+
+  const refreshed = await loadPodAndConsignment(admin, pod.id);
+  return json({
+    ok: true,
+    message: "Missing POD details were synchronized with the ERP.",
+    manifest: manifestFor(request, actor, refreshed.pod, refreshed.consignment),
+  });
+}
+
 async function createPODRequest(request: Request, admin: AdminClient, actor: Actor) {
   if (actor.authType !== "bearer")
     throw new ApiError(401, "Creating an Outward POD requires an ERP session.");
@@ -688,21 +957,26 @@ async function createPODFromMobileUpload(
 
   const file = getFormFile(form, "file");
   validateFile(file);
-  const deliveryDate = String(form.get("deliveryDate") ?? "").trim();
-  const lrNumber = String(form.get("transporterLrNumber") ?? "").trim();
-  const lrDate = String(form.get("transporterLrDate") ?? "").trim();
-  if (!isIsoDate(deliveryDate))
-    throw new ApiError(400, "Enter a valid delivery date (YYYY-MM-DD).");
+  const requestedDeliveryDate = String(form.get("deliveryDate") ?? "").trim();
+  const requestedLrNumber = String(form.get("transporterLrNumber") ?? "").trim();
+  const requestedLrDate = String(form.get("transporterLrDate") ?? "").trim();
 
   const { data: consignment, error: consignmentError } = await admin
     .from("consignments")
-    .select("id,consignment_number,branch_id,consignment_type")
+    .select(
+      "id,consignment_number,branch_id,consignment_type,delivery_date,transporter_lr_number,transporter_lr_date",
+    )
     .eq("id", consignmentId)
     .maybeSingle();
   if (consignmentError)
     throw new ApiError(503, "The consignment service is temporarily unavailable.");
   if (!consignment) throw new ApiError(404, "Consignment not found.");
   await ensureBranchAccess(admin, actor, String(consignment.branch_id));
+  const deliveryDate = requestedDeliveryDate || String(consignment.delivery_date ?? "").trim();
+  const lrNumber = requestedLrNumber || String(consignment.transporter_lr_number ?? "").trim();
+  const lrDate = requestedLrDate || String(consignment.transporter_lr_date ?? "").trim();
+  if (!isIsoDate(deliveryDate))
+    throw new ApiError(400, "Choose a valid delivery date before uploading the first POD file.");
   if (consignment.consignment_type === "third_party" && (!lrNumber || !isIsoDate(lrDate))) {
     throw new ApiError(
       400,
@@ -864,6 +1138,11 @@ export async function handleOutwardPODPost(request: Request): Promise<Response> 
     const admin = await getAdmin();
     const actor = await authenticateRequest(request, admin);
     if (operation === "create") return await createPODRequest(request, admin, actor);
+    if (operation === "metadata") {
+      const podId = url.searchParams.get("podId") ?? "";
+      if (!podId) throw new ApiError(400, "POD ID is required.");
+      return await updatePODMetadataRequest(request, admin, actor, podId);
+    }
     if (operation === "create-upload") {
       const consignmentId = url.searchParams.get("consignmentId") ?? "";
       const kind = url.searchParams.get("kind");

@@ -116,6 +116,13 @@ function consignmentManifestUrl(consignmentId: string) {
   return url.toString();
 }
 
+function podManifestUrl(podId: string) {
+  const url = new URL("/api/mobile/outward-pod", window.location.origin);
+  url.searchParams.set("operation", "manifest");
+  url.searchParams.set("podId", podId);
+  return url.toString();
+}
+
 async function podApiJson<T>(url: string, token: string | undefined, init: RequestInit = {}) {
   if (!token)
     throw new Error("Your ERP session has expired. Sign in again before managing POD documents.");
@@ -141,6 +148,11 @@ function podDocumentsChanged(a: POD | null, b: POD | null) {
     a.signature_copy_path !== b.signature_copy_path ||
     a.updated_at !== b.updated_at
   );
+}
+
+function uploadedDocumentCount(pod: POD | null | undefined) {
+  if (!pod) return 0;
+  return [pod.front_copy_path, pod.back_copy_path, pod.signature_copy_path].filter(Boolean).length;
 }
 
 function text(value: unknown): string {
@@ -204,6 +216,9 @@ export function OutwardPOD() {
     canManageOutwardPODDocument(user?.role, action),
   );
   const canAddPODDocuments = canManageOutwardPODDocument(user?.role, "add");
+  const canEditMobileMetadata =
+    canManageOutwardPODDocument(user?.role, "add") ||
+    canManageOutwardPODDocument(user?.role, "replace");
   const allowed = useMemo(
     () => (user?.role === "basic" ? (user.branchIds ?? []) : null),
     [user?.role, user?.branchIds],
@@ -217,6 +232,8 @@ export function OutwardPOD() {
   const [selected, setSelected] = useState<Consignment | null>(null);
   const selectedRef = useRef<Consignment | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [mobileEditQrDataUrl, setMobileEditQrDataUrl] = useState<string | null>(null);
+  const [mobileEditQrLoading, setMobileEditQrLoading] = useState(false);
   const [form, setForm] = useState<FormState>({
     delivery_date: "",
     transporter_lr_number: "",
@@ -265,6 +282,7 @@ export function OutwardPOD() {
       setSelected(row);
       setSearchOpen(false);
       setQrDataUrl(null);
+      setMobileEditQrDataUrl(null);
       const existing = first(row.outward_pod);
       setForm({
         delivery_date: existing?.delivery_date ?? row.delivery_date ?? "",
@@ -289,10 +307,10 @@ export function OutwardPOD() {
         }
       }
 
+      if (existing || !canAddPODDocuments) return;
+
       try {
-        const manifestUrl = existing
-          ? podApiUrl("manifest", existing.id)
-          : consignmentManifestUrl(row.id);
+        const manifestUrl = consignmentManifestUrl(row.id);
         const dataUrl = await QRCode.toDataURL(manifestUrl, {
           width: 256,
           margin: 2,
@@ -303,7 +321,7 @@ export function OutwardPOD() {
         toast.error("Could not create the POD mobile QR code");
       }
     },
-    [canUsePODDocuments, user?.role, user?.sessionToken],
+    [canAddPODDocuments, canUsePODDocuments, user?.role, user?.sessionToken],
   );
 
   useEffect(() => {
@@ -363,6 +381,24 @@ export function OutwardPOD() {
     setSearchResults(result);
     setSearchOpen(true);
     if (!result.length) toast.info("No matching consignments found");
+  }
+  async function showMobileEditQr() {
+    const pod = first(selected?.outward_pod);
+    if (!selected || !pod || !canEditMobileMetadata) return;
+    const selectedId = selected.id;
+    setMobileEditQrLoading(true);
+    try {
+      const dataUrl = await QRCode.toDataURL(podManifestUrl(pod.id), {
+        width: 256,
+        margin: 2,
+        errorCorrectionLevel: "M",
+      });
+      if (selectedRef.current?.id === selectedId) setMobileEditQrDataUrl(dataUrl);
+    } catch {
+      toast.error("Could not create the mobile edit QR code");
+    } finally {
+      setMobileEditQrLoading(false);
+    }
   }
   function chooseFile(kind: DocumentKind, file: File | undefined) {
     if (!file) return;
@@ -574,6 +610,7 @@ export function OutwardPOD() {
                 <th className="px-4 py-3">Consignor</th>
                 <th className="px-4 py-3">Consignee</th>
                 <th className="px-4 py-3">Delivery Date</th>
+                <th className="px-4 py-3">Documents</th>
                 <th className="px-4 py-3">Created At</th>
                 <th className="px-4 py-3">Action</th>
               </tr>
@@ -581,7 +618,7 @@ export function OutwardPOD() {
             <tbody>
               {filteredPodRows.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-12 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-4 py-12 text-center text-muted-foreground">
                     No Outward POD records created yet.
                   </td>
                 </tr>
@@ -594,6 +631,15 @@ export function OutwardPOD() {
                       <td className="px-4 py-3">{party(row, "consignor")}</td>
                       <td className="px-4 py-3">{party(row, "consignee")}</td>
                       <td className="px-4 py-3">{pod.delivery_date || "—"}</td>
+                      <td className="px-4 py-3">
+                        {uploadedDocumentCount(pod) > 0 ? (
+                          <span className="inline-flex rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs font-medium text-emerald-600">
+                            Uploaded ({uploadedDocumentCount(pod)}/3)
+                          </span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">No files uploaded</span>
+                        )}
+                      </td>
                       <td className="px-4 py-3">
                         {pod.created_at ? new Date(pod.created_at).toLocaleString("en-IN") : "—"}
                       </td>
@@ -637,9 +683,11 @@ export function OutwardPOD() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
         <div>
-          <h2 className="font-semibold">Create Outward POD</h2>
+          <h2 className="font-semibold">{existing ? "View Outward POD" : "Create Outward POD"}</h2>
           <p className="text-xs text-muted-foreground">
-            Select a consignment and complete the POD documents.
+            {existing
+              ? "Review the POD details and uploaded document status."
+              : "Select a consignment and complete the POD documents."}
           </p>
         </div>
         <Button
@@ -656,9 +704,11 @@ export function OutwardPOD() {
       <div className="rounded-xl border border-border bg-card p-4">
         <div className="mb-3 flex items-center justify-between gap-3">
           <div>
-            <h2 className="font-semibold">Outward POD</h2>
+            <h2 className="font-semibold">{existing ? "Outward POD details" : "Outward POD"}</h2>
             <p className="text-xs text-muted-foreground">
-              Select one consignment, consignor or consignee to create its proof of delivery.
+              {existing
+                ? "View the current POD and its attachment status."
+                : "Select one consignment, consignor or consignee to create its proof of delivery."}
             </p>
           </div>
           <Button
@@ -727,14 +777,41 @@ export function OutwardPOD() {
                   {selected.movement_mode === "drop" ? "Drop" : "Pickup"}
                 </p>
               </div>
-              {existing ? (
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-600">
-                  <CheckCircle2 className="size-3.5" />
-                  {canUsePODDocuments
-                    ? "Created · document actions available"
-                    : "Created · no document actions"}
-                </span>
-              ) : null}
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                {existing && canEditMobileMetadata ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={mobileEditQrLoading}
+                    onClick={() => void showMobileEditQr()}
+                  >
+                    {mobileEditQrLoading ? (
+                      <Loader2 className="mr-2 size-4 animate-spin" />
+                    ) : (
+                      <QrCode className="mr-2 size-4" />
+                    )}
+                    {mobileEditQrDataUrl ? "Refresh mobile QR" : "Edit on mobile"}
+                  </Button>
+                ) : null}
+                {existing ? (
+                  <span
+                    className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
+                      uploadedDocumentCount(existing) > 0
+                        ? "bg-emerald-500/10 text-emerald-600"
+                        : "bg-muted text-muted-foreground"
+                    }`}
+                  >
+                    <CheckCircle2 className="size-3.5" />
+                    {uploadedDocumentCount(existing) > 0
+                      ? `Uploaded (${uploadedDocumentCount(existing)}/3)`
+                      : "No files uploaded"}
+                    {canUsePODDocuments
+                      ? " · document actions available"
+                      : " · no document actions"}
+                  </span>
+                ) : null}
+              </div>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <Info label="Consignment Date" value={selected.consignment_date} />
@@ -766,7 +843,7 @@ export function OutwardPOD() {
                 />
               </div>
             </div>
-            {(existing ? canUsePODDocuments : canAddPODDocuments) ? (
+            {!existing && canAddPODDocuments ? (
               <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/20 p-3">
                 {qrDataUrl ? (
                   <img
@@ -785,9 +862,9 @@ export function OutwardPOD() {
                     Scan with ORCA Documents
                   </h4>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    {existing
-                      ? "This QR is tied to the selected POD. Sign in with an ERP account to add an empty PDF/image slot, preview an existing file, or replace it. The server verifies the account and action on every request."
-                      : "This QR starts an Outward POD for the selected consignment. In ORCA Documents, enter the delivery details and upload the first PDF/image; that upload creates the POD. Further files can be added from the same scan."}
+                    This QR starts an Outward POD for the selected consignment. In ORCA Documents,
+                    enter the delivery details and upload the first PDF/image; that upload creates
+                    the POD. Further files can be added from the same scan.
                   </p>
                   <Button
                     type="button"
@@ -797,6 +874,34 @@ export function OutwardPOD() {
                     onClick={() => void selectConsignment(selected)}
                   >
                     <QrCode className="mr-2 size-4" /> Refresh QR
+                  </Button>
+                </div>
+              </div>
+            ) : null}
+            {existing && mobileEditQrDataUrl ? (
+              <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/20 p-3">
+                <img
+                  src={mobileEditQrDataUrl}
+                  alt={`Mobile edit QR for ${selected.consignment_number}`}
+                  className="size-36 rounded bg-white p-2"
+                />
+                <div className="min-w-48 flex-1">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold">
+                    <QrCode className="size-4" />
+                    Mobile edit mode
+                  </h4>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Scan with ORCA Documents to update or clear permitted POD details, then sync
+                    them to the ERP. The QR is hidden from the normal view until requested.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => setMobileEditQrDataUrl(null)}
+                  >
+                    Hide QR
                   </Button>
                 </div>
               </div>

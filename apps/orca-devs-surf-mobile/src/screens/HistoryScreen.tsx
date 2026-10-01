@@ -13,6 +13,7 @@ const actionNames: Record<HistoryEntry["action"], string> = {
   view: "VIEW",
   add: "ADD FILE",
   replace: "REPLACE FILE",
+  update: "SYNC DETAILS",
 };
 
 export function HistoryScreen({ entries, onClear }: HistoryScreenProps) {
@@ -42,8 +43,8 @@ export function HistoryScreen({ entries, onClear }: HistoryScreenProps) {
         ) : null}
       </View>
       <Text style={styles.subtitle}>
-        Recent scans and document actions. Passwords and authentication headers are never recorded
-        here.
+        Recent scans, document actions, and metadata syncs. Passwords and authentication headers are
+        never recorded here.
       </Text>
 
       {entries.length === 0 ? (

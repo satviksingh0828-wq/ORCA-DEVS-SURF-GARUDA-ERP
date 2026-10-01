@@ -1,12 +1,6 @@
 import { fromByteArray } from "base64-js";
 import * as FileSystem from "expo-file-system/legacy";
-import type {
-  Credentials,
-  FileAction,
-  PickedFile,
-  PODCreationMetadata,
-  QrManifest,
-} from "../types";
+import type { Credentials, FileAction, PickedFile, QrManifest } from "../types";
 
 export interface UploadedFileResponse {
   url?: string;
@@ -122,7 +116,7 @@ export async function uploadFile(
   uploadId: string,
   action: FileAction,
   file: PickedFile,
-  creation?: PODCreationMetadata,
+  metadataValues?: Record<string, string>,
 ): Promise<UploadedFileResponse> {
   const safeUrl = validateHttpUrl(url);
   const parameters: Record<string, string> = {
@@ -131,10 +125,10 @@ export async function uploadFile(
     uploadId,
     id: credentials.userId,
   };
-  if (creation) {
-    parameters.deliveryDate = creation.deliveryDate;
-    parameters.transporterLrNumber = creation.transporterLrNumber ?? "";
-    parameters.transporterLrDate = creation.transporterLrDate ?? "";
+  if (metadataValues) {
+    for (const [fieldId, value] of Object.entries(metadataValues)) {
+      parameters[fieldId] = value;
+    }
   }
 
   const response = await FileSystem.uploadAsync(safeUrl, file.uri, {
@@ -167,6 +161,36 @@ export async function uploadFile(
     return result as UploadedFileResponse;
   }
   return {};
+}
+
+export async function syncMetadata(
+  url: string,
+  credentials: Credentials,
+  recordId: string,
+  fields: Record<string, string>,
+): Promise<UploadedFileResponse> {
+  const safeUrl = validateHttpUrl(url);
+  const response = await fetch(safeUrl, {
+    method: "POST",
+    headers: { ...authHeaders(credentials), "Content-Type": "application/json" },
+    body: JSON.stringify({ recordId, fields }),
+  });
+  const result = await responseJson(response);
+  if (!response.ok) {
+    const serverMessage =
+      result &&
+      typeof result === "object" &&
+      !Array.isArray(result) &&
+      typeof (result as Record<string, unknown>).message === "string"
+        ? ((result as Record<string, unknown>).message as string)
+        : undefined;
+    throw new Error(serverMessage ?? `POD detail sync failed (${response.status}).`);
+  }
+  const rejected = explicitRejection(result);
+  if (rejected) throw new Error(rejected);
+  return result && typeof result === "object" && !Array.isArray(result)
+    ? (result as UploadedFileResponse)
+    : {};
 }
 
 export async function downloadForPreview(

@@ -1,4 +1,12 @@
-import type { FileKind, FileAction, QrManifest, UploadField } from "../types";
+import type {
+  FileAction,
+  FileKind,
+  ManifestMetadata,
+  MetadataField,
+  MetadataFieldOption,
+  QrManifest,
+  UploadField,
+} from "../types";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -29,6 +37,53 @@ function boolValue(value: unknown): boolean | undefined {
   if (value === 1 || value === "1" || value === "true") return true;
   if (value === 0 || value === "0" || value === "false") return false;
   return undefined;
+}
+
+function metadataFrom(root: JsonRecord, baseUrl?: string): ManifestMetadata | undefined {
+  const schema = record(firstDefined(root, ["metadata", "metadataSchema", "metadata_schema"]));
+  const rawFields = schema?.fields;
+  if (!schema || !Array.isArray(rawFields)) return undefined;
+
+  const fields: MetadataField[] = rawFields.flatMap((rawField) => {
+    const item = record(rawField);
+    const id = stringValue(firstDefined(item, ["id", "key", "name"]));
+    const label = stringValue(firstDefined(item, ["label", "title", "name"]));
+    const rawType = stringValue(
+      firstDefined(item, ["type", "fieldType", "field_type"]),
+    )?.toLowerCase();
+    if (!item || !id || !label || !rawType) return [];
+    if (!["text", "date", "number", "select"].includes(rawType)) return [];
+
+    const options = Array.isArray(item.options)
+      ? item.options.flatMap((rawOption): MetadataFieldOption[] => {
+          if (typeof rawOption === "string") return [{ label: rawOption, value: rawOption }];
+          const option = record(rawOption);
+          const value = stringValue(firstDefined(option, ["value", "id"]));
+          const optionLabel = stringValue(firstDefined(option, ["label", "title", "name"]));
+          return value && optionLabel ? [{ value, label: optionLabel }] : [];
+        })
+      : undefined;
+
+    return [
+      {
+        id,
+        label,
+        type: rawType as MetadataField["type"],
+        value: stringValue(firstDefined(item, ["value", "currentValue", "current_value"])) ?? "",
+        required: boolValue(firstDefined(item, ["required", "isRequired", "is_required"])) ?? false,
+        editable: boolValue(firstDefined(item, ["editable", "allowEdit", "allow_edit"])) ?? false,
+        ...(boolValue(firstDefined(item, ["syncOnly", "sync_only"])) ? { syncOnly: true } : {}),
+        ...(options?.length ? { options } : {}),
+      },
+    ];
+  });
+
+  const mode = stringValue(schema.mode)?.toLowerCase() === "update" ? "update" : "create";
+  const updateUrl = absoluteUrl(
+    firstDefined(schema, ["updateUrl", "update_url", "saveUrl"]),
+    baseUrl,
+  );
+  return { mode, fields, ...(updateUrl ? { updateUrl } : {}) };
 }
 
 function permission(item: JsonRecord, action: "view" | "add" | "replace"): boolean {
@@ -159,6 +214,7 @@ export function normalizeManifest(input: unknown, baseUrl?: string): QrManifest 
   const title =
     stringValue(firstDefined(root, ["title", "name", "recordName", "record_name"])) ??
     `Record ${recordId}`;
+  const metadata = metadataFrom(root, baseUrl);
   const creationRecord = record(firstDefined(root, ["creation", "createForm", "create_form"]));
   const creation = creationRecord
     ? {
@@ -177,6 +233,7 @@ export function normalizeManifest(input: unknown, baseUrl?: string): QrManifest 
     recordId,
     title,
     uploads,
+    ...(metadata ? { metadata } : {}),
     ...(creation ? { creation } : {}),
     scannedAt: new Date().toISOString(),
   };
