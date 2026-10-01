@@ -58,7 +58,15 @@ type Consignment = {
   delivery_date: string | null;
   transporter_lr_number: string | null;
   transporter_lr_date: string | null;
-  branch?: { branch_name?: string } | null;
+  branch?: {
+    branch_name?: string;
+    address_line1?: string | null;
+    address_line2?: string | null;
+    area_locality?: string | null;
+    city?: string | null;
+    state?: string | null;
+    pin_code?: string | null;
+  } | null;
   source?: { contract_name?: string } | null;
   transporter?: { transporter_name?: string } | null;
   shipments?: Array<{
@@ -218,9 +226,6 @@ export function OutwardPOD() {
     canManageOutwardPODDocument(user?.role, action),
   );
   const canAddPODDocuments = canManageOutwardPODDocument(user?.role, "add");
-  const canEditMobileMetadata =
-    canManageOutwardPODDocument(user?.role, "add") ||
-    canManageOutwardPODDocument(user?.role, "replace");
   const allowed = useMemo(
     () => (user?.role === "basic" ? (user.branchIds ?? []) : null),
     [user?.role, user?.branchIds],
@@ -235,9 +240,7 @@ export function OutwardPOD() {
   const selectedRef = useRef<Consignment | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [viewQrDataUrl, setViewQrDataUrl] = useState<string | null>(null);
-  const [mobileEditQrDataUrl, setMobileEditQrDataUrl] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
-  const [mobileEditQrLoading, setMobileEditQrLoading] = useState(false);
   const [form, setForm] = useState<FormState>({
     delivery_date: "",
     transporter_lr_number: "",
@@ -259,7 +262,7 @@ export function OutwardPOD() {
         let query = db
           .from("consignments")
           .select(
-            "id,consignment_number,consignment_date,branch_id,consignment_type,movement_mode,from_details,to_details,from_pin_code,to_pin_code,delivery_date,transporter_lr_number,transporter_lr_date,branch:branches(branch_name),source:contracts(contract_name),transporter:ltms_transporters(transporter_name),shipments(supplier_trade_name,recipient_trade_name,supplier_pin_code,recipient_pin_code,shipment_items(quantity,weight_kg)),consignment_package_information(package_type,quantity,weight_kg),trip:trips(trip_code,odometer_start,odometer_end,start_date,end_date,vehicle:vehicles(registration_number)),outward_pod:outward_pods(id,delivery_date,transporter_lr_number,transporter_lr_date,front_copy_path,back_copy_path,signature_copy_path,created_at,updated_at,updated_by)",
+            "id,consignment_number,consignment_date,branch_id,consignment_type,movement_mode,from_details,to_details,from_pin_code,to_pin_code,delivery_date,transporter_lr_number,transporter_lr_date,branch:branches(branch_name,address_line1,address_line2,area_locality,city,state,pin_code),source:contracts(contract_name),transporter:ltms_transporters(transporter_name),shipments(supplier_trade_name,recipient_trade_name,supplier_pin_code,recipient_pin_code,shipment_items(quantity,weight_kg)),consignment_package_information(package_type,quantity,weight_kg),trip:trips(trip_code,odometer_start,odometer_end,start_date,end_date,vehicle:vehicles(registration_number)),outward_pod:outward_pods(id,delivery_date,transporter_lr_number,transporter_lr_date,front_copy_path,back_copy_path,signature_copy_path,created_at,updated_at,updated_by)",
           )
           .order("created_at", { ascending: false })
           .limit(2000);
@@ -287,7 +290,6 @@ export function OutwardPOD() {
       setSearchOpen(false);
       setQrDataUrl(null);
       setViewQrDataUrl(null);
-      setMobileEditQrDataUrl(null);
       const existing = first(row.outward_pod);
       setForm({
         delivery_date: existing?.delivery_date ?? row.delivery_date ?? "",
@@ -324,18 +326,6 @@ export function OutwardPOD() {
           toast.error("Could not create the view-only POD QR code");
         }
       }
-      if (existing && canEditMobileMetadata) {
-        try {
-          const dataUrl = await QRCode.toDataURL(podManifestUrl(existing.id), {
-            width: 256,
-            margin: 2,
-            errorCorrectionLevel: "M",
-          });
-          if (selectedRef.current?.id === row.id) setMobileEditQrDataUrl(dataUrl);
-        } catch {
-          toast.error("Could not create the mobile edit QR code");
-        }
-      }
       if (existing || !canAddPODDocuments) return;
 
       try {
@@ -350,7 +340,7 @@ export function OutwardPOD() {
         toast.error("Could not create the POD mobile QR code");
       }
     },
-    [canAddPODDocuments, canEditMobileMetadata, canUsePODDocuments, user?.role, user?.sessionToken],
+    [canAddPODDocuments, canUsePODDocuments, user?.role, user?.sessionToken],
   );
 
   useEffect(() => {
@@ -410,24 +400,6 @@ export function OutwardPOD() {
     setSearchResults(result);
     setSearchOpen(true);
     if (!result.length) toast.info("No matching consignments found");
-  }
-  async function showMobileEditQr() {
-    const pod = first(selected?.outward_pod);
-    if (!selected || !pod || !canEditMobileMetadata) return;
-    const selectedId = selected.id;
-    setMobileEditQrLoading(true);
-    try {
-      const dataUrl = await QRCode.toDataURL(podManifestUrl(pod.id), {
-        width: 256,
-        margin: 2,
-        errorCorrectionLevel: "M",
-      });
-      if (selectedRef.current?.id === selectedId) setMobileEditQrDataUrl(dataUrl);
-    } catch {
-      toast.error("Could not create the mobile edit QR code");
-    } finally {
-      setMobileEditQrLoading(false);
-    }
   }
   function chooseFile(kind: DocumentKind, file: File | undefined) {
     if (!file) return;
@@ -544,6 +516,16 @@ export function OutwardPOD() {
         consignee: party(selected, "consignee"),
         destination: destination(selected),
         branchName: selected.branch?.branch_name,
+        branchAddress: [
+          selected.branch?.address_line1,
+          selected.branch?.address_line2,
+          selected.branch?.area_locality,
+          selected.branch?.city,
+          selected.branch?.state,
+          selected.branch?.pin_code,
+        ]
+          .filter(Boolean)
+          .join(", "),
         consignmentType: selected.consignment_type,
         deliveryDate: existing.delivery_date,
         transporterLrNumber: existing.transporter_lr_number,
@@ -847,22 +829,6 @@ export function OutwardPOD() {
                     Export PDF
                   </Button>
                 ) : null}
-                {existing && canEditMobileMetadata ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={mobileEditQrLoading}
-                    onClick={() => void showMobileEditQr()}
-                  >
-                    {mobileEditQrLoading ? (
-                      <Loader2 className="mr-2 size-4 animate-spin" />
-                    ) : (
-                      <QrCode className="mr-2 size-4" />
-                    )}
-                    {mobileEditQrDataUrl ? "Refresh edit QR" : "Edit on mobile"}
-                  </Button>
-                ) : null}
                 {existing ? (
                   <span
                     className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
@@ -963,34 +929,6 @@ export function OutwardPOD() {
                     Scan in ORCA Documents to view this existing Outward POD and its documents. This
                     QR cannot replace files or edit any data.
                   </p>
-                </div>
-              </div>
-            ) : null}
-            {existing && mobileEditQrDataUrl ? (
-              <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/20 p-3">
-                <img
-                  src={mobileEditQrDataUrl}
-                  alt={`Mobile edit QR for ${selected.consignment_number}`}
-                  className="size-36 rounded bg-white p-2"
-                />
-                <div className="min-w-48 flex-1">
-                  <h4 className="flex items-center gap-2 text-sm font-semibold">
-                    <QrCode className="size-4" />
-                    Edit QR — mobile mode
-                  </h4>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Scan with ORCA Documents to update or clear permitted POD details and add or
-                    replace documents, then sync them to the ERP.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="mt-3"
-                    onClick={() => setMobileEditQrDataUrl(null)}
-                  >
-                    Hide QR
-                  </Button>
                 </div>
               </div>
             ) : null}

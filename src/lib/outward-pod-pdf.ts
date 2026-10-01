@@ -9,6 +9,7 @@ export type OutwardPODPdfData = {
   consignee?: string | null;
   destination?: string | null;
   branchName?: string | null;
+  branchAddress?: string | null;
   consignmentType?: string | null;
   deliveryDate?: string | null;
   transporterLrNumber?: string | null;
@@ -30,19 +31,24 @@ function drawHeader(doc: jsPDF, companyName: string, address: string, title: str
   doc.text(companyName || "ORCA DEVS SURF", 88, 32);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
-  if (address) doc.text(address, 88, 45);
+  const addressLines = address ? (doc.splitTextToSize(address, 420) as string[]) : [];
+  if (addressLines.length) doc.text(addressLines, 88, 45);
+  const lineY = addressLines.length ? 45 + addressLines.length * 12 + 5 : 58;
   doc.setDrawColor(...RED);
   doc.setLineWidth(1.2);
-  doc.line(36, 58, 559, 58);
+  doc.line(36, lineY, 559, lineY);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(12);
   doc.setTextColor(...RED);
-  doc.text(title, 36, 77);
+  const titleY = lineY + 19;
+  doc.text(title, 36, titleY);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(...GREY);
-  doc.text(`Generated ${new Date().toLocaleString("en-IN")}`, 36, 91);
+  const generatedY = titleY + 14;
+  doc.text(`Generated ${new Date().toLocaleString("en-IN")}`, 36, generatedY);
   doc.setTextColor(0, 0, 0);
+  return generatedY + 25;
 }
 
 function drawFooter(doc: jsPDF) {
@@ -97,7 +103,7 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
       QRCode.toDataURL(data.viewQrUrl, { width: 360, margin: 2, errorCorrectionLevel: "M" }),
     ]);
     const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const address = [
+    const companyAddress = [
       company?.address_line1,
       company?.address_line2,
       company?.city,
@@ -106,25 +112,35 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
     ]
       .filter(Boolean)
       .join(", ");
-    drawHeader(doc, company?.company_name ?? "ORCA DEVS SURF", address, "Outward POD");
+    const branchAddress = data.branchAddress?.trim() || companyAddress;
+    const headerAddress = data.branchName
+      ? `${data.branchName}${branchAddress ? `, ${branchAddress}` : ""}`
+      : branchAddress;
+    const contentStartY = drawHeader(
+      doc,
+      company?.company_name ?? "ORCA DEVS SURF",
+      headerAddress,
+      "Outward POD",
+    );
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(...RED);
-    doc.text("CONSIGNMENT DETAILS", 36, 122);
+    doc.text("CONSIGNMENT DETAILS", 36, contentStartY);
     doc.setTextColor(0, 0, 0);
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.6);
-    doc.roundedRect(36, 134, 523, 180, 4, 4);
+    const detailsY = contentStartY + 12;
+    doc.roundedRect(36, detailsY, 523, 180, 4, 4);
 
-    let y = 158;
+    let y = detailsY + 24;
     y += drawField(doc, "Consignment No.", data.consignmentNumber, 52, y, 235);
     y += drawField(doc, "Consignment Date", data.consignmentDate, 52, y, 235);
     y += drawField(doc, "Consignor", data.consignor, 52, y, 235);
     y += drawField(doc, "Consignee", data.consignee, 52, y, 235);
     drawField(doc, "Destination", data.destination, 52, y, 235);
 
-    let rightY = 158;
+    let rightY = detailsY + 24;
     rightY += drawField(
       doc,
       "POD Type",
@@ -150,14 +166,16 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(...RED);
-    doc.text("VIEW-ONLY MOBILE QR", 36, 354);
+    const qrTitleY = detailsY + 220;
+    doc.text("VIEW-ONLY MOBILE QR", 36, qrTitleY);
     doc.setTextColor(0, 0, 0);
     doc.setDrawColor(200, 200, 200);
-    doc.roundedRect(36, 366, 523, 180, 4, 4);
-    doc.addImage(qrDataUrl, "PNG", 54, 384, 144, 144);
+    const qrBoxY = qrTitleY + 12;
+    doc.roundedRect(36, qrBoxY, 523, 180, 4, 4);
+    doc.addImage(qrDataUrl, "PNG", 54, qrBoxY + 18, 144, 144);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);
-    doc.text("Outward POD view mode", 225, 410);
+    doc.text("Outward POD view mode", 225, qrBoxY + 44);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(10);
     doc.text(
@@ -166,7 +184,7 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
         275,
       ),
       225,
-      435,
+      qrBoxY + 69,
     );
 
     drawFooter(doc);
