@@ -71,6 +71,13 @@ import {
   printTripNote,
 } from "@/lib/trip-note-pdf";
 
+function tripQrManifestUrl(tripId: string) {
+  const url = new URL("/api/mobile/outward-pod", window.location.origin);
+  url.searchParams.set("operation", "trip-manifest");
+  url.searchParams.set("tripId", tripId);
+  return url.toString();
+}
+
 export type TripRow = {
   id?: string;
   trip_code: string;
@@ -828,9 +835,7 @@ export function TripForm({
     try {
       let tripQrDataUri: string | null = null;
       if (trip.id) {
-        const qrUrl = new URL("/ltms/operations", window.location.origin);
-        qrUrl.searchParams.set("tripId", trip.id);
-        tripQrDataUri = await QRCode.toDataURL(qrUrl.toString(), {
+        tripQrDataUri = await QRCode.toDataURL(tripQrManifestUrl(trip.id), {
           width: 320,
           margin: 2,
           errorCorrectionLevel: "M",
@@ -998,9 +1003,7 @@ export function TripForm({
     setTripQrOpen(true);
     setTripQrLoading(true);
     try {
-      const url = new URL("/ltms/operations", window.location.origin);
-      url.searchParams.set("tripId", trip.id);
-      const dataUrl = await QRCode.toDataURL(url.toString(), {
+      const dataUrl = await QRCode.toDataURL(tripQrManifestUrl(trip.id), {
         width: 320,
         margin: 2,
         errorCorrectionLevel: "M",
@@ -1449,12 +1452,11 @@ export function TripForm({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <QrCode className="size-5" />
-              {tripClosed ? "Closed trip view QR" : "Trip edit QR"}
+              Trip manifest QR
             </DialogTitle>
             <DialogDescription>
-              {tripClosed
-                ? "Scan this QR to open the closed trip in view-only mode. Reopen the trip before making changes."
-                : "Scan this QR to open the trip in the system. Open trips allow editing and replacement; the same QR becomes view-only after closure."}
+              Scan with ORCA Documents to view this Trip and its manifests. The Trip form in ERP
+              remains editable; use it to make changes.
             </DialogDescription>
           </DialogHeader>
           <div className="flex min-h-80 items-center justify-center rounded-xl border border-border bg-white p-4">
@@ -1467,7 +1469,7 @@ export function TripForm({
             )}
           </div>
           <p className="break-all text-center font-mono text-[11px] text-muted-foreground">
-            {trip.trip_code} · {tripClosed ? "View only" : "Edit / replace / view"}
+            {trip.trip_code} · JSON manifest · edit in ERP
           </p>
         </DialogContent>
       </Dialog>

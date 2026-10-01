@@ -3,6 +3,7 @@ import {
   canManageOutwardPODDocument,
   outwardPODDocumentActions,
 } from "@/lib/outward-pod-document-access";
+import { buildTripQrManifest } from "@/lib/trip-qr-manifest";
 import { verifyAppToken } from "@/lib/user-auth";
 
 const BUCKET = "outward-pod-documents";
@@ -326,7 +327,12 @@ async function loadPodAndConsignment(admin: AdminClient, podId: string) {
   return { pod: pod as PodRecord, consignment: consignment as ConsignmentRecord };
 }
 
-async function ensureBranchAccess(admin: AdminClient, actor: Actor, branchId: string) {
+async function ensureBranchAccess(
+  admin: AdminClient,
+  actor: Actor,
+  branchId: string,
+  entityName = "POD",
+) {
   if (actor.role !== "basic") return;
   const { data, error } = await admin
     .from("user_branch_access")
@@ -335,7 +341,7 @@ async function ensureBranchAccess(admin: AdminClient, actor: Actor, branchId: st
     .eq("branch_id", branchId)
     .maybeSingle();
   if (error) throw new ApiError(503, "The branch access service is temporarily unavailable.");
-  if (!data) throw new ApiError(403, "This account is not assigned to the POD branch.");
+  if (!data) throw new ApiError(403, `This account is not assigned to the ${entityName} branch.`);
 }
 
 async function authorizePodAction(
@@ -1106,6 +1112,128 @@ export async function verifyMobileCredentials(request: Request): Promise<Respons
   }
 }
 
+function relationLabel(row: Record<string, unknown> | null | undefined, keys: string[]) {
+  if (!row) return "";
+  return keys
+    .map((key) => row[key])
+    .filter(
+      (value): value is string | number =>
+        (typeof value === "string" && value.trim() !== "") || typeof value === "number",
+    )
+    .map(String)
+    .join(", ");
+}
+
+async function tripQrManifestRequest(admin: AdminClient, actor: Actor, tripId: string) {
+  if (!canManageOutwardPODDocument(actor.role, "view")) {
+    throw new ApiError(403, "This account type is not permitted to view Trip details.");
+  }
+
+  const { data: trip, error: tripError } = await admin
+    .from("trips")
+    .select("*")
+    .eq("id", tripId)
+    .maybeSingle();
+  if (tripError) throw new ApiError(503, "The Trip service is temporarily unavailable.");
+  if (!trip) throw new ApiError(404, "Trip not found.");
+
+  const tripRow = trip as Record<string, unknown>;
+  const branchId = typeof tripRow.branch_id === "string" ? tripRow.branch_id : "";
+  if (actor.role === "basic" && !branchId) {
+    throw new ApiError(403, "This account is not assigned to the Trip branch.");
+  }
+  if (branchId) await ensureBranchAccess(admin, actor, branchId, "Trip");
+
+  const related = (table: string, id: unknown) => {
+    if (typeof id !== "string" || !id) return Promise.resolve({ data: null, error: null });
+    return admin.from(table).select("*").eq("id", id).maybeSingle();
+  };
+  const [
+    manifestsResult,
+    branchResult,
+    vehicleResult,
+    driverResult,
+    transporterResult,
+    rentalResult,
+    contractResult,
+  ] = await Promise.all([
+    admin
+      .from("trip_manifests")
+      .select("*")
+      .eq("trip_id", tripId)
+      .order("created_at", { ascending: true }),
+    related("branches", tripRow.branch_id),
+    related("vehicles", tripRow.vehicle_id),
+    related("drivers", tripRow.driver_id),
+    related("transporters", tripRow.transporter_id),
+    related("rentals", tripRow.rental_id),
+    related("contracts", tripRow.contract_id),
+  ]);
+  if (
+    manifestsResult.error ||
+    branchResult.error ||
+    vehicleResult.error ||
+    driverResult.error ||
+    transporterResult.error ||
+    rentalResult.error ||
+    contractResult.error
+  ) {
+    throw new ApiError(503, "Trip details are temporarily unavailable.");
+  }
+
+  const manifests = (manifestsResult.data ?? []) as Array<Record<string, unknown>>;
+  const locationIds = Array.from(
+    new Set(
+      [
+        tripRow.start_location_id,
+        tripRow.end_location_id,
+        ...manifests.flatMap((manifest) => [manifest.from_location_id, manifest.to_location_id]),
+      ].filter((id): id is string => typeof id === "string" && id.length > 0),
+    ),
+  );
+  const locationsResult = locationIds.length
+    ? await admin.from("locations").select("*").in("id", locationIds)
+    : { data: [], error: null };
+  if (locationsResult.error) throw new ApiError(503, "Trip locations are temporarily unavailable.");
+
+  const locationsById = new Map<string, Record<string, unknown>>(
+    ((locationsResult.data ?? []) as Array<Record<string, unknown>>).map((row) => [
+      String(row.id),
+      row,
+    ]),
+  );
+  const locationName = (id: unknown) =>
+    typeof id === "string"
+      ? relationLabel(locationsById.get(id), ["location_name", "city", "state", "pin_code"])
+      : "";
+  const manifestsWithLocations = manifests.map((manifest) => ({
+    ...manifest,
+    from_location_name: locationName(manifest.from_location_id),
+    to_location_name: locationName(manifest.to_location_id),
+  }));
+  const vehicleRow = vehicleResult.data as Record<string, unknown> | null;
+  const vehicleName =
+    relationLabel(vehicleRow, ["registration_number", "manufacturer", "model", "nickname"]) ||
+    (typeof tripRow.third_party_vehicle_number === "string"
+      ? tripRow.third_party_vehicle_number
+      : "");
+
+  return json(
+    buildTripQrManifest({
+      trip: tripRow,
+      branchName: relationLabel(branchResult.data, ["branch_name"]),
+      startLocationName: locationName(tripRow.start_location_id),
+      endLocationName: locationName(tripRow.end_location_id),
+      vehicleName,
+      driverName: relationLabel(driverResult.data, ["full_name"]),
+      transporterName: relationLabel(transporterResult.data, ["transporter_name"]),
+      rentalName: relationLabel(rentalResult.data, ["rental_name"]),
+      contractName: relationLabel(contractResult.data, ["contract_name"]),
+      manifests: manifestsWithLocations,
+    }),
+  );
+}
+
 export async function handleOutwardPODGet(request: Request): Promise<Response> {
   if (rateLimited(request, "outward-pod-read", 600, 5 * 60 * 1000)) {
     return jsonError("Too many requests. Wait a few minutes and try again.", 429);
@@ -1116,6 +1244,11 @@ export async function handleOutwardPODGet(request: Request): Promise<Response> {
     const podId = url.searchParams.get("podId") ?? "";
     const admin = await getAdmin();
     const actor = await authenticateRequest(request, admin);
+    if (operation === "trip-manifest") {
+      const tripId = url.searchParams.get("tripId") ?? "";
+      if (!tripId) throw new ApiError(400, "Trip ID is required.");
+      return await tripQrManifestRequest(admin, actor, tripId);
+    }
     if (operation === "manifest") {
       if (podId) return await manifestRequest(request, admin, actor, podId);
       const consignmentId = url.searchParams.get("consignmentId") ?? "";
