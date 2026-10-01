@@ -59,6 +59,11 @@ export function Trips({
         return q;
       });
       setTrips(live);
+      const requestedTripId = new URLSearchParams(window.location.search).get("tripId");
+      const requestedTrip = requestedTripId
+        ? live.find((trip) => trip.id === requestedTripId)
+        : undefined;
+      if (requestedTrip) setEditing(requestedTrip);
     } catch {
       toast.error("Could not load trips");
     }

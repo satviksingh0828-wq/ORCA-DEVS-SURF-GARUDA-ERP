@@ -52,10 +52,12 @@ export const serverSaveTripLines = createServerFn({ method: "POST" })
 
     const { data: trip, error: tripError } = await db
       .from("trips")
-      .select("branch_id")
+      .select("branch_id,closed")
       .eq("id", data.tripId)
       .maybeSingle();
     if (tripError || !trip) throw new Error("Trip is no longer open.");
+    if (trip.closed === true)
+      throw new Error("Closed trips are read-only. Reopen the trip before editing.");
     if (user.role === "basic") {
       const { data: accessRows, error: accessError } = await db
         .from("user_branch_access")

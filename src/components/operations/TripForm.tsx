@@ -7,11 +7,13 @@ import {
   Loader2,
   Plus,
   Printer,
+  QrCode,
   RotateCcw,
   Save,
   Search,
   Trash2,
 } from "lucide-react";
+import QRCode from "qrcode";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -46,6 +48,7 @@ import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 import { serverReopenMarkedTrip, serverSaveTripLines } from "@/lib/trip-actions";
+import { serverCloseTrip } from "@/lib/close-trip";
 import { serverUpdateEwayBillPartB } from "@/lib/ewaybill-partb";
 import { logAction } from "@/lib/log-actions";
 import { ensureLocationForPin, ensureLocationsForPins } from "@/lib/ensure-location";
@@ -271,6 +274,9 @@ export function TripForm({
   const tripClosed = trip.closed === true;
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [tripQrDataUrl, setTripQrDataUrl] = useState<string | null>(null);
+  const [tripQrLoading, setTripQrLoading] = useState(false);
+  const [tripQrOpen, setTripQrOpen] = useState(false);
   const [tab, setTab] = useState<TabId>("movement");
 
   const [vehicles, setVehicles] = useState<AnyRow[]>([]);
@@ -577,6 +583,7 @@ export function TripForm({
           .from("trips")
           .update(rest as never)
           .eq("id", id)
+          .eq("closed", false)
           .select("id")
           .single()
       : await supabase
@@ -818,6 +825,16 @@ export function TripForm({
   async function handleTripNote(internal = false) {
     setGeneratingPdf(true);
     try {
+      let tripQrDataUri: string | null = null;
+      if (trip.id) {
+        const qrUrl = new URL("/operations", window.location.origin);
+        qrUrl.searchParams.set("tripId", trip.id);
+        tripQrDataUri = await QRCode.toDataURL(qrUrl.toString(), {
+          width: 320,
+          margin: 2,
+          errorCorrectionLevel: "M",
+        });
+      }
       // Resolve insurance number for the trip's start-date month (own vehicles only)
       let insuranceNumber: string | null = null;
       if (vehicle && trip.ownership === "own" && trip.start_date) {
@@ -915,6 +932,7 @@ export function TripForm({
             }
           : null,
         third_party_vehicle_number: trip.third_party_vehicle_number || null,
+        trip_qr_data_uri: tripQrDataUri,
         movements: ((movementResult.data ?? []) as Array<Record<string, any>>).map((m) => {
           const from = (m.from_details ?? {}) as Record<string, any>;
           const to = (m.to_details ?? {}) as Record<string, any>;
@@ -952,11 +970,15 @@ export function TripForm({
       toast.error(validationError);
       return;
     }
-    const { error } = await supabase
-      .from("trips")
-      .update({ closed: true } as never)
-      .eq("id", trip.id);
-    if (error) return toast.error(error.message);
+    if (!user?.sessionToken) {
+      toast.error("Your session has expired. Please sign in again before closing this trip.");
+      return;
+    }
+    try {
+      await serverCloseTrip({ data: { sessionToken: user.sessionToken, tripId: trip.id } });
+    } catch (error) {
+      return toast.error(error instanceof Error ? error.message : "Could not close trip");
+    }
     setTrip((current) => ({ ...current, closed: true }));
     logAction("updated", "trip", {
       entityId: trip.id,
@@ -965,6 +987,29 @@ export function TripForm({
     });
     toast.success("Trip marked closed");
     onSaved();
+  }
+
+  async function showTripQr() {
+    if (!trip.id) {
+      toast.info("Save the trip before creating its QR code.");
+      return;
+    }
+    setTripQrOpen(true);
+    setTripQrLoading(true);
+    try {
+      const url = new URL("/operations", window.location.origin);
+      url.searchParams.set("tripId", trip.id);
+      const dataUrl = await QRCode.toDataURL(url.toString(), {
+        width: 320,
+        margin: 2,
+        errorCorrectionLevel: "M",
+      });
+      setTripQrDataUrl(dataUrl);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not create the trip QR code");
+    } finally {
+      setTripQrLoading(false);
+    }
   }
 
   async function reopenTrip() {
@@ -1044,6 +1089,17 @@ export function TripForm({
           )}
           Internal Note
         </Button>
+        {trip.id ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => void showTripQr()}
+            title={tripClosed ? "View closed trip QR" : "Open trip edit QR"}
+          >
+            <QrCode className="size-4" />
+            Trip QR
+          </Button>
+        ) : null}
         {trip.id && trip.closed !== true && !isViewer ? (
           <Button variant="outline" size="sm" onClick={() => void closeTrip()}>
             <CheckCircle2 className="size-4" />
@@ -2304,6 +2360,33 @@ function MovementTab({
         open={detailsConsignmentId !== null}
         onOpenChange={(open) => !open && setDetailsConsignmentId(null)}
       />
+      <Dialog open={tripQrOpen} onOpenChange={setTripQrOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <QrCode className="size-5" />
+              {tripClosed ? "Closed trip view QR" : "Trip edit QR"}
+            </DialogTitle>
+            <DialogDescription>
+              {tripClosed
+                ? "Scan this QR to open the closed trip in view-only mode. Reopen the trip before making changes."
+                : "Scan this QR to open the trip in the system. Open trips allow editing and replacement; the same QR becomes view-only after closure."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex min-h-80 items-center justify-center rounded-xl border border-border bg-white p-4">
+            {tripQrLoading ? (
+              <Loader2 className="size-7 animate-spin text-muted-foreground" />
+            ) : tripQrDataUrl ? (
+              <img src={tripQrDataUrl} alt={`Trip QR for ${trip.trip_code}`} className="size-72" />
+            ) : (
+              <p className="text-sm text-muted-foreground">QR code unavailable.</p>
+            )}
+          </div>
+          <p className="break-all text-center font-mono text-[11px] text-muted-foreground">
+            {trip.trip_code} · {tripClosed ? "View only" : "Edit / replace / view"}
+          </p>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

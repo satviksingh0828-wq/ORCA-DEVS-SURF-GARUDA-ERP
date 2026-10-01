@@ -21,11 +21,39 @@ export type OutwardPODPdfData = {
 const RED: [number, number, number] = [139, 26, 44];
 const GREY: [number, number, number] = [110, 110, 110];
 
+async function toDataUri(url: string): Promise<string> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) return url;
+    const blob = await response.blob();
+    return await new Promise<string>((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(String(reader.result));
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return url;
+  }
+}
+
 function value(value: unknown) {
   return value == null || String(value).trim() === "" ? "—" : String(value);
 }
 
-function drawHeader(doc: jsPDF, companyName: string, address: string, title: string) {
+function drawHeader(
+  doc: jsPDF,
+  companyName: string,
+  address: string,
+  title: string,
+  logoDataUri?: string,
+) {
+  if (logoDataUri) {
+    try {
+      doc.addImage(logoDataUri, "PNG", 36, 18, 40, 40);
+    } catch {
+      // Continue without the logo if the configured asset cannot be decoded.
+    }
+  }
   doc.setFont("helvetica", "bold");
   doc.setFontSize(15);
   doc.text(companyName || "ORCA DEVS SURF", 88, 32);
@@ -93,14 +121,22 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
   const tab = window.open("", "_blank");
   if (tab) {
     tab.document.title = `Outward POD - ${data.consignmentNumber}`;
-    tab.document.body.innerHTML =
-      "<p style='font-family:Arial;padding:32px'>Preparing Outward POD PDF…</p>";
+    tab.document.open();
+    tab.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>Generating…</title>
+      <style>body{margin:0;display:flex;align-items:center;justify-content:center;min-height:100vh;
+      background:#f8fafc;font-family:Arial,sans-serif;flex-direction:column;gap:16px}
+      .ring{width:44px;height:44px;border:3px solid #e2e8f0;border-top-color:#8b1a2c;
+      border-radius:50%;animation:spin .7s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+      p{color:#64748b;font-size:13px;letter-spacing:.05em;margin:0}</style></head>
+      <body><div class="ring"></div><p>Generating Outward POD PDF…</p></body></html>`);
+    tab.document.close();
   }
 
   try {
-    const [company, qrDataUrl] = await Promise.all([
+    const [company, qrDataUrl, logoDataUri] = await Promise.all([
       fetchCompany(),
       QRCode.toDataURL(data.viewQrUrl, { width: 360, margin: 2, errorCorrectionLevel: "M" }),
+      toDataUri(`${window.location.origin}/garuda-logo.png`),
     ]);
     const doc = new jsPDF({ unit: "pt", format: "a4" });
     const companyAddress = [
@@ -121,6 +157,7 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
       company?.company_name ?? "ORCA DEVS SURF",
       headerAddress,
       "Outward POD",
+      logoDataUri,
     );
 
     doc.setFont("helvetica", "bold");
@@ -188,16 +225,35 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
     );
 
     drawFooter(doc);
-    const blobUrl = URL.createObjectURL(doc.output("blob"));
-    if (tab) {
-      tab.location.href = blobUrl;
+    const pdfDataUri = doc.output("datauristring");
+    if (tab && !tab.closed) {
+      tab.document.open();
+      tab.document.write(`<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+        <meta name="viewport" content="width=device-width,initial-scale=1"/>
+        <title>Outward POD — ${data.consignmentNumber}</title>
+        <style>*{box-sizing:border-box}html,body{height:100%;margin:0;background:#f1f5f9;
+        font-family:Arial,Helvetica,sans-serif;display:flex;flex-direction:column}.bar{display:flex;
+        align-items:center;justify-content:space-between;padding:10px 20px;background:#fff;
+        border-bottom:1px solid #e2e8f0;flex-shrink:0}.title{color:#0f172a;font-size:14px;font-weight:600}
+        .actions{display:flex;gap:8px}.btn{padding:7px 14px;border-radius:6px;font-size:12px;
+        font-weight:600;cursor:pointer;border:1px solid #e2e8f0;background:#f1f5f9;color:#334155}
+        .primary{background:#8b1a2c;color:#fff;border-color:#8b1a2c}.wrap{flex:1;display:flex;
+        overflow:hidden;padding:16px}.wrap iframe{flex:1;width:100%;border:0;border-radius:8px;
+        box-shadow:0 2px 12px rgba(0,0,0,.1)}</style></head><body>
+        <div class="bar"><div class="title">Outward POD — ${data.consignmentNumber}</div>
+        <div class="actions"><button class="btn" onclick="downloadPdf()">Download</button>
+        <button class="btn primary" onclick="document.getElementById('pdf').contentWindow.print()">Print</button></div></div>
+        <div class="wrap"><iframe id="pdf" src="${pdfDataUri}"></iframe></div>
+        <script>function downloadPdf(){var a=document.createElement('a');a.href=${JSON.stringify(pdfDataUri)};
+        a.download=${JSON.stringify(`outward-pod-${data.consignmentNumber}.pdf`)};a.click()}</script>
+        </body></html>`);
+      tab.document.close();
     } else {
       const link = document.createElement("a");
-      link.href = blobUrl;
+      link.href = pdfDataUri;
       link.download = `outward-pod-${data.consignmentNumber}.pdf`;
       link.click();
     }
-    window.setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
   } catch (error) {
     if (tab) tab.close();
     throw error;
