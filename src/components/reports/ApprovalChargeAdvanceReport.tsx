@@ -17,7 +17,10 @@ import { downloadCsv, toCsv } from "@/lib/csv";
 import { financialYearRange } from "@/lib/financial-year";
 import { useReportFilters } from "@/lib/report-filters";
 import { useSession } from "@/lib/session";
-import { serverSettleRentalBalance } from "@/lib/trip-actions";
+import {
+  serverRecordUnpostedRentalAdvancePayment,
+  serverSettleRentalBalance,
+} from "@/lib/trip-actions";
 
 interface RentalRow {
   rental_id: string;
@@ -288,9 +291,7 @@ export function ApprovalChargeAdvanceReport() {
     return rows.filter((r) => (r.rental_name ?? "").toLowerCase().includes(s));
   }, [rows, search]);
   const visible = filtered.filter((r) => r.trip_count > 0);
-  const payableHistory = history.filter(
-    (h) => Number(h.balance ?? 0) > 0 && Boolean(h.posted_journal_entry_id),
-  );
+  const payableHistory = history.filter((h) => Number(h.balance ?? 0) > 0);
   const selectedLogs = history.filter((h) => selectedTripIds.includes(h.id));
   const selectedPaidTotal = selectedLogs.reduce((sum, h) => sum + Number(h.advance ?? 0), 0);
   const selectedBalanceTotal = selectedLogs.reduce((sum, h) => sum + Number(h.balance ?? 0), 0);
@@ -347,9 +348,9 @@ export function ApprovalChargeAdvanceReport() {
     if (!Number.isFinite(amount) || amount <= 0) return toast.error("Enter a valid paid amount");
     if (amount > selectedBalanceTotal)
       return toast.error("Paid amount cannot exceed selected balance");
-    const unpostedTrip = selectedLogs.find((log) => !log.posted_journal_entry_id);
-    if (unpostedTrip) return toast.error("Post Trip Billing before recording a rental payment");
-    const missingAccount = selectedLogs.find((log) => !accountSelections[log.id]);
+    const missingAccount = selectedLogs.find(
+      (log) => log.posted_journal_entry_id && !accountSelections[log.id],
+    );
     if (missingAccount) {
       return toast.error(`Select a Cash / Bank Account for trip ${logTripLabel(missingAccount)}`);
     }
@@ -357,6 +358,8 @@ export function ApprovalChargeAdvanceReport() {
 
     setPaying(true);
     let paidAmount = 0;
+    let journaledAmount = 0;
+    let unpostedAmount = 0;
     try {
       let remaining = amount;
       for (const log of selectedLogs) {
@@ -364,19 +367,35 @@ export function ApprovalChargeAdvanceReport() {
         const balance = Number(log.balance ?? 0);
         if (balance <= 0) continue;
         const applied = Math.min(balance, remaining);
-        const entryId = await serverSettleRentalBalance({
-          data: {
-            sessionToken: user.sessionToken,
-            advanceId: log.id,
-            paymentLedgerId: accountSelections[log.id],
-            amount: applied,
-          },
-        });
-        if (!entryId) throw new Error(`No remaining balance for trip ${logTripLabel(log)}`);
+        if (log.posted_journal_entry_id) {
+          const entryId = await serverSettleRentalBalance({
+            data: {
+              sessionToken: user.sessionToken,
+              advanceId: log.id,
+              paymentLedgerId: accountSelections[log.id],
+              amount: applied,
+            },
+          });
+          if (!entryId) throw new Error(`No remaining balance for trip ${logTripLabel(log)}`);
+          journaledAmount += applied;
+        } else {
+          await serverRecordUnpostedRentalAdvancePayment({
+            data: {
+              sessionToken: user.sessionToken,
+              advanceId: log.id,
+              amount: applied,
+            },
+          });
+          unpostedAmount += applied;
+        }
         remaining -= applied;
         paidAmount += applied;
       }
-      toast.success(`${inr(paidAmount)} payment posted to the selected Cash / Bank account(s)`);
+      toast.success(
+        unpostedAmount > 0
+          ? `${inr(paidAmount)} saved: ${inr(unpostedAmount)} on unposted trips (no journal)${journaledAmount > 0 ? `; ${inr(journaledAmount)} journaled for posted trips` : ""}`
+          : `${inr(journaledAmount)} payment journaled to the selected Cash / Bank account(s)`,
+      );
       setPayAmount("");
       setSelectedTripIds([]);
       await loadData();
@@ -385,8 +404,8 @@ export function ApprovalChargeAdvanceReport() {
       const message = err instanceof Error ? err.message : "Unknown error";
       toast.error(
         paidAmount > 0
-          ? `${inr(paidAmount)} was posted before the next payment failed: ${message}`
-          : "Could not post rental payment: " + message,
+          ? `${inr(paidAmount)} was saved before the next payment failed (${inr(unpostedAmount)} without a journal, ${inr(journaledAmount)} journaled): ${message}`
+          : "Could not save rental payment: " + message,
       );
       await loadData();
       if (selectedId) await loadHistory(selectedId);
@@ -559,9 +578,21 @@ export function ApprovalChargeAdvanceReport() {
                                     onChange={(e) => setPayAmount(e.target.value)}
                                   />
                                   <Button size="sm" onClick={handlePay} disabled={paying}>
-                                    {paying ? "Paying…" : "Pay"}
+                                    {paying
+                                      ? "Saving…"
+                                      : selectedLogs.length > 0 &&
+                                          selectedLogs.every((log) => !log.posted_journal_entry_id)
+                                        ? "Save amount (no journal)"
+                                        : "Pay"}
                                   </Button>
                                 </div>
+                                {selectedLogs.some((log) => !log.posted_journal_entry_id) && (
+                                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                                    Unposted-trip amounts update the Rental Advance only; no journal
+                                    entry is created. The existing Cash / Bank account is shown
+                                    read-only until Trip Billing is posted.
+                                  </p>
+                                )}
                                 {loadingHistory ? (
                                   <div className="py-4 text-center text-muted-foreground">
                                     Loading…
@@ -708,7 +739,7 @@ export function ApprovalChargeAdvanceReport() {
                                               </Select>
                                               {!h.posted_journal_entry_id && (
                                                 <p className="mt-1 text-[10px] text-muted-foreground">
-                                                  Locked until posted
+                                                  Read-only; amount saves without journal
                                                 </p>
                                               )}
                                             </td>
@@ -727,7 +758,9 @@ export function ApprovalChargeAdvanceReport() {
                                               >
                                                 {savingAccountId === h.id
                                                   ? "Posting…"
-                                                  : "Post balance"}
+                                                  : h.posted_journal_entry_id
+                                                    ? "Post balance"
+                                                    : "After Trip Billing"}
                                               </Button>
                                             </td>
                                           </tr>
