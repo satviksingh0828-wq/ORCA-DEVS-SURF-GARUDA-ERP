@@ -79,6 +79,8 @@ import { Route as AccountsMastersCashRouteImport } from './routes/accounts.maste
 import { Route as AccountsMastersRulesRouteImport } from './routes/accounts.masters.rules'
 import { Route as ApiDriverThemeRouteImport } from './routes/api/driver/theme'
 import { Route as ApiHrPayrollEmailRouteImport } from './routes/api/hr/payroll-email'
+import { Route as ApiMobileOutwardPodRouteImport } from './routes/api/mobile/outward-pod'
+import { Route as ApiMobileVerifyRouteImport } from './routes/api/mobile/verify'
 import { Route as AttendanceHistoryIndexRouteImport } from './routes/attendance.history.index'
 import { Route as AttendanceHistoryIdRouteImport } from './routes/attendance.history.$id'
 import { Route as EmployeesIdIndexRouteImport } from './routes/employees.$id.index'
@@ -450,6 +452,16 @@ const ApiHrPayrollEmailRoute = ApiHrPayrollEmailRouteImport.update({
   path: '/api/hr/payroll-email',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMobileOutwardPodRoute = ApiMobileOutwardPodRouteImport.update({
+  id: '/api/mobile/outward-pod',
+  path: '/api/mobile/outward-pod',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiMobileVerifyRoute = ApiMobileVerifyRouteImport.update({
+  id: '/api/mobile/verify',
+  path: '/api/mobile/verify',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AttendanceHistoryIndexRoute = AttendanceHistoryIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -624,6 +636,8 @@ export interface FileRoutesByFullPath {
   '/accounts/masters/rules': typeof AccountsMastersRulesRoute
   '/api/driver/theme': typeof ApiDriverThemeRoute
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
+  '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
+  '/api/mobile/verify': typeof ApiMobileVerifyRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
   '/employees/departments/new': typeof EmployeesDepartmentsNewRoute
@@ -707,6 +721,8 @@ export interface FileRoutesByTo {
   '/accounts/masters/rules': typeof AccountsMastersRulesRoute
   '/api/driver/theme': typeof ApiDriverThemeRoute
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
+  '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
+  '/api/mobile/verify': typeof ApiMobileVerifyRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
   '/employees/departments/new': typeof EmployeesDepartmentsNewRoute
@@ -799,6 +815,8 @@ export interface FileRoutesById {
   '/accounts/masters/rules': typeof AccountsMastersRulesRoute
   '/api/driver/theme': typeof ApiDriverThemeRoute
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
+  '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
+  '/api/mobile/verify': typeof ApiMobileVerifyRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
   '/employees/departments/new': typeof EmployeesDepartmentsNewRoute
@@ -892,6 +910,8 @@ export interface FileRouteTypes {
     | '/accounts/masters/rules'
     | '/api/driver/theme'
     | '/api/hr/payroll-email'
+    | '/api/mobile/outward-pod'
+    | '/api/mobile/verify'
     | '/attendance/history/$id'
     | '/employees/$id/edit'
     | '/employees/departments/new'
@@ -975,6 +995,8 @@ export interface FileRouteTypes {
     | '/accounts/masters/rules'
     | '/api/driver/theme'
     | '/api/hr/payroll-email'
+    | '/api/mobile/outward-pod'
+    | '/api/mobile/verify'
     | '/attendance/history/$id'
     | '/employees/$id/edit'
     | '/employees/departments/new'
@@ -1066,6 +1088,8 @@ export interface FileRouteTypes {
     | '/accounts/masters/rules'
     | '/api/driver/theme'
     | '/api/hr/payroll-email'
+    | '/api/mobile/outward-pod'
+    | '/api/mobile/verify'
     | '/attendance/history/$id'
     | '/employees/$id/edit'
     | '/employees/departments/new'
@@ -1124,6 +1148,8 @@ export interface RootRouteChildren {
   LtmsReportsRoute: typeof LtmsReportsRoute
   ApiDriverThemeRoute: typeof ApiDriverThemeRoute
   ApiHrPayrollEmailRoute: typeof ApiHrPayrollEmailRoute
+  ApiMobileOutwardPodRoute: typeof ApiMobileOutwardPodRoute
+  ApiMobileVerifyRoute: typeof ApiMobileVerifyRoute
   ApiDriverTripsClaimRoute: typeof ApiDriverTripsClaimRoute
   ApiDriverTripsCurrentRoute: typeof ApiDriverTripsCurrentRoute
   ApiDriverTripsEndRoute: typeof ApiDriverTripsEndRoute
@@ -1629,6 +1655,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHrPayrollEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mobile/outward-pod': {
+      id: '/api/mobile/outward-pod'
+      path: '/api/mobile/outward-pod'
+      fullPath: '/api/mobile/outward-pod'
+      preLoaderRoute: typeof ApiMobileOutwardPodRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/mobile/verify': {
+      id: '/api/mobile/verify'
+      path: '/api/mobile/verify'
+      fullPath: '/api/mobile/verify'
+      preLoaderRoute: typeof ApiMobileVerifyRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/attendance/history/': {
       id: '/attendance/history/'
       path: '/'
@@ -1974,6 +2014,8 @@ const rootRouteChildren: RootRouteChildren = {
   LtmsReportsRoute: LtmsReportsRoute,
   ApiDriverThemeRoute: ApiDriverThemeRoute,
   ApiHrPayrollEmailRoute: ApiHrPayrollEmailRoute,
+  ApiMobileOutwardPodRoute: ApiMobileOutwardPodRoute,
+  ApiMobileVerifyRoute: ApiMobileVerifyRoute,
   ApiDriverTripsClaimRoute: ApiDriverTripsClaimRoute,
   ApiDriverTripsCurrentRoute: ApiDriverTripsCurrentRoute,
   ApiDriverTripsEndRoute: ApiDriverTripsEndRoute,

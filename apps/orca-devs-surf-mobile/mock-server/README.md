@@ -32,7 +32,7 @@ Manifest routes are `/api/mock/qr/01-invoice`, `/api/mock/qr/02-id-photo`, and `
 
 ## API behavior
 
-- `POST /api/mobile/verify`: checks HTTP Basic auth and the JSON `{ "action": "verify", "id": "demo", "password": "orca-demo-2026" }` payload.
+- `POST /api/mobile/verify`: checks HTTP Basic auth and the JSON `{ "action": "verify", "id": "demo" }` payload. The password is sent only in the Authorization header.
 - `GET /api/mock/qr/:qrId`: returns `schema: orca.document.v1`, file value/view URLs, add/replace URLs, and boolean permissions.
 - `GET /api/mock/files/:fileId/:filename`: serves one sample or uploaded file with authenticated access.
 - `POST /api/mock/uploads`: accepts the app's authenticated multipart request. It checks record, upload field, account ID, and QR action permission before storing a file in memory.

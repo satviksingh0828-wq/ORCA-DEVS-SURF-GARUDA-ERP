@@ -13,7 +13,7 @@ const port = Number(process.env.PORT ?? 4200);
 const publicBase = process.env.PUBLIC_BASE_URL?.replace(/\/$/, "");
 const demoUser = process.env.DEMO_USER ?? "demo";
 const demoPassword = process.env.DEMO_PASSWORD ?? "orca-demo-2026";
-const maxUploadBytes = 50 * 1024 * 1024;
+const maxUploadBytes = 20 * 1024 * 1024;
 const startedAt = new Date().toISOString();
 const files = new Map();
 let uploadCount = 0;
@@ -348,7 +348,7 @@ function receiveUpload(req, res) {
   parser.on("finish", () => {
     if (completed) return;
     completed = true;
-    if (tooLarge) return sendJson(res, 413, { ok: false, message: "Demo upload limit is 50 MB." });
+    if (tooLarge) return sendJson(res, 413, { ok: false, message: "Demo upload limit is 20 MB." });
     if (!uploadedFile?.buffer.length)
       return sendJson(res, 400, { ok: false, message: "Choose a non-empty file first." });
 
@@ -420,7 +420,7 @@ async function handle(req, res) {
     if (!requireAuth(req, res)) return;
     try {
       const body = await readJson(req);
-      if (body.id !== demoUser || body.password !== demoPassword)
+      if (body.action !== "verify" || body.id !== demoUser)
         return sendJson(res, 401, {
           ok: false,
           valid: false,

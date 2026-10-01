@@ -21,7 +21,6 @@ interface LoginScreenProps {
   initialUserId?: string;
   busy: boolean;
   error?: string;
-  demoEndpoint?: string;
   onSubmit: (credentials: Credentials) => void;
 }
 
@@ -30,7 +29,6 @@ export function LoginScreen({
   initialUserId = "",
   busy,
   error,
-  demoEndpoint,
   onSubmit,
 }: LoginScreenProps) {
   const { colors, isDark } = useAppTheme();
@@ -43,13 +41,6 @@ export function LoginScreen({
   const submit = () => {
     if (!endpointUrl.trim() || !userId.trim() || !password) return;
     onSubmit({ endpointUrl: endpointUrl.trim(), userId: userId.trim(), password });
-  };
-
-  const fillDemo = () => {
-    if (!demoEndpoint) return;
-    setEndpointUrl(`${demoEndpoint.replace(/\/$/, "")}/api/mobile/verify`);
-    setUserId("demo");
-    setPassword("orca-demo-2026");
   };
 
   return (
@@ -70,20 +61,10 @@ export function LoginScreen({
 
         <View style={styles.card}>
           <Text style={styles.eyebrow}>SIGN IN</Text>
-          <Text style={styles.heading}>Connect to your endpoint</Text>
+          <Text style={styles.heading}>Connect to your ERP</Text>
           <Text style={styles.intro}>
             Verify your ORCA account before saving it securely on this device.
           </Text>
-
-          {demoEndpoint ? (
-            <Pressable
-              accessibilityRole="button"
-              onPress={fillDemo}
-              style={({ pressed }) => [styles.demoButton, pressed && styles.pressed]}
-            >
-              <Text style={styles.demoButtonText}>FILL HOSTED DEMO ACCOUNT</Text>
-            </Pressable>
-          ) : null}
 
           <Text style={styles.label}>ENDPOINT URL</Text>
           <TextInput
@@ -91,7 +72,7 @@ export function LoginScreen({
             autoCorrect={false}
             keyboardType="url"
             onChangeText={setEndpointUrl}
-            placeholder="https://your-server.example/api/mobile/verify"
+            placeholder="https://your-erp-domain.example/api/mobile/verify"
             placeholderTextColor={colors.placeholder}
             style={styles.input}
             value={endpointUrl}
@@ -158,8 +139,8 @@ export function LoginScreen({
           <View style={styles.securityNote}>
             <Text style={styles.lock}>●</Text>
             <Text style={styles.securityText}>
-              Password is saved in encrypted device storage and sent over HTTPS only for protected
-              requests.
+              Password is saved in encrypted device storage and sent over HTTPS for sign-in and
+              protected document requests.
             </Text>
           </View>
         </View>
@@ -221,23 +202,6 @@ function createStyles(colors: ThemeColors) {
       fontSize: fontSizes.body,
       marginTop: space.sm,
       marginBottom: space.md,
-    },
-    demoButton: {
-      minHeight: 44,
-      borderWidth: 1,
-      borderColor: colors.border,
-      borderRadius: radius.sm,
-      alignItems: "center",
-      justifyContent: "center",
-      paddingHorizontal: space.md,
-      marginBottom: space.sm,
-      backgroundColor: colors.accentContainer,
-    },
-    demoButtonText: {
-      color: colors.text,
-      fontFamily: fontFamilies.semiBold,
-      fontSize: fontSizes.small,
-      letterSpacing: 0.6,
     },
     label: {
       color: colors.text,

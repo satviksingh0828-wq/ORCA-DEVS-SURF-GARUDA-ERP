@@ -14,6 +14,7 @@ export interface UploadField {
   id: string;
   label: string;
   mimeType: string;
+  hasValue?: boolean;
   valueUrl?: string;
   viewUrl?: string;
   addUrl?: string;

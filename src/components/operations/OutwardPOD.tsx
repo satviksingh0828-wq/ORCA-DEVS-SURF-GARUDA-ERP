@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -6,6 +6,7 @@ import {
   Eye,
   FileText,
   Loader2,
+  QrCode,
   Search,
   Trash2,
   Truck,
@@ -13,9 +14,10 @@ import {
   X,
 } from "lucide-react";
 import { toast } from "sonner";
+import QRCode from "qrcode";
 import { supabase } from "@/integrations/supabase/client";
-import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
+import { canManageOutwardPODDocument } from "@/lib/outward-pod-document-access";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -38,6 +40,8 @@ type POD = {
   back_copy_path: string | null;
   signature_copy_path: string | null;
   created_at: string;
+  updated_at?: string;
+  updated_by?: string | null;
 };
 type Consignment = {
   id: string;
@@ -86,9 +90,51 @@ type FormState = {
 };
 const emptyFiles: Record<DocumentKind, File | null> = { front: null, back: null, signature: null };
 const emptyUrls: Record<DocumentKind, string | null> = { front: null, back: null, signature: null };
+const allowedPODMimeTypes = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
 // This screen queries tables added by migrations that are not present in the generated client types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const db = supabase as any;
+
+function podApiUrl(operation: string, podId?: string) {
+  const url = new URL("/api/mobile/outward-pod", window.location.origin);
+  url.searchParams.set("operation", operation);
+  if (podId) url.searchParams.set("podId", podId);
+  return url.toString();
+}
+
+async function podApiJson<T>(url: string, token: string | undefined, init: RequestInit = {}) {
+  if (!token)
+    throw new Error("Your ERP session has expired. Sign in again before managing POD documents.");
+  const headers = new Headers(init.headers);
+  headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(url, { ...init, headers });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || (payload && typeof payload === "object" && payload.ok === false)) {
+    throw new Error(
+      payload && typeof payload === "object" && typeof payload.message === "string"
+        ? payload.message
+        : `POD request failed (${response.status}).`,
+    );
+  }
+  return payload as T;
+}
+
+function podDocumentsChanged(a: POD | null, b: POD | null) {
+  if (!a || !b) return a !== b;
+  return (
+    a.front_copy_path !== b.front_copy_path ||
+    a.back_copy_path !== b.back_copy_path ||
+    a.signature_copy_path !== b.signature_copy_path ||
+    a.updated_at !== b.updated_at
+  );
+}
 
 function text(value: unknown): string {
   if (value == null) return "";
@@ -119,9 +165,6 @@ function shipmentTotals(row: Consignment) {
     weight: items.reduce((sum, item) => sum + Number(item.weight_kg ?? 0), 0),
   };
 }
-function safeName(name: string) {
-  return name.replace(/[^a-zA-Z0-9._-]/g, "_");
-}
 function isImage(fileOrUrl: File | string | null) {
   return Boolean(
     fileOrUrl &&
@@ -150,8 +193,13 @@ async function downloadDocument(url: string, filename: string) {
 
 export function OutwardPOD() {
   const { user } = useSession();
-  const branches = useBranches();
-  const allowed = user?.role === "basic" ? (user.branchIds ?? []) : null;
+  const canUsePODDocuments = (["view", "add", "replace"] as const).some((action) =>
+    canManageOutwardPODDocument(user?.role, action),
+  );
+  const allowed = useMemo(
+    () => (user?.role === "basic" ? (user.branchIds ?? []) : null),
+    [user?.role, user?.branchIds],
+  );
   const [rows, setRows] = useState<Consignment[]>([]);
   const [searchBy, setSearchBy] = useState<SearchBy>("consignment");
   const [searchTerm, setSearchTerm] = useState("");
@@ -159,6 +207,8 @@ export function OutwardPOD() {
   const [searchOpen, setSearchOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [selected, setSelected] = useState<Consignment | null>(null);
+  const selectedRef = useRef<Consignment | null>(null);
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>({
     delivery_date: "",
     transporter_lr_number: "",
@@ -173,29 +223,117 @@ export function OutwardPOD() {
   const [podMonth, setPodMonth] = useState("");
   const [podVisibleCount, setPodVisibleCount] = useState(25);
 
-  async function loadRows() {
-    setLoading(true);
-    try {
-      let query = db
-        .from("consignments")
-        .select(
-          "id,consignment_number,consignment_date,branch_id,consignment_type,movement_mode,from_details,to_details,from_pin_code,to_pin_code,delivery_date,transporter_lr_number,transporter_lr_date,branch:branches(branch_name),source:contracts(contract_name),transporter:ltms_transporters(transporter_name),shipments(supplier_trade_name,recipient_trade_name,supplier_pin_code,recipient_pin_code,shipment_items(quantity,weight_kg)),consignment_package_information(package_type,quantity,weight_kg),trip:trips(trip_code,odometer_start,odometer_end,start_date,end_date,vehicle:vehicles(registration_number)),outward_pod:outward_pods(id,delivery_date,transporter_lr_number,transporter_lr_date,front_copy_path,back_copy_path,signature_copy_path,created_at)",
-        )
-        .order("created_at", { ascending: false })
-        .limit(2000);
-      if (allowed !== null) query = query.in("branch_id", allowed);
-      const { data, error } = await query;
-      if (error) throw error;
-      setRows((data ?? []) as Consignment[]);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not load consignments");
-    } finally {
-      setLoading(false);
-    }
-  }
+  const loadRows = useCallback(
+    async (quiet = false): Promise<Consignment[]> => {
+      if (!quiet) setLoading(true);
+      try {
+        let query = db
+          .from("consignments")
+          .select(
+            "id,consignment_number,consignment_date,branch_id,consignment_type,movement_mode,from_details,to_details,from_pin_code,to_pin_code,delivery_date,transporter_lr_number,transporter_lr_date,branch:branches(branch_name),source:contracts(contract_name),transporter:ltms_transporters(transporter_name),shipments(supplier_trade_name,recipient_trade_name,supplier_pin_code,recipient_pin_code,shipment_items(quantity,weight_kg)),consignment_package_information(package_type,quantity,weight_kg),trip:trips(trip_code,odometer_start,odometer_end,start_date,end_date,vehicle:vehicles(registration_number)),outward_pod:outward_pods(id,delivery_date,transporter_lr_number,transporter_lr_date,front_copy_path,back_copy_path,signature_copy_path,created_at,updated_at,updated_by)",
+          )
+          .order("created_at", { ascending: false })
+          .limit(2000);
+        if (allowed !== null) query = query.in("branch_id", allowed);
+        const { data, error } = await query;
+        if (error) throw error;
+        const nextRows = (data ?? []) as Consignment[];
+        setRows(nextRows);
+        return nextRows;
+      } catch (error) {
+        if (!quiet)
+          toast.error(error instanceof Error ? error.message : "Could not load consignments");
+        return [];
+      } finally {
+        if (!quiet) setLoading(false);
+      }
+    },
+    [allowed],
+  );
+
+  const selectConsignment = useCallback(
+    async (row: Consignment) => {
+      selectedRef.current = row;
+      setSelected(row);
+      setSearchOpen(false);
+      setQrDataUrl(null);
+      const existing = first(row.outward_pod);
+      setForm({
+        delivery_date: existing?.delivery_date ?? row.delivery_date ?? "",
+        transporter_lr_number: existing?.transporter_lr_number ?? row.transporter_lr_number ?? "",
+        transporter_lr_date: existing?.transporter_lr_date ?? row.transporter_lr_date ?? "",
+      });
+      setFiles({ ...emptyFiles });
+      setUrls({ ...emptyUrls });
+      if (!existing || !canUsePODDocuments) return;
+
+      if (canManageOutwardPODDocument(user?.role, "view")) {
+        try {
+          const result = await podApiJson<{ urls?: Partial<Record<DocumentKind, string>> }>(
+            podApiUrl("links", existing.id),
+            user?.sessionToken,
+          );
+          if (selectedRef.current?.id === row.id) {
+            setUrls({ ...emptyUrls, ...(result.urls ?? {}) });
+          }
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : "Could not prepare POD previews");
+        }
+      }
+
+      try {
+        const manifestUrl = podApiUrl("manifest", existing.id);
+        const dataUrl = await QRCode.toDataURL(manifestUrl, {
+          width: 256,
+          margin: 2,
+          errorCorrectionLevel: "M",
+        });
+        if (selectedRef.current?.id === row.id) setQrDataUrl(dataUrl);
+      } catch {
+        toast.error("Could not create the POD mobile QR code");
+      }
+    },
+    [canUsePODDocuments, user?.role, user?.sessionToken],
+  );
+
   useEffect(() => {
-    if (allowed === null || allowed.length) void loadRows();
-  }, [allowed === null, allowed?.length]);
+    selectedRef.current = selected;
+  }, [selected]);
+
+  useEffect(() => {
+    if (allowed !== null && allowed.length === 0) return;
+    void loadRows();
+  }, [allowed, loadRows]);
+
+  useEffect(() => {
+    if (allowed !== null && allowed.length === 0) return;
+    let active = true;
+    const refresh = async () => {
+      const nextRows = await loadRows(true);
+      if (!active) return;
+      const current = selectedRef.current;
+      if (!current) return;
+      const latest = nextRows.find((row) => row.id === current.id);
+      if (!latest) return;
+      const currentPod = first(current.outward_pod);
+      const latestPod = first(latest.outward_pod);
+      if (podDocumentsChanged(currentPod, latestPod)) {
+        await selectConsignment(latest);
+      }
+    };
+    const channel = supabase
+      .channel("outward-pod-document-updates")
+      .on("postgres_changes", { event: "*", schema: "public", table: "outward_pods" }, () => {
+        void refresh();
+      })
+      .subscribe();
+    const timer = window.setInterval(() => void refresh(), 12_000);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      void supabase.removeChannel(channel);
+    };
+  }, [allowed, loadRows, selectConsignment]);
 
   const candidates = useMemo(() => {
     const needle = searchTerm.trim().toLowerCase();
@@ -216,41 +354,12 @@ export function OutwardPOD() {
     setSearchOpen(true);
     if (!result.length) toast.info("No matching consignments found");
   }
-  async function selectConsignment(row: Consignment) {
-    setSelected(row);
-    setSearchOpen(false);
-    const existing = first(row.outward_pod);
-    setForm({
-      delivery_date: existing?.delivery_date ?? row.delivery_date ?? "",
-      transporter_lr_number: existing?.transporter_lr_number ?? row.transporter_lr_number ?? "",
-      transporter_lr_date: existing?.transporter_lr_date ?? row.transporter_lr_date ?? "",
-    });
-    setFiles({ ...emptyFiles });
-    setUrls({ ...emptyUrls });
-    if (existing) {
-      const paths: Partial<Record<DocumentKind, string>> = {
-        front: existing.front_copy_path,
-        back: existing.back_copy_path,
-        signature: existing.signature_copy_path,
-      };
-      const next = { ...emptyUrls };
-      await Promise.all(
-        (Object.keys(paths) as DocumentKind[]).map(async (kind) => {
-          const path = paths[kind];
-          if (!path) return;
-          const { data, error } = await supabase.storage
-            .from("outward-pod-documents")
-            .createSignedUrl(path, 600);
-          if (!error && data?.signedUrl) next[kind] = data.signedUrl;
-        }),
-      );
-      setUrls(next);
-    }
-  }
   function chooseFile(kind: DocumentKind, file: File | undefined) {
     if (!file) return;
-    const allowedType = file.type.startsWith("image/") || file.type === "application/pdf";
-    if (!allowedType) return toast.error("Upload an image or PDF file");
+    const allowedType =
+      allowedPODMimeTypes.has(file.type.toLowerCase()) ||
+      /\.(pdf|jpe?g|png|webp|heic|heif)$/i.test(file.name);
+    if (!allowedType) return toast.error("Upload a PDF, JPEG, PNG, WEBP, HEIC or HEIF file.");
     if (file.size > 20 * 1024 * 1024) return toast.error("Each document must be 20 MB or smaller");
     if (urls[kind]?.startsWith("blob:")) URL.revokeObjectURL(urls[kind] as string);
     setFiles((current) => ({ ...current, [kind]: file }));
@@ -258,6 +367,11 @@ export function OutwardPOD() {
   }
   function removeDraftFile(kind: DocumentKind) {
     if (urls[kind]?.startsWith("blob:")) URL.revokeObjectURL(urls[kind] as string);
+    const current = selected;
+    if (current && first(current.outward_pod)) {
+      void selectConsignment(current);
+      return;
+    }
     setFiles((current) => ({ ...current, [kind]: null }));
     setUrls((current) => ({ ...current, [kind]: null }));
   }
@@ -275,70 +389,72 @@ export function OutwardPOD() {
       );
     }
     setCreating(true);
-    const uploaded: string[] = [];
     try {
-      const paths: Record<DocumentKind, string | null> = {
-        front: null,
-        back: null,
-        signature: null,
-      };
+      const body = new FormData();
+      body.set("consignmentId", selected.id);
+      body.set("deliveryDate", form.delivery_date);
+      body.set("transporterLrNumber", form.transporter_lr_number.trim());
+      body.set("transporterLrDate", form.transporter_lr_date);
       for (const kind of ["front", "back", "signature"] as DocumentKind[]) {
-        const file = files[kind];
-        if (!file) continue;
-        const path = `${user?.id ?? "user"}/${selected.id}/${crypto.randomUUID()}-${safeName(file.name)}`;
-        const { error } = await supabase.storage
-          .from("outward-pod-documents")
-          .upload(path, file, { contentType: file.type, upsert: false });
-        if (error) throw error;
-        uploaded.push(path);
-        paths[kind] = path;
+        if (files[kind]) body.set(kind, files[kind] as File);
       }
-      const { error: updateError } = await db
-        .from("consignments")
-        .update({
-          delivery_date: form.delivery_date,
-          transporter_lr_number:
-            selected.consignment_type === "third_party" ? form.transporter_lr_number.trim() : null,
-          transporter_lr_date:
-            selected.consignment_type === "third_party" ? form.transporter_lr_date : null,
-        })
-        .eq("id", selected.id);
-      if (updateError) throw updateError;
-      const { error: podError } = await db.from("outward_pods").insert({
-        consignment_id: selected.id,
-        delivery_date: form.delivery_date,
-        transporter_lr_number:
-          selected.consignment_type === "third_party" ? form.transporter_lr_number.trim() : null,
-        transporter_lr_date:
-          selected.consignment_type === "third_party" ? form.transporter_lr_date : null,
-        front_copy_path: paths.front,
-        back_copy_path: paths.back,
-        signature_copy_path: paths.signature,
-        created_by: user?.id ?? null,
+      await podApiJson<{ ok: true }>(podApiUrl("create"), user?.sessionToken, {
+        method: "POST",
+        body,
       });
-      if (podError) throw podError;
-      toast.success("Outward POD created. It is now view-only.");
-      setSelected(null);
-      setScreen("list");
-      await loadRows();
-      const refreshed = rows.find((row) => row.id === selected.id);
-      if (refreshed)
-        await selectConsignment({
-          ...refreshed,
-          outward_pod: {
-            id: "",
-            ...paths,
-            delivery_date: form.delivery_date,
-            transporter_lr_number: form.transporter_lr_number,
-            transporter_lr_date: form.transporter_lr_date,
-            created_at: new Date().toISOString(),
-          } as POD,
-        });
+      toast.success(
+        "Outward POD created. Scan its QR to add or replace documents from ORCA Documents.",
+      );
+      const refreshedRows = await loadRows(true);
+      const refreshed = refreshedRows.find((row) => row.id === selected.id);
+      if (refreshed) {
+        await selectConsignment(refreshed);
+        setScreen("create");
+      } else {
+        setSelected(null);
+        setScreen("list");
+      }
     } catch (error) {
-      if (uploaded.length) await supabase.storage.from("outward-pod-documents").remove(uploaded);
       toast.error(error instanceof Error ? error.message : "Could not create Outward POD");
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function saveExistingDocument(kind: DocumentKind) {
+    const row = selected;
+    const pod = first(row?.outward_pod);
+    const file = files[kind];
+    if (!row || !pod || !file) return;
+    const savedPath =
+      kind === "front"
+        ? pod.front_copy_path
+        : kind === "back"
+          ? pod.back_copy_path
+          : pod.signature_copy_path;
+    const action = savedPath ? "replace" : "add";
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.set("file", file);
+      body.set("action", action);
+      body.set("recordId", pod.id);
+      body.set("uploadId", kind);
+      await podApiJson<{ ok: true }>(
+        `${podApiUrl("upload", pod.id)}&kind=${encodeURIComponent(kind)}`,
+        user?.sessionToken,
+        { method: "POST", body },
+      );
+      toast.success(
+        `${kind === "front" ? "Front" : kind === "back" ? "Back" : "Signature"} copy ${action === "add" ? "added" : "replaced"}.`,
+      );
+      const refreshedRows = await loadRows(true);
+      const refreshed = refreshedRows.find((candidate) => candidate.id === row.id);
+      if (refreshed) await selectConsignment(refreshed);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save the POD document");
+    } finally {
+      setUploading(false);
     }
   }
   const existing = first(selected?.outward_pod);
@@ -361,6 +477,39 @@ export function OutwardPOD() {
     });
   }, [podRows, podSearch, podMonth]);
   const visiblePodRows = filteredPodRows.slice(0, podVisibleCount);
+  const documentPanels = (["front", "back", "signature"] as DocumentKind[]).map((kind) => {
+    const savedPath =
+      kind === "front"
+        ? existing?.front_copy_path
+        : kind === "back"
+          ? existing?.back_copy_path
+          : existing?.signature_copy_path;
+    return (
+      <DocumentPanel
+        key={kind}
+        kind={kind}
+        url={urls[kind]}
+        file={files[kind]}
+        existing={Boolean(existing)}
+        hasSavedFile={Boolean(savedPath)}
+        canView={canManageOutwardPODDocument(user?.role, "view")}
+        canAdd={canManageOutwardPODDocument(user?.role, "add")}
+        canReplace={canManageOutwardPODDocument(user?.role, "replace")}
+        uploading={uploading}
+        onChooseFile={(file) => chooseFile(kind, file)}
+        onRemove={() => removeDraftFile(kind)}
+        onSave={() => void saveExistingDocument(kind)}
+        onDownload={() =>
+          urls[kind]
+            ? void downloadDocument(
+                urls[kind] as string,
+                `${selected?.consignment_number ?? "pod"}-${kind}`,
+              )
+            : undefined
+        }
+      />
+    );
+  });
 
   if (screen === "list") {
     return (
@@ -571,7 +720,9 @@ export function OutwardPOD() {
               {existing ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 px-2.5 py-1 text-xs text-emerald-600">
                   <CheckCircle2 className="size-3.5" />
-                  Created · View only
+                  {canUsePODDocuments
+                    ? "Created · document actions available"
+                    : "Created · no document actions"}
                 </span>
               ) : null}
             </div>
@@ -605,6 +756,41 @@ export function OutwardPOD() {
                 />
               </div>
             </div>
+            {existing && canUsePODDocuments ? (
+              <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/20 p-3">
+                {qrDataUrl ? (
+                  <img
+                    src={qrDataUrl}
+                    alt={`Mobile upload QR for ${selected.consignment_number}`}
+                    className="size-36 rounded bg-white p-2"
+                  />
+                ) : (
+                  <div className="flex size-36 items-center justify-center rounded border border-dashed bg-card text-muted-foreground">
+                    <Loader2 className="size-5 animate-spin" />
+                  </div>
+                )}
+                <div className="min-w-48 flex-1">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold">
+                    <QrCode className="size-4" />
+                    Scan with ORCA Documents
+                  </h4>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    This QR is tied to the selected POD. Sign in with an ERP account to add an empty
+                    PDF/image slot, preview an existing file, or replace it. The server verifies the
+                    account and action on every request.
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="mt-3"
+                    onClick={() => void selectConsignment(selected)}
+                  >
+                    <QrCode className="mr-2 size-4" /> Refresh QR
+                  </Button>
+                </div>
+              </div>
+            ) : null}
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-muted-foreground">Delivery date *</label>
@@ -673,53 +859,39 @@ export function OutwardPOD() {
             <div>
               <h3 className="font-semibold">POD document area</h3>
               <p className="text-xs text-muted-foreground">
-                Upload at least one image or PDF copy. After creation, documents are view-only.
+                {existing
+                  ? "Each slot accepts an image or PDF. Empty slots can be added; existing files can be previewed or replaced."
+                  : "Upload at least one image or PDF copy to create this Outward POD."}
               </p>
             </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {(["front", "back", "signature"] as DocumentKind[]).map((kind) => (
-                <label
-                  key={kind}
-                  className={`flex cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs ${existing ? "cursor-default opacity-60" : "hover:bg-muted"}`}
-                >
-                  <Upload className="size-3.5" />
-                  {kind === "front"
-                    ? "Front Copy"
-                    : kind === "back"
-                      ? "Back Copy"
-                      : "Signature Copy"}
-                  <input
-                    type="file"
-                    accept="image/*,.pdf"
-                    className="hidden"
-                    disabled={Boolean(existing)}
-                    onChange={(event) => chooseFile(kind, event.target.files?.[0])}
-                  />
-                </label>
-              ))}
-              <span className="flex items-center justify-center gap-1 rounded-lg border border-dashed px-2 py-2 text-xs text-muted-foreground">
-                <FileText className="size-3.5" />
-                PDF / Image
-              </span>
-            </div>
-            {(["front", "back", "signature"] as DocumentKind[]).map((kind) => (
-              <DocumentPanel
-                key={kind}
-                kind={kind}
-                url={urls[kind]}
-                file={files[kind]}
-                locked={Boolean(existing)}
-                onRemove={() => removeDraftFile(kind)}
-                onDownload={() =>
-                  urls[kind]
-                    ? void downloadDocument(
-                        urls[kind] as string,
-                        `${selected?.consignment_number ?? "pod"}-${kind}`,
-                      )
-                    : undefined
-                }
-              />
-            ))}
+            {!existing ? (
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                {(["front", "back", "signature"] as DocumentKind[]).map((kind) => (
+                  <label
+                    key={kind}
+                    className="flex cursor-pointer items-center justify-center gap-1 rounded-lg border px-2 py-2 text-xs hover:bg-muted"
+                  >
+                    <Upload className="size-3.5" />
+                    {kind === "front"
+                      ? "Front Copy"
+                      : kind === "back"
+                        ? "Back Copy"
+                        : "Signature Copy"}
+                    <input
+                      type="file"
+                      accept="application/pdf,image/jpeg,image/png,image/webp,image/heic,image/heif,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                      className="hidden"
+                      onChange={(event) => chooseFile(kind, event.target.files?.[0])}
+                    />
+                  </label>
+                ))}
+                <span className="flex items-center justify-center gap-1 rounded-lg border border-dashed px-2 py-2 text-xs text-muted-foreground">
+                  <FileText className="size-3.5" />
+                  PDF / Image
+                </span>
+              </div>
+            ) : null}
+            {documentPanels}
           </section>
         </div>
       )}
@@ -795,53 +967,54 @@ function DocumentPanel({
   kind,
   url,
   file,
-  locked,
+  existing,
+  hasSavedFile,
+  canView,
+  canAdd,
+  canReplace,
+  uploading,
+  onChooseFile,
   onRemove,
+  onSave,
   onDownload,
 }: {
   kind: DocumentKind;
   url: string | null;
   file: File | null;
-  locked: boolean;
+  existing: boolean;
+  hasSavedFile: boolean;
+  canView: boolean;
+  canAdd: boolean;
+  canReplace: boolean;
+  uploading: boolean;
+  onChooseFile: (file: File | undefined) => void;
   onRemove: () => void;
+  onSave: () => void;
   onDownload: () => void;
 }) {
   const label = kind === "front" ? "Front Copy" : kind === "back" ? "Back Copy" : "Signature Copy";
+  const mayUpload = hasSavedFile ? canReplace : canAdd;
   return (
     <div className="overflow-hidden rounded-lg border border-border">
       <div className="flex items-center justify-between bg-muted/40 px-3 py-2 text-xs font-medium">
         <span>{label}</span>
-        {url && !locked && (
+        {canView && hasSavedFile && url && !file && (
           <span className="flex items-center gap-1">
             <button
               type="button"
-              title="View"
+              title="View current file"
               onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
             >
               <Eye className="size-3.5" />
             </button>
-            <button type="button" title="Delete" onClick={onRemove}>
-              <Trash2 className="size-3.5 text-destructive" />
-            </button>
-          </span>
-        )}
-        {url && locked && (
-          <span className="flex items-center gap-1">
-            <button
-              type="button"
-              title="View"
-              onClick={() => window.open(url, "_blank", "noopener,noreferrer")}
-            >
-              <Eye className="size-3.5 text-emerald-600" />
-            </button>
             <button type="button" title="Download" onClick={onDownload}>
-              <Download className="size-3.5 text-emerald-600" />
+              <Download className="size-3.5" />
             </button>
           </span>
         )}
       </div>
       <div className="flex min-h-40 items-center justify-center bg-muted/10 p-2">
-        {url ? (
+        {canView && url ? (
           isImage(file || url) ? (
             <img src={url} alt={label} className="max-h-64 w-full object-contain" />
           ) : (
@@ -850,13 +1023,72 @@ function DocumentPanel({
         ) : (
           <div className="text-center text-xs text-muted-foreground">
             <Upload className="mx-auto mb-2 size-6 opacity-50" />
-            No document uploaded
+            {hasSavedFile
+              ? canView
+                ? "File attached; preview is unavailable."
+                : "A file is attached, but viewing is not allowed for this account."
+              : "No document uploaded"}
           </div>
         )}
       </div>
       {file && (
         <div className="truncate px-3 pb-2 text-[11px] text-muted-foreground">{file.name}</div>
       )}
+      {existing ? (
+        <div className="flex flex-wrap items-center gap-2 border-t border-border p-2">
+          {mayUpload && !file ? (
+            <label className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md border border-border px-3 text-xs font-medium hover:bg-muted">
+              <Upload className="size-3.5" />
+              {hasSavedFile ? "Replace image / PDF" : "Add image / PDF"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/heic,image/heif,application/pdf,.pdf,.jpg,.jpeg,.png,.webp,.heic,.heif"
+                className="hidden"
+                disabled={uploading}
+                onChange={(event) => {
+                  onChooseFile(event.target.files?.[0]);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          ) : null}
+          {file ? (
+            <>
+              <Button type="button" size="sm" disabled={uploading} onClick={onSave}>
+                {uploading ? (
+                  <Loader2 className="mr-2 size-3.5 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 size-3.5" />
+                )}
+                Save {hasSavedFile ? "replacement" : "document"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={uploading}
+                onClick={onRemove}
+              >
+                <Trash2 className="mr-1.5 size-3.5" /> Cancel
+              </Button>
+            </>
+          ) : null}
+          {!mayUpload && !file ? (
+            <span className="text-[11px] text-muted-foreground">
+              Upload/replace is not allowed for this account.
+            </span>
+          ) : null}
+          {uploading ? (
+            <span className="text-[11px] text-muted-foreground">Saving securely…</span>
+          ) : null}
+        </div>
+      ) : file ? (
+        <div className="border-t border-border p-2">
+          <Button type="button" size="sm" variant="outline" onClick={onRemove}>
+            <Trash2 className="mr-1.5 size-3.5" /> Remove draft
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

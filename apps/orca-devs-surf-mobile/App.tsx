@@ -64,7 +64,15 @@ import { fontFamilies, fontSizes, radius, space, useAppTheme, type ThemeColors }
 
 import logo from "./assets/orca-logo.png";
 
-const MAX_FILE_BYTES = 50 * 1024 * 1024;
+const MAX_FILE_BYTES = 20 * 1024 * 1024;
+const allowedUploadMimeTypes = new Set([
+  "application/pdf",
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/heic",
+  "image/heif",
+]);
 const tabs: {
   id: AppTab;
   label: string;
@@ -78,9 +86,11 @@ const tabs: {
 function fileNameFromUrl(url?: string): string | undefined {
   if (!url) return undefined;
   try {
-    return (
-      decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() ?? "") || undefined
-    );
+    const parsed = new URL(url);
+    const advertised = parsed.searchParams.get("filename");
+    return advertised
+      ? advertised
+      : decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "") || undefined;
   } catch {
     return undefined;
   }
@@ -141,7 +151,7 @@ export default function App() {
   });
   const { colors, isDark } = useAppTheme();
   const styles = useMemo(() => createStyles(colors), [colors]);
-  const demoEndpoint = process.env.EXPO_PUBLIC_MOCK_API_ORIGIN;
+  const defaultLoginEndpoint = process.env.EXPO_PUBLIC_ORCA_LOGIN_URL;
   const [hydrated, setHydrated] = useState(false);
   const [showSplash, setShowSplash] = useState(true);
   const [credentials, setCredentials] = useState<Credentials | null>(null);
@@ -331,7 +341,14 @@ export default function App() {
       try {
         if (source === "document") {
           const result = await DocumentPicker.getDocumentAsync({
-            type: "*/*",
+            type: [
+              "application/pdf",
+              "image/jpeg",
+              "image/png",
+              "image/webp",
+              "image/heic",
+              "image/heif",
+            ],
             copyToCacheDirectory: true,
             multiple: false,
           });
@@ -362,8 +379,17 @@ export default function App() {
           };
         }
 
+        const fileMime = file.mimeType.toLowerCase();
+        if (
+          !allowedUploadMimeTypes.has(fileMime) &&
+          !/\.(pdf|jpe?g|png|webp|heic|heif)$/i.test(file.name)
+        ) {
+          throw new Error(
+            "Only PDF, JPEG, PNG, WEBP, HEIC, or HEIF documents can be uploaded to Outward POD.",
+          );
+        }
         if (file.size && file.size > MAX_FILE_BYTES) {
-          throw new Error("This file is over the app's 50 MB upload limit. Choose a smaller file.");
+          throw new Error("This file is over the app's 20 MB upload limit. Choose a smaller file.");
         }
         setBusyUploadId(field.id);
         const response = await uploadFile(targetUrl, credentials, manifest, field.id, action, file);
@@ -521,9 +547,9 @@ export default function App() {
           <>
             <View style={styles.loginArea}>
               <LoginScreen
+                initialEndpoint={defaultLoginEndpoint}
                 busy={loginBusy}
                 error={loginError}
-                demoEndpoint={demoEndpoint}
                 onSubmit={onLogin}
               />
             </View>

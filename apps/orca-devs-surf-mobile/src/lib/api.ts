@@ -35,8 +35,10 @@ export function validateHttpUrl(input: string): string {
   } catch {
     throw new Error("Enter a complete endpoint URL beginning with https://.");
   }
-  if (parsed.protocol !== "https:") throw new Error("HTTPS is required for every endpoint, QR manifest, and file URL.");
-  if (parsed.username || parsed.password) throw new Error("Do not put credentials in a URL. Enter them in the ID and password fields.");
+  if (parsed.protocol !== "https:")
+    throw new Error("HTTPS is required for every endpoint, QR manifest, and file URL.");
+  if (parsed.username || parsed.password)
+    throw new Error("Do not put credentials in a URL. Enter them in the ID and password fields.");
   if (!parsed.hostname) throw new Error("The URL must include a server host.");
   parsed.hash = "";
   return parsed.toString();
@@ -66,8 +68,15 @@ async function responseJson(response: Response): Promise<unknown> {
 function explicitRejection(body: unknown): string | undefined {
   if (!body || typeof body !== "object" || Array.isArray(body)) return undefined;
   const data = body as Record<string, unknown>;
-  if (data.valid === false || data.ok === false || data.exists === false || data.authenticated === false) {
-    return typeof data.message === "string" ? data.message : "The endpoint rejected this ID and password.";
+  if (
+    data.valid === false ||
+    data.ok === false ||
+    data.exists === false ||
+    data.authenticated === false
+  ) {
+    return typeof data.message === "string"
+      ? data.message
+      : "The endpoint rejected this ID and password.";
   }
   return undefined;
 }
@@ -77,7 +86,7 @@ export async function verifyCredentials(credentials: Credentials): Promise<void>
   const response = await fetch(endpointUrl, {
     method: "POST",
     headers: { ...authHeaders(credentials), "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "verify", id: credentials.userId, password: credentials.password }),
+    body: JSON.stringify({ action: "verify", id: credentials.userId }),
   });
   const body = await responseJson(response);
   if (!response.ok) {
@@ -94,7 +103,8 @@ export async function fetchManifest(url: string, credentials: Credentials): Prom
   if (!response.ok) throw new Error(`Could not load the QR manifest (${response.status}).`);
   const rejected = explicitRejection(body);
   if (rejected) throw new Error(rejected);
-  if (!body || typeof body !== "object") throw new Error("The manifest endpoint did not return JSON.");
+  if (!body || typeof body !== "object")
+    throw new Error("The manifest endpoint did not return JSON.");
   return body;
 }
 

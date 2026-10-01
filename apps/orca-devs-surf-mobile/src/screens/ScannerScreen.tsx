@@ -29,7 +29,10 @@ interface ScannerScreenProps {
 function fileNameFromUrl(url?: string): string | undefined {
   if (!url) return undefined;
   try {
-    const name = decodeURIComponent(new URL(url).pathname.split("/").filter(Boolean).pop() ?? "");
+    const parsed = new URL(url);
+    const name =
+      parsed.searchParams.get("filename") ??
+      decodeURIComponent(parsed.pathname.split("/").filter(Boolean).pop() ?? "");
     return name || undefined;
   } catch {
     return undefined;
@@ -94,36 +97,41 @@ function UploadCard({
   const addUrl = actionUrl(field, "add");
   const replaceUrl = actionUrl(field, "replace");
   const canView = field.allowView && Boolean(field.viewUrl);
-  const filename = fileNameFromUrl(field.valueUrl);
+  const hasValue = field.hasValue ?? Boolean(field.valueUrl);
+  const visibleUrl = canView ? field.valueUrl : undefined;
+  const visibleType = hasValue && canView ? displayFileType(field) : "FILE";
+  const filename = fileNameFromUrl(visibleUrl);
 
   return (
     <View style={styles.uploadCard}>
       <View style={styles.fieldHeading}>
         <View style={styles.fileIcon}>
-          <Text style={styles.fileIconText}>{displayFileType(field).slice(0, 3)}</Text>
+          <Text style={styles.fileIconText}>
+            {(hasValue && canView ? visibleType : "FILE").slice(0, 3)}
+          </Text>
         </View>
         <View style={styles.fieldTitles}>
           <Text style={styles.fieldName}>{field.label}</Text>
           <Text style={styles.fieldId}>ID · {field.id}</Text>
         </View>
-        <View
-          style={[styles.typePill, field.valueUrl ? styles.typePillFilled : styles.typePillEmpty]}
-        >
-          <Text style={styles.typePillText}>
-            {field.valueUrl ? displayFileType(field) : "EMPTY"}
-          </Text>
+        <View style={[styles.typePill, hasValue ? styles.typePillFilled : styles.typePillEmpty]}>
+          <Text style={styles.typePillText}>{hasValue ? visibleType : "EMPTY"}</Text>
         </View>
       </View>
 
       <View style={styles.valueBox}>
-        <Text style={styles.valueHeading}>{field.valueUrl ? "CURRENT FILE" : "CURRENT VALUE"}</Text>
+        <Text style={styles.valueHeading}>{hasValue ? "CURRENT FILE" : "CURRENT VALUE"}</Text>
         <Text numberOfLines={2} style={styles.valueText}>
           {filename ??
-            (field.valueUrl ? safeUrlLabel(field.valueUrl) : "No file is currently attached")}
+            (visibleUrl
+              ? safeUrlLabel(visibleUrl)
+              : hasValue
+                ? "A file is attached; preview is not allowed for this account."
+                : "No file is currently attached")}
         </Text>
-        {field.valueUrl && safeUrlLabel(field.valueUrl) ? (
+        {visibleUrl && safeUrlLabel(visibleUrl) ? (
           <Text numberOfLines={1} style={styles.valueHost}>
-            {safeUrlLabel(field.valueUrl)}
+            {safeUrlLabel(visibleUrl)}
           </Text>
         ) : null}
       </View>

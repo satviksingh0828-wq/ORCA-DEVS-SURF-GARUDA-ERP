@@ -62,7 +62,9 @@ test("resolves relative file/action URLs against the QR manifest endpoint", () =
     {
       recordId: "R-2",
       uploadUrl: "./files/upload",
-      uploads: [{ id: "identity", fileUrl: "../stored/id-card.jpg", viewAllowed: true, addAllowed: true }],
+      uploads: [
+        { id: "identity", fileUrl: "../stored/id-card.jpg", viewAllowed: true, addAllowed: true },
+      ],
     },
     "https://docs.example.test/api/manifest/R-2",
   );
@@ -70,4 +72,24 @@ test("resolves relative file/action URLs against the QR manifest endpoint", () =
   assert.equal(manifest.uploads[0].valueUrl, "https://docs.example.test/api/stored/id-card.jpg");
   assert.equal(manifest.uploads[0].addUrl, "https://docs.example.test/api/manifest/files/upload");
   assert.equal(manifest.uploads[0].allowView, true);
+});
+
+test("keeps attached state for replace-only fields without exposing a view URL", () => {
+  const manifest = normalizeManifest({
+    recordId: "POD-4",
+    uploads: [
+      {
+        id: "front",
+        hasValue: true,
+        allowView: false,
+        allowReplace: true,
+        replaceUrl: "https://erp.example.test/api/upload",
+      },
+    ],
+  });
+
+  assert.equal(manifest.uploads[0].hasValue, true);
+  assert.equal(manifest.uploads[0].valueUrl, undefined);
+  assert.equal(manifest.uploads[0].viewUrl, undefined);
+  assert.equal(actionUrl(manifest.uploads[0], "replace"), "https://erp.example.test/api/upload");
 });

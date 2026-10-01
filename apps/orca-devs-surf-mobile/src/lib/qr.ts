@@ -31,10 +31,7 @@ function boolValue(value: unknown): boolean | undefined {
   return undefined;
 }
 
-function permission(
-  item: JsonRecord,
-  action: "view" | "add" | "replace",
-): boolean {
+function permission(item: JsonRecord, action: "view" | "add" | "replace"): boolean {
   const aliases: Record<typeof action, string[]> = {
     view: ["allowView", "allow_view", "viewAllowed", "view_allowed"],
     add: ["allowAdd", "allow_add", "addAllowed", "add_allowed"],
@@ -72,14 +69,18 @@ function inferMimeType(fileUrl: string | undefined, hint?: string): string {
   const normalized = (hint ?? "").toLowerCase();
   if (normalized.includes("pdf")) return "application/pdf";
   if (normalized.includes("word") || normalized === "doc" || normalized === "docx") {
-    return normalized === "doc" ? "application/msword" : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    return normalized === "doc"
+      ? "application/msword"
+      : "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
   }
   if (normalized.includes("image")) return "image/*";
   const path = (fileUrl ?? "").toLowerCase().split(/[?#]/)[0];
   if (path.endsWith(".pdf")) return "application/pdf";
   if (path.endsWith(".doc")) return "application/msword";
-  if (path.endsWith(".docx")) return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
-  if (/\.(png|jpe?g|gif|webp|bmp|heic)$/.test(path)) return path.endsWith(".png") ? "image/png" : "image/jpeg";
+  if (path.endsWith(".docx"))
+    return "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+  if (/\.(png|jpe?g|gif|webp|bmp|heic)$/.test(path))
+    return path.endsWith(".png") ? "image/png" : "image/jpeg";
   return "application/octet-stream";
 }
 
@@ -99,12 +100,23 @@ export function normalizeManifest(input: unknown, baseUrl?: string): QrManifest 
     const item = record(rawItem);
     if (!item) throw new Error(`Upload item ${index + 1} must be an object.`);
 
-    const id = stringValue(firstDefined(item, ["id", "key", "code", "name"])) ?? `upload-${index + 1}`;
-    const label =
-      stringValue(firstDefined(item, ["label", "title", "displayName", "name"])) ?? id;
-    const rawValue = firstDefined(item, ["valueUrl", "value_url", "value", "fileUrl", "file_url", "currentUrl", "current_url", "url"]);
+    const id =
+      stringValue(firstDefined(item, ["id", "key", "code", "name"])) ?? `upload-${index + 1}`;
+    const label = stringValue(firstDefined(item, ["label", "title", "displayName", "name"])) ?? id;
+    const rawValue = firstDefined(item, [
+      "valueUrl",
+      "value_url",
+      "value",
+      "fileUrl",
+      "file_url",
+      "currentUrl",
+      "current_url",
+      "url",
+    ]);
     const valueUrl = fileUrl(rawValue, baseUrl);
-    const rawMime = stringValue(firstDefined(item, ["mimeType", "mime_type", "contentType", "content_type", "type"]));
+    const rawMime = stringValue(
+      firstDefined(item, ["mimeType", "mime_type", "contentType", "content_type", "type"]),
+    );
     const mimeType = rawMime?.includes("/") ? rawMime : inferMimeType(valueUrl, rawMime);
     const uploadUrl = firstDefined(item, ["uploadUrl", "upload_url"]) ?? rootUploadUrl;
     const addUrl = absoluteUrl(
@@ -119,18 +131,25 @@ export function normalizeManifest(input: unknown, baseUrl?: string): QrManifest 
       firstDefined(item, ["viewUrl", "view_url", "downloadUrl", "download_url"]) ?? valueUrl,
       baseUrl,
     );
+    const allowView = permission(item, "view");
+    const allowAdd = permission(item, "add");
+    const allowReplace = permission(item, "replace");
+    const explicitHasValue = boolValue(
+      firstDefined(item, ["hasValue", "has_value", "hasFile", "has_file"]),
+    );
 
     return {
       id,
       label,
       mimeType,
+      hasValue: explicitHasValue ?? Boolean(valueUrl || allowReplace),
       valueUrl,
       viewUrl,
       addUrl,
       replaceUrl,
-      allowView: permission(item, "view"),
-      allowAdd: permission(item, "add"),
-      allowReplace: permission(item, "replace"),
+      allowView,
+      allowAdd,
+      allowReplace,
     };
   });
 
@@ -163,19 +182,23 @@ export function qrManifestUrl(payload: unknown): string | undefined {
   }
   const root = record(payload);
   if (!root) return undefined;
-  return absoluteUrl(firstDefined(root, ["manifestUrl", "manifest_url", "endpointUrl", "endpoint_url", "manifest"]));
+  return absoluteUrl(
+    firstDefined(root, ["manifestUrl", "manifest_url", "endpointUrl", "endpoint_url", "manifest"]),
+  );
 }
 
 export function fileKind(mimeType: string, fileUrlOrName?: string): FileKind {
   const mime = mimeType.toLowerCase();
   const value = (fileUrlOrName ?? "").toLowerCase().split(/[?#]/)[0];
-  if (mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|heic|tiff?)$/.test(value)) return "image";
+  if (mime.startsWith("image/") || /\.(png|jpe?g|gif|webp|bmp|heic|tiff?)$/.test(value))
+    return "image";
   if (mime === "application/pdf" || value.endsWith(".pdf")) return "pdf";
   if (
     mime.includes("wordprocessingml") ||
     mime === "application/msword" ||
     /\.(docx?|dotx?)$/.test(value)
-  ) return "word";
+  )
+    return "word";
   return "other";
 }
 
@@ -189,5 +212,11 @@ export function displayFileType(field: UploadField): string {
 }
 
 export function actionUrl(field: UploadField, action: FileAction): string | undefined {
-  return action === "add" ? (field.allowAdd ? field.addUrl : undefined) : field.allowReplace ? field.replaceUrl : undefined;
+  return action === "add"
+    ? field.allowAdd
+      ? field.addUrl
+      : undefined
+    : field.allowReplace
+      ? field.replaceUrl
+      : undefined;
 }
