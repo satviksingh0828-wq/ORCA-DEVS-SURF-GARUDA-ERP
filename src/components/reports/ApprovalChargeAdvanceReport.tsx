@@ -37,6 +37,8 @@ interface AdvanceLog {
   balance: number;
   branch_id: string | null;
   posted_journal_entry_id: string | null;
+  posted_at: string | null;
+  settlement_journal_entry_id: string | null;
   payment_ledger_id: string | null;
 }
 
@@ -104,7 +106,7 @@ export function ApprovalChargeAdvanceReport() {
       const { start, endExclusive } = range();
       let liveTripsQuery = supabase
         .from("trips")
-        .select("id,trip_code,rental_id,branch_id,posted_journal_entry_id")
+        .select("id,trip_code,rental_id,branch_id,posted_journal_entry_id,posted_at")
         .not("rental_id", "is", null);
       if (branchId !== "all") liveTripsQuery = liveTripsQuery.eq("branch_id", branchId);
       const liveTrips = await fetchAll<Record<string, unknown>>(() => liveTripsQuery);
@@ -122,7 +124,9 @@ export function ApprovalChargeAdvanceReport() {
           ? fetchAll<Record<string, unknown>>(() =>
               supabase
                 .from("approval_charge_advances" as never)
-                .select("id,trip_id,trip_code,rental_id,advance,balance,created_at")
+                .select(
+                  "id,trip_id,trip_code,rental_id,advance,balance,created_at,settlement_journal_entry_id",
+                )
                 .in("trip_id", liveTripIds)
                 .gte("created_at", start)
                 .lt("created_at", endExclusive),
@@ -164,6 +168,8 @@ export function ApprovalChargeAdvanceReport() {
           rental_id: String(log.rental_id ?? trip?.rental_id ?? "") || null,
           branch_id: String(trip?.branch_id ?? "") || null,
           posted_journal_entry_id: String(trip?.posted_journal_entry_id ?? "") || null,
+          posted_at: String(trip?.posted_at ?? "") || null,
+          settlement_journal_entry_id: String(log.settlement_journal_entry_id ?? "") || null,
           payment_ledger_id: hireAccountByTrip.get(String(log.trip_id)) || null,
         };
       });
@@ -211,7 +217,7 @@ export function ApprovalChargeAdvanceReport() {
       const { start, endExclusive } = range();
       let liveTripsQuery = supabase
         .from("trips")
-        .select("id,trip_code,rental_id,branch_id,posted_journal_entry_id")
+        .select("id,trip_code,rental_id,branch_id,posted_journal_entry_id,posted_at")
         .eq("rental_id", rentalId);
       if (branchId !== "all") liveTripsQuery = liveTripsQuery.eq("branch_id", branchId);
       const liveTrips = await fetchAll<Record<string, unknown>>(() => liveTripsQuery);
@@ -255,6 +261,8 @@ export function ApprovalChargeAdvanceReport() {
           rental_id: String(row.rental_id ?? trip?.rental_id ?? "") || null,
           branch_id: String(trip?.branch_id ?? "") || null,
           posted_journal_entry_id: String(trip?.posted_journal_entry_id ?? "") || null,
+          posted_at: String(trip?.posted_at ?? "") || null,
+          settlement_journal_entry_id: String(row.settlement_journal_entry_id ?? "") || null,
           payment_ledger_id: hireAccountByTrip.get(String(row.trip_id)) || null,
         } as AdvanceLog;
       });
@@ -280,7 +288,9 @@ export function ApprovalChargeAdvanceReport() {
     return rows.filter((r) => (r.rental_name ?? "").toLowerCase().includes(s));
   }, [rows, search]);
   const visible = filtered.filter((r) => r.trip_count > 0);
-  const payableHistory = history.filter((h) => Number(h.balance ?? 0) > 0);
+  const payableHistory = history.filter(
+    (h) => Number(h.balance ?? 0) > 0 && Boolean(h.posted_journal_entry_id),
+  );
   const selectedLogs = history.filter((h) => selectedTripIds.includes(h.id));
   const selectedPaidTotal = selectedLogs.reduce((sum, h) => sum + Number(h.advance ?? 0), 0);
   const selectedBalanceTotal = selectedLogs.reduce((sum, h) => sum + Number(h.balance ?? 0), 0);
@@ -319,8 +329,8 @@ export function ApprovalChargeAdvanceReport() {
       });
       toast.success(
         entryId
-          ? "Rental account updated and remaining balance journal posted"
-          : "Rental account updated; no balance remained to post",
+          ? `Remaining rental balance posted. Journal entry ${entryId}.`
+          : "No remaining rental balance to post",
       );
       await loadData();
       if (selectedId) await loadHistory(selectedId);
@@ -337,8 +347,16 @@ export function ApprovalChargeAdvanceReport() {
     if (!Number.isFinite(amount) || amount <= 0) return toast.error("Enter a valid paid amount");
     if (amount > selectedBalanceTotal)
       return toast.error("Paid amount cannot exceed selected balance");
+    const unpostedTrip = selectedLogs.find((log) => !log.posted_journal_entry_id);
+    if (unpostedTrip) return toast.error("Post Trip Billing before recording a rental payment");
+    const missingAccount = selectedLogs.find((log) => !accountSelections[log.id]);
+    if (missingAccount) {
+      return toast.error(`Select a Cash / Bank Account for trip ${logTripLabel(missingAccount)}`);
+    }
+    if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
 
     setPaying(true);
+    let paidAmount = 0;
     try {
       let remaining = amount;
       for (const log of selectedLogs) {
@@ -346,24 +364,32 @@ export function ApprovalChargeAdvanceReport() {
         const balance = Number(log.balance ?? 0);
         if (balance <= 0) continue;
         const applied = Math.min(balance, remaining);
+        const entryId = await serverSettleRentalBalance({
+          data: {
+            sessionToken: user.sessionToken,
+            advanceId: log.id,
+            paymentLedgerId: accountSelections[log.id],
+            amount: applied,
+          },
+        });
+        if (!entryId) throw new Error(`No remaining balance for trip ${logTripLabel(log)}`);
         remaining -= applied;
-        const { error } = await supabase
-          .from("approval_charge_advances" as never)
-          .update({
-            advance: Number(log.advance ?? 0) + applied,
-            balance: balance - applied,
-          })
-          .eq("id", log.id);
-        if (error) throw error;
+        paidAmount += applied;
       }
-      toast.success("Paid amount updated");
+      toast.success(`${inr(paidAmount)} payment posted to the selected Cash / Bank account(s)`);
       setPayAmount("");
       setSelectedTripIds([]);
       await loadData();
       if (selectedId) await loadHistory(selectedId);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
-      toast.error("Could not update paid amount: " + message);
+      toast.error(
+        paidAmount > 0
+          ? `${inr(paidAmount)} was posted before the next payment failed: ${message}`
+          : "Could not post rental payment: " + message,
+      );
+      await loadData();
+      if (selectedId) await loadHistory(selectedId);
     } finally {
       setPaying(false);
     }
@@ -563,6 +589,12 @@ export function ApprovalChargeAdvanceReport() {
                                         </th>
                                         <th className="pb-2 text-left font-semibold">Saved Date</th>
                                         <th className="pb-2 text-left font-semibold">Trip ID</th>
+                                        <th className="pb-2 text-left font-semibold">
+                                          Trip posting
+                                        </th>
+                                        <th className="pb-2 text-left font-semibold">
+                                          Balance payment journal
+                                        </th>
                                         <th className="pb-2 text-right font-semibold">
                                           PAID AMOUNT
                                         </th>
@@ -582,7 +614,9 @@ export function ApprovalChargeAdvanceReport() {
                                               <input
                                                 type="checkbox"
                                                 checked={selectedTripIds.includes(h.id)}
-                                                disabled={balance <= 0}
+                                                disabled={
+                                                  balance <= 0 || !h.posted_journal_entry_id
+                                                }
                                                 onChange={() => toggleTrip(h.id)}
                                               />
                                             </td>
@@ -590,6 +624,55 @@ export function ApprovalChargeAdvanceReport() {
                                               {String(h.created_at).slice(0, 10)}
                                             </td>
                                             <td className="py-2 font-medium">{logTripLabel(h)}</td>
+                                            <td className="py-2">
+                                              <span
+                                                className={
+                                                  h.posted_journal_entry_id
+                                                    ? "font-medium text-emerald-700 dark:text-emerald-400"
+                                                    : "font-medium text-amber-700 dark:text-amber-400"
+                                                }
+                                              >
+                                                {h.posted_journal_entry_id
+                                                  ? "Posted"
+                                                  : "Not posted"}
+                                              </span>
+                                              {h.posted_journal_entry_id && (
+                                                <p
+                                                  className="text-[10px] text-muted-foreground"
+                                                  title={h.posted_journal_entry_id}
+                                                >
+                                                  JE {h.posted_journal_entry_id.slice(0, 8)}
+                                                  {h.posted_at
+                                                    ? ` · ${h.posted_at.slice(0, 10)}`
+                                                    : ""}
+                                                </p>
+                                              )}
+                                            </td>
+                                            <td className="py-2">
+                                              {h.settlement_journal_entry_id ? (
+                                                <>
+                                                  <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                                                    {balance > 0
+                                                      ? "Part payment posted"
+                                                      : "Paid / posted"}
+                                                  </span>
+                                                  <p
+                                                    className="text-[10px] text-muted-foreground"
+                                                    title={h.settlement_journal_entry_id}
+                                                  >
+                                                    JE {h.settlement_journal_entry_id.slice(0, 8)}
+                                                  </p>
+                                                </>
+                                              ) : balance > 0 ? (
+                                                <span className="font-medium text-amber-700 dark:text-amber-400">
+                                                  Not posted
+                                                </span>
+                                              ) : (
+                                                <span className="text-muted-foreground">
+                                                  No balance
+                                                </span>
+                                              )}
+                                            </td>
                                             <td className="py-2 text-right text-blue-600">
                                               {Number(h.advance) > 0 ? inr(Number(h.advance)) : "—"}
                                             </td>
@@ -636,12 +719,15 @@ export function ApprovalChargeAdvanceReport() {
                                                 className="h-8 text-xs"
                                                 disabled={
                                                   !h.posted_journal_entry_id ||
+                                                  balance <= 0 ||
                                                   !accountSelections[h.id] ||
                                                   savingAccountId === h.id
                                                 }
                                                 onClick={() => void saveAccount(h)}
                                               >
-                                                {savingAccountId === h.id ? "Saving…" : "Save"}
+                                                {savingAccountId === h.id
+                                                  ? "Posting…"
+                                                  : "Post balance"}
                                               </Button>
                                             </td>
                                           </tr>

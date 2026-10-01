@@ -242,6 +242,7 @@ export const serverSettleRentalBalance = createServerFn({ method: "POST" })
       sessionToken: z.string().min(1),
       advanceId: z.string().uuid(),
       paymentLedgerId: z.string().uuid(),
+      amount: z.number().positive().optional(),
     }),
   )
   .handler(async ({ data }): Promise<string | null> => {
@@ -290,6 +291,7 @@ export const serverSettleRentalBalance = createServerFn({ method: "POST" })
       p_advance_id: data.advanceId,
       p_payment_ledger_id: data.paymentLedgerId,
       p_user_id: session.uid,
+      p_amount: data.amount ?? null,
     });
     if (error) throw new Error(error.message);
     return entryId ? String(entryId) : null;
