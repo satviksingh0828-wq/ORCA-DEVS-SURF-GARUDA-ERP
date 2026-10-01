@@ -645,9 +645,7 @@ export function ApprovalChargeAdvanceReport() {
                                               <input
                                                 type="checkbox"
                                                 checked={selectedTripIds.includes(h.id)}
-                                                disabled={
-                                                  balance <= 0 || !h.posted_journal_entry_id
-                                                }
+                                                disabled={balance <= 0}
                                                 onChange={() => toggleTrip(h.id)}
                                               />
                                             </td>
@@ -744,24 +742,35 @@ export function ApprovalChargeAdvanceReport() {
                                               )}
                                             </td>
                                             <td className="py-2 text-right">
-                                              <Button
-                                                size="sm"
-                                                variant="outline"
-                                                className="h-8 text-xs"
-                                                disabled={
-                                                  !h.posted_journal_entry_id ||
-                                                  balance <= 0 ||
-                                                  !accountSelections[h.id] ||
-                                                  savingAccountId === h.id
-                                                }
-                                                onClick={() => void saveAccount(h)}
-                                              >
-                                                {savingAccountId === h.id
-                                                  ? "Posting…"
-                                                  : h.posted_journal_entry_id
-                                                    ? "Post balance"
-                                                    : "After Trip Billing"}
-                                              </Button>
+                                              {h.posted_journal_entry_id ? (
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="h-8 text-xs"
+                                                  disabled={
+                                                    balance <= 0 ||
+                                                    !accountSelections[h.id] ||
+                                                    savingAccountId === h.id
+                                                  }
+                                                  onClick={() => void saveAccount(h)}
+                                                >
+                                                  {savingAccountId === h.id
+                                                    ? "Posting…"
+                                                    : "Post balance"}
+                                                </Button>
+                                              ) : (
+                                                <Button
+                                                  size="sm"
+                                                  variant="outline"
+                                                  className="h-8 text-xs"
+                                                  disabled={balance <= 0 || paying}
+                                                  onClick={() => toggleTrip(h.id)}
+                                                >
+                                                  {selectedTripIds.includes(h.id)
+                                                    ? "Selected"
+                                                    : "Select for amount"}
+                                                </Button>
+                                              )}
                                             </td>
                                           </tr>
                                         );
