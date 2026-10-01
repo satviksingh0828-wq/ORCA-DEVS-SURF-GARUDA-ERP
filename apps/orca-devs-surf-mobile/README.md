@@ -27,7 +27,7 @@ This requires signing in to an Expo/EAS account when prompted. The command creat
 
 ## Production ERP setup
 
-Apply this migration after the existing Outward POD migrations, then deploy the ERP server/web code:
+Apply this migration after the existing Outward POD migrations:
 
 ```text
 supabase/migrations/20261001134500_outward_pod_mobile_document_api.sql
