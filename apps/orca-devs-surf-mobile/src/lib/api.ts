@@ -1,12 +1,19 @@
 import { fromByteArray } from "base64-js";
 import * as FileSystem from "expo-file-system/legacy";
-import type { Credentials, PickedFile, QrManifest, FileAction } from "../types";
+import type {
+  Credentials,
+  FileAction,
+  PickedFile,
+  PODCreationMetadata,
+  QrManifest,
+} from "../types";
 
 export interface UploadedFileResponse {
   url?: string;
   fileUrl?: string;
   value?: string;
   message?: string;
+  manifest?: unknown;
 }
 
 function utf8Bytes(value: string): Uint8Array {
@@ -115,22 +122,45 @@ export async function uploadFile(
   uploadId: string,
   action: FileAction,
   file: PickedFile,
+  creation?: PODCreationMetadata,
 ): Promise<UploadedFileResponse> {
   const safeUrl = validateHttpUrl(url);
-  const body = new FormData();
-  body.append("file", { uri: file.uri, name: file.name, type: file.mimeType } as unknown as Blob);
-  body.append("action", action);
-  body.append("recordId", manifest.recordId);
-  body.append("uploadId", uploadId);
-  body.append("id", credentials.userId);
+  const parameters: Record<string, string> = {
+    action,
+    recordId: manifest.recordId,
+    uploadId,
+    id: credentials.userId,
+  };
+  if (creation) {
+    parameters.deliveryDate = creation.deliveryDate;
+    parameters.transporterLrNumber = creation.transporterLrNumber ?? "";
+    parameters.transporterLrDate = creation.transporterLrDate ?? "";
+  }
 
-  const response = await fetch(safeUrl, {
-    method: "POST",
+  const response = await FileSystem.uploadAsync(safeUrl, file.uri, {
+    httpMethod: "POST",
+    uploadType: FileSystem.FileSystemUploadType.MULTIPART,
+    fieldName: "file",
+    mimeType: file.mimeType,
     headers: authHeaders(credentials),
-    body,
+    parameters,
   });
-  const result = await responseJson(response);
-  if (!response.ok) throw new Error(`Upload failed (${response.status}).`);
+  let result: unknown;
+  try {
+    result = JSON.parse(response.body) as unknown;
+  } catch {
+    result = response.body;
+  }
+  if (response.status < 200 || response.status >= 300) {
+    const serverMessage =
+      result &&
+      typeof result === "object" &&
+      !Array.isArray(result) &&
+      typeof (result as Record<string, unknown>).message === "string"
+        ? ((result as Record<string, unknown>).message as string)
+        : undefined;
+    throw new Error(serverMessage ?? `Upload failed (${response.status}).`);
+  }
   const rejected = explicitRejection(result);
   if (rejected) throw new Error(rejected);
   if (result && typeof result === "object" && !Array.isArray(result)) {

@@ -216,6 +216,14 @@ function operationUrl(request: Request, operation: string, podId: string, kind?:
   return url.toString();
 }
 
+function createUploadUrl(request: Request, consignmentId: string, kind: DocumentKind) {
+  const url = new URL("/api/mobile/outward-pod", new URL(request.url).origin);
+  url.searchParams.set("operation", "create-upload");
+  url.searchParams.set("consignmentId", consignmentId);
+  url.searchParams.set("kind", kind);
+  return url.toString();
+}
+
 async function loadPodAndConsignment(admin: AdminClient, podId: string) {
   const { data: pod, error: podError } = await admin
     .from("outward_pods")
@@ -317,6 +325,54 @@ async function manifestRequest(request: Request, admin: AdminClient, actor: Acto
   return json(manifestFor(request, actor, pod, consignment));
 }
 
+async function creationManifestRequest(
+  request: Request,
+  admin: AdminClient,
+  actor: Actor,
+  consignmentId: string,
+) {
+  const { data: consignment, error } = await admin
+    .from("consignments")
+    .select("id,consignment_number,branch_id,consignment_type")
+    .eq("id", consignmentId)
+    .maybeSingle();
+  if (error) throw new ApiError(503, "The consignment service is temporarily unavailable.");
+  if (!consignment) throw new ApiError(404, "Consignment not found.");
+  await ensureBranchAccess(admin, actor, String(consignment.branch_id));
+
+  const { data: existing, error: podError } = await admin
+    .from("outward_pods")
+    .select("id")
+    .eq("consignment_id", consignmentId)
+    .maybeSingle();
+  if (podError) throw new ApiError(503, "The POD service is temporarily unavailable.");
+  if (existing) return manifestRequest(request, admin, actor, String(existing.id));
+  if (!canManageOutwardPODDocument(actor.role, "add")) {
+    throw new ApiError(403, "This account type is not permitted to create POD documents.");
+  }
+
+  const uploads = (Object.keys(DOCUMENT_COLUMNS) as DocumentKind[]).map((kind) => ({
+    id: kind,
+    label: kind === "front" ? "Front Copy" : kind === "back" ? "Back Copy" : "Signature Copy",
+    mimeType: "application/octet-stream",
+    hasValue: false,
+    addUrl: createUploadUrl(request, consignmentId, kind),
+    allowView: false,
+    allowAdd: true,
+    allowReplace: false,
+  }));
+  return json({
+    schema: "orca.document.v1",
+    recordId: consignmentId,
+    title: `Create Outward POD · ${consignment.consignment_number}`,
+    creation: {
+      deliveryDateRequired: true,
+      transporterLrRequired: consignment.consignment_type === "third_party",
+    },
+    uploads,
+  });
+}
+
 async function fileLinksRequest(admin: AdminClient, actor: Actor, podId: string) {
   if (actor.authType !== "bearer") throw new ApiError(401, "Web preview requires an ERP session.");
   const { pod } = await authorizePodAction(admin, actor, podId, "view");
@@ -373,7 +429,20 @@ function fileMime(file: File): string {
 
 function getFormFile(form: FormData, key: string): File | null {
   const value = form.get(key);
-  return typeof File !== "undefined" && value instanceof File ? value : null;
+  if (!value || typeof value !== "object") return null;
+  const candidate = value as Partial<File>;
+  return typeof candidate.name === "string" &&
+    typeof candidate.type === "string" &&
+    typeof candidate.size === "number" &&
+    typeof candidate.arrayBuffer === "function"
+    ? (value as File)
+    : null;
+}
+
+function isIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const parsed = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value;
 }
 
 function validateFile(file: File | null): asserts file is File {
@@ -591,6 +660,129 @@ async function createPODRequest(request: Request, admin: AdminClient, actor: Act
   }
 }
 
+async function createPODFromMobileUpload(
+  request: Request,
+  admin: AdminClient,
+  actor: Actor,
+  consignmentId: string,
+  kind: DocumentKind,
+) {
+  let form: FormData;
+  try {
+    form = await request.formData();
+  } catch {
+    throw new ApiError(400, "Send the document as multipart form data.");
+  }
+  if (String(form.get("action") ?? "") !== "add") {
+    throw new ApiError(400, "A new Outward POD only accepts an add action.");
+  }
+  if (String(form.get("recordId") ?? "") !== consignmentId) {
+    throw new ApiError(400, "Consignment does not match the create-form QR code.");
+  }
+  if (String(form.get("uploadId") ?? "") !== kind) {
+    throw new ApiError(400, "POD document field does not match the QR code.");
+  }
+  if (!canManageOutwardPODDocument(actor.role, "add")) {
+    throw new ApiError(403, "This account type is not permitted to add POD documents.");
+  }
+
+  const file = getFormFile(form, "file");
+  validateFile(file);
+  const deliveryDate = String(form.get("deliveryDate") ?? "").trim();
+  const lrNumber = String(form.get("transporterLrNumber") ?? "").trim();
+  const lrDate = String(form.get("transporterLrDate") ?? "").trim();
+  if (!isIsoDate(deliveryDate))
+    throw new ApiError(400, "Enter a valid delivery date (YYYY-MM-DD).");
+
+  const { data: consignment, error: consignmentError } = await admin
+    .from("consignments")
+    .select("id,consignment_number,branch_id,consignment_type")
+    .eq("id", consignmentId)
+    .maybeSingle();
+  if (consignmentError)
+    throw new ApiError(503, "The consignment service is temporarily unavailable.");
+  if (!consignment) throw new ApiError(404, "Consignment not found.");
+  await ensureBranchAccess(admin, actor, String(consignment.branch_id));
+  if (consignment.consignment_type === "third_party" && (!lrNumber || !isIsoDate(lrDate))) {
+    throw new ApiError(
+      400,
+      "Transporter LR number and a valid LR date (YYYY-MM-DD) are required for third-party consignments.",
+    );
+  }
+
+  const { data: existing, error: existingError } = await admin
+    .from("outward_pods")
+    .select("id")
+    .eq("consignment_id", consignmentId)
+    .maybeSingle();
+  if (existingError) throw new ApiError(503, "The POD service is temporarily unavailable.");
+  if (existing) {
+    throw new ApiError(
+      409,
+      "This POD was created while you were scanning. Scan its latest QR to continue.",
+    );
+  }
+
+  const podId = randomUUID();
+  const stored = await storeFile(admin, podId, kind, file);
+  const paths: Record<DocumentKind, string | null> = { front: null, back: null, signature: null };
+  paths[kind] = stored.path;
+  try {
+    const { data: pod, error: insertError } = await admin
+      .from("outward_pods")
+      .insert({
+        id: podId,
+        consignment_id: consignmentId,
+        delivery_date: deliveryDate,
+        transporter_lr_number: consignment.consignment_type === "third_party" ? lrNumber : null,
+        transporter_lr_date: consignment.consignment_type === "third_party" ? lrDate : null,
+        front_copy_path: paths.front,
+        back_copy_path: paths.back,
+        signature_copy_path: paths.signature,
+        created_by: actor.userId,
+        updated_by: actor.userId,
+        updated_at: new Date().toISOString(),
+      })
+      .select(
+        "id,consignment_id,delivery_date,transporter_lr_number,transporter_lr_date,front_copy_path,back_copy_path,signature_copy_path",
+      )
+      .single();
+    if (insertError || !pod) {
+      if (insertError?.code === "23505") {
+        throw new ApiError(
+          409,
+          "An Outward POD already exists for this consignment. Scan its latest QR.",
+        );
+      }
+      throw new ApiError(503, "The Outward POD record could not be created.");
+    }
+
+    const { error: updateError } = await admin
+      .from("consignments")
+      .update({
+        delivery_date: deliveryDate,
+        transporter_lr_number: consignment.consignment_type === "third_party" ? lrNumber : null,
+        transporter_lr_date: consignment.consignment_type === "third_party" ? lrDate : null,
+      })
+      .eq("id", consignmentId);
+    if (updateError) {
+      await admin.from("outward_pods").delete().eq("id", podId);
+      throw new ApiError(503, "The delivery details could not be saved.");
+    }
+
+    return json({
+      ok: true,
+      pod,
+      message: "Outward POD created and first document uploaded.",
+      manifest: manifestFor(request, actor, pod as PodRecord, consignment as ConsignmentRecord),
+    });
+  } catch (error) {
+    await removeStoredFiles(admin, [stored.path]);
+    if (error instanceof ApiError) throw error;
+    throw new ApiError(503, "The Outward POD could not be created from the mobile upload.");
+  }
+}
+
 export async function verifyMobileCredentials(request: Request): Promise<Response> {
   if (rateLimited(request, "mobile-verify", 12, 10 * 60 * 1000)) {
     return jsonError("Too many sign-in attempts. Wait a few minutes and try again.", 429);
@@ -637,10 +829,17 @@ export async function handleOutwardPODGet(request: Request): Promise<Response> {
     const url = new URL(request.url);
     const operation = url.searchParams.get("operation");
     const podId = url.searchParams.get("podId") ?? "";
-    if (!podId) throw new ApiError(400, "POD ID is required.");
     const admin = await getAdmin();
     const actor = await authenticateRequest(request, admin);
-    if (operation === "manifest") return await manifestRequest(request, admin, actor, podId);
+    if (operation === "manifest") {
+      if (podId) return await manifestRequest(request, admin, actor, podId);
+      const consignmentId = url.searchParams.get("consignmentId") ?? "";
+      if (consignmentId) {
+        return await creationManifestRequest(request, admin, actor, consignmentId);
+      }
+      throw new ApiError(400, "POD or consignment ID is required.");
+    }
+    if (!podId) throw new ApiError(400, "POD ID is required.");
     if (operation === "links") return await fileLinksRequest(admin, actor, podId);
     if (operation === "file") {
       const kind = url.searchParams.get("kind");
@@ -665,6 +864,13 @@ export async function handleOutwardPODPost(request: Request): Promise<Response> 
     const admin = await getAdmin();
     const actor = await authenticateRequest(request, admin);
     if (operation === "create") return await createPODRequest(request, admin, actor);
+    if (operation === "create-upload") {
+      const consignmentId = url.searchParams.get("consignmentId") ?? "";
+      const kind = url.searchParams.get("kind");
+      if (!consignmentId) throw new ApiError(400, "Consignment ID is required.");
+      if (!isDocumentKind(kind)) throw new ApiError(400, "Unknown POD document field.");
+      return await createPODFromMobileUpload(request, admin, actor, consignmentId, kind);
+    }
     if (operation === "upload") {
       const podId = url.searchParams.get("podId") ?? "";
       const kind = url.searchParams.get("kind");

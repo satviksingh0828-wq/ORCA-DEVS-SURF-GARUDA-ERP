@@ -28,6 +28,7 @@ export interface QrManifest {
   recordId: string;
   title: string;
   uploads: UploadField[];
+  creation?: PODCreationRequirements;
   scannedAt: string;
 }
 
@@ -36,6 +37,17 @@ export interface PickedFile {
   name: string;
   mimeType: string;
   size?: number;
+}
+
+export interface PODCreationMetadata {
+  deliveryDate: string;
+  transporterLrNumber?: string;
+  transporterLrDate?: string;
+}
+
+export interface PODCreationRequirements {
+  deliveryDateRequired: boolean;
+  transporterLrRequired: boolean;
 }
 
 export interface HistoryEntry {

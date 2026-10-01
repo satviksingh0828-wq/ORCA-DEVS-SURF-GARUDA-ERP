@@ -93,3 +93,24 @@ test("keeps attached state for replace-only fields without exposing a view URL",
   assert.equal(manifest.uploads[0].viewUrl, undefined);
   assert.equal(actionUrl(manifest.uploads[0], "replace"), "https://erp.example.test/api/upload");
 });
+
+test("preserves delivery and transporter requirements from a create-form QR", () => {
+  const manifest = normalizeManifest({
+    recordId: "CONS-42",
+    title: "Create Outward POD · CONS-42",
+    creation: { deliveryDateRequired: true, transporterLrRequired: true },
+    uploads: [
+      {
+        id: "front",
+        allowAdd: true,
+        addUrl: "https://erp.example.test/api/mobile/outward-pod?operation=create-upload",
+      },
+    ],
+  });
+
+  assert.deepEqual(manifest.creation, {
+    deliveryDateRequired: true,
+    transporterLrRequired: true,
+  });
+  assert.equal(manifest.uploads[0].allowAdd, true);
+});

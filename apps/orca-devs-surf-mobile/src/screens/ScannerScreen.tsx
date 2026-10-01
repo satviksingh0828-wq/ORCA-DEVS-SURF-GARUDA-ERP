@@ -6,10 +6,17 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { CameraView, useCameraPermissions } from "expo-camera";
-import type { FileAction, FileSource, QrManifest, UploadField } from "../types";
+import type {
+  FileAction,
+  FileSource,
+  PODCreationMetadata,
+  QrManifest,
+  UploadField,
+} from "../types";
 import { actionUrl, displayFileType } from "../lib/qr";
 import { fontFamilies, fontSizes, radius, space, useAppTheme, type ThemeColors } from "../theme";
 
@@ -23,7 +30,18 @@ interface ScannerScreenProps {
   onScan: (data: string) => void;
   onRescan: () => void;
   onView: (field: UploadField) => void;
-  onFileAction: (field: UploadField, action: FileAction, source: FileSource) => void;
+  onFileAction: (
+    field: UploadField,
+    action: FileAction,
+    source: FileSource,
+    creation?: PODCreationMetadata,
+  ) => void;
+}
+
+function validIsoDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00.000Z`);
+  return !Number.isNaN(date.valueOf()) && date.toISOString().slice(0, 10) === value;
 }
 
 function fileNameFromUrl(url?: string): string | undefined {
@@ -84,11 +102,13 @@ function SmallAction({
 function UploadCard({
   field,
   disabled,
+  uploadDisabled,
   onView,
   onFileAction,
 }: {
   field: UploadField;
   disabled: boolean;
+  uploadDisabled: boolean;
   onView: (field: UploadField) => void;
   onFileAction: (field: UploadField, action: FileAction, source: FileSource) => void;
 }) {
@@ -149,28 +169,28 @@ function UploadCard({
           <SmallAction
             label="ADD FILE"
             onPress={() => onFileAction(field, "add", "document")}
-            disabled={disabled}
+            disabled={disabled || uploadDisabled}
           />
         ) : null}
         {addUrl ? (
           <SmallAction
             label="TAKE PHOTO"
             onPress={() => onFileAction(field, "add", "photo")}
-            disabled={disabled}
+            disabled={disabled || uploadDisabled}
           />
         ) : null}
         {replaceUrl ? (
           <SmallAction
             label="REPLACE FILE"
             onPress={() => onFileAction(field, "replace", "document")}
-            disabled={disabled}
+            disabled={disabled || uploadDisabled}
           />
         ) : null}
         {replaceUrl ? (
           <SmallAction
             label="REPLACE WITH PHOTO"
             onPress={() => onFileAction(field, "replace", "photo")}
-            disabled={disabled}
+            disabled={disabled || uploadDisabled}
           />
         ) : null}
       </View>
@@ -206,6 +226,15 @@ export function ScannerScreen({
   const [permission, requestPermission] = useCameraPermissions();
   const [scanLocked, setScanLocked] = useState(false);
   const [torch, setTorch] = useState(false);
+  const [creationValues, setCreationValues] = useState<PODCreationMetadata>({
+    deliveryDate: "",
+    transporterLrNumber: "",
+    transporterLrDate: "",
+  });
+
+  useEffect(() => {
+    setCreationValues({ deliveryDate: "", transporterLrNumber: "", transporterLrDate: "" });
+  }, [manifest?.recordId]);
 
   useEffect(() => {
     if (!manifest && !scanning) setScanLocked(false);
@@ -216,6 +245,12 @@ export function ScannerScreen({
     setScanLocked(true);
     onScan(data);
   };
+  const creationComplete =
+    !manifest?.creation ||
+    ((!manifest.creation.deliveryDateRequired || validIsoDate(creationValues.deliveryDate)) &&
+      (!manifest.creation.transporterLrRequired ||
+        (Boolean(creationValues.transporterLrNumber?.trim()) &&
+          validIsoDate(creationValues.transporterLrDate ?? ""))));
 
   return (
     <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
@@ -318,6 +353,69 @@ export function ScannerScreen({
             </View>
             <SmallAction label="SCAN ANOTHER QR" onPress={onRescan} />
           </View>
+          {manifest.creation ? (
+            <View style={styles.creationCard}>
+              <Text style={styles.creationTitle}>Create Outward POD</Text>
+              <Text style={styles.creationDescription}>
+                Enter the POD details. The first successful file upload creates the record; you can
+                then add the remaining files.
+              </Text>
+              {manifest.creation.deliveryDateRequired ? (
+                <View style={styles.creationField}>
+                  <Text style={styles.creationLabel}>Delivery date · required</Text>
+                  <TextInput
+                    value={creationValues.deliveryDate}
+                    onChangeText={(deliveryDate) =>
+                      setCreationValues((current) => ({ ...current, deliveryDate }))
+                    }
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor={colors.muted}
+                    keyboardType="numbers-and-punctuation"
+                    maxLength={10}
+                    autoCapitalize="none"
+                    style={styles.creationInput}
+                  />
+                </View>
+              ) : null}
+              {manifest.creation.transporterLrRequired ? (
+                <>
+                  <View style={styles.creationField}>
+                    <Text style={styles.creationLabel}>Transporter LR number · required</Text>
+                    <TextInput
+                      value={creationValues.transporterLrNumber}
+                      onChangeText={(transporterLrNumber) =>
+                        setCreationValues((current) => ({ ...current, transporterLrNumber }))
+                      }
+                      placeholder="Enter LR number"
+                      placeholderTextColor={colors.muted}
+                      autoCapitalize="characters"
+                      style={styles.creationInput}
+                    />
+                  </View>
+                  <View style={styles.creationField}>
+                    <Text style={styles.creationLabel}>Transporter LR date · required</Text>
+                    <TextInput
+                      value={creationValues.transporterLrDate}
+                      onChangeText={(transporterLrDate) =>
+                        setCreationValues((current) => ({ ...current, transporterLrDate }))
+                      }
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor={colors.muted}
+                      keyboardType="numbers-and-punctuation"
+                      maxLength={10}
+                      autoCapitalize="none"
+                      style={styles.creationInput}
+                    />
+                  </View>
+                </>
+              ) : null}
+              {!creationComplete ? (
+                <Text style={styles.creationHint}>
+                  Complete the required dates and transporter details to enable upload.
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
           {manifest.uploads.length === 0 ? (
             <View style={styles.emptyCard}>
               <Text style={styles.emptyTitle}>No file fields available</Text>
@@ -332,8 +430,16 @@ export function ScannerScreen({
                   key={field.id}
                   field={field}
                   disabled={busyUploadId === field.id}
+                  uploadDisabled={!creationComplete}
                   onView={onView}
-                  onFileAction={onFileAction}
+                  onFileAction={(selectedField, action, source) =>
+                    onFileAction(
+                      selectedField,
+                      action,
+                      source,
+                      manifest.creation ? creationValues : undefined,
+                    )
+                  }
                 />
               ))}
             </View>
@@ -477,6 +583,49 @@ function createStyles(colors: ThemeColors) {
       fontSize: fontSizes.caption,
       lineHeight: 18,
       marginTop: space.xs,
+    },
+    creationCard: {
+      borderRadius: radius.md,
+      borderColor: colors.border,
+      borderWidth: 1,
+      backgroundColor: colors.surface,
+      padding: space.lg,
+      marginTop: space.md,
+      gap: space.md,
+    },
+    creationTitle: {
+      color: colors.text,
+      fontFamily: fontFamilies.semiBold,
+      fontSize: fontSizes.label,
+    },
+    creationDescription: {
+      color: colors.muted,
+      fontFamily: fontFamilies.regular,
+      fontSize: fontSizes.caption,
+      lineHeight: 18,
+    },
+    creationField: { gap: space.xs },
+    creationLabel: {
+      color: colors.text,
+      fontFamily: fontFamilies.medium,
+      fontSize: fontSizes.caption,
+    },
+    creationInput: {
+      minHeight: 44,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      backgroundColor: colors.input,
+      color: colors.text,
+      paddingHorizontal: space.md,
+      fontFamily: fontFamilies.regular,
+      fontSize: fontSizes.description,
+    },
+    creationHint: {
+      color: colors.muted,
+      fontFamily: fontFamilies.regular,
+      fontSize: fontSizes.caption,
+      lineHeight: 18,
     },
     manifestCard: {
       borderRadius: radius.md,

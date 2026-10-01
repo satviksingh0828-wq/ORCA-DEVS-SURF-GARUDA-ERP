@@ -109,6 +109,13 @@ function podApiUrl(operation: string, podId?: string) {
   return url.toString();
 }
 
+function consignmentManifestUrl(consignmentId: string) {
+  const url = new URL("/api/mobile/outward-pod", window.location.origin);
+  url.searchParams.set("operation", "manifest");
+  url.searchParams.set("consignmentId", consignmentId);
+  return url.toString();
+}
+
 async function podApiJson<T>(url: string, token: string | undefined, init: RequestInit = {}) {
   if (!token)
     throw new Error("Your ERP session has expired. Sign in again before managing POD documents.");
@@ -196,6 +203,7 @@ export function OutwardPOD() {
   const canUsePODDocuments = (["view", "add", "replace"] as const).some((action) =>
     canManageOutwardPODDocument(user?.role, action),
   );
+  const canAddPODDocuments = canManageOutwardPODDocument(user?.role, "add");
   const allowed = useMemo(
     () => (user?.role === "basic" ? (user.branchIds ?? []) : null),
     [user?.role, user?.branchIds],
@@ -265,9 +273,9 @@ export function OutwardPOD() {
       });
       setFiles({ ...emptyFiles });
       setUrls({ ...emptyUrls });
-      if (!existing || !canUsePODDocuments) return;
+      if (!canUsePODDocuments) return;
 
-      if (canManageOutwardPODDocument(user?.role, "view")) {
+      if (existing && canManageOutwardPODDocument(user?.role, "view")) {
         try {
           const result = await podApiJson<{ urls?: Partial<Record<DocumentKind, string>> }>(
             podApiUrl("links", existing.id),
@@ -282,7 +290,9 @@ export function OutwardPOD() {
       }
 
       try {
-        const manifestUrl = podApiUrl("manifest", existing.id);
+        const manifestUrl = existing
+          ? podApiUrl("manifest", existing.id)
+          : consignmentManifestUrl(row.id);
         const dataUrl = await QRCode.toDataURL(manifestUrl, {
           width: 256,
           margin: 2,
@@ -756,7 +766,7 @@ export function OutwardPOD() {
                 />
               </div>
             </div>
-            {existing && canUsePODDocuments ? (
+            {(existing ? canUsePODDocuments : canAddPODDocuments) ? (
               <div className="flex flex-wrap items-center gap-4 rounded-lg border border-border bg-muted/20 p-3">
                 {qrDataUrl ? (
                   <img
@@ -775,9 +785,9 @@ export function OutwardPOD() {
                     Scan with ORCA Documents
                   </h4>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    This QR is tied to the selected POD. Sign in with an ERP account to add an empty
-                    PDF/image slot, preview an existing file, or replace it. The server verifies the
-                    account and action on every request.
+                    {existing
+                      ? "This QR is tied to the selected POD. Sign in with an ERP account to add an empty PDF/image slot, preview an existing file, or replace it. The server verifies the account and action on every request."
+                      : "This QR starts an Outward POD for the selected consignment. In ORCA Documents, enter the delivery details and upload the first PDF/image; that upload creates the POD. Further files can be added from the same scan."}
                   </p>
                   <Button
                     type="button"
@@ -861,7 +871,7 @@ export function OutwardPOD() {
               <p className="text-xs text-muted-foreground">
                 {existing
                   ? "Each slot accepts an image or PDF. Empty slots can be added; existing files can be previewed or replaced."
-                  : "Upload at least one image or PDF copy to create this Outward POD."}
+                  : "Upload at least one image or PDF here, or scan the create-form QR and upload the first file from ORCA Documents."}
               </p>
             </div>
             {!existing ? (

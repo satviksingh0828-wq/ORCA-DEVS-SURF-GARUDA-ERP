@@ -56,6 +56,7 @@ import type {
   FileSource,
   HistoryAction,
   HistoryEntry,
+  PODCreationMetadata,
   PickedFile,
   QrManifest,
   UploadField,
@@ -325,8 +326,30 @@ export default function App() {
   );
 
   const handleFileAction = useCallback(
-    async (field: UploadField, action: FileAction, source: FileSource) => {
+    async (
+      field: UploadField,
+      action: FileAction,
+      source: FileSource,
+      creation?: PODCreationMetadata,
+    ) => {
       if (!credentials || !manifest) return;
+      if (manifest.creation?.deliveryDateRequired && !creation?.deliveryDate) {
+        Alert.alert(
+          "Delivery date required",
+          "Enter the delivery date before uploading the first POD file.",
+        );
+        return;
+      }
+      if (
+        manifest.creation?.transporterLrRequired &&
+        (!creation?.transporterLrNumber?.trim() || !creation.transporterLrDate)
+      ) {
+        Alert.alert(
+          "Transporter details required",
+          "Enter the transporter LR number and date before uploading the first POD file.",
+        );
+        return;
+      }
       const targetUrl = actionUrl(field, action);
       if (!targetUrl) {
         Alert.alert(
@@ -392,9 +415,19 @@ export default function App() {
           throw new Error("This file is over the app's 20 MB upload limit. Choose a smaller file.");
         }
         setBusyUploadId(field.id);
-        const response = await uploadFile(targetUrl, credentials, manifest, field.id, action, file);
+        const response = await uploadFile(
+          targetUrl,
+          credentials,
+          manifest,
+          field.id,
+          action,
+          file,
+          manifest.creation ? creation : undefined,
+        );
         const returnedUrl = response.url ?? response.fileUrl ?? response.value;
-        if (returnedUrl) {
+        if (response.manifest) {
+          setManifest(normalizeManifest(response.manifest, targetUrl));
+        } else if (returnedUrl) {
           setManifest((current) =>
             current
               ? {

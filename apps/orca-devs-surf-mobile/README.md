@@ -37,14 +37,16 @@ Use the Supabase SQL editor or the repository's normal Supabase migration workfl
 
 Then deploy the ERP web/server build. Its routes are:
 
-| Route                                                                        | Method | Purpose                                                            |
-| ---------------------------------------------------------------------------- | ------ | ------------------------------------------------------------------ |
-| `/api/mobile/verify`                                                         | `POST` | Verify an existing `app_users` ID/password; no account is created. |
-| `/api/mobile/outward-pod?operation=manifest&podId=…`                         | `GET`  | Return that POD's fields and role-allowed QR actions.              |
-| `/api/mobile/outward-pod?operation=file&podId=…&kind=front\|back\|signature` | `GET`  | Authenticated file preview/download.                               |
-| `/api/mobile/outward-pod?operation=upload&podId=…&kind=…`                    | `POST` | Add to an empty image/PDF slot or replace an existing one.         |
-| `/api/mobile/outward-pod?operation=links&podId=…`                            | `GET`  | Issue short-lived signed previews for the ERP web UI.              |
-| `/api/mobile/outward-pod?operation=create`                                   | `POST` | Used by the ERP UI to create a POD record and initial files.       |
+| Route                                                                        | Method | Purpose                                                              |
+| ---------------------------------------------------------------------------- | ------ | -------------------------------------------------------------------- |
+| `/api/mobile/verify`                                                         | `POST` | Verify an existing `app_users` ID/password; no account is created.   |
+| `/api/mobile/outward-pod?operation=manifest&podId=…`                         | `GET`  | Return an existing POD's fields and role-allowed QR actions.         |
+| `/api/mobile/outward-pod?operation=manifest&consignmentId=…`                 | `GET`  | Return add-only fields for a new-POD create-form QR.                 |
+| `/api/mobile/outward-pod?operation=file&podId=…&kind=front\|back\|signature` | `GET`  | Authenticated file preview/download.                                 |
+| `/api/mobile/outward-pod?operation=upload&podId=…&kind=…`                    | `POST` | Add to an empty image/PDF slot or replace an existing one.           |
+| `/api/mobile/outward-pod?operation=create-upload&consignmentId=…&kind=…`     | `POST` | Create the POD on its first mobile file; return its normal manifest. |
+| `/api/mobile/outward-pod?operation=links&podId=…`                            | `GET`  | Issue short-lived signed previews for the ERP web UI.                |
+| `/api/mobile/outward-pod?operation=create`                                   | `POST` | Used by the ERP UI to create a POD record and initial files.         |
 
 Sign in with the **same ERP user ID/password** used in the ERP. The app submits credentials over HTTPS for verification, stores them using Expo SecureStore, and sends HTTP Basic authorization over HTTPS for QR actions. The API checks that the ERP account is active, checks branch assignment for `basic` users, and rechecks each action. Failed mobile verification is rate-limited without changing the ERP's shared failed-login counter or pausing the account.
 
@@ -52,7 +54,7 @@ The login request uses `Authorization: Basic base64(userId:password)` and sends 
 
 The role/action matrix is centralized in `src/lib/outward-pod-document-access.ts`. All four existing roles (`admin`, `semi_admin`, `basic`, `viewer`) can currently view, add, and replace documents, as requested. The API enforces the rule independently of what the QR/UI displays, so later role restrictions can be added in one place. Empty fields receive **add**; fields containing a file receive **view/replace**. Each PDF/image is limited to 20 MB; allowed formats are JPEG, PNG, WEBP, HEIC, HEIF, and PDF.
 
-The Outward POD web page shows a QR tied to the selected POD, opens private file previews through the server, and shows add/replace actions. It refreshes after a mobile upload using Supabase Realtime where configured plus a 12-second fallback refresh, so the latest document appears without reopening the record.
+The Outward POD web page shows a QR for both an existing POD and a selected consignment in the create form. The create QR asks the mobile user for the delivery date, plus transporter LR number/date for third-party consignments. Its first mobile file upload creates the POD; the app then switches to the normal manifest so the other fields can be added or replaced. Existing POD previews remain private and the web UI refreshes after mobile uploads using Supabase Realtime where configured plus a 12-second fallback refresh.
 
 Set a public endpoint URL at build time if you want the field prefilled (URL only; do not put secrets in the app build):
 

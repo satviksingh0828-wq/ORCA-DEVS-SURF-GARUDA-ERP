@@ -159,8 +159,27 @@ export function normalizeManifest(input: unknown, baseUrl?: string): QrManifest 
   const title =
     stringValue(firstDefined(root, ["title", "name", "recordName", "record_name"])) ??
     `Record ${recordId}`;
+  const creationRecord = record(firstDefined(root, ["creation", "createForm", "create_form"]));
+  const creation = creationRecord
+    ? {
+        deliveryDateRequired:
+          boolValue(
+            firstDefined(creationRecord, ["deliveryDateRequired", "delivery_date_required"]),
+          ) ?? false,
+        transporterLrRequired:
+          boolValue(
+            firstDefined(creationRecord, ["transporterLrRequired", "transporter_lr_required"]),
+          ) ?? false,
+      }
+    : undefined;
 
-  return { recordId, title, uploads, scannedAt: new Date().toISOString() };
+  return {
+    recordId,
+    title,
+    uploads,
+    ...(creation ? { creation } : {}),
+    scannedAt: new Date().toISOString(),
+  };
 }
 
 export function parseJsonQr(raw: string): unknown | undefined {
