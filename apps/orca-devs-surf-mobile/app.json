@@ -5,8 +5,8 @@
     "version": "1.0.0",
     "scheme": "orca-documents",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
-    "userInterfaceStyle": "dark",
+    "userInterfaceStyle": "automatic",
+    "icon": "./assets/icon-light.png",
     "ios": {
       "bundleIdentifier": "com.orcadevssurf.documents",
       "supportsTablet": false
@@ -14,15 +14,16 @@
     "android": {
       "package": "com.orcadevssurf.documents",
       "adaptiveIcon": {
-        "backgroundColor": "#060B12",
-        "foregroundImage": "./assets/android-icon-foreground.png"
+        "backgroundColor": "#F4F4F4",
+        "foregroundImage": "./assets/android-icon-foreground-light.png"
       },
       "predictiveBackGestureEnabled": true
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/icon-light.png"
     },
     "plugins": [
+      "expo-font",
       [
         "expo-camera",
         {
@@ -47,10 +48,10 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/splash-icon.png",
+          "image": "./assets/splash-icon-light.png",
           "imageWidth": 190,
           "resizeMode": "contain",
-          "backgroundColor": "#060B12"
+          "backgroundColor": "#F4F4F4"
         }
       ],
       "expo-sharing"

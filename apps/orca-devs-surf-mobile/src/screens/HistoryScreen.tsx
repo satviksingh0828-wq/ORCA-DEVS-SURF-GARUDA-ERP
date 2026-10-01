@@ -1,6 +1,7 @@
+import { useMemo } from "react";
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import type { HistoryEntry } from "../types";
-import { colors } from "../theme";
+import { fontFamilies, fontSizes, radius, space, useAppTheme, type ThemeColors } from "../theme";
 
 interface HistoryScreenProps {
   entries: HistoryEntry[];
@@ -15,38 +16,66 @@ const actionNames: Record<HistoryEntry["action"], string> = {
 };
 
 export function HistoryScreen({ entries, onClear }: HistoryScreenProps) {
-  const confirmClear = () => Alert.alert("Clear history?", "This removes only this device's local activity list. It does not delete uploaded documents.", [
-    { text: "Cancel", style: "cancel" },
-    { text: "Clear history", style: "destructive", onPress: onClear },
-  ]);
+  const { colors } = useAppTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const confirmClear = () =>
+    Alert.alert(
+      "Clear history?",
+      "This removes only this device's local activity list. It does not delete uploaded documents.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Clear history", style: "destructive", onPress: onClear },
+      ],
+    );
 
   return (
     <ScrollView contentContainerStyle={styles.content}>
       <View style={styles.headingRow}>
         <View>
           <Text style={styles.eyebrow}>ON THIS DEVICE</Text>
-          <Text style={styles.title}>History</Text>
+          <Text style={styles.title}>Recent activity</Text>
         </View>
-        {entries.length > 0 ? <Pressable accessibilityRole="button" onPress={confirmClear}><Text style={styles.clear}>CLEAR</Text></Pressable> : null}
+        {entries.length > 0 ? (
+          <Pressable accessibilityRole="button" onPress={confirmClear} style={styles.clearButton}>
+            <Text style={styles.clear}>CLEAR</Text>
+          </Pressable>
+        ) : null}
       </View>
-      <Text style={styles.subtitle}>Recent scans and document actions. Passwords and authentication headers are never recorded here.</Text>
+      <Text style={styles.subtitle}>
+        Recent scans and document actions. Passwords and authentication headers are never recorded
+        here.
+      </Text>
 
       {entries.length === 0 ? (
         <View style={styles.empty}>
           <Text style={styles.emptyMark}>—</Text>
           <Text style={styles.emptyTitle}>No activity yet</Text>
-          <Text style={styles.emptyText}>QR scans, previews, additions, and replacements will appear here.</Text>
+          <Text style={styles.emptyText}>
+            QR scans, previews, additions, and replacements will appear here.
+          </Text>
         </View>
       ) : (
         <View style={styles.list}>
           {entries.map((entry) => (
             <View key={entry.id} style={styles.card}>
               <View style={styles.cardTop}>
-                <View style={styles.actionBadge}><Text style={styles.actionText}>{actionNames[entry.action]}</Text></View>
-                <Text style={[styles.status, entry.status === "success" ? styles.success : styles.failed]}>{entry.status === "success" ? "SUCCESS" : "FAILED"}</Text>
+                <View style={styles.actionBadge}>
+                  <Text style={styles.actionText}>{actionNames[entry.action]}</Text>
+                </View>
+                <Text
+                  style={[
+                    styles.status,
+                    entry.status === "success" ? styles.success : styles.failed,
+                  ]}
+                >
+                  {entry.status === "success" ? "SUCCESS" : "FAILED"}
+                </Text>
               </View>
               <Text style={styles.record}>{entry.recordTitle}</Text>
-              <Text style={styles.meta}>{entry.uploadLabel ? `${entry.uploadLabel} · ` : ""}{entry.fileName ?? entry.recordId}</Text>
+              <Text style={styles.meta}>
+                {entry.uploadLabel ? `${entry.uploadLabel} · ` : ""}
+                {entry.fileName ?? entry.recordId}
+              </Text>
               <Text style={styles.message}>{entry.message}</Text>
               <Text style={styles.time}>{new Date(entry.at).toLocaleString()}</Text>
             </View>
@@ -57,27 +86,120 @@ export function HistoryScreen({ entries, onClear }: HistoryScreenProps) {
   );
 }
 
-const styles = StyleSheet.create({
-  content: { padding: 20, paddingBottom: 28 },
-  headingRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
-  eyebrow: { color: colors.accent, fontSize: 9, fontWeight: "800", letterSpacing: 1.6 },
-  title: { color: colors.text, fontSize: 26, fontWeight: "900", marginTop: 4 },
-  clear: { color: colors.danger, fontSize: 10, fontWeight: "900", letterSpacing: 1.1, padding: 8 },
-  subtitle: { color: colors.muted, fontSize: 12, lineHeight: 19, marginTop: 9, marginBottom: 18 },
-  empty: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 18, alignItems: "center", padding: 26, marginTop: 8 },
-  emptyMark: { color: colors.accent, fontSize: 28, fontWeight: "300" },
-  emptyTitle: { color: colors.text, fontSize: 15, fontWeight: "800", marginTop: 4 },
-  emptyText: { color: colors.muted, fontSize: 11, lineHeight: 17, textAlign: "center", marginTop: 7 },
-  list: { gap: 10 },
-  card: { backgroundColor: colors.surface, borderWidth: 1, borderColor: colors.border, borderRadius: 16, padding: 15 },
-  cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  actionBadge: { borderColor: colors.border, borderWidth: 1, borderRadius: 20, paddingHorizontal: 9, paddingVertical: 5, backgroundColor: colors.surfaceRaised },
-  actionText: { color: colors.accent, fontSize: 8, fontWeight: "900", letterSpacing: 0.8 },
-  status: { fontSize: 8, fontWeight: "900", letterSpacing: 0.8 },
-  success: { color: colors.success },
-  failed: { color: colors.danger },
-  record: { color: colors.text, fontSize: 14, fontWeight: "800", marginTop: 12 },
-  meta: { color: colors.muted, fontSize: 11, marginTop: 4 },
-  message: { color: "#B6C2D0", fontSize: 10, lineHeight: 15, marginTop: 9 },
-  time: { color: "#68798C", fontSize: 9, marginTop: 10 },
-});
+function createStyles(colors: ThemeColors) {
+  return StyleSheet.create({
+    content: { paddingHorizontal: space.lg, paddingTop: space.xl, paddingBottom: space.xl },
+    headingRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-end" },
+    eyebrow: {
+      color: colors.muted,
+      fontFamily: fontFamilies.semiBold,
+      fontSize: fontSizes.caption,
+      letterSpacing: 0.5,
+    },
+    title: {
+      color: colors.text,
+      fontFamily: fontFamilies.bold,
+      fontSize: fontSizes.title,
+      marginTop: space.xs,
+    },
+    clearButton: {
+      minHeight: 44,
+      minWidth: 48,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.sm,
+      justifyContent: "center",
+      alignItems: "center",
+      paddingHorizontal: space.sm,
+    },
+    clear: {
+      color: colors.text,
+      fontFamily: fontFamilies.semiBold,
+      fontSize: fontSizes.small,
+      letterSpacing: 0.4,
+    },
+    subtitle: {
+      color: colors.muted,
+      fontFamily: fontFamilies.regular,
+      fontSize: fontSizes.body,
+      lineHeight: 20,
+      marginTop: space.sm,
+      marginBottom: space.lg,
+    },
+    empty: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      alignItems: "center",
+      padding: space.xl,
+      marginTop: space.sm,
+    },
+    emptyMark: { color: colors.text, fontFamily: fontFamilies.regular, fontSize: 28 },
+    emptyTitle: {
+      color: colors.text,
+      fontFamily: fontFamilies.semiBold,
+      fontSize: fontSizes.label,
+      marginTop: space.xs,
+    },
+    emptyText: {
+      color: colors.muted,
+      fontFamily: fontFamilies.regular,
+      fontSize: fontSizes.description,
+      lineHeight: 19,
+      textAlign: "center",
+      marginTop: space.sm,
+    },
+    list: { gap: space.sm },
+    card: {
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: radius.md,
+      padding: space.lg,
+    },
+    cardTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+    actionBadge: {
+      borderColor: colors.border,
+      borderWidth: 1,
+      borderRadius: radius.pill,
+      paddingHorizontal: space.sm,
+      paddingVertical: space.xs,
+      backgroundColor: colors.input,
+    },
+    actionText: {
+      color: colors.text,
+      fontFamily: fontFamilies.semiBold,
+      fontSize: fontSizes.micro,
+      letterSpacing: 0.4,
+    },
+    status: { fontFamily: fontFamilies.semiBold, fontSize: fontSizes.micro, letterSpacing: 0.4 },
+    success: { color: colors.success },
+    failed: { color: colors.danger },
+    record: {
+      color: colors.text,
+      fontFamily: fontFamilies.semiBold,
+      fontSize: fontSizes.body,
+      marginTop: space.md,
+    },
+    meta: {
+      color: colors.muted,
+      fontFamily: fontFamilies.regular,
+      fontSize: fontSizes.description,
+      marginTop: space.xs,
+    },
+    message: {
+      color: colors.text,
+      fontFamily: fontFamilies.regular,
+      fontSize: fontSizes.description,
+      lineHeight: 19,
+      marginTop: space.sm,
+    },
+    time: {
+      color: colors.muted,
+      fontFamily: fontFamilies.regular,
+      fontSize: fontSizes.caption,
+      marginTop: space.md,
+    },
+  });
+}

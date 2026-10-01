@@ -1,6 +1,6 @@
 # ORCA DEVS SURF — secure documents app
 
-An Expo / React Native mobile app branded with the existing ORCA dot logo. The app has **Scan**, **History**, and **About** tabs, a matching dark splash screen, and a persistent **POWERED BY ORCA DEVS SURF** footer linking to `https://orca.devs.surf`.
+An Expo / React Native mobile app branded with the existing ORCA dot logo. It follows the device's system appearance automatically (light or dark), and uses the monochrome colors, Inter typography, safe-area spacing, cards, footer, and icon tabs from the [ORCA DEVS SURF mobile reference](https://github.com/satviksingh0828-wq/ORCA-DEVS-SURF-mobile). The app has **Scan**, **History**, and **About** tabs plus a persistent **POWERED BY ORCA DEVS SURF** footer linking to `https://orca.devs.surf`.
 
 ## Run in Expo Go
 
@@ -14,7 +14,7 @@ npm start
 
 Open Expo Go on the phone and scan the development QR shown by Expo. Camera scanning and photo capture need a real phone; camera functions are not available in the standard Android emulator in the same way as a device.
 
-The source is Expo SDK 57. The app shows its own branded splash when it starts in Expo Go. The configured native launcher icon and native splash are applied to an APK build.
+The source is Expo SDK 57. The app shows its ORCA splash when it starts in Expo Go. The configured light-compatible native launcher icon and splash are applied to an APK build; the in-app splash and screens follow the current system theme.
 
 ## Build an Android APK
 
@@ -26,6 +26,14 @@ npm run build:apk
 ```
 
 This runs an EAS internal-distribution build with `android.buildType: "apk"`. Sign in to an Expo account if prompted, then use the build URL printed by EAS to download and install the APK. Alternatively, generate Android native files with `npx expo prebuild --platform android` and build an APK with Android Studio / Gradle. An APK is the Android installer; it is not a Windows `.exe`.
+
+## Hosted mock app and QR endpoint
+
+The nested `mock-server` provides a public landing page with three scannable QR codes, a demo login endpoint, sample PDF/PNG/DOCX files, and in-memory upload handling. From the app directory, run `npm run mock:install`, then start the service with `PORT=4200 PUBLIC_BASE_URL=https://your-public-host.example npm run mock`. Visit the public base URL to view and download the QR codes. See [`mock-server/README.md`](./mock-server/README.md) for API paths and permissions.
+
+For a one-tap demo fill on the sign-in screen, set `EXPO_PUBLIC_MOCK_API_ORIGIN=https://your-public-host.example` in a local `.env.local` file and restart Expo. The sign-in form fills the demo endpoint, ID and password; submit it to verify. The three QR records demonstrate PDF view/replace, an existing PNG preview plus a separate empty PDF add slot, and Word-document view-only. They use the same authenticated endpoint as sign-in.
+
+**Demo data only:** the sample credentials are public and not a production secret. The mock server stores uploads in process memory and discards them when it stops. Do not upload real or sensitive documents. Remove `.env.local` before making a production build; no demo URL or demo credentials are committed in the source.
 
 ## Important backend requirement
 
@@ -43,7 +51,7 @@ Accept: application/json, ...
 ```
 
 ```json
-{"action":"verify","id":"YOUR_USER_ID","password":"YOUR_PASSWORD"}
+{ "action": "verify", "id": "YOUR_USER_ID", "password": "YOUR_PASSWORD" }
 ```
 
 Return a successful 2xx response only for a valid account; return 401/403 for an invalid ID/password. A JSON response with `valid`, `ok`, `exists`, or `authenticated` set to `false` is also treated as rejection. The app saves credentials only after verification succeeds.

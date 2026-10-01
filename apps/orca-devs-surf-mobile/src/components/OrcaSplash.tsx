@@ -1,11 +1,24 @@
 import { useEffect, useRef } from "react";
-import { Animated, Easing, Image, Linking, Pressable, StatusBar, StyleSheet, Text, View, useWindowDimensions } from "react-native";
+import {
+  Animated,
+  Easing,
+  Image,
+  Linking,
+  Pressable,
+  StatusBar,
+  StyleSheet,
+  Text,
+  View,
+  useWindowDimensions,
+} from "react-native";
+import { fontFamilies, fontSizes, useAppTheme } from "../theme";
 
-const logo = require("../../assets/orca-logo.png");
+import logo from "../../assets/orca-logo.png";
 const WEBSITE = "https://orca.devs.surf";
 
 export function OrcaSplash({ onComplete }: { onComplete: () => void }) {
   const { width, height } = useWindowDimensions();
+  const { colors, isDark } = useAppTheme();
   const size = Math.min(width * 0.6, height * 0.6, 420);
   const overlayOpacity = useRef(new Animated.Value(1)).current;
   const firstRingScale = useRef(new Animated.Value(0.08)).current;
@@ -37,41 +50,106 @@ export function OrcaSplash({ onComplete }: { onComplete: () => void }) {
       Animated.sequence([
         Animated.delay(600),
         Animated.parallel([
-          Animated.timing(markOpacity, { toValue: 1, duration: 600, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
-          Animated.spring(markScale, { toValue: 1, speed: 1.1, bounciness: 4, useNativeDriver: true }),
+          Animated.timing(markOpacity, {
+            toValue: 1,
+            duration: 600,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.spring(markScale, {
+            toValue: 1,
+            speed: 1.1,
+            bounciness: 4,
+            useNativeDriver: true,
+          }),
         ]),
       ]),
       Animated.sequence([
         Animated.delay(1550),
-        Animated.timing(captionOpacity, { toValue: 1, duration: 700, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+        Animated.timing(captionOpacity, {
+          toValue: 1,
+          duration: 700,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
       ]),
     ]).start();
 
-    const fadeTimer = setTimeout(() => {
-      Animated.timing(overlayOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start();
-    }, 2450);
+    const fadeTimer = setTimeout(
+      () =>
+        Animated.timing(overlayOpacity, {
+          toValue: 0,
+          duration: 400,
+          useNativeDriver: true,
+        }).start(),
+      2450,
+    );
     const doneTimer = setTimeout(onComplete, 2850);
     return () => {
       clearTimeout(fadeTimer);
       clearTimeout(doneTimer);
     };
-  }, [captionOpacity, firstRingOpacity, firstRingScale, markOpacity, markScale, onComplete, overlayOpacity, secondRingOpacity, secondRingScale]);
+  }, [
+    captionOpacity,
+    firstRingOpacity,
+    firstRingScale,
+    markOpacity,
+    markScale,
+    onComplete,
+    overlayOpacity,
+    secondRingOpacity,
+    secondRingScale,
+  ]);
 
   return (
     <>
-      <StatusBar barStyle="light-content" backgroundColor="#060B12" />
-      <Animated.View style={[styles.root, { opacity: overlayOpacity }]}>
+      <StatusBar
+        barStyle={isDark ? "light-content" : "dark-content"}
+        backgroundColor={colors.background}
+      />
+      <Animated.View
+        style={[styles.root, { backgroundColor: colors.background, opacity: overlayOpacity }]}
+      >
         <View style={[styles.stage, { width: size, height: size }]}>
-          <Animated.View style={[styles.ring, { opacity: firstRingOpacity, transform: [{ scale: firstRingScale }] }]} />
-          <Animated.View style={[styles.ring, { opacity: secondRingOpacity, transform: [{ scale: secondRingScale }] }]} />
-          <Animated.Image source={logo} resizeMode="contain" style={[styles.logo, { opacity: markOpacity, transform: [{ scale: markScale }] }]} />
+          <Animated.View
+            style={[
+              styles.ring,
+              {
+                borderColor: colors.text,
+                opacity: firstRingOpacity,
+                transform: [{ scale: firstRingScale }],
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.ring,
+              {
+                borderColor: colors.text,
+                opacity: secondRingOpacity,
+                transform: [{ scale: secondRingScale }],
+              },
+            ]}
+          />
+          <Animated.Image
+            source={logo}
+            resizeMode="contain"
+            style={[
+              styles.logo,
+              { tintColor: colors.text, opacity: markOpacity, transform: [{ scale: markScale }] },
+            ]}
+          />
           <Pressable
             accessibilityRole="link"
             accessibilityLabel="Powered by ORCA DEVS SURF. Open orca.devs.surf."
             onPress={() => void Linking.openURL(WEBSITE)}
             style={styles.captionWrap}
           >
-            <Animated.Text style={[styles.caption, { opacity: captionOpacity }]}>POWERED BY ORCA DEVS SURF</Animated.Text>
+            <Animated.Text
+              style={[styles.caption, { color: colors.muted, opacity: captionOpacity }]}
+            >
+              POWERED BY ORCA DEVS SURF
+            </Animated.Text>
           </Pressable>
         </View>
       </Animated.View>
@@ -80,10 +158,23 @@ export function OrcaSplash({ onComplete }: { onComplete: () => void }) {
 }
 
 const styles = StyleSheet.create({
-  root: { ...StyleSheet.absoluteFill, zIndex: 1000, backgroundColor: "#060B12", alignItems: "center", justifyContent: "center", overflow: "hidden" },
+  root: {
+    ...StyleSheet.absoluteFill,
+    zIndex: 1000,
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
+  },
   stage: { alignItems: "center", justifyContent: "center", overflow: "visible" },
-  ring: { position: "absolute", width: "100%", height: "100%", borderRadius: 999, borderWidth: 1, borderColor: "#F2F5F8" },
+  ring: { position: "absolute", width: "100%", height: "100%", borderRadius: 999, borderWidth: 1 },
   logo: { width: "100%", height: "100%" },
   captionWrap: { position: "absolute", top: "100%", marginTop: 28, alignSelf: "center" },
-  caption: { color: "#93A8BD", fontFamily: "monospace", fontSize: 10, letterSpacing: 2.2, textTransform: "uppercase", textAlign: "center", includeFontPadding: false },
+  caption: {
+    fontFamily: fontFamilies.semiBold,
+    fontSize: fontSizes.micro,
+    letterSpacing: 1.2,
+    textTransform: "uppercase",
+    textAlign: "center",
+    includeFontPadding: false,
+  },
 });

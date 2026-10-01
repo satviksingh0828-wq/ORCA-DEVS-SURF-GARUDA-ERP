@@ -1,0 +1,14 @@
+{
+  "name": "orca-documents-mock-server",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "dev": "node --watch server.mjs"
+  },
+  "dependencies": {
+    "busboy": "^1.6.0",
+    "qrcode": "^1.5.4"
+  }
+}
