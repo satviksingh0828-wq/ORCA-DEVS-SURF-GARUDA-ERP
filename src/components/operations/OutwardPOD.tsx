@@ -324,6 +324,18 @@ export function OutwardPOD() {
           toast.error("Could not create the view-only POD QR code");
         }
       }
+      if (existing && canEditMobileMetadata) {
+        try {
+          const dataUrl = await QRCode.toDataURL(podManifestUrl(existing.id), {
+            width: 256,
+            margin: 2,
+            errorCorrectionLevel: "M",
+          });
+          if (selectedRef.current?.id === row.id) setMobileEditQrDataUrl(dataUrl);
+        } catch {
+          toast.error("Could not create the mobile edit QR code");
+        }
+      }
       if (existing || !canAddPODDocuments) return;
 
       try {
@@ -338,7 +350,7 @@ export function OutwardPOD() {
         toast.error("Could not create the POD mobile QR code");
       }
     },
-    [canAddPODDocuments, canUsePODDocuments, user?.role, user?.sessionToken],
+    [canAddPODDocuments, canEditMobileMetadata, canUsePODDocuments, user?.role, user?.sessionToken],
   );
 
   useEffect(() => {
@@ -848,7 +860,7 @@ export function OutwardPOD() {
                     ) : (
                       <QrCode className="mr-2 size-4" />
                     )}
-                    {mobileEditQrDataUrl ? "Refresh mobile QR" : "Edit on mobile"}
+                    {mobileEditQrDataUrl ? "Refresh edit QR" : "Edit on mobile"}
                   </Button>
                 ) : null}
                 {existing ? (
@@ -964,11 +976,11 @@ export function OutwardPOD() {
                 <div className="min-w-48 flex-1">
                   <h4 className="flex items-center gap-2 text-sm font-semibold">
                     <QrCode className="size-4" />
-                    Mobile edit mode
+                    Edit QR — mobile mode
                   </h4>
                   <p className="mt-1 text-xs text-muted-foreground">
-                    Scan with ORCA Documents to update or clear permitted POD details, then sync
-                    them to the ERP. The QR is hidden from the normal view until requested.
+                    Scan with ORCA Documents to update or clear permitted POD details and add or
+                    replace documents, then sync them to the ERP.
                   </p>
                   <Button
                     type="button"
