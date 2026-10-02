@@ -155,6 +155,10 @@ const ALL_EXPENSES = ["Hire Charges", ...DEFAULT_EXPENSES];
 const DEFAULT_INCOMES = ["Approval Charge"];
 const THIRD_PARTY_DEFAULT_INCOMES = DEFAULT_INCOMES;
 
+function isInformationalTollCharge(name: string) {
+  return name.trim().toLowerCase() === "toll charges";
+}
+
 function formatDateInput(date: Date) {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
@@ -803,12 +807,15 @@ export function TripForm({
         expense_name: row.name,
         amount: row.amount,
         note: row.note,
-        payment_ledger_id: row.paymentLedgerId || null,
+        payment_ledger_id: isInformationalTollCharge(row.name) ? null : row.paymentLedgerId || null,
         sort_order: index,
       }));
     const rowsToValidate = table === "trip_other_income" ? rows : expenses;
     const missingPaymentAccount = rowsToValidate.find(
-      (row) => num(row.amount) > 0 && !row.paymentLedgerId,
+      (row) =>
+        num(row.amount) > 0 &&
+        !(table === "trip_expenses" && isInformationalTollCharge(row.name)) &&
+        !row.paymentLedgerId,
     );
     if (missingPaymentAccount) {
       toast.error(`Select a cash or bank account for ${missingPaymentAccount.name}`);
@@ -3041,6 +3048,8 @@ function LineTab({
         {rows.map((r, i) => {
           const isHireCharge =
             showHireChargeFields && r.name.trim().toLowerCase() === "hire charges";
+          const informationalTollCharge =
+            nameLabel === "Expense name" && isInformationalTollCharge(r.name);
           const balance = Math.max(num(r.amount) - num(r.advance ?? ""), 0);
           return (
             <div
@@ -3073,30 +3082,38 @@ function LineTab({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label className="text-xs font-medium text-muted-foreground">
-                  Cash / Bank Account
-                </Label>
-                <Select
-                  disabled={isViewer || tripClosed}
-                  value={r.paymentLedgerId || "__none__"}
-                  onValueChange={(value) =>
-                    !isViewer &&
-                    !tripClosed &&
-                    update(i, { paymentLedgerId: value === "__none__" ? "" : value })
-                  }
-                >
-                  <SelectTrigger className="h-10">
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="__none__">Select account</SelectItem>
-                    {paymentLedgers.map((ledger) => (
-                      <SelectItem key={ledger.id} value={ledger.id}>
-                        {ledger.account_name} ({ledger.ledger_type})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {informationalTollCharge ? (
+                  <p className="pt-7 text-xs text-muted-foreground">
+                    No cash/bank account required
+                  </p>
+                ) : (
+                  <>
+                    <Label className="text-xs font-medium text-muted-foreground">
+                      Cash / Bank Account
+                    </Label>
+                    <Select
+                      disabled={isViewer || tripClosed}
+                      value={r.paymentLedgerId || "__none__"}
+                      onValueChange={(value) =>
+                        !isViewer &&
+                        !tripClosed &&
+                        update(i, { paymentLedgerId: value === "__none__" ? "" : value })
+                      }
+                    >
+                      <SelectTrigger className="h-10">
+                        <SelectValue placeholder="Select account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">Select account</SelectItem>
+                        {paymentLedgers.map((ledger) => (
+                          <SelectItem key={ledger.id} value={ledger.id}>
+                            {ledger.account_name} ({ledger.ledger_type})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </>
+                )}
               </div>
 
               {isHireCharge ? (

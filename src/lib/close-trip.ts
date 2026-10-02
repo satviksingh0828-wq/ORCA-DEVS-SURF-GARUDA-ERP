@@ -305,6 +305,20 @@ export const serverCloseTrip = createServerFn({ method: "POST" })
           }
         : null;
 
+    let fastagForClose = fastag;
+    if (fastag) {
+      const { data: existingFastag, error: existingFastagError } = await db
+        .from("fastag_transactions")
+        .select("id")
+        .eq("trip_id", tripId)
+        .eq("transaction_type", "deduction")
+        .maybeSingle();
+      if (existingFastagError) throw new Error(existingFastagError.message);
+      // Trip saves create the live deduction. Do not insert it again while
+      // archiving the trip; older trips without one still use p_fastag below.
+      if (existingFastag) fastagForClose = null;
+    }
+
     const { data: archiveId, error: closeError } = await db.rpc("close_trip_atomic", {
       p_trip_id: tripId,
       p_trip_snapshot: snapshot,
@@ -320,7 +334,7 @@ export const serverCloseTrip = createServerFn({ method: "POST" })
       p_total_income: manifestTotal + otherIncomeTotal,
       p_total_expense: expenseTotal,
       p_net_income: manifestTotal + otherIncomeTotal - expenseTotal,
-      p_fastag: fastag,
+      p_fastag: fastagForClose,
       p_vehicle_log: vehicleLog,
       p_driver_log: driverLog,
       p_transporter_log: transporterLog,

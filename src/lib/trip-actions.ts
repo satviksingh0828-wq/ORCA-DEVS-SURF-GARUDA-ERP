@@ -52,7 +52,7 @@ export const serverSaveTripLines = createServerFn({ method: "POST" })
 
     const { data: trip, error: tripError } = await db
       .from("trips")
-      .select("branch_id,closed")
+      .select("branch_id,closed,vehicle_id,trip_code")
       .eq("id", data.tripId)
       .maybeSingle();
     if (tripError || !trip) throw new Error("Trip is no longer open.");
@@ -78,6 +78,31 @@ export const serverSaveTripLines = createServerFn({ method: "POST" })
       p_approval: data.approval,
     });
     if (error) throw new Error(error.message);
+
+    // Regular Toll Charges are informational for accounting, but they must
+    // still reduce the live Fastag balance of the trip's vehicle. Replace the
+    // trip-scoped deduction so edits and clearing the amount never duplicate it.
+    const tollCharges = data.expenses
+      .filter((row) => row.expense_name.trim().toLowerCase() === "toll charges")
+      .reduce((sum, row) => sum + Number(row.amount || 0), 0);
+    const { error: deleteFastagError } = await db
+      .from("fastag_transactions")
+      .delete()
+      .eq("trip_id", data.tripId)
+      .eq("transaction_type", "deduction");
+    if (deleteFastagError) throw new Error(deleteFastagError.message);
+    if (trip.vehicle_id && tollCharges > 0) {
+      const { error: insertFastagError } = await db.from("fastag_transactions").insert({
+        vehicle_id: trip.vehicle_id,
+        trip_id: data.tripId,
+        transaction_type: "deduction",
+        amount: Math.round(tollCharges * 100) / 100,
+        transaction_date: new Date().toISOString().slice(0, 10),
+        note: `Toll Charges (Trip ${trip.trip_code})`,
+        trip_code: trip.trip_code,
+      });
+      if (insertFastagError) throw new Error(insertFastagError.message);
+    }
   });
 
 export const serverDeleteTrip = createServerFn({ method: "POST" })
