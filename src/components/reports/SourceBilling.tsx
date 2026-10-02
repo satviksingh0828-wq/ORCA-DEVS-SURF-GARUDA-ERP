@@ -7,6 +7,7 @@ import { fetchAll } from "@/lib/fetch-all";
 import { manifestCharges, num, type ContractLite, type EntryLite } from "@/lib/trip-calc";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
+import { ConsignmentDetailsDialog } from "@/components/operations/ConsignmentDetailsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -80,6 +81,23 @@ type BillLine = Consignment & {
   final_freight: number;
   final_loading: number;
 };
+type BillItem = {
+  id: string;
+  bill_id: string;
+  consignment_id: string;
+  consignment_number: string;
+  consignment_date: string | null;
+  from_pin_code: string;
+  to_pin_code: string;
+  calculated_freight: number | string;
+  freight_deduction: number | string;
+  additional_freight: number | string;
+  final_freight: number | string;
+  calculated_loading: number | string;
+  loading_deduction: number | string;
+  additional_loading: number | string;
+  final_loading: number | string;
+};
 
 const money = (value: number | string | null | undefined) =>
   `₹${num(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -121,6 +139,9 @@ export function SourceBilling() {
   const [search, setSearch] = useState("");
   const [showDeleted, setShowDeleted] = useState(false);
   const [viewing, setViewing] = useState<Bill | null>(null);
+  const [viewItems, setViewItems] = useState<BillItem[]>([]);
+  const [viewItemsLoading, setViewItemsLoading] = useState(false);
+  const [consignmentViewing, setConsignmentViewing] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [candidates, setCandidates] = useState<BillLine[]>([]);
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
@@ -135,6 +156,35 @@ export function SourceBilling() {
     to: monthEnd(),
   });
   const [generating, setGenerating] = useState(false);
+
+  async function loadBillItems(billId: string) {
+    setViewItemsLoading(true);
+    try {
+      const rows = await fetchAll<BillItem>(() =>
+        (supabase as any)
+          .from("ltms_source_bill_items")
+          .select(
+            "id,bill_id,consignment_id,consignment_number,consignment_date,from_pin_code,to_pin_code,calculated_freight,freight_deduction,additional_freight,final_freight,calculated_loading,loading_deduction,additional_loading,final_loading",
+          )
+          .eq("bill_id", billId)
+          .order("consignment_date", { ascending: false }),
+      );
+      setViewItems(rows);
+    } catch (error) {
+      setViewItems([]);
+      toast.error(error instanceof Error ? error.message : "Could not load billed consignments");
+    } finally {
+      setViewItemsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!viewing) {
+      setViewItems([]);
+      return;
+    }
+    void loadBillItems(viewing.id);
+  }, [viewing]);
 
   async function loadSources() {
     const { data, error } = await (supabase as any)
@@ -845,41 +895,115 @@ export function SourceBilling() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
-        <DialogContent>
+      <Dialog
+        open={viewing !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setViewing(null);
+            setConsignmentViewing(null);
+          }
+        }}
+      >
+        <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Source Bill {viewing?.bill_number}</DialogTitle>
           </DialogHeader>
           {viewing && (
-            <div className="grid grid-cols-2 gap-3 text-sm">
-              <div>
-                <span className="text-muted-foreground">Branch</span>
-                <p className="font-medium">{viewing.branch?.branch_name}</p>
+            <div className="space-y-5">
+              <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+                <div>
+                  <span className="text-muted-foreground">Branch</span>
+                  <p className="font-medium">{viewing.branch?.branch_name ?? "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Source</span>
+                  <p className="font-medium">{viewing.source?.contract_name ?? "—"}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Bill date / Due date</span>
+                  <p>
+                    {viewing.bill_date} / {viewing.due_date}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Billing period</span>
+                  <p>
+                    {viewing.period_from} → {viewing.period_to}
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Consignments</span>
+                  <p className="font-medium">{viewItems.length}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Bill totals</span>
+                  <p className="font-semibold">
+                    {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading
+                  </p>
+                </div>
               </div>
-              <div>
-                <span className="text-muted-foreground">Source</span>
-                <p className="font-medium">{viewing.source?.contract_name}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Bill date</span>
-                <p>{viewing.bill_date}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Due date</span>
-                <p>{viewing.due_date}</p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Period</span>
-                <p>
-                  {viewing.period_from} → {viewing.period_to}
-                </p>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Totals</span>
-                <p className="font-semibold">
-                  {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading
-                </p>
-              </div>
+              <section>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold">Billed consignments</h3>
+                  <span className="text-xs text-muted-foreground">
+                    Open any row to view complete consignment details
+                  </span>
+                </div>
+                <div className="overflow-x-auto rounded-xl border border-border">
+                  <table className="w-full min-w-[1050px] text-sm">
+                    <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                      <tr>
+                        <th className="px-3 py-2">Consignment</th>
+                        <th className="px-3 py-2">Date</th>
+                        <th className="px-3 py-2">Route</th>
+                        <th className="px-3 py-2 text-right">Freight</th>
+                        <th className="px-3 py-2 text-right">Loading</th>
+                        <th className="px-3 py-2 text-right">Total</th>
+                        <th className="px-3 py-2 text-center">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {viewItemsLoading ? (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                            Loading billed consignments…
+                          </td>
+                        </tr>
+                      ) : viewItems.length ? (
+                        viewItems.map((item) => (
+                          <tr key={item.id} className="hover:bg-muted/20">
+                            <td className="px-3 py-2 font-medium">{item.consignment_number}</td>
+                            <td className="px-3 py-2">{item.consignment_date ?? "—"}</td>
+                            <td className="px-3 py-2">
+                              {item.from_pin_code || "—"} → {item.to_pin_code || "—"}
+                            </td>
+                            <td className="px-3 py-2 text-right">{money(item.final_freight)}</td>
+                            <td className="px-3 py-2 text-right">{money(item.final_loading)}</td>
+                            <td className="px-3 py-2 text-right font-medium">
+                              {money(num(item.final_freight) + num(item.final_loading))}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => setConsignmentViewing(item.consignment_id)}
+                              >
+                                <Eye className="size-3.5" /> View details
+                              </Button>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                            No consignments found for this bill.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
             </div>
           )}
           <DialogFooter>
@@ -889,6 +1013,11 @@ export function SourceBilling() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ConsignmentDetailsDialog
+        consignmentId={consignmentViewing}
+        open={consignmentViewing !== null}
+        onOpenChange={(open) => !open && setConsignmentViewing(null)}
+      />
     </div>
   );
 }
