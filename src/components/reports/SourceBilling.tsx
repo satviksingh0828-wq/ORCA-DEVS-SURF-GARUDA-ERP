@@ -107,6 +107,7 @@ function routeEntry(entries: Entry[], row: Consignment, fromPin: string, toPin: 
 export function SourceBilling() {
   const branches = useBranches();
   const { user } = useSession();
+  const [screen, setScreen] = useState<"list" | "create">("list");
   const [bills, setBills] = useState<Bill[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [branchSources, setBranchSources] = useState<Source[]>([]);
@@ -351,6 +352,7 @@ export function SourceBilling() {
     if (error) return toast.error(`Could not generate source bill: ${error.message}`);
     toast.success("Source bill generated. Selected consignments are now locked.");
     setLines([]);
+    setScreen("list");
     await loadBills();
   }
   async function deleteBill(bill: Bill) {
@@ -394,161 +396,55 @@ export function SourceBilling() {
   const sourceList = listFilters.branch === "all" ? sources : sources;
   return (
     <div className="space-y-6">
-      <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold">Source Billing History</h2>
-            <p className="text-xs text-muted-foreground">
-              Generated bills are immutable; delete moves them to history only.
-            </p>
+      {screen === "list" && (
+        <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">Source Billing History</h2>
+              <p className="text-xs text-muted-foreground">
+                Generated bills are immutable; delete moves them to history only.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button size="sm" onClick={() => setScreen("create")}>
+                <FilePlus2 className="size-4" /> Create Source Bill
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => void loadBills()}
+                disabled={loading}
+              >
+                <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+              </Button>
+              <Button
+                variant={showDeleted ? "secondary" : "outline"}
+                size="sm"
+                onClick={() => setShowDeleted((value) => !value)}
+              >
+                {showDeleted ? "Deleted bills" : "Active bills"}
+              </Button>
+            </div>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => void loadBills()} disabled={loading}>
-              <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} /> Refresh
-            </Button>
-            <Button
-              variant={showDeleted ? "secondary" : "outline"}
-              size="sm"
-              onClick={() => setShowDeleted((value) => !value)}
+          <div className="flex flex-wrap items-end gap-2 rounded-lg bg-muted/30 p-3">
+            <div className="relative w-full sm:w-56">
+              <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+              <Input
+                className="h-9 pl-9"
+                placeholder="Search bill, source or branch"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </div>
+            <Select
+              value={listFilters.branch}
+              onValueChange={(value) => setListFilters((f) => ({ ...f, branch: value }))}
             >
-              {showDeleted ? "Deleted bills" : "Active bills"}
-            </Button>
-          </div>
-        </div>
-        <div className="flex flex-wrap items-end gap-2 rounded-lg bg-muted/30 p-3">
-          <div className="relative w-full sm:w-56">
-            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-            <Input
-              className="h-9 pl-9"
-              placeholder="Search bill, source or branch"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-            />
-          </div>
-          <Select
-            value={listFilters.branch}
-            onValueChange={(value) => setListFilters((f) => ({ ...f, branch: value }))}
-          >
-            <SelectTrigger className="h-9 w-48">
-              <SelectValue placeholder="All branches" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All branches</SelectItem>
-              {branches.map((branch) => (
-                <SelectItem key={branch.id} value={branch.id}>
-                  {branch.branch_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={listFilters.source}
-            onValueChange={(value) => setListFilters((f) => ({ ...f, source: value }))}
-          >
-            <SelectTrigger className="h-9 w-52">
-              <SelectValue placeholder="All sources" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All sources</SelectItem>
-              {sourceList.map((source) => (
-                <SelectItem key={source.id} value={source.id}>
-                  {source.contract_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            className="h-9 w-40"
-            type="date"
-            value={listFilters.from}
-            onChange={(event) => setListFilters((f) => ({ ...f, from: event.target.value }))}
-          />
-          <Input
-            className="h-9 w-40"
-            type="date"
-            value={listFilters.to}
-            onChange={(event) => setListFilters((f) => ({ ...f, to: event.target.value }))}
-          />
-        </div>
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[900px] text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                <th className="px-3 py-3">Bill No.</th>
-                <th className="px-3 py-3">Bill Date</th>
-                <th className="px-3 py-3">Branch</th>
-                <th className="px-3 py-3">Source</th>
-                <th className="px-3 py-3">Period</th>
-                <th className="px-3 py-3 text-right">Freight</th>
-                <th className="px-3 py-3 text-right">Loading</th>
-                <th className="px-3 py-3 text-center">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {visibleBills.length ? (
-                visibleBills.map((bill) => (
-                  <tr key={bill.id} className="hover:bg-muted/20">
-                    <td className="px-3 py-3 font-medium">
-                      {bill.bill_number}
-                      {bill.deleted_at && (
-                        <span className="ml-2 text-xs text-destructive">Deleted</span>
-                      )}
-                    </td>
-                    <td className="px-3 py-3">{bill.bill_date}</td>
-                    <td className="px-3 py-3">{bill.branch?.branch_name ?? "—"}</td>
-                    <td className="px-3 py-3">{bill.source?.contract_name ?? "—"}</td>
-                    <td className="px-3 py-3">
-                      {bill.period_from} → {bill.period_to}
-                    </td>
-                    <td className="px-3 py-3 text-right">{money(bill.total_freight)}</td>
-                    <td className="px-3 py-3 text-right">{money(bill.total_loading)}</td>
-                    <td className="px-3 py-3">
-                      <div className="flex justify-center gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setViewing(bill)}>
-                          <Eye className="size-3.5" /> View
-                        </Button>
-                        {!bill.deleted_at && (
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            onClick={() => void deleteBill(bill)}
-                          >
-                            <Trash2 className="size-3.5" /> Delete
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={8} className="py-10 text-center text-muted-foreground">
-                    {loading ? "Loading bills…" : "No source bills found."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-      <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
-        <div>
-          <h2 className="flex items-center gap-2 text-base font-semibold">
-            <FilePlus2 className="size-4 text-primary" /> Create Source Bill
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Only consignments marked To be billed can be selected. Source, branch and billing dates
-            are stored on the bill.
-          </p>
-        </div>
-        <div className="grid gap-3 md:grid-cols-3">
-          <label className="space-y-1 text-xs font-medium text-muted-foreground">
-            Branch
-            <Select value={form.branch} onValueChange={(value) => updateForm("branch", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select branch" />
+              <SelectTrigger className="h-9 w-48">
+                <SelectValue placeholder="All branches" />
               </SelectTrigger>
               <SelectContent>
+                <SelectItem value="all">All branches</SelectItem>
                 {branches.map((branch) => (
                   <SelectItem key={branch.id} value={branch.id}>
                     {branch.branch_name}
@@ -556,187 +452,314 @@ export function SourceBilling() {
                 ))}
               </SelectContent>
             </Select>
-          </label>
-          <label className="space-y-1 text-xs font-medium text-muted-foreground">
-            Source
-            <Select value={form.source} onValueChange={(value) => updateForm("source", value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select source" />
+            <Select
+              value={listFilters.source}
+              onValueChange={(value) => setListFilters((f) => ({ ...f, source: value }))}
+            >
+              <SelectTrigger className="h-9 w-52">
+                <SelectValue placeholder="All sources" />
               </SelectTrigger>
               <SelectContent>
-                {(form.branch ? branchSources : []).map((source) => (
+                <SelectItem value="all">All sources</SelectItem>
+                {sourceList.map((source) => (
                   <SelectItem key={source.id} value={source.id}>
                     {source.contract_name}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
-          </label>
-          <label className="space-y-1 text-xs font-medium text-muted-foreground">
-            Bill Date
             <Input
+              className="h-9 w-40"
               type="date"
-              value={form.billDate}
-              onChange={(event) => updateForm("billDate", event.target.value)}
+              value={listFilters.from}
+              onChange={(event) => setListFilters((f) => ({ ...f, from: event.target.value }))}
             />
-          </label>
-          <label className="space-y-1 text-xs font-medium text-muted-foreground">
-            Bill Due Date
             <Input
+              className="h-9 w-40"
               type="date"
-              value={form.dueDate}
-              onChange={(event) => updateForm("dueDate", event.target.value)}
+              value={listFilters.to}
+              onChange={(event) => setListFilters((f) => ({ ...f, to: event.target.value }))}
             />
-          </label>
-          <label className="space-y-1 text-xs font-medium text-muted-foreground">
-            Billing From
-            <Input
-              type="date"
-              value={form.from}
-              onChange={(event) => updateForm("from", event.target.value)}
-            />
-          </label>
-          <label className="space-y-1 text-xs font-medium text-muted-foreground">
-            Billing To
-            <Input
-              type="date"
-              value={form.to}
-              onChange={(event) => updateForm("to", event.target.value)}
-            />
-          </label>
-        </div>
-        <div className="flex justify-end">
-          <Button variant="outline" onClick={() => void loadCandidates()} disabled={pickerLoading}>
-            {pickerLoading ? <RefreshCw className="animate-spin" /> : <PackageSearch />} Load
-            consignments
-          </Button>
-        </div>
-        <div className="overflow-x-auto rounded-lg border border-border">
-          <table className="w-full min-w-[1200px] text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                <th className="px-3 py-3">Consignment</th>
-                <th className="px-3 py-3">Date</th>
-                <th className="px-3 py-3">From → To</th>
-                <th className="px-3 py-3 text-right">Freight</th>
-                <th className="px-3 py-3 text-right">Loading</th>
-                <th className="px-3 py-3 text-right">Adjustments</th>
-                <th className="px-3 py-3 text-center">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {lines.length ? (
-                lines.map((line) => (
-                  <tr key={line.id}>
-                    <td className="px-3 py-3 font-medium">{line.consignment_number}</td>
-                    <td className="px-3 py-3">{line.consignment_date ?? "—"}</td>
-                    <td className="px-3 py-3">
-                      {line.from_pin_code || "—"} → {line.to_pin_code || "—"}
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <div>{money(line.final_freight)}</div>
-                      <div className="mt-1 flex justify-end gap-1">
-                        <Input
-                          className="h-7 w-24"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          aria-label="Additional freight"
-                          placeholder="+ freight"
-                          value={line.additional_freight || ""}
-                          onChange={(event) =>
-                            updateLine(line.id, "additional_freight", event.target.value)
-                          }
-                        />
-                        <Input
-                          className="h-7 w-24"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          aria-label="Freight deduction"
-                          placeholder="- freight"
-                          value={line.freight_deduction || ""}
-                          onChange={(event) =>
-                            updateLine(line.id, "freight_deduction", event.target.value)
-                          }
-                        />
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-right">
-                      <div>{money(line.final_loading)}</div>
-                      <div className="mt-1 flex justify-end gap-1">
-                        <Input
-                          className="h-7 w-24"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          aria-label="Additional loading"
-                          placeholder="+ loading"
-                          value={line.additional_loading || ""}
-                          onChange={(event) =>
-                            updateLine(line.id, "additional_loading", event.target.value)
-                          }
-                        />
-                        <Input
-                          className="h-7 w-24"
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          aria-label="Loading deduction"
-                          placeholder="- loading"
-                          value={line.loading_deduction || ""}
-                          onChange={(event) =>
-                            updateLine(line.id, "loading_deduction", event.target.value)
-                          }
-                        />
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-right text-xs text-muted-foreground">
-                      Freight: {money(line.freight_deduction)} / {money(line.additional_freight)}
-                      <br />
-                      Loading: {money(line.loading_deduction)} / {money(line.additional_loading)}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() =>
-                          setLines((current) => current.filter((item) => item.id !== line.id))
-                        }
-                      >
-                        Remove
-                      </Button>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[900px] text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-3 py-3">Bill No.</th>
+                  <th className="px-3 py-3">Bill Date</th>
+                  <th className="px-3 py-3">Branch</th>
+                  <th className="px-3 py-3">Source</th>
+                  <th className="px-3 py-3">Period</th>
+                  <th className="px-3 py-3 text-right">Freight</th>
+                  <th className="px-3 py-3 text-right">Loading</th>
+                  <th className="px-3 py-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {visibleBills.length ? (
+                  visibleBills.map((bill) => (
+                    <tr key={bill.id} className="hover:bg-muted/20">
+                      <td className="px-3 py-3 font-medium">
+                        {bill.bill_number}
+                        {bill.deleted_at && (
+                          <span className="ml-2 text-xs text-destructive">Deleted</span>
+                        )}
+                      </td>
+                      <td className="px-3 py-3">{bill.bill_date}</td>
+                      <td className="px-3 py-3">{bill.branch?.branch_name ?? "—"}</td>
+                      <td className="px-3 py-3">{bill.source?.contract_name ?? "—"}</td>
+                      <td className="px-3 py-3">
+                        {bill.period_from} → {bill.period_to}
+                      </td>
+                      <td className="px-3 py-3 text-right">{money(bill.total_freight)}</td>
+                      <td className="px-3 py-3 text-right">{money(bill.total_loading)}</td>
+                      <td className="px-3 py-3">
+                        <div className="flex justify-center gap-2">
+                          <Button size="sm" variant="outline" onClick={() => setViewing(bill)}>
+                            <Eye className="size-3.5" /> View
+                          </Button>
+                          {!bill.deleted_at && (
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              onClick={() => void deleteBill(bill)}
+                            >
+                              <Trash2 className="size-3.5" /> Delete
+                            </Button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={8} className="py-10 text-center text-muted-foreground">
+                      {loading ? "Loading bills…" : "No source bills found."}
                     </td>
                   </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="py-8 text-center text-muted-foreground">
-                    No consignments selected. Use Load consignments.
-                  </td>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
+      {screen === "create" && (
+        <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="flex items-center gap-2 text-base font-semibold">
+                <FilePlus2 className="size-4 text-primary" /> Create Source Bill
+              </h2>
+              <Button variant="outline" size="sm" onClick={() => setScreen("list")}>
+                Back to bills
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Only consignments marked To be billed can be selected. Source, branch and billing
+              dates are stored on the bill.
+            </p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">
+              Branch
+              <Select value={form.branch} onValueChange={(value) => updateForm("branch", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select branch" />
+                </SelectTrigger>
+                <SelectContent>
+                  {branches.map((branch) => (
+                    <SelectItem key={branch.id} value={branch.id}>
+                      {branch.branch_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">
+              Source
+              <Select value={form.source} onValueChange={(value) => updateForm("source", value)}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select source" />
+                </SelectTrigger>
+                <SelectContent>
+                  {(form.branch ? branchSources : []).map((source) => (
+                    <SelectItem key={source.id} value={source.id}>
+                      {source.contract_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </label>
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">
+              Bill Date
+              <Input
+                type="date"
+                value={form.billDate}
+                onChange={(event) => updateForm("billDate", event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">
+              Bill Due Date
+              <Input
+                type="date"
+                value={form.dueDate}
+                onChange={(event) => updateForm("dueDate", event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">
+              Billing From
+              <Input
+                type="date"
+                value={form.from}
+                onChange={(event) => updateForm("from", event.target.value)}
+              />
+            </label>
+            <label className="space-y-1 text-xs font-medium text-muted-foreground">
+              Billing To
+              <Input
+                type="date"
+                value={form.to}
+                onChange={(event) => updateForm("to", event.target.value)}
+              />
+            </label>
+          </div>
+          <div className="flex justify-end">
+            <Button
+              variant="outline"
+              onClick={() => void loadCandidates()}
+              disabled={pickerLoading}
+            >
+              {pickerLoading ? <RefreshCw className="animate-spin" /> : <PackageSearch />} Load
+              consignments
+            </Button>
+          </div>
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <table className="w-full min-w-[1200px] text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-3 py-3">Consignment</th>
+                  <th className="px-3 py-3">Date</th>
+                  <th className="px-3 py-3">From → To</th>
+                  <th className="px-3 py-3 text-right">Freight</th>
+                  <th className="px-3 py-3 text-right">Loading</th>
+                  <th className="px-3 py-3 text-right">Adjustments</th>
+                  <th className="px-3 py-3 text-center">Action</th>
                 </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {lines.length ? (
+                  lines.map((line) => (
+                    <tr key={line.id}>
+                      <td className="px-3 py-3 font-medium">{line.consignment_number}</td>
+                      <td className="px-3 py-3">{line.consignment_date ?? "—"}</td>
+                      <td className="px-3 py-3">
+                        {line.from_pin_code || "—"} → {line.to_pin_code || "—"}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <div>{money(line.final_freight)}</div>
+                        <div className="mt-1 flex justify-end gap-1">
+                          <Input
+                            className="h-7 w-24"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            aria-label="Additional freight"
+                            placeholder="+ freight"
+                            value={line.additional_freight || ""}
+                            onChange={(event) =>
+                              updateLine(line.id, "additional_freight", event.target.value)
+                            }
+                          />
+                          <Input
+                            className="h-7 w-24"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            aria-label="Freight deduction"
+                            placeholder="- freight"
+                            value={line.freight_deduction || ""}
+                            onChange={(event) =>
+                              updateLine(line.id, "freight_deduction", event.target.value)
+                            }
+                          />
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        <div>{money(line.final_loading)}</div>
+                        <div className="mt-1 flex justify-end gap-1">
+                          <Input
+                            className="h-7 w-24"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            aria-label="Additional loading"
+                            placeholder="+ loading"
+                            value={line.additional_loading || ""}
+                            onChange={(event) =>
+                              updateLine(line.id, "additional_loading", event.target.value)
+                            }
+                          />
+                          <Input
+                            className="h-7 w-24"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            aria-label="Loading deduction"
+                            placeholder="- loading"
+                            value={line.loading_deduction || ""}
+                            onChange={(event) =>
+                              updateLine(line.id, "loading_deduction", event.target.value)
+                            }
+                          />
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-right text-xs text-muted-foreground">
+                        Freight: {money(line.freight_deduction)} / {money(line.additional_freight)}
+                        <br />
+                        Loading: {money(line.loading_deduction)} / {money(line.additional_loading)}
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() =>
+                            setLines((current) => current.filter((item) => item.id !== line.id))
+                          }
+                        >
+                          Remove
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                      No consignments selected. Use Load consignments.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+              {lines.length > 0 && (
+                <tfoot>
+                  <tr className="border-t-2 bg-muted/30 font-semibold">
+                    <td colSpan={3} className="px-3 py-3">
+                      Total ({lines.length} consignments)
+                    </td>
+                    <td className="px-3 py-3 text-right">{money(totals.freight)}</td>
+                    <td className="px-3 py-3 text-right">{money(totals.loading)}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
               )}
-            </tbody>
-            {lines.length > 0 && (
-              <tfoot>
-                <tr className="border-t-2 bg-muted/30 font-semibold">
-                  <td colSpan={3} className="px-3 py-3">
-                    Total ({lines.length} consignments)
-                  </td>
-                  <td className="px-3 py-3 text-right">{money(totals.freight)}</td>
-                  <td className="px-3 py-3 text-right">{money(totals.loading)}</td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            )}
-          </table>
-        </div>
-        <div className="flex justify-end">
-          <Button onClick={() => void generate()} disabled={generating || !lines.length}>
-            {generating ? "Generating…" : "Generate Source Bill"}
-          </Button>
-        </div>
-      </section>
+            </table>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={() => void generate()} disabled={generating || !lines.length}>
+              {generating ? "Generating…" : "Generate Source Bill"}
+            </Button>
+          </div>
+        </section>
+      )}
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
