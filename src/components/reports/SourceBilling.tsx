@@ -24,7 +24,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-type Source = { id: string; contract_name: string };
+type Source = { id: string; contract_name: string; branch_id?: string | null };
 type Bill = {
   id: string;
   bill_number: string;
@@ -123,6 +123,7 @@ export function SourceBilling() {
   const [viewing, setViewing] = useState<Bill | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [candidates, setCandidates] = useState<BillLine[]>([]);
+  const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [lines, setLines] = useState<BillLine[]>([]);
   const [form, setForm] = useState({
@@ -138,7 +139,7 @@ export function SourceBilling() {
   async function loadSources() {
     const { data, error } = await (supabase as any)
       .from("contracts")
-      .select("id,contract_name")
+      .select("id,contract_name,branch_id")
       .order("contract_name");
     if (error) return toast.error(`Could not load sources: ${error.message}`);
     setSources((data ?? []) as Source[]);
@@ -174,17 +175,7 @@ export function SourceBilling() {
       setBranchSources([]);
       return;
     }
-    void (async () => {
-      const { data } = await (supabase as any)
-        .from("consignments")
-        .select("source_id")
-        .eq("branch_id", form.branch)
-        .not("source_id", "is", null);
-      const ids = new Set(
-        (data ?? []).map((row: { source_id: string | null }) => row.source_id).filter(Boolean),
-      );
-      setBranchSources(sources.filter((source) => ids.has(source.id)));
-    })();
+    setBranchSources(sources.filter((source) => source.branch_id === form.branch));
   }, [form.branch, sources]);
   useEffect(() => {
     void loadBills();
@@ -213,6 +204,7 @@ export function SourceBilling() {
       const ids = consignments.map((row) => row.id);
       if (!ids.length) {
         setCandidates([]);
+        setSelectedCandidateIds([]);
         setPickerOpen(true);
         return;
       }
@@ -290,6 +282,7 @@ export function SourceBilling() {
         };
       });
       setCandidates(rows);
+      setSelectedCandidateIds([]);
       setPickerOpen(true);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load consignments");
@@ -297,9 +290,13 @@ export function SourceBilling() {
       setPickerLoading(false);
     }
   }
-  function addLine(row: BillLine) {
-    if (lines.some((item) => item.id === row.id)) return;
-    setLines((current) => [...current, row]);
+  function addSelectedLines() {
+    const selected = candidates.filter(
+      (row) => selectedCandidateIds.includes(row.id) && !lines.some((line) => line.id === row.id),
+    );
+    if (!selected.length) return toast.error("Select at least one consignment");
+    setLines((current) => [...current, ...selected]);
+    setSelectedCandidateIds([]);
     setPickerOpen(false);
   }
   function updateLine(id: string, key: keyof BillLine, value: string) {
@@ -763,12 +760,34 @@ export function SourceBilling() {
       <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
         <DialogContent className="max-w-5xl">
           <DialogHeader>
-            <DialogTitle>Select one unbilled consignment</DialogTitle>
+            <DialogTitle>Select unbilled consignments</DialogTitle>
           </DialogHeader>
           <div className="max-h-[60vh] overflow-auto rounded-lg border border-border">
             <table className="w-full min-w-[850px] text-sm">
               <thead>
                 <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all visible consignments"
+                      checked={
+                        candidates.filter((row) => !lines.some((line) => line.id === row.id))
+                          .length > 0 &&
+                        candidates
+                          .filter((row) => !lines.some((line) => line.id === row.id))
+                          .every((row) => selectedCandidateIds.includes(row.id))
+                      }
+                      onChange={(event) =>
+                        setSelectedCandidateIds(
+                          event.target.checked
+                            ? candidates
+                                .filter((row) => !lines.some((line) => line.id === row.id))
+                                .map((row) => row.id)
+                            : [],
+                        )
+                      }
+                    />
+                  </th>
                   <th className="px-3 py-3">Consignment</th>
                   <th className="px-3 py-3">Date</th>
                   <th className="px-3 py-3">From → To</th>
@@ -782,6 +801,20 @@ export function SourceBilling() {
                   .filter((row) => !lines.some((line) => line.id === row.id))
                   .map((row) => (
                     <tr key={row.id}>
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${row.consignment_number}`}
+                          checked={selectedCandidateIds.includes(row.id)}
+                          onChange={(event) =>
+                            setSelectedCandidateIds((current) =>
+                              event.target.checked
+                                ? [...current, row.id]
+                                : current.filter((id) => id !== row.id),
+                            )
+                          }
+                        />
+                      </td>
                       <td className="px-3 py-3 font-medium">{row.consignment_number}</td>
                       <td className="px-3 py-3">{row.consignment_date ?? "—"}</td>
                       <td className="px-3 py-3">
@@ -789,16 +822,12 @@ export function SourceBilling() {
                       </td>
                       <td className="px-3 py-3 text-right">{money(row.final_freight)}</td>
                       <td className="px-3 py-3 text-right">{money(row.final_loading)}</td>
-                      <td className="px-3 py-3 text-center">
-                        <Button size="sm" onClick={() => addLine(row)}>
-                          <Plus className="size-3.5" /> Add
-                        </Button>
-                      </td>
+                      <td className="px-3 py-3 text-center">Select above</td>
                     </tr>
                   ))}
                 {!candidates.length && (
                   <tr>
-                    <td colSpan={6} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={7} className="py-10 text-center text-muted-foreground">
                       No unbilled consignments found for this branch, source and period.
                     </td>
                   </tr>
@@ -809,6 +838,9 @@ export function SourceBilling() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setPickerOpen(false)}>
               Close
+            </Button>
+            <Button onClick={addSelectedLines} disabled={!selectedCandidateIds.length}>
+              <Plus className="size-3.5" /> Add selected ({selectedCandidateIds.length})
             </Button>
           </DialogFooter>
         </DialogContent>
