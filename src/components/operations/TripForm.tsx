@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -127,6 +127,12 @@ type LineRow = {
   note: string;
   paymentLedgerId?: string;
   advance?: string;
+};
+
+type TripFinanceSnapshot = {
+  incomes: Map<string, string>;
+  expenses: Map<string, string>;
+  approvalAdvance: string;
 };
 
 type PaymentLedger = { id: string; account_name: string; ledger_type: "cash" | "bank" };
@@ -301,6 +307,11 @@ export function TripForm({
   const [incomes, setIncomes] = useState<LineRow[]>(
     defaultIncomeList.map((name) => ({ name, amount: "", note: "", paymentLedgerId: "" })),
   );
+  const financeSnapshotRef = useRef<TripFinanceSnapshot>({
+    incomes: new Map(),
+    expenses: new Map(),
+    approvalAdvance: "",
+  });
   const defaultExpenseList =
     trip.ownership === "third_party" ? THIRD_PARTY_EXPENSES : DEFAULT_EXPENSES;
   const [expenses, setExpenses] = useState<LineRow[]>(
@@ -471,6 +482,19 @@ export function TripForm({
     const filteredExpenses = exp.filter((row) =>
       allowedExpenseNames.has(row.name.trim().toLowerCase()),
     );
+    const incomeAmounts = new Map<string, string>();
+    for (const row of incRows) {
+      if (row.id) incomeAmounts.set(row.id, row.amount);
+    }
+    const expenseAmounts = new Map<string, string>();
+    for (const row of filteredExpenses) {
+      if (row.id) expenseAmounts.set(row.id, row.amount);
+    }
+    financeSnapshotRef.current = {
+      incomes: incomeAmounts,
+      expenses: expenseAmounts,
+      approvalAdvance: savedApprovalAdvance,
+    };
     setExpenses(
       filteredExpenses.length > 0
         ? filteredExpenses
@@ -479,6 +503,131 @@ export function TripForm({
   }
   useEffect(() => {
     if (initial.id) loadChildren(initial.id);
+  }, [initial.id]);
+
+  useEffect(() => {
+    const tripId = initial.id;
+    if (!tripId) return;
+
+    let active = true;
+    let refreshTimeout: number | undefined;
+    const refreshFinanceValues = async () => {
+      try {
+        const [incomeResult, expenseResult, approvalResult] = await Promise.all([
+          supabase.from("trip_other_income").select("id,amount").eq("trip_id", tripId),
+          supabase.from("trip_expenses").select("id,amount").eq("trip_id", tripId),
+          supabase
+            .from("approval_charge_advances" as never)
+            .select("advance")
+            .eq("trip_id", tripId)
+            .maybeSingle(),
+        ]);
+        if (!active || incomeResult.error || expenseResult.error || approvalResult.error) return;
+
+        const latestIncomes = new Map<string, string>(
+          ((incomeResult.data ?? []) as Array<{ id: string; amount: string | null }>).map((row) => [
+            row.id,
+            row.amount ?? "",
+          ]),
+        );
+        const latestExpenses = new Map<string, string>(
+          ((expenseResult.data ?? []) as Array<{ id: string; amount: string | null }>).map(
+            (row) => [row.id, row.amount ?? ""],
+          ),
+        );
+        const latestAdvance = String(
+          ((approvalResult.data as { advance?: string | number } | null)?.advance ?? "") || "",
+        );
+        const previous = financeSnapshotRef.current;
+
+        setIncomes((current) => {
+          let changed = false;
+          const next = current.map((row) => {
+            if (!row.id) return row;
+            const amount = latestIncomes.get(row.id);
+            if (amount === undefined || previous.incomes.get(row.id) === amount) return row;
+            if (row.amount === amount) return row;
+            changed = true;
+            return { ...row, amount };
+          });
+          return changed ? next : current;
+        });
+        setExpenses((current) => {
+          let changed = false;
+          const next = current.map((row) => {
+            if (!row.id) return row;
+            const amount = latestExpenses.get(row.id);
+            if (amount === undefined) return row;
+            const amountChanged = previous.expenses.get(row.id) !== amount;
+            const isHireCharge = row.name.trim().toLowerCase() === "hire charges";
+            const advanceChanged = isHireCharge && previous.approvalAdvance !== latestAdvance;
+            if (!amountChanged && !advanceChanged) return row;
+            if (row.amount === amount && (!advanceChanged || row.advance === latestAdvance))
+              return row;
+            changed = true;
+            return {
+              ...row,
+              ...(amountChanged ? { amount } : {}),
+              ...(advanceChanged ? { advance: latestAdvance } : {}),
+            };
+          });
+          return changed ? next : current;
+        });
+
+        financeSnapshotRef.current = {
+          incomes: latestIncomes,
+          expenses: latestExpenses,
+          approvalAdvance: latestAdvance,
+        };
+      } catch {
+        // The periodic retry below and subsequent Realtime events will try again.
+      }
+    };
+    const scheduleRefresh = () => {
+      if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
+      refreshTimeout = window.setTimeout(() => void refreshFinanceValues(), 150);
+    };
+    const channel = supabase
+      .channel(`trip-finance-updates-${tripId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trip_other_income",
+          filter: `trip_id=eq.${tripId}`,
+        },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trip_expenses",
+          filter: `trip_id=eq.${tripId}`,
+        },
+        scheduleRefresh,
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "approval_charge_advances",
+          filter: `trip_id=eq.${tripId}`,
+        },
+        scheduleRefresh,
+      )
+      .subscribe();
+    const refreshInterval = window.setInterval(() => void refreshFinanceValues(), 12_000);
+
+    return () => {
+      active = false;
+      if (refreshTimeout !== undefined) window.clearTimeout(refreshTimeout);
+      window.clearInterval(refreshInterval);
+      void supabase.removeChannel(channel);
+    };
   }, [initial.id]);
 
   const vehicle = vehicles.find((v) => v.id === trip.vehicle_id);
