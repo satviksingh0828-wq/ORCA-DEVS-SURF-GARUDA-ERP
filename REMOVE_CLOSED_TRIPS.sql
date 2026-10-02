@@ -136,9 +136,8 @@ BEGIN
 END;
 $$;
 
--- Do not drop public.closed_trips yet. Existing Cash Ledger, P&L, receipt,
--- and system-report screens still read historical rows from that table.
--- After those report queries are migrated to public.trips, run this separately:
--- DROP TABLE IF EXISTS public.closed_trips CASCADE;
+-- Final removal requested by the application owner. CASCADE also removes
+-- dependent policies, indexes, views, and foreign-key dependencies.
+DROP TABLE IF EXISTS public.closed_trips CASCADE;
 
 COMMIT;
