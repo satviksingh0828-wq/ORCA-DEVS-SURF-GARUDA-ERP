@@ -11,6 +11,19 @@ type TripQrManifestInput = {
   rentalName?: string | null;
   contractName?: string | null;
   manifests: Row[];
+  incomes?: Row[];
+  expenses?: Row[];
+  allowFinanceEdit?: boolean;
+  updateUrl?: string;
+};
+
+type MetadataField = {
+  id: string;
+  label: string;
+  type: "text" | "date" | "number";
+  value: string;
+  required: false;
+  editable: boolean;
 };
 
 function displayValue(value: unknown): string {
@@ -22,24 +35,22 @@ function displayValue(value: unknown): string {
 
 export function buildTripQrManifest(input: TripQrManifestInput) {
   const { trip } = input;
-  const fields: Array<{
-    id: string;
-    label: string;
-    type: "text" | "date" | "number";
-    value: string;
-    required: false;
-    editable: false;
-  }> = [];
+  const fields: MetadataField[] = [];
   const addField = (
     id: string,
     label: string,
     value: unknown,
-    type: "text" | "date" | "number" = "text",
+    type: MetadataField["type"] = "text",
   ) => {
     const text = displayValue(value);
     if (!text) return;
     fields.push({ id, label, type, value: text, required: false, editable: false });
   };
+  const canEditFinance =
+    input.allowFinanceEdit === true &&
+    Boolean(input.updateUrl) &&
+    trip.closed !== true &&
+    !trip.posted_journal_entry_id;
 
   const tripCode = displayValue(trip.trip_code) || displayValue(trip.id) || "Trip";
   addField("tripStatus", "Trip status", trip.closed === true ? "Closed" : "Open");
@@ -77,12 +88,47 @@ export function buildTripQrManifest(input: TripQrManifestInput) {
     addField(`${prefix}Quantity`, `${title} quantity`, manifest.quantity, "number");
   });
 
+  const addFinanceRows = (rows: Row[] | undefined, kind: "income" | "expense") => {
+    (rows ?? []).forEach((row) => {
+      const id = displayValue(row.id);
+      if (!id) return;
+      const isIncome = kind === "income";
+      const name =
+        displayValue(isIncome ? row.income_name : row.expense_name) ||
+        (isIncome ? "Other income" : "Expense");
+      const label = isIncome ? `Other Income — ${name}` : `Expenditure — ${name}`;
+      fields.push({
+        id: `${kind}Name_${id}`,
+        label: `${isIncome ? "Other Income" : "Expenditure"} name`,
+        type: "text",
+        value: name,
+        required: false,
+        editable: false,
+      });
+      fields.push({
+        id: `${kind}Amount_${id}`,
+        label: `${label} amount (₹)`,
+        type: "number",
+        value: displayValue(row.amount),
+        required: false,
+        editable: canEditFinance,
+      });
+    });
+  };
+  addFinanceRows(input.incomes, "income");
+  addFinanceRows(input.expenses, "expense");
+
+  const hasEditableFinance = fields.some((field) => field.editable);
   return {
     schema: "orca.document.v1",
     recordId: displayValue(trip.id) || tripCode,
     title: `Trip · ${tripCode}`,
-    readOnly: true,
+    readOnly: !hasEditableFinance,
     uploads: [],
-    metadata: { mode: "update" as const, fields },
+    metadata: {
+      mode: "update" as const,
+      fields,
+      ...(hasEditableFinance && input.updateUrl ? { updateUrl: input.updateUrl } : {}),
+    },
   };
 }

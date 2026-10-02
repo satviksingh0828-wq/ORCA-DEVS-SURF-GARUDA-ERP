@@ -1124,7 +1124,12 @@ function relationLabel(row: Record<string, unknown> | null | undefined, keys: st
     .join(", ");
 }
 
-async function tripQrManifestRequest(admin: AdminClient, actor: Actor, tripId: string) {
+async function tripQrManifestRequest(
+  request: Request,
+  admin: AdminClient,
+  actor: Actor,
+  tripId: string,
+) {
   if (!canManageOutwardPODDocument(actor.role, "view")) {
     throw new ApiError(403, "This account type is not permitted to view Trip details.");
   }
@@ -1150,6 +1155,8 @@ async function tripQrManifestRequest(admin: AdminClient, actor: Actor, tripId: s
   };
   const [
     manifestsResult,
+    incomesResult,
+    expensesResult,
     branchResult,
     vehicleResult,
     driverResult,
@@ -1162,6 +1169,12 @@ async function tripQrManifestRequest(admin: AdminClient, actor: Actor, tripId: s
       .select("*")
       .eq("trip_id", tripId)
       .order("created_at", { ascending: true }),
+    admin.from("trip_other_income").select("id,income_name,amount").eq("trip_id", tripId),
+    admin
+      .from("trip_expenses")
+      .select("id,expense_name,amount,sort_order")
+      .eq("trip_id", tripId)
+      .order("sort_order", { ascending: true }),
     related("branches", tripRow.branch_id),
     related("vehicles", tripRow.vehicle_id),
     related("drivers", tripRow.driver_id),
@@ -1171,6 +1184,8 @@ async function tripQrManifestRequest(admin: AdminClient, actor: Actor, tripId: s
   ]);
   if (
     manifestsResult.error ||
+    incomesResult.error ||
+    expensesResult.error ||
     branchResult.error ||
     vehicleResult.error ||
     driverResult.error ||
@@ -1182,6 +1197,8 @@ async function tripQrManifestRequest(admin: AdminClient, actor: Actor, tripId: s
   }
 
   const manifests = (manifestsResult.data ?? []) as Array<Record<string, unknown>>;
+  const incomes = (incomesResult.data ?? []) as Array<Record<string, unknown>>;
+  const expenses = (expensesResult.data ?? []) as Array<Record<string, unknown>>;
   const locationIds = Array.from(
     new Set(
       [
@@ -1217,6 +1234,20 @@ async function tripQrManifestRequest(admin: AdminClient, actor: Actor, tripId: s
     (typeof tripRow.third_party_vehicle_number === "string"
       ? tripRow.third_party_vehicle_number
       : "");
+  const allowFinanceEdit =
+    actor.role !== "viewer" &&
+    canManageOutwardPODDocument(actor.role, "replace") &&
+    tripRow.closed !== true &&
+    !tripRow.posted_journal_entry_id &&
+    incomes.length + expenses.length > 0;
+  const updateUrl = allowFinanceEdit
+    ? (() => {
+        const url = new URL("/api/mobile/outward-pod", request.url);
+        url.searchParams.set("operation", "trip-finance");
+        url.searchParams.set("tripId", tripId);
+        return url.toString();
+      })()
+    : undefined;
 
   return json(
     buildTripQrManifest({
@@ -1230,8 +1261,246 @@ async function tripQrManifestRequest(admin: AdminClient, actor: Actor, tripId: s
       rentalName: relationLabel(rentalResult.data, ["rental_name"]),
       contractName: relationLabel(contractResult.data, ["contract_name"]),
       manifests: manifestsWithLocations,
+      incomes,
+      expenses,
+      allowFinanceEdit,
+      updateUrl,
     }),
   );
+}
+
+const TRIP_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const TRIP_AMOUNT_FIELD_PATTERN =
+  /^(income|expense)Amount_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+function tripAmountNumber(value: unknown): number {
+  const number = Number(String(value ?? "").replace(/[^0-9.-]/g, ""));
+  return Number.isFinite(number) ? number : 0;
+}
+
+function parseTripAmount(value: unknown, label: string): string {
+  if (typeof value !== "string") throw new ApiError(400, `${label} must be sent as text.`);
+  const amount = value.trim();
+  if (amount.length > 32) throw new ApiError(400, `${label} is too long.`);
+  if (amount && (!/^-?(?:\d+(?:\.\d*)?|\.\d+)$/.test(amount) || !Number.isFinite(Number(amount)))) {
+    throw new ApiError(400, `Enter a valid amount for ${label}.`);
+  }
+  return amount;
+}
+
+async function updateTripFinanceRequest(
+  request: Request,
+  admin: AdminClient,
+  actor: Actor,
+  tripId: string,
+) {
+  if (!TRIP_UUID_PATTERN.test(tripId)) throw new ApiError(400, "Trip ID is invalid.");
+  if (actor.role === "viewer" || !canManageOutwardPODDocument(actor.role, "replace")) {
+    throw new ApiError(403, "This account type is not permitted to edit Trip amounts.");
+  }
+  if (Number(request.headers.get("content-length") ?? 0) > 32_768) {
+    throw new ApiError(413, "Trip amount update is too large.");
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    throw new ApiError(400, "Send Trip amount changes as JSON.");
+  }
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new ApiError(400, "Invalid Trip amount update.");
+  }
+  const payload = body as Record<string, unknown>;
+  if (String(payload.recordId ?? "") !== tripId) {
+    throw new ApiError(400, "Trip record does not match the amount update URL.");
+  }
+  const submittedFields = payload.fields;
+  if (!submittedFields || typeof submittedFields !== "object" || Array.isArray(submittedFields)) {
+    throw new ApiError(400, "Trip details must be an object of field values.");
+  }
+
+  const submittedAmounts: Array<{ kind: "income" | "expense"; id: string; amount: string }> = [];
+  for (const [fieldId, rawValue] of Object.entries(submittedFields as Record<string, unknown>)) {
+    if (!fieldId.startsWith("incomeAmount_") && !fieldId.startsWith("expenseAmount_")) continue;
+    const match = TRIP_AMOUNT_FIELD_PATTERN.exec(fieldId);
+    if (!match) throw new ApiError(400, "A Trip amount field identifier is invalid.");
+    const kind = match[1].toLowerCase() as "income" | "expense";
+    const label = kind === "income" ? "Other Income amount" : "Expenditure amount";
+    submittedAmounts.push({ kind, id: match[2], amount: parseTripAmount(rawValue, label) });
+  }
+  if (!submittedAmounts.length) {
+    throw new ApiError(400, "No Other Income or Expenditure amount fields were supplied.");
+  }
+
+  const { data: trip, error: tripError } = await admin
+    .from("trips")
+    .select("id,branch_id,closed,posted_journal_entry_id,trip_code,rental_id")
+    .eq("id", tripId)
+    .maybeSingle();
+  if (tripError) throw new ApiError(503, "The Trip service is temporarily unavailable.");
+  if (!trip) throw new ApiError(404, "Trip not found.");
+  if (trip.closed === true || trip.posted_journal_entry_id) {
+    throw new ApiError(409, "Closed or posted Trips cannot be edited. Reopen the Trip first.");
+  }
+  const branchId = typeof trip.branch_id === "string" ? trip.branch_id : "";
+  if (actor.role === "basic" && !branchId) {
+    throw new ApiError(403, "This account is not assigned to the Trip branch.");
+  }
+  if (branchId) await ensureBranchAccess(admin, actor, branchId, "Trip");
+
+  const [incomeResult, expenseResult, approvalResult] = await Promise.all([
+    admin.from("trip_other_income").select("id,income_name,amount").eq("trip_id", tripId),
+    admin
+      .from("trip_expenses")
+      .select("id,expense_name,amount,sort_order")
+      .eq("trip_id", tripId)
+      .order("sort_order", { ascending: true }),
+    admin.from("approval_charge_advances").select("advance").eq("trip_id", tripId).maybeSingle(),
+  ]);
+  if (incomeResult.error || expenseResult.error || approvalResult.error) {
+    throw new ApiError(503, "Trip income and expense values are temporarily unavailable.");
+  }
+  const incomes = (incomeResult.data ?? []) as Array<Record<string, unknown>>;
+  const expenses = (expenseResult.data ?? []) as Array<Record<string, unknown>>;
+  const rowsById = {
+    income: new Map(incomes.map((row) => [String(row.id), row])),
+    expense: new Map(expenses.map((row) => [String(row.id), row])),
+  };
+
+  const changes: Array<{
+    kind: "income" | "expense";
+    id: string;
+    current: string | null;
+    amount: string;
+    name: string;
+  }> = [];
+  for (const submitted of submittedAmounts) {
+    const row = rowsById[submitted.kind].get(submitted.id);
+    if (!row) {
+      throw new ApiError(
+        409,
+        "A Trip amount field is out of date. Rescan the Trip QR and try again.",
+      );
+    }
+    const current = row.amount == null ? "" : String(row.amount).trim();
+    if (current === submitted.amount) continue;
+    changes.push({
+      kind: submitted.kind,
+      id: submitted.id,
+      current: row.amount == null ? null : String(row.amount),
+      amount: submitted.amount,
+      name: String(submitted.kind === "income" ? (row.income_name ?? "") : (row.expense_name ?? ""))
+        .trim()
+        .toLowerCase(),
+    });
+  }
+  if (!changes.length) return json({ ok: true, message: "Trip amounts are already up to date." });
+
+  for (const change of changes) {
+    const table = change.kind === "income" ? "trip_other_income" : "trip_expenses";
+    let update = admin
+      .from(table)
+      .update({ amount: change.amount })
+      .eq("id", change.id)
+      .eq("trip_id", tripId);
+    update =
+      change.current === null ? update.is("amount", null) : update.eq("amount", change.current);
+    const { data, error } = await update.select("id").maybeSingle();
+    if (error) throw new ApiError(503, "A Trip amount could not be saved.");
+    if (!data) {
+      throw new ApiError(409, "Trip amounts changed while you were editing. Rescan and try again.");
+    }
+  }
+
+  const updatedIncome = incomes.map((row) => {
+    const change = changes.find((item) => item.kind === "income" && item.id === String(row.id));
+    return change ? { ...row, amount: change.amount } : row;
+  });
+  const updatedExpenses = expenses.map((row) => {
+    const change = changes.find((item) => item.kind === "expense" && item.id === String(row.id));
+    return change ? { ...row, amount: change.amount } : row;
+  });
+
+  const tripPatch: Record<string, number> = {};
+  if (changes.some((change) => change.kind === "income" && change.name === "approval charge")) {
+    const approvalIncome = updatedIncome.find(
+      (row) =>
+        String(row.income_name ?? "")
+          .trim()
+          .toLowerCase() === "approval charge",
+    );
+    tripPatch.income_approval_charge = tripAmountNumber(approvalIncome?.amount);
+  }
+  const expenseColumns: Record<string, string> = {
+    "hire charges": "expense_hire_charges",
+    "toll charges": "expense_toll_charges",
+    "toll cash": "expense_toll_cash",
+    fuel: "expense_fuel",
+    "driver bata": "expense_driver_bata",
+    morning: "expense_morning",
+    night: "expense_night",
+    sunday: "expense_sunday",
+    parking: "expense_parking",
+    dala: "expense_dala",
+    unloading: "expense_unloading",
+  };
+  for (const change of changes.filter((item) => item.kind === "expense")) {
+    const column = expenseColumns[change.name];
+    if (!column) continue;
+    const matchingRows = updatedExpenses.filter(
+      (row) =>
+        String(row.expense_name ?? "")
+          .trim()
+          .toLowerCase() === change.name,
+    );
+    tripPatch[column] = tripAmountNumber(matchingRows.at(-1)?.amount);
+  }
+  if (Object.keys(tripPatch).length) {
+    const { data, error } = await admin
+      .from("trips")
+      .update(tripPatch)
+      .eq("id", tripId)
+      .select("id")
+      .maybeSingle();
+    if (error)
+      throw new ApiError(503, "Trip amounts saved, but the Trip summary could not be updated.");
+    if (!data)
+      throw new ApiError(409, "The Trip changed while you were editing. Rescan and try again.");
+  }
+
+  if (changes.some((change) => change.kind === "expense" && change.name === "hire charges")) {
+    const advance = tripAmountNumber(approvalResult.data?.advance);
+    const hireChargeRows = updatedExpenses.filter(
+      (row) =>
+        String(row.expense_name ?? "")
+          .trim()
+          .toLowerCase() === "hire charges",
+    );
+    const hireCharges = tripAmountNumber(hireChargeRows.at(-1)?.amount);
+    if (trip.rental_id && (hireCharges > 0 || advance > 0)) {
+      const { error } = await admin.from("approval_charge_advances").upsert(
+        {
+          trip_id: tripId,
+          trip_code: String(trip.trip_code ?? ""),
+          rental_id: trip.rental_id,
+          advance,
+          balance: Math.max(hireCharges - advance, 0),
+        },
+        { onConflict: "trip_id" },
+      );
+      if (error) throw new ApiError(503, "The hire-charge balance could not be updated.");
+    } else {
+      const { error } = await admin.from("approval_charge_advances").delete().eq("trip_id", tripId);
+      if (error) throw new ApiError(503, "The hire-charge balance could not be updated.");
+    }
+  }
+
+  return json({
+    ok: true,
+    message: "Other Income and Expenditure amounts synced to the ERP.",
+    updatedCount: changes.length,
+  });
 }
 
 export async function handleOutwardPODGet(request: Request): Promise<Response> {
@@ -1247,7 +1516,7 @@ export async function handleOutwardPODGet(request: Request): Promise<Response> {
     if (operation === "trip-manifest") {
       const tripId = url.searchParams.get("tripId") ?? "";
       if (!tripId) throw new ApiError(400, "Trip ID is required.");
-      return await tripQrManifestRequest(admin, actor, tripId);
+      return await tripQrManifestRequest(request, admin, actor, tripId);
     }
     if (operation === "manifest") {
       if (podId) return await manifestRequest(request, admin, actor, podId);
@@ -1286,6 +1555,11 @@ export async function handleOutwardPODPost(request: Request): Promise<Response> 
       const podId = url.searchParams.get("podId") ?? "";
       if (!podId) throw new ApiError(400, "POD ID is required.");
       return await updatePODMetadataRequest(request, admin, actor, podId);
+    }
+    if (operation === "trip-finance") {
+      const tripId = url.searchParams.get("tripId") ?? "";
+      if (!tripId) throw new ApiError(400, "Trip ID is required.");
+      return await updateTripFinanceRequest(request, admin, actor, tripId);
     }
     if (operation === "create-upload") {
       const consignmentId = url.searchParams.get("consignmentId") ?? "";
