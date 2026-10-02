@@ -1,5 +1,12 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ChevronRight, FileText, ReceiptText, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import {
+  ChevronRight,
+  FileText,
+  ReceiptText,
+  Truck,
+  PanelLeftClose,
+  PanelLeftOpen,
+} from "lucide-react";
 import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -7,6 +14,7 @@ import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { TripBilling } from "@/components/reports/TripBilling";
 import { SourceBilling } from "@/components/reports/SourceBilling";
+import { TransporterBilling } from "@/components/reports/TransporterBilling";
 
 const TABS = [
   {
@@ -20,6 +28,12 @@ const TABS = [
     label: "Source Billing",
     desc: "Bill consignments by source",
     icon: FileText,
+  },
+  {
+    id: "transporter-billing",
+    label: "Transporter Bill",
+    desc: "Bill transporter-source expenditure",
+    icon: Truck,
   },
 ] as const;
 
@@ -121,6 +135,7 @@ function BillingPage() {
           </header>
           {tab === "trip-billing" && <TripBilling />}
           {tab === "source-billing" && <SourceBilling />}
+          {tab === "transporter-billing" && <TransporterBilling />}
         </div>
       </div>
     </AppShell>
