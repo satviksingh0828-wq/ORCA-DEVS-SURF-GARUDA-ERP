@@ -125,13 +125,32 @@ export const serverDeleteTrip = createServerFn({ method: "POST" })
 
     const { data: lockedTrip, error: lockedTripError } = await db
       .from("trips")
-      .select("part_b_locked_at")
+      .select("part_b_locked_at,closed,posted_journal_entry_id")
       .eq("id", data.tripId)
       .maybeSingle();
     if (lockedTripError) throw new Error(lockedTripError.message);
     if (!lockedTrip) throw new Error("Trip not found");
     if (lockedTrip.part_b_locked_at)
       throw new Error("This trip cannot be deleted because Part-B has been updated.");
+    if (lockedTrip.closed === true)
+      throw new Error("Closed trips cannot be deleted. Reopen the trip first.");
+    if (lockedTrip.posted_journal_entry_id) {
+      throw new Error("A posted trip cannot be deleted.");
+    }
+
+    // These tables are intentionally linked by trip_id without ON DELETE
+    // CASCADE. Remove them first so deleting a trip also reverses its live
+    // Toll Charges Fastag deduction and removes stale operational report rows.
+    for (const table of [
+      "fastag_transactions",
+      "vehicle_trip_logs",
+      "driver_expense_logs",
+      "other_expense_logs",
+      "transporter_expense_logs",
+    ]) {
+      const { error } = await db.from(table).delete().eq("trip_id", data.tripId);
+      if (error) throw new Error(`${table} cleanup failed: ${error.message}`);
+    }
     const { error: approvalError } = await db
       .from("approval_charge_advances")
       .delete()

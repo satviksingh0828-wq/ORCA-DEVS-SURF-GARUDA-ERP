@@ -1,4 +1,4 @@
--- Restore archived trips before removing the legacy closed_trips table.
+-- Restore archived trips and repair Fastag data before any legacy-table removal.
 --
 -- This recovers the data captured by the old close-trip workflow into public.trips:
 --   trips, trip_manifests, trip_other_income, trip_expenses,
@@ -115,6 +115,18 @@ BEGIN
 END;
 $$;
 
+-- Remove historical Toll Charges deductions whose trip was deleted before the
+-- new deletion cleanup existed. This makes Fastag balances and reports match
+-- the trips that still exist.
+DELETE FROM public.fastag_transactions AS fastag
+WHERE fastag.transaction_type = 'deduction'
+  AND fastag.trip_id IS NOT NULL
+  AND NOT EXISTS (
+    SELECT 1
+    FROM public.trips
+    WHERE trips.id = fastag.trip_id
+  );
+
 -- Safety check: no archive rows should remain before the legacy table is removed.
 DO $$
 BEGIN
@@ -124,7 +136,9 @@ BEGIN
 END;
 $$;
 
--- The application now keeps closed trips in public.trips with closed = true.
-DROP TABLE IF EXISTS public.closed_trips CASCADE;
+-- Do not drop public.closed_trips yet. Existing Cash Ledger, P&L, receipt,
+-- and system-report screens still read historical rows from that table.
+-- After those report queries are migrated to public.trips, run this separately:
+-- DROP TABLE IF EXISTS public.closed_trips CASCADE;
 
 COMMIT;
