@@ -138,8 +138,3 @@ export function manifestCharges(
     matched: details.matched,
   };
 }
-
-export function newTripCode(prefix?: string | null): string {
-  const p = (prefix ?? "").trim().toUpperCase() || "TR";
-  return `${p}${new Date().getFullYear()}000001`;
-}

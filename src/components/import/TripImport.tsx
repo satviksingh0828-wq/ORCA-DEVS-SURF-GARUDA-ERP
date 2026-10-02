@@ -19,18 +19,18 @@ import { isAdminLike } from "@/lib/roles";
 import { isDriverActive } from "@/lib/drivers";
 import { readCsvFile, downloadCsv, toCsv } from "@/lib/csv";
 import { ensureLocationsForPins } from "@/lib/ensure-location";
-import { newTripCode } from "@/lib/trip-calc";
 import { normalizeImportedDate } from "@/lib/date-input";
 import { Button } from "@/components/ui/button";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type MasterMaps = {
-  branches: Map<string, string>;    // lower(branch_name) → id
-  vehicles: Map<string, string>;    // lower(registration_number) → id
-  drivers:  Map<string, string>;    // lower(full_name) → id
-  transporters: Map<string, string>;// lower(transporter_name) → id
-  sources: Map<string, string>;     // lower(contract_name) → id
+  branches: Map<string, string>; // lower(branch_name) → id
+  branchPrefixes: Map<string, string>; // lower(branch_name) → trip series prefix
+  vehicles: Map<string, string>; // lower(registration_number) → id
+  drivers: Map<string, string>; // lower(full_name) → id
+  transporters: Map<string, string>; // lower(transporter_name) → id
+  sources: Map<string, string>; // lower(contract_name) → id
   locationsByPin: Map<string, string>; // pin_code → id
 };
 
@@ -74,12 +74,13 @@ function normalizeDate(raw: string | undefined): string {
   return normalizeImportedDate(raw);
 }
 
-function validate(
+async function validate(
   rows: Record<string, string>[],
   maps: MasterMaps,
-): ValidatedTrip[] {
+): Promise<ValidatedTrip[]> {
   const seen = new Set<string>();
-  return rows.map((raw, i) => {
+  const validated: ValidatedTrip[] = [];
+  for (const [i, raw] of rows.entries()) {
     const errors: string[] = [];
 
     const ownership = norm(raw.ownership) === "rented" ? "rented" : "own";
@@ -123,11 +124,39 @@ function validate(
     if (!startDate) errors.push("start_date required (YYYY-MM-DD or DD/MM/YYYY)");
     else if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) errors.push("start_date must be YYYY-MM-DD or DD/MM/YYYY");
 
-    const tripCode = raw.trip_code?.trim() || newTripCode();
+    let tripCode = raw.trip_code?.trim() ?? "";
+    if (!tripCode && errors.length === 0) {
+      const prefix =
+        maps.branchPrefixes
+          .get(norm(raw.branch_name ?? ""))
+          ?.trim()
+          .toUpperCase() ?? "";
+      if (!branchId) {
+        errors.push("Branch is required to assign a Trip number");
+      } else if (!/^[A-Z0-9]{1,10}$/.test(prefix)) {
+        errors.push("A valid Trip Series Prefix is required to assign a Trip number");
+      } else {
+        const { data: generatedCode, error: numberError } = await supabase.rpc(
+          "next_branch_series_number" as never,
+          {
+            p_branch_id: branchId,
+            p_document_type: "trip",
+            p_prefix: prefix,
+            p_series_year: Number(startDate.slice(0, 4)) || new Date().getFullYear(),
+          } as never,
+        );
+        if (numberError || !generatedCode) {
+          errors.push(numberError?.message ?? "Could not generate Trip number");
+        } else {
+          tripCode = String(generatedCode);
+        }
+      }
+    }
+    if (!tripCode) tripCode = `PENDING-ROW-${i + 2}`;
     if (seen.has(tripCode)) errors.push(`Duplicate trip_code "${tripCode}" in file`);
     seen.add(tripCode);
 
-    return {
+    validated.push({
       rowNum: i + 2, // +2 because row 1 is header
       raw,
       trip_code: tripCode,
@@ -145,8 +174,9 @@ function validate(
       third_party_vehicle_number: raw.third_party_vehicle_number?.trim() ?? "",
       errors,
       ok: errors.length === 0,
-    };
-  });
+    });
+  }
+  return validated;
 }
 
 // ── File upload card ───────────────────────────────────────────────────────
@@ -244,7 +274,7 @@ function ReadMe() {
             </thead>
             <tbody className="text-muted-foreground">
               {[
-                ["trip_code",                  "No",  "Leave blank to auto-generate (e.g. TR-1234567890)"],
+                ["trip_code",                  "No",  "Leave blank to assign the next branch number during validation"],
                 ["ownership",                  "Yes", "'own' for your vehicle, 'rented' for hired transport"],
                 ["branch_name",                "Yes", "Must exactly match a branch name in Settings"],
                 ["start_pin_code",           "No",  "6-digit PIN code; importer finds or creates the Starting Location from this PIN"],
@@ -416,22 +446,39 @@ export function TripImport({ embedded = false }: { embedded?: boolean }) {
     if (!user || !isAdminLike(user.role)) return;
     setLoadingMasters(true);
     Promise.all([
-      supabase.from("branches").select("id,branch_name"),
+      supabase.from("branches").select("id,branch_name,trip_series_prefix" as never),
       supabase.from("vehicles").select("id,registration_number"),
       supabase.from("drivers").select("id,full_name,ending_date"),
       supabase.from("transporters").select("id,transporter_name"),
       supabase.from("contracts").select("id,contract_name").eq("status", "active"),
       supabase.from("locations").select("id,pin_code"),
-    ]).then(([b, v, d, t, c, l]) => {
-      setMasters({
-        branches:     new Map((b.data ?? []).map(r => [norm(r.branch_name), r.id])),
-        vehicles:     new Map((v.data ?? []).map(r => [norm(r.registration_number), r.id])),
-        drivers:      new Map((d.data ?? []).filter(isDriverActive).map(r => [norm(r.full_name), r.id])),
-        transporters: new Map((t.data ?? []).map(r => [norm(r.transporter_name), r.id])),
-        sources:      new Map((c.data ?? []).map(r => [norm(r.contract_name), r.id])),
-        locationsByPin: new Map((l.data ?? []).filter(r => (r.pin_code ?? "").trim()).map(r => [(r.pin_code ?? "").trim(), r.id])),
-      });
-    }).catch(() => toast.error("Could not load master data")).finally(() => setLoadingMasters(false));
+    ])
+      .then(([b, v, d, t, c, l]) => {
+        const branchRows = (b.data ?? []) as unknown as Array<{
+          id: string;
+          branch_name: string;
+          trip_series_prefix: string | null;
+        }>;
+        setMasters({
+          branches: new Map(branchRows.map((r) => [norm(r.branch_name), r.id])),
+          branchPrefixes: new Map(
+            branchRows.map((r) => [norm(r.branch_name), r.trip_series_prefix ?? ""]),
+          ),
+          vehicles: new Map((v.data ?? []).map((r) => [norm(r.registration_number), r.id])),
+          drivers: new Map(
+            (d.data ?? []).filter(isDriverActive).map((r) => [norm(r.full_name), r.id]),
+          ),
+          transporters: new Map((t.data ?? []).map((r) => [norm(r.transporter_name), r.id])),
+          sources: new Map((c.data ?? []).map((r) => [norm(r.contract_name), r.id])),
+          locationsByPin: new Map(
+            (l.data ?? [])
+              .filter((r) => (r.pin_code ?? "").trim())
+              .map((r) => [(r.pin_code ?? "").trim(), r.id]),
+          ),
+        });
+      })
+      .catch(() => toast.error("Could not load master data"))
+      .finally(() => setLoadingMasters(false));
   }, [user]);
 
   async function handleValidate() {
@@ -456,7 +503,7 @@ export function TripImport({ embedded = false }: { embedded?: boolean }) {
         );
       }
 
-      setValidated(validate(tripRows, masters));
+      setValidated(await validate(tripRows, masters));
       setManifests(mfRows);
       setExpenses(exRows);
       setOtherIncome(incRows);

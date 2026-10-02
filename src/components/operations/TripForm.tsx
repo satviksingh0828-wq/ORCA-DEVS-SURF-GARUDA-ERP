@@ -58,7 +58,6 @@ import {
   findEntry,
   inr,
   manifestCharges,
-  newTripCode,
   num,
   type ContractLite,
   type EntryLite,
@@ -219,7 +218,7 @@ export function emptyTrip(): TripRow {
   const now = new Date();
   const pad = (n: number) => String(n).padStart(2, "0");
   return {
-    trip_code: newTripCode(),
+    trip_code: "",
     mode: "ROAD",
     ownership: "own",
     branch_id: null,
@@ -285,6 +284,7 @@ export function TripForm({
   const basicStartDateBounds = getBasicStartDateBounds();
 
   const [trip, setTrip] = useState<TripRow>({ ...initial, mode: initial.mode ?? "ROAD" });
+  const tripCodeRef = useRef(trip.trip_code);
   const tripClosed = trip.closed === true;
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -396,19 +396,14 @@ export function TripForm({
     }));
   }
 
-  // Auto-update trip_code prefix and start-location defaults when branch data becomes available
-  // (covers basic users with a single auto-filled branch on new trips).
+  // Apply the branch start-location default when branch data becomes available.
   useEffect(() => {
-    if (!initial.id && trip.branch_id && allBranches.length > 0) {
-      const prefix = allBranches.find((b) => b.id === trip.branch_id)?.trip_series_prefix ?? null;
-      if (prefix) {
-        setTrip((t) => ({ ...t, trip_code: newTripCode(prefix) }));
-      }
+    if (!trip.id && trip.branch_id && allBranches.length > 0) {
       void applyBranchStartLocationDefault(trip.branch_id);
     }
-    // Run only when allBranches first becomes available (or branch_id changes on new trips)
+    // Run only when allBranches first becomes available (or branch_id changes on new trips).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [allBranches, trip.branch_id, locationIdByPin]);
+  }, [allBranches, trip.branch_id, locationIdByPin, trip.id]);
 
   async function loadChildren(tripId: string) {
     const [m, i, e, lrLinks, approvalAdvance] = await Promise.all([
@@ -708,7 +703,8 @@ export function TripForm({
     const { id, created_at, reopened_at, ...rest } = trip;
     void created_at;
     void reopened_at;
-    let payload = rest;
+    let assignedTripCode = tripCodeRef.current || trip.trip_code;
+    let payload = { ...rest, trip_code: assignedTripCode };
     if (!id) {
       const branch = allBranches.find((candidate) => candidate.id === trip.branch_id);
       const prefix = String(branch?.trip_series_prefix ?? "")
@@ -720,25 +716,26 @@ export function TripForm({
         return null;
       }
       const { data: generatedCode, error: numberError } = await supabase.rpc(
-        "next_branch_series_number",
+        "next_branch_series_number" as never,
         {
           p_branch_id: trip.branch_id,
           p_document_type: "trip",
           p_prefix: prefix,
           p_series_year: Number(String(trip.start_date).slice(0, 4)) || new Date().getFullYear(),
-        },
+        } as never,
       );
       if (numberError || !generatedCode) {
         setSaving(false);
         toast.error(numberError?.message ?? "Could not generate trip number");
         return null;
       }
-      payload = { ...rest, trip_code: generatedCode };
+      assignedTripCode = generatedCode;
+      payload = { ...rest, trip_code: assignedTripCode };
     }
     const res = id
       ? await supabase
           .from("trips")
-          .update(rest as never)
+          .update({ ...rest, trip_code: assignedTripCode } as never)
           .eq("id", id)
           .eq("closed", false)
           .select("id")
@@ -754,7 +751,10 @@ export function TripForm({
       return null;
     }
     const newId = (res.data as { id: string }).id;
-    if (!id) setTrip((t) => ({ ...t, id: newId }));
+    if (!id) {
+      tripCodeRef.current = assignedTripCode;
+      setTrip((t) => ({ ...t, id: newId, trip_code: assignedTripCode }));
+    }
     const isNew = !id;
     logAction(isNew ? "created" : "updated", "trip", {
       entityId: newId,
@@ -828,7 +828,7 @@ export function TripForm({
     const approval =
       trip.rental_id && (amount > 0 || advance > 0)
         ? {
-            trip_code: trip.trip_code,
+            trip_code: tripCodeRef.current || trip.trip_code,
             rental_id: trip.rental_id,
             advance,
             balance: Math.max(amount - advance, 0),
@@ -1207,7 +1207,7 @@ export function TripForm({
           <ArrowLeft className="size-4" />
           Back to trips
         </Button>
-        <h2 className="text-lg font-semibold tracking-tight">{trip.trip_code}</h2>
+        <h2 className="text-lg font-semibold tracking-tight">{trip.trip_code || "New Trip"}</h2>
         {trip.reopened_at ? (
           <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[11px] font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
             Reopened
@@ -1277,7 +1277,12 @@ export function TripForm({
         <div className="grid grid-cols-1 gap-x-5 gap-y-4 sm:grid-cols-2 xl:grid-cols-5">
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Trip ID</Label>
-            <Input className="h-10" value={trip.trip_code} readOnly />
+            <Input
+              className="h-10"
+              value={trip.trip_code}
+              placeholder={!trip.id ? "Assigned on first save" : undefined}
+              readOnly
+            />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">
@@ -1395,7 +1400,6 @@ export function TripForm({
             disabled={tripClosed || Boolean(trip.part_b_locked_at)}
             options={branchOpts}
             onChange={(id) => {
-              const prefix = allBranches.find((b) => b.id === id)?.trip_series_prefix ?? null;
               // Clear vehicle/driver if they belong to a different branch
               const vehicleStillValid =
                 !trip.vehicle_id ||
@@ -1404,8 +1408,6 @@ export function TripForm({
                 !trip.driver_id || drivers.find((d) => d.id === trip.driver_id)?.branch_id === id;
               patch({
                 branch_id: id,
-                // Regenerate trip code on new trips
-                ...(!trip.id ? { trip_code: newTripCode(prefix) } : {}),
                 ...(!vehicleStillValid ? { vehicle_id: null } : {}),
                 ...(!driverStillValid ? { driver_id: null } : {}),
               });
