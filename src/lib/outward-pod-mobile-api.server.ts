@@ -1124,7 +1124,7 @@ function relationLabel(row: Record<string, unknown> | null | undefined, keys: st
     .join(", ");
 }
 
-async function tripQrManifestRequest(
+async function buildTripQrManifestForRequest(
   request: Request,
   admin: AdminClient,
   actor: Actor,
@@ -1249,24 +1249,22 @@ async function tripQrManifestRequest(
       })()
     : undefined;
 
-  return json(
-    buildTripQrManifest({
-      trip: tripRow,
-      branchName: relationLabel(branchResult.data, ["branch_name"]),
-      startLocationName: locationName(tripRow.start_location_id),
-      endLocationName: locationName(tripRow.end_location_id),
-      vehicleName,
-      driverName: relationLabel(driverResult.data, ["full_name"]),
-      transporterName: relationLabel(transporterResult.data, ["transporter_name"]),
-      rentalName: relationLabel(rentalResult.data, ["rental_name"]),
-      contractName: relationLabel(contractResult.data, ["contract_name"]),
-      manifests: manifestsWithLocations,
-      incomes,
-      expenses,
-      allowFinanceEdit,
-      updateUrl,
-    }),
-  );
+  return buildTripQrManifest({
+    trip: tripRow,
+    branchName: relationLabel(branchResult.data, ["branch_name"]),
+    startLocationName: locationName(tripRow.start_location_id),
+    endLocationName: locationName(tripRow.end_location_id),
+    vehicleName,
+    driverName: relationLabel(driverResult.data, ["full_name"]),
+    transporterName: relationLabel(transporterResult.data, ["transporter_name"]),
+    rentalName: relationLabel(rentalResult.data, ["rental_name"]),
+    contractName: relationLabel(contractResult.data, ["contract_name"]),
+    manifests: manifestsWithLocations,
+    incomes,
+    expenses,
+    allowFinanceEdit,
+    updateUrl,
+  });
 }
 
 const TRIP_UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -1395,7 +1393,10 @@ async function updateTripFinanceRequest(
         .toLowerCase(),
     });
   }
-  if (!changes.length) return json({ ok: true, message: "Trip amounts are already up to date." });
+  if (!changes.length) {
+    const manifest = await buildTripQrManifestForRequest(request, admin, actor, tripId);
+    return json({ ok: true, message: "Trip amounts are already up to date.", manifest });
+  }
 
   for (const change of changes) {
     const table = change.kind === "income" ? "trip_other_income" : "trip_expenses";
@@ -1496,10 +1497,12 @@ async function updateTripFinanceRequest(
     }
   }
 
+  const manifest = await buildTripQrManifestForRequest(request, admin, actor, tripId);
   return json({
     ok: true,
     message: "Other Income and Expenditure amounts synced to the ERP.",
     updatedCount: changes.length,
+    manifest,
   });
 }
 
@@ -1516,7 +1519,7 @@ export async function handleOutwardPODGet(request: Request): Promise<Response> {
     if (operation === "trip-manifest") {
       const tripId = url.searchParams.get("tripId") ?? "";
       if (!tripId) throw new ApiError(400, "Trip ID is required.");
-      return await tripQrManifestRequest(request, admin, actor, tripId);
+      return json(await buildTripQrManifestForRequest(request, admin, actor, tripId));
     }
     if (operation === "manifest") {
       if (podId) return await manifestRequest(request, admin, actor, podId);
