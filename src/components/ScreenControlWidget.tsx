@@ -623,41 +623,46 @@ export function ScreenControlWidget() {
     let captured: MediaStream | null = null;
     try {
       if (accept) {
-        if (session.share_scope === "system" && !window.electronAPI) {
-          captured = await startWindowsDesktopAgentCapture(session.id, session.requester.name);
-        } else {
-          if (!navigator.mediaDevices?.getDisplayMedia)
-            throw new Error(
-              "Screen sharing is not available in this browser. Use the app over HTTPS in a supported browser.",
-            );
-          // App-only sharing continues to use the browser's existing chooser.
-          const captureOptions: DisplayMediaStreamOptions & { preferCurrentTab?: boolean } = {
-            video: {
-              displaySurface: session.share_scope === "system" ? "monitor" : "window",
-              frameRate: { ideal: 15, max: 24 },
-            },
-            audio: false,
-            preferCurrentTab: session.share_scope === "app",
-          };
-          const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
-            ((scope: string) => Promise<unknown>) | undefined;
-          await setElectronCaptureScope?.(session.share_scope);
-          captured = await navigator.mediaDevices.getDisplayMedia(captureOptions);
+        // The sharing owner gets the popup. The main page only accepts the request;
+        // the popup owns capture so refreshing the ERP page cannot stop it.
+        if (!isPopupWindow) openScreenPopup();
+        if (isPopupWindow) {
+          if (session.share_scope === "system" && !window.electronAPI) {
+            captured = await startWindowsDesktopAgentCapture(session.id, session.requester.name);
+          } else {
+            if (!navigator.mediaDevices?.getDisplayMedia)
+              throw new Error(
+                "Screen sharing is not available in this browser. Use the app over HTTPS in a supported browser.",
+              );
+            const captureOptions: DisplayMediaStreamOptions & { preferCurrentTab?: boolean } = {
+              video: {
+                displaySurface: session.share_scope === "system" ? "monitor" : "window",
+                frameRate: { ideal: 15, max: 24 },
+              },
+              audio: false,
+              preferCurrentTab: session.share_scope === "app",
+            };
+            const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
+              ((scope: string) => Promise<unknown>) | undefined;
+            await setElectronCaptureScope?.(session.share_scope);
+            captured = await navigator.mediaDevices.getDisplayMedia(captureOptions);
+          }
+          const backgroundVideo =
+            document.querySelector<HTMLVideoElement>(".background-video-layer");
+          if (backgroundVideo) {
+            backgroundVideo.dataset.screenControlPaused = "true";
+            backgroundVideo.pause();
+          }
+          localStreamRef.current = captured;
+          localStreamSessionRef.current = session.id;
+          setLocalShareReady(true);
+          captured.getTracks().forEach((track) => {
+            track.onended = () => {
+              if (localStreamSessionRef.current === session.id)
+                void finishSession(session.id, "screen_share_stopped");
+            };
+          });
         }
-        const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
-        if (backgroundVideo) {
-          backgroundVideo.dataset.screenControlPaused = "true";
-          backgroundVideo.pause();
-        }
-        localStreamRef.current = captured;
-        localStreamSessionRef.current = session.id;
-        setLocalShareReady(true);
-        captured.getTracks().forEach((track) => {
-          track.onended = () => {
-            if (localStreamSessionRef.current === session.id)
-              void finishSession(session.id, "screen_share_stopped");
-          };
-        });
       }
       await respondToScreenControlRequest({
         data: { sessionToken: token, sessionId: session.id, accept },
@@ -680,9 +685,8 @@ export function ScreenControlWidget() {
       setBusyId(null);
     }
   }
-
   function scheduleAutoReshare(session: ScreenControlSession) {
-    if (session.share_scope !== "app" || !window.electronAPI) {
+    if (session.share_scope !== "app" || (!window.electronAPI && !isPopupWindow)) {
       void finishSession(session.id, "screen_share_stopped");
       return;
     }
