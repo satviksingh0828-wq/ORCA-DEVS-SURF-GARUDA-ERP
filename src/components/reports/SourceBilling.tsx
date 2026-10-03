@@ -63,6 +63,9 @@ type Bill = {
   source_state?: string | null;
   source_country?: string | null;
   source_pin_code?: string | null;
+  source_asset_ledger_id?: string | null;
+  freight_income_ledger_id?: string | null;
+  loading_income_ledger_id?: string | null;
 };
 type Consignment = {
   id: string;
@@ -103,6 +106,12 @@ type BillLine = Consignment & {
   additional_loading: number;
   final_freight: number;
   final_loading: number;
+};
+type LedgerAccount = {
+  id: string;
+  account_name: string;
+  ledger_type: string;
+  account_kind: string;
 };
 type BillItem = {
   id: string;
@@ -151,6 +160,7 @@ export function SourceBilling() {
   const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [bills, setBills] = useState<Bill[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
+  const [ledgerAccounts, setLedgerAccounts] = useState<Record<string, LedgerAccount>>({});
   const [branchSources, setBranchSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(false);
   const [listFilters, setListFilters] = useState({
@@ -179,6 +189,9 @@ export function SourceBilling() {
     to: monthEnd(),
   });
   const [generating, setGenerating] = useState(false);
+  const [journalPreviewOpen, setJournalPreviewOpen] = useState(false);
+  const [journalPostStatus, setJournalPostStatus] = useState<"pending" | "success" | "error">("pending");
+  const [journalPostError, setJournalPostError] = useState<string | null>(null);
 
   async function loadBillItems(billId: string) {
     setViewItemsLoading(true);
@@ -213,11 +226,27 @@ export function SourceBilling() {
     const { data, error } = await (supabase as any)
       .from("contracts")
       .select(
-        "id,contract_name,branch_id,company_name,legal_business_name,gstin,address_line1,address_line2,city,state,country,pin_code",
+        "id,contract_name,branch_id,company_name,legal_business_name,gstin,address_line1,address_line2,city,state,country,pin_code,source_asset_ledger_id,freight_income_ledger_id,loading_income_ledger_id",
       )
       .order("contract_name");
     if (error) return toast.error(`Could not load sources: ${error.message}`);
-    setSources((data ?? []) as Source[]);
+    const loadedSources = (data ?? []) as Source[];
+    setSources(loadedSources);
+    const ledgerIds = [...new Set(loadedSources.flatMap((source) => [
+      source.source_asset_ledger_id,
+      source.freight_income_ledger_id,
+      source.loading_income_ledger_id,
+    ].filter((id): id is string => Boolean(id))))];
+    if (ledgerIds.length) {
+      const { data: ledgerRows, error: ledgerError } = await (supabase as any)
+        .from("ledger_accounts")
+        .select("id,account_name,ledger_type,account_kind")
+        .in("id", ledgerIds);
+      if (ledgerError) return toast.error(`Could not load mapped source accounts: ${ledgerError.message}`);
+      setLedgerAccounts(Object.fromEntries(((ledgerRows ?? []) as LedgerAccount[]).map((ledger) => [ledger.id, ledger])));
+    } else {
+      setLedgerAccounts({});
+    }
   }
   async function loadBills() {
     setLoading(true);
@@ -400,6 +429,9 @@ export function SourceBilling() {
       return toast.error(
         "Adjusted final Freight and Loading total must be greater than zero before posting the journal entry",
       );
+    setJournalPostError(null);
+    setJournalPostStatus("pending");
+    setJournalPreviewOpen(true);
     setGenerating(true);
     const { error } = await (supabase as any).rpc("generate_ltms_source_bill", {
       p_branch_id: form.branch,
@@ -425,7 +457,12 @@ export function SourceBilling() {
       })),
     });
     setGenerating(false);
-    if (error) return toast.error(`Could not generate source bill: ${error.message}`);
+    if (error) {
+      setJournalPostStatus("error");
+      setJournalPostError(error.message);
+      return toast.error(`Could not generate source bill: ${error.message}`);
+    }
+    setJournalPostStatus("success");
     toast.success("Source bill generated. Selected consignments are now locked.");
     setLines([]);
     setScreen("list");
@@ -463,6 +500,23 @@ export function SourceBilling() {
       ),
     [lines],
   );
+  const selectedBillingSource = sources.find((source) => source.id === form.source);
+  const journalPreviewLines = useMemo(() => {
+    const source = selectedBillingSource;
+    const mapped = [
+      { key: "source", label: "Source account (debit)", id: source?.source_asset_ledger_id, amount: totals.freight + totals.loading, side: "debit" },
+      { key: "freight", label: "Freight income (credit)", id: source?.freight_income_ledger_id, amount: totals.freight, side: "credit" },
+      { key: "loading", label: "Loading income (credit)", id: source?.loading_income_ledger_id, amount: totals.loading, side: "credit" },
+    ];
+    return mapped.filter((line) => line.amount > 0 || line.key === "source").map((line) => ({
+      ...line,
+      account: line.id ? ledgerAccounts[line.id] : undefined,
+    }));
+  }, [ledgerAccounts, selectedBillingSource, totals]);
+  const journalDebit = journalPreviewLines.reduce((sum, line) => sum + (line.side === "debit" ? line.amount : 0), 0);
+  const journalCredit = journalPreviewLines.reduce((sum, line) => sum + (line.side === "credit" ? line.amount : 0), 0);
+  const journalBalanced = Math.abs(journalDebit - journalCredit) < 0.005;
+
   const updateForm = (key: keyof typeof form, value: string) =>
     setForm((current) => ({
       ...current,
@@ -962,6 +1016,53 @@ export function SourceBilling() {
               <Plus className="size-3.5" /> Add selected ({selectedCandidateIds.length})
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={journalPreviewOpen} onOpenChange={(open) => !generating && setJournalPreviewOpen(open)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Source Bill Journal Entry Preview</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
+              <div className="flex flex-wrap justify-between gap-2">
+                <span><strong>Basis:</strong> adjusted final freight/loading only</span>
+                <span><strong>Total:</strong> {money(totals.freight + totals.loading)}</span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Gross calculated values are stored for audit but are not posted to this journal.
+              </p>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
+                  <tr><th className="px-3 py-2">Journal line</th><th className="px-3 py-2">Mapped account</th><th className="px-3 py-2">Account kind</th><th className="px-3 py-2 text-right">Debit</th><th className="px-3 py-2 text-right">Credit</th></tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {journalPreviewLines.map((line) => (
+                    <tr key={line.key}>
+                      <td className="px-3 py-2">{line.label}</td>
+                      <td className="px-3 py-2 font-medium">{line.account?.account_name ?? (line.id ? `Mapped ID ${line.id}` : "NOT MAPPED")}</td>
+                      <td className="px-3 py-2">{line.account ? `${line.account.ledger_type} / ${line.account.account_kind}` : "—"}</td>
+                      <td className="px-3 py-2 text-right">{line.side === "debit" ? money(line.amount) : "—"}</td>
+                      <td className="px-3 py-2 text-right">{line.side === "credit" ? money(line.amount) : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot className="border-t-2 border-border bg-muted/30 font-semibold">
+                  <tr><td colSpan={3} className="px-3 py-2">Totals {journalBalanced ? "(balanced)" : "(NOT BALANCED)"}</td><td className="px-3 py-2 text-right">{money(journalDebit)}</td><td className="px-3 py-2 text-right">{money(journalCredit)}</td></tr>
+                </tfoot>
+              </table>
+            </div>
+            {journalPreviewLines.some((line) => !line.account) && (
+              <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">One or more Source Master accounts are missing or could not be loaded. The database will reject this entry until all three mapped accounts are active in this branch.</p>
+            )}
+            {generating && <p className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">Posting this exact entry now… Please wait.</p>}
+            {journalPostStatus === "success" && <p className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900">Journal entry passed and the source bill was generated successfully.</p>}
+            {journalPostError && <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">Journal entry was not passed:
+{journalPostError}</pre>}
+          </div>
+          <DialogFooter><Button variant="outline" disabled={generating} onClick={() => setJournalPreviewOpen(false)}>Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       {screen === "view" && viewing && (
