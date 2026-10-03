@@ -396,6 +396,10 @@ export function SourceBilling() {
       return toast.error("Select branch, source and at least one consignment");
     if (form.from > form.to || form.billDate < form.from || form.dueDate < form.billDate)
       return toast.error("Check bill and billing period dates");
+    if (totals.freight + totals.loading <= 0)
+      return toast.error(
+        "Freight and Loading total must be greater than zero before posting the journal entry",
+      );
     setGenerating(true);
     const { error } = await (supabase as any).rpc("generate_ltms_source_bill", {
       p_branch_id: form.branch,
