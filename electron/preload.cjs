@@ -1,6 +1,7 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  screenCaptureScope: (scope) => ipcRenderer.invoke('screen-capture-scope', scope),
   /** Execute a per-company database operation and return { data, error } */
   dbOp: (descriptor) => ipcRenderer.invoke('db-op', descriptor),
 

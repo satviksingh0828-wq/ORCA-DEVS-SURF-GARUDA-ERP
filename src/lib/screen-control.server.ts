@@ -3,11 +3,12 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 type ScreenStatus = "pending" | "active" | "declined" | "ended" | "expired";
 type SignalType = "offer" | "answer" | "ice";
-type SessionRecord = {
+type ScreenRecord = {
   id: string;
   requester_id: string;
   target_id: string;
   status: ScreenStatus;
+  share_scope: "app" | "system";
   created_at: string;
   accepted_at: string | null;
   ended_at: string | null;
@@ -138,7 +139,7 @@ export async function getScreenControlState(sessionToken: string) {
   const validOnlineIds = new Set<string>(onlineProfiles.map((row) => row.id));
   validOnlineIds.add(uid);
   const sessionColumns =
-    "id,requester_id,target_id,status,created_at,accepted_at,ended_at,ended_by,end_reason";
+    "id,requester_id,target_id,status,share_scope,created_at,accepted_at,ended_at,ended_by,end_reason";
   const [liveSessions, recentSessions] = await Promise.all([
     db
       .from("screen_control_sessions")
@@ -206,7 +207,11 @@ export async function getScreenControlState(sessionToken: string) {
   };
 }
 
-export async function createScreenControlRequest(sessionToken: string, targetId: string) {
+export async function createScreenControlRequest(
+  sessionToken: string,
+  targetId: string,
+  shareScope: "app" | "system",
+) {
   const { db, uid } = await requireCurrentUser(sessionToken);
   if (!targetId || targetId === uid) throw new Error("Choose another online user.");
 
@@ -227,10 +232,12 @@ export async function createScreenControlRequest(sessionToken: string, targetId:
   if (!targetUser?.is_active || targetUser?.is_paused)
     throw new Error("That account cannot receive a screen-control request.");
 
+  if (shareScope !== "app" && shareScope !== "system")
+    throw new Error("Choose whether to request the app or the full system.");
   const { data, error } = await db
     .from("screen_control_sessions")
-    .insert({ requester_id: uid, target_id: targetId, status: "pending" })
-    .select("id,requester_id,target_id,status,created_at,accepted_at,ended_at,ended_by,end_reason")
+    .insert({ requester_id: uid, target_id: targetId, status: "pending", share_scope: shareScope })
+    .select("id,requester_id,target_id,status,share_scope,created_at,accepted_at,ended_at,ended_by,end_reason")
     .single();
   if (error) {
     if (error.code === "23505")
@@ -248,7 +255,7 @@ export async function respondToScreenControlRequest(
   const { db, uid } = await requireCurrentUser(sessionToken);
   const { data: request, error: loadError } = await db
     .from("screen_control_sessions")
-    .select("id,requester_id,target_id,status,created_at")
+    .select("id,requester_id,target_id,status,share_scope,created_at")
     .eq("id", sessionId)
     .eq("target_id", uid)
     .eq("status", "pending")
@@ -282,7 +289,7 @@ export async function respondToScreenControlRequest(
     .eq("id", sessionId)
     .eq("target_id", uid)
     .eq("status", "pending")
-    .select("id,requester_id,target_id,status,created_at,accepted_at,ended_at,ended_by,end_reason")
+    .select("id,requester_id,target_id,status,share_scope,created_at,accepted_at,ended_at,ended_by,end_reason")
     .maybeSingle();
   if (error || !data) throw new Error("Could not update this screen-control request.");
   return data;

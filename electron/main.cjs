@@ -15,6 +15,7 @@ const RCLONE_FOLDER = 'rclone-v1.74.4-windows-386';
 const RCLONE_REMOTE = 'mega:CompanyData';
 let backupInProgress = false;
 let lastBackup = null;
+let requestedCaptureScope = 'app';
 
 const TABLES = [
   'employees', 'departments', 'positions', 'attendance', 'holidays',
@@ -619,6 +620,11 @@ async function initWhatsApp() {
   }
 }
 
+ipcMain.handle('screen-capture-scope', async (_event, scope) => {
+  requestedCaptureScope = scope === 'system' ? 'system' : 'app';
+  return { ok: true };
+});
+
 ipcMain.handle('wa-status', async () => waState);
 
 ipcMain.handle('wa-init', async () => {
@@ -725,10 +731,13 @@ app.whenReady().then(() => {
     session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
       try {
         const sources = await desktopCapturer.getSources({
-          types: ['screen'],
+          types: requestedCaptureScope === 'system' ? ['screen'] : ['window'],
           thumbnailSize: { width: 1, height: 1 },
         });
-        callback(sources[0] ? { video: sources[0] } : {});
+        const source = requestedCaptureScope === 'system'
+          ? sources[0]
+          : sources.find((item) => /garuda|hrms/i.test(item.name)) || sources[0];
+        callback(source ? { video: source } : {});
       } catch {
         callback({});
       }

@@ -480,12 +480,14 @@ export function ScreenControlWidget() {
     }
   }, []);
 
-  async function requestControl(targetId: string) {
+  async function requestControl(targetId: string, shareScope: "app" | "system") {
     if (!token || participantBusy) return;
     setBusyId(targetId);
     try {
-      await createScreenControlRequest({ data: { sessionToken: token, targetId } });
-      toast.success("Request sent. The other user must accept it before screen sharing starts.");
+      await createScreenControlRequest({ data: { sessionToken: token, targetId, shareScope } });
+      toast.success(
+        `${shareScope === "system" ? "Full-system" : "App-only"} request sent. The other user must accept it.`,
+      );
       await refreshState(true);
     } catch (cause) {
       toast.error(
@@ -510,10 +512,17 @@ export function ScreenControlWidget() {
         // This call must happen directly from the user's Accept click. The browser
         // shows its own chooser; the app cannot capture without the owner choosing.
         const captureOptions: DisplayMediaStreamOptions & { preferCurrentTab?: boolean } = {
-          video: { displaySurface: "monitor", frameRate: { ideal: 15, max: 24 } },
+          video: {
+            displaySurface: session.share_scope === "system" ? "monitor" : "window",
+            frameRate: { ideal: 15, max: 24 },
+          },
           audio: false,
-          preferCurrentTab: false,
+          preferCurrentTab: session.share_scope === "app",
         };
+        const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
+          | ((scope: string) => Promise<unknown>)
+          | undefined;
+        await setElectronCaptureScope?.(session.share_scope);
         const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
         if (backgroundVideo) {
           backgroundVideo.dataset.screenControlPaused = "true";
@@ -552,10 +561,17 @@ export function ScreenControlWidget() {
     try {
       if (!navigator.mediaDevices?.getDisplayMedia)
         throw new Error("Screen sharing is not available in this browser.");
+      const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
+        | ((scope: string) => Promise<unknown>)
+        | undefined;
+      await setElectronCaptureScope?.(session.share_scope);
       const captured = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: "monitor", frameRate: { ideal: 15, max: 24 } },
+        video: {
+          displaySurface: session.share_scope === "system" ? "monitor" : "window",
+          frameRate: { ideal: 15, max: 24 },
+        },
         audio: false,
-        preferCurrentTab: false,
+        preferCurrentTab: session.share_scope === "app",
       } as DisplayMediaStreamOptions & { preferCurrentTab?: boolean });
       localStreamRef.current = captured;
       localStreamSessionRef.current = session.id;
@@ -922,11 +938,12 @@ export function ScreenControlWidget() {
                         className="rounded-lg border border-primary/30 bg-primary/5 p-3"
                       >
                         <p className="text-sm font-medium">
-                          {request.requester.name} wants to view and control this app
+                          {request.requester.name} requests {request.share_scope === "system" ? "full system" : "this app"}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Accepting shares the desktop in the installed Windows app; browsers show
-                          their native screen chooser. You can stop sharing at any time.
+                          {request.share_scope === "system"
+                            ? "Accepting shares the full Windows desktop. Do not share passwords or other sensitive windows."
+                            : "Accepting shares only the ERP app surface. You can stop sharing at any time."}
                         </p>
                         <div className="mt-3 flex justify-end gap-2">
                           <Button
@@ -947,7 +964,7 @@ export function ScreenControlWidget() {
                             ) : (
                               <Check className="size-3.5" />
                             )}
-                            Accept & share
+                            Accept & share {request.share_scope === "system" ? "system" : "app"}
                           </Button>
                         </div>
                       </div>
@@ -966,7 +983,9 @@ export function ScreenControlWidget() {
                       <p className="mt-0.5">
                         {isController
                           ? connectionLabel
-                          : "Your app tab is being shared. You can end this session at any time."}
+                          : request.share_scope === "system"
+                            ? "Your full Windows desktop is being shared. You can end this session at any time."
+                            : "This app is being shared. You can end this session at any time."}
                       </p>
                     </div>
                     <Button
@@ -1017,19 +1036,24 @@ export function ScreenControlWidget() {
                             @{person.username} · {person.role}
                           </p>
                         </div>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={participantBusy || busyId === person.id}
-                          onClick={() => void requestControl(person.id)}
-                        >
-                          {busyId === person.id ? (
-                            <LoaderCircle className="size-3.5 animate-spin" />
-                          ) : (
-                            <MonitorUp className="size-3.5" />
-                          )}
-                          Request
-                        </Button>
+                        <div className="flex shrink-0 gap-1">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={participantBusy || busyId === person.id}
+                            onClick={() => void requestControl(person.id, "app")}
+                          >
+                            App
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={participantBusy || busyId === person.id}
+                            onClick={() => void requestControl(person.id, "system")}
+                          >
+                            System
+                          </Button>
+                        </div>
                       </div>
                     ))
                   )}

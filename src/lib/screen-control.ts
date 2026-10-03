@@ -12,6 +12,7 @@ export type ScreenControlSession = {
   requester_id: string;
   target_id: string;
   status: "pending" | "active" | "declined" | "ended" | "expired";
+  share_scope: "app" | "system";
   created_at: string;
   accepted_at: string | null;
   ended_at: string | null;
@@ -43,10 +44,10 @@ export const getScreenControlState = createServerFn({ method: "POST" })
   });
 
 export const createScreenControlRequest = createServerFn({ method: "POST" })
-  .validator((input: { sessionToken: string; targetId: string }) => input)
+  .validator((input: { sessionToken: string; targetId: string; shareScope: "app" | "system" }) => input)
   .handler(async ({ data }) => {
     const server = await import("@/lib/screen-control.server");
-    return server.createScreenControlRequest(data.sessionToken, data.targetId);
+    return server.createScreenControlRequest(data.sessionToken, data.targetId, data.shareScope);
   });
 
 export const respondToScreenControlRequest = createServerFn({ method: "POST" })
