@@ -70,10 +70,29 @@ declare global {
   }
 }
 
+const TURN_URLS = (import.meta.env.VITE_SCREEN_CONTROL_TURN_URLS || "")
+  .split(",")
+  .map((url: string) => url.trim())
+  .filter(Boolean);
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    ...(TURN_URLS.length > 0 &&
+    import.meta.env.VITE_SCREEN_CONTROL_TURN_USERNAME &&
+    import.meta.env.VITE_SCREEN_CONTROL_TURN_CREDENTIAL
+      ? [
+          {
+            urls: TURN_URLS,
+            username: import.meta.env.VITE_SCREEN_CONTROL_TURN_USERNAME,
+            credential: import.meta.env.VITE_SCREEN_CONTROL_TURN_CREDENTIAL,
+          },
+        ]
+      : []),
+  ],
   bundlePolicy: "max-bundle",
-  iceCandidatePoolSize: 10,
+  rtcpMuxPolicy: "require",
+  iceCandidatePoolSize: 16,
 };
 const MAX_AUTO_RESHARE_ATTEMPTS = 5;
 
@@ -800,6 +819,14 @@ export function ScreenControlWidget() {
         data: { sessionToken: token, sessionId, signalType, payload },
       });
     };
+    const scheduleRestart = (delay = 800) => {
+      if (disposed || !isOwner || restartInFlight || restartAttempts >= 8) return;
+      if (restartTimer !== null) window.clearTimeout(restartTimer);
+      restartTimer = window.setTimeout(() => {
+        restartTimer = null;
+        void restartConnection();
+      }, delay);
+    };
     const restartConnection = async () => {
       if (disposed || !isOwner || restartInFlight || restartAttempts >= 8) return;
       restartInFlight = true;
@@ -872,18 +899,21 @@ export function ScreenControlWidget() {
         connectionTimeout = null;
       } else if (
         isOwner &&
-        (peer.connectionState === "disconnected" || peer.connectionState === "failed") &&
-        restartAttempts < 8
+        (peer.connectionState === "disconnected" || peer.connectionState === "failed")
       ) {
-        if (restartTimer !== null) window.clearTimeout(restartTimer);
-        restartTimer = window.setTimeout(() => void restartConnection(), 800);
+        scheduleRestart(Math.min(800 * 2 ** restartAttempts, 8_000));
       }
+    };
+    peer.oniceconnectionstatechange = () => {
+      if (disposed || !isOwner) return;
+      if (peer.iceConnectionState === "failed") scheduleRestart(0);
+      else if (peer.iceConnectionState === "disconnected") scheduleRestart(500);
     };
     peer.ontrack = (event) => {
       if (!isOwner) setRemoteStream(event.streams[0] ?? new MediaStream([event.track]));
     };
     peer.ondatachannel = (event) => installControlChannel(event.channel);
-    connectionTimeout = window.setTimeout(() => void restartConnection(), 8_000);
+    connectionTimeout = window.setTimeout(() => scheduleRestart(0), 8_000);
 
     if (isOwner && ownedStream) {
       ownedStream.getTracks().forEach((track) => {
@@ -957,7 +987,7 @@ export function ScreenControlWidget() {
     void pollSignals();
     // Keep handshake and ICE-restart latency low without creating an unbounded
     // request loop; receiveScreenControlSignals returns at most 50 rows.
-    const signalTimer = window.setInterval(() => void pollSignals(), 400);
+    const signalTimer = window.setInterval(() => void pollSignals(), 300);
 
     return () => {
       disposed = true;
@@ -967,6 +997,7 @@ export function ScreenControlWidget() {
       peer.ontrack = null;
       peer.onicecandidate = null;
       peer.onconnectionstatechange = null;
+      peer.oniceconnectionstatechange = null;
       peer.ondatachannel = null;
       peer.close();
       if (peerRef.current === peer) peerRef.current = null;
