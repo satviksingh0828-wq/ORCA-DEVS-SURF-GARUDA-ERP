@@ -89,6 +89,11 @@ async function expireStaleSessions(
   const now = Date.now();
   for (const row of rows) {
     if (!ACTIVE_STATUSES.includes(row.status)) continue;
+    // Presence is only a request-routing signal. Once a request is active,
+    // WebRTC owns the connection and background-tab heartbeat throttling must
+    // not terminate the session. Active sessions end explicitly or when the
+    // screen owner stops the capture track.
+    if (row.status === "active") continue;
     const peerId = row.requester_id === currentUserId ? row.target_id : row.requester_id;
     const expiredRequest =
       row.status === "pending" && now - new Date(row.created_at).getTime() > REQUEST_WINDOW_MS;

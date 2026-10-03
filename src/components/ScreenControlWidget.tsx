@@ -631,7 +631,13 @@ export function ScreenControlWidget() {
         }
       };
       channel.onclose = () => {
-        if (channelRef.current === channel) channelRef.current = null;
+        if (channelRef.current !== channel || disposed) return;
+        channelRef.current = null;
+        if (isOwner) {
+          const replacement = peer.createDataChannel("app-control", { ordered: true });
+          installControlChannel(replacement);
+          void restartConnection();
+        }
       };
     };
 
