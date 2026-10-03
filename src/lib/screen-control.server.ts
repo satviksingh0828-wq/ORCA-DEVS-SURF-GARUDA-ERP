@@ -253,19 +253,20 @@ export async function respondToScreenControlRequest(
   accept: boolean,
 ) {
   const { db, uid } = await requireCurrentUser(sessionToken);
-  const { data: request, error: loadError } = await db
+  const { data: incomingRequest, error: loadError } = await db
     .from("screen_control_sessions")
     .select("id,requester_id,target_id,status,share_scope,created_at")
     .eq("id", sessionId)
     .eq("target_id", uid)
     .eq("status", "pending")
     .maybeSingle();
-  if (loadError || !request) throw new Error("This screen-control request is no longer available.");
+  if (loadError || !incomingRequest)
+    throw new Error("This screen-control request is no longer available.");
 
   const { data: requesterSession } = await db
     .from("user_sessions")
     .select("user_id,last_seen_at")
-    .eq("user_id", request.requester_id)
+    .eq("user_id", incomingRequest.requester_id)
     .gt("last_seen_at", new Date(Date.now() - ONLINE_WINDOW_MS).toISOString())
     .maybeSingle();
   if (!requesterSession) {
