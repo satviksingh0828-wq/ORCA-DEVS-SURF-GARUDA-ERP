@@ -113,6 +113,14 @@ type LedgerAccount = {
   ledger_type: string;
   account_kind: string;
 };
+type JournalPreviewLine = {
+  key: string;
+  label: string;
+  id?: string | null;
+  amount: number;
+  side: "debit" | "credit";
+  account?: LedgerAccount;
+};
 type BillItem = {
   id: string;
   bill_id: string;
@@ -193,6 +201,8 @@ export function SourceBilling() {
   const [journalPostStatus, setJournalPostStatus] = useState<"pending" | "success" | "error">("pending");
   const [journalPostError, setJournalPostError] = useState<string | null>(null);
   const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{ freight: number; loading: number } | null>(null);
+  const [postedJournalEntryId, setPostedJournalEntryId] = useState<string | null>(null);
+  const [postedJournalLines, setPostedJournalLines] = useState<JournalPreviewLine[] | null>(null);
 
   async function loadBillItems(billId: string) {
     setViewItemsLoading(true);
@@ -433,9 +443,11 @@ export function SourceBilling() {
     setJournalPreviewAmounts({ freight: totals.freight, loading: totals.loading });
     setJournalPostError(null);
     setJournalPostStatus("pending");
+    setPostedJournalEntryId(null);
+    setPostedJournalLines(null);
     setJournalPreviewOpen(true);
     setGenerating(true);
-    const { error } = await (supabase as any).rpc("generate_ltms_source_bill", {
+    const { data: generatedBillId, error } = await (supabase as any).rpc("generate_ltms_source_bill", {
       p_branch_id: form.branch,
       p_source_id: form.source,
       p_bill_date: form.billDate,
@@ -464,6 +476,38 @@ export function SourceBilling() {
       setJournalPostError(error.message);
       return toast.error(`Could not generate source bill: ${error.message}`);
     }
+    const { data: savedBill, error: savedBillError } = await (supabase as any)
+      .from("ltms_source_bills")
+      .select("journal_entry_id")
+      .eq("id", generatedBillId)
+      .maybeSingle();
+    if (savedBillError || !savedBill?.journal_entry_id) {
+      setJournalPostStatus("error");
+      setJournalPostError(savedBillError?.message ?? "The bill was created but no journal entry was linked to it.");
+      return toast.error("Bill created, but the posted journal could not be verified");
+    }
+    const { data: savedLines, error: savedLinesError } = await (supabase as any)
+      .from("journal_lines")
+      .select("line_no,ledger_account_id,account_kind,line_description,debit,credit,ledger_account:ledger_accounts(account_name,ledger_type,account_kind)")
+      .eq("journal_entry_id", savedBill.journal_entry_id)
+      .order("line_no");
+    if (savedLinesError || !savedLines?.length) {
+      setJournalPostStatus("error");
+      setJournalPostError(savedLinesError?.message ?? "The journal entry was linked but has no saved journal lines.");
+      return toast.error("Bill created, but saved journal lines could not be verified");
+    }
+    setPostedJournalEntryId(savedBill.journal_entry_id);
+    setPostedJournalLines((savedLines as Array<any>).flatMap((line) => {
+      const debit = num(line.debit);
+      const credit = num(line.credit);
+      const account = line.ledger_account
+        ? { id: line.ledger_account_id, account_name: line.ledger_account.account_name, ledger_type: line.ledger_account.ledger_type, account_kind: line.ledger_account.account_kind }
+        : undefined;
+      return [
+        debit > 0 ? { key: `posted-${line.line_no}-debit`, label: line.line_description ?? `Line ${line.line_no}`, id: line.ledger_account_id, amount: debit, side: "debit" as const, account } : null,
+        credit > 0 ? { key: `posted-${line.line_no}-credit`, label: line.line_description ?? `Line ${line.line_no}`, id: line.ledger_account_id, amount: credit, side: "credit" as const, account } : null,
+      ].filter((entry): entry is JournalPreviewLine => entry !== null);
+    }));
     setJournalPostStatus("success");
     toast.success("Source bill generated. Selected consignments are now locked.");
     setLines([]);
@@ -504,7 +548,7 @@ export function SourceBilling() {
   );
   const selectedBillingSource = sources.find((source) => source.id === form.source);
   const previewTotals = journalPreviewAmounts ?? totals;
-  const journalPreviewLines = useMemo(() => {
+  const journalPreviewLines = useMemo<JournalPreviewLine[]>(() => {
     const source = selectedBillingSource;
     const mapped = [
       { key: "source", label: "Source account (debit)", id: source?.source_asset_ledger_id, amount: previewTotals.freight + previewTotals.loading, side: "debit" },
@@ -519,6 +563,10 @@ export function SourceBilling() {
   const journalDebit = journalPreviewLines.reduce((sum, line) => sum + (line.side === "debit" ? line.amount : 0), 0);
   const journalCredit = journalPreviewLines.reduce((sum, line) => sum + (line.side === "credit" ? line.amount : 0), 0);
   const journalBalanced = Math.abs(journalDebit - journalCredit) < 0.005;
+  const displayedJournalLines = postedJournalLines ?? journalPreviewLines;
+  const displayedJournalDebit = displayedJournalLines.reduce((sum, line) => sum + (line.side === "debit" ? line.amount : 0), 0);
+  const displayedJournalCredit = displayedJournalLines.reduce((sum, line) => sum + (line.side === "credit" ? line.amount : 0), 0);
+  const displayedJournalBalanced = Math.abs(displayedJournalDebit - displayedJournalCredit) < 0.005;
 
   const updateForm = (key: keyof typeof form, value: string) =>
     setForm((current) => ({
@@ -1042,7 +1090,7 @@ export function SourceBilling() {
                   <tr><th className="px-3 py-2">Journal line</th><th className="px-3 py-2">Mapped account</th><th className="px-3 py-2">Account kind</th><th className="px-3 py-2 text-right">Debit</th><th className="px-3 py-2 text-right">Credit</th></tr>
                 </thead>
                 <tbody className="divide-y divide-border">
-                  {journalPreviewLines.map((line) => (
+                  {displayedJournalLines.map((line) => (
                     <tr key={line.key}>
                       <td className="px-3 py-2">{line.label}</td>
                       <td className="px-3 py-2 font-medium">{line.account?.account_name ?? (line.id ? `Mapped ID ${line.id}` : "NOT MAPPED")}</td>
@@ -1053,13 +1101,14 @@ export function SourceBilling() {
                   ))}
                 </tbody>
                 <tfoot className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <tr><td colSpan={3} className="px-3 py-2">Totals {journalBalanced ? "(balanced)" : "(NOT BALANCED)"}</td><td className="px-3 py-2 text-right">{money(journalDebit)}</td><td className="px-3 py-2 text-right">{money(journalCredit)}</td></tr>
+                  <tr><td colSpan={3} className="px-3 py-2">Totals {displayedJournalBalanced ? "(balanced)" : "(NOT BALANCED)"}</td><td className="px-3 py-2 text-right">{money(displayedJournalDebit)}</td><td className="px-3 py-2 text-right">{money(displayedJournalCredit)}</td></tr>
                 </tfoot>
               </table>
             </div>
             {journalPreviewLines.some((line) => !line.account) && (
               <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">One or more Source Master accounts are missing or could not be loaded. The database will reject this entry until all three mapped accounts are active in this branch.</p>
             )}
+            {postedJournalEntryId && <p className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-800">Verified from saved journal entry <strong>{postedJournalEntryId}</strong>. The lines above are the actual posted voucher, not only the preview.</p>}
             {generating && <p className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">Posting this exact entry now… Please wait.</p>}
             {journalPostStatus === "success" && <p className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900">Journal entry passed and the source bill was generated successfully.</p>}
             {journalPostError && <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">Journal entry was not passed:
