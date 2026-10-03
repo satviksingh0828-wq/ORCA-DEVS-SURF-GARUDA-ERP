@@ -31,6 +31,12 @@ type TransporterSource = {
   source_name: string;
   transporter_id: string;
   branch_id?: string | null;
+  liability_ledger_id?: string | null;
+  freight_expenditure_ledger_id?: string | null;
+  loading_expenditure_ledger_id?: string | null;
+  liability_ledger?: { account_name?: string | null } | null;
+  freight_expenditure_ledger?: { account_name?: string | null } | null;
+  loading_expenditure_ledger?: { account_name?: string | null } | null;
 };
 type Bill = {
   id: string;
@@ -46,6 +52,7 @@ type Bill = {
   total_freight: number | string;
   total_loading: number | string;
   deleted_at: string | null;
+  journal_entry_id: string | null;
 };
 type Consignment = {
   id: string;
@@ -177,13 +184,19 @@ export function TransporterBilling() {
     to: "",
   });
   const [generating, setGenerating] = useState(false);
+  const [journalPreviewOpen, setJournalPreviewOpen] = useState(false);
+  const [journalPostStatus, setJournalPostStatus] = useState<"pending" | "success" | "error">("pending");
+  const [journalPostError, setJournalPostError] = useState<string | null>(null);
+  const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{ freight: number; loading: number } | null>(null);
+  const [postedJournalEntryId, setPostedJournalEntryId] = useState<string | null>(null);
+  const [postedJournalLines, setPostedJournalLines] = useState<any[] | null>(null);
 
   async function loadMasters() {
     const [transporterResult, sourceResult] = await Promise.all([
       supabase.from("ltms_transporters").select("id,transporter_name").order("transporter_name"),
       (supabase as any)
         .from("ltms_transporter_sources")
-        .select("id,source_name,transporter_id,branch_id")
+        .select("id,source_name,transporter_id,branch_id,liability_ledger_id,freight_expenditure_ledger_id,loading_expenditure_ledger_id,liability_ledger:ledger_accounts!liability_ledger_id(account_name),freight_expenditure_ledger:ledger_accounts!freight_expenditure_ledger_id(account_name),loading_expenditure_ledger:ledger_accounts!loading_expenditure_ledger_id(account_name)")
         .eq("is_active", true)
         .order("source_name"),
     ]);
@@ -202,7 +215,7 @@ export function TransporterBilling() {
       let query = (supabase as any)
         .from("ltms_transporter_bills")
         .select(
-          "id,system_number,system_date,transporter_bill_number,transporter_bill_date,period_from,period_to,total_freight,total_loading,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),transporter_source:ltms_transporter_sources(source_name)",
+          "id,system_number,system_date,transporter_bill_number,transporter_bill_date,period_from,period_to,total_freight,total_loading,journal_entry_id,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),transporter_source:ltms_transporter_sources(source_name)",
         )
         .gte("system_date", listFilters.from)
         .lte("system_date", listFilters.to)
@@ -433,8 +446,16 @@ export function TransporterBilling() {
       !lines.length
     )
       return toast.error("Complete bill details and select at least one consignment");
+    if (totals.freight + totals.loading <= 0)
+      return toast.error("Adjusted final Freight and Loading total must be greater than zero before posting the journal entry");
+    setJournalPreviewAmounts({ freight: totals.freight, loading: totals.loading });
+    setJournalPostError(null);
+    setJournalPostStatus("pending");
+    setPostedJournalEntryId(null);
+    setPostedJournalLines(null);
+    setJournalPreviewOpen(true);
     setGenerating(true);
-    const { error } = await (supabase as any).rpc("generate_ltms_transporter_bill", {
+    const { data: generatedBillId, error } = await (supabase as any).rpc("generate_ltms_transporter_bill", {
       p_branch_id: form.branch,
       p_transporter_id: form.transporter,
       p_transporter_source_id: form.source,
@@ -460,10 +481,35 @@ export function TransporterBilling() {
       })),
     });
     setGenerating(false);
-    if (error) return toast.error(`Could not generate transporter bill: ${error.message}`);
-    toast.success(
-      "Transporter bill generated. Selected consignments are now locked for transporter-source changes.",
-    );
+    if (error) {
+      setJournalPostStatus("error");
+      setJournalPostError(error.message);
+      return toast.error(`Could not generate transporter bill: ${error.message}`);
+    }
+    const { data: savedBill, error: savedBillError } = await (supabase as any)
+      .from("ltms_transporter_bills")
+      .select("journal_entry_id")
+      .eq("id", generatedBillId)
+      .maybeSingle();
+    if (savedBillError || !savedBill?.journal_entry_id) {
+      setJournalPostStatus("error");
+      setJournalPostError(savedBillError?.message ?? "The bill was created but no journal entry was linked to it.");
+      return toast.error("Bill created, but the posted journal could not be verified");
+    }
+    const { data: savedLines, error: savedLinesError } = await (supabase as any)
+      .from("journal_lines")
+      .select("line_no,ledger_account_id,line_description,debit,credit,ledger_account:ledger_accounts(account_name,ledger_type,account_kind)")
+      .eq("journal_entry_id", savedBill.journal_entry_id)
+      .order("line_no");
+    if (savedLinesError || !savedLines?.length) {
+      setJournalPostStatus("error");
+      setJournalPostError(savedLinesError?.message ?? "The journal entry was linked but has no saved journal lines.");
+      return toast.error("Bill created, but saved journal lines could not be verified");
+    }
+    setPostedJournalEntryId(savedBill.journal_entry_id);
+    setPostedJournalLines(savedLines);
+    setJournalPostStatus("success");
+    toast.success("Transporter bill generated and journal entry verified.");
     setLines([]);
     setForm((current) => ({ ...current, billNumber: "" }));
     setScreen("list");
@@ -479,6 +525,18 @@ export function TransporterBilling() {
     toast.success("Transporter bill moved to deleted history");
     await loadBills();
   }
+  const selectedBillingSource = formSources.find((source) => source.id === form.source);
+  const previewTotals = journalPreviewAmounts ?? totals;
+  const previewLines = [
+    { key: "freight", label: "Freight expenditure (debit)", account: selectedBillingSource?.freight_expenditure_ledger, id: selectedBillingSource?.freight_expenditure_ledger_id, amount: previewTotals.freight, side: "debit" },
+    { key: "loading", label: "Loading expenditure (debit)", account: selectedBillingSource?.loading_expenditure_ledger, id: selectedBillingSource?.loading_expenditure_ledger_id, amount: previewTotals.loading, side: "debit" },
+    { key: "source", label: "Transporter source payable (credit)", account: selectedBillingSource?.liability_ledger, id: selectedBillingSource?.liability_ledger_id, amount: previewTotals.freight + previewTotals.loading, side: "credit" },
+  ].filter((line) => line.amount > 0);
+  const displayedJournalLines = postedJournalLines ?? previewLines;
+  const journalDebit = displayedJournalLines.reduce((sum, line) => sum + ((line.side ?? (num(line.debit) > 0 ? "debit" : "credit")) === "debit" ? num(line.amount ?? line.debit) : 0), 0);
+  const journalCredit = displayedJournalLines.reduce((sum, line) => sum + ((line.side ?? (num(line.debit) > 0 ? "debit" : "credit")) === "credit" ? num(line.amount ?? line.credit) : 0), 0);
+  const journalBalanced = Math.abs(journalDebit - journalCredit) < 0.005;
+
   const visibleBills = useMemo(() => {
     const query = search.trim().toLowerCase();
     return query
@@ -995,6 +1053,24 @@ export function TransporterBilling() {
               <Plus className="size-3.5" /> Add selected ({selectedCandidateIds.length})
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={journalPreviewOpen} onOpenChange={(open) => !generating && setJournalPreviewOpen(open)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader><DialogTitle>Transporter Bill Journal Entry Preview</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
+              <div className="flex flex-wrap justify-between gap-2"><span><strong>Basis:</strong> adjusted final freight/loading only</span><span><strong>Total:</strong> {money(previewTotals.freight + previewTotals.loading)}</span></div>
+              <p className="mt-1 text-xs text-muted-foreground">Freight and Loading are posted as expenditure debits; the mapped transporter source ledger is credited.</p>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-border"><table className="w-full text-sm"><thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground"><tr><th className="px-3 py-2">Journal line</th><th className="px-3 py-2">Mapped account</th><th className="px-3 py-2">Account kind</th><th className="px-3 py-2 text-right">Debit</th><th className="px-3 py-2 text-right">Credit</th></tr></thead><tbody className="divide-y divide-border">{displayedJournalLines.map((line: any, index: number) => { const account = line.account ?? line.ledger_account; const debit = num(line.amount ?? line.debit); const credit = num(line.amount ?? line.credit); const isDebit = line.side ? line.side === "debit" : debit > 0; return <tr key={line.key ?? `${line.line_no}-${index}`}><td className="px-3 py-2">{line.label ?? line.line_description ?? `Line ${line.line_no}`}</td><td className="px-3 py-2 font-medium">{account?.account_name ?? (line.id || line.ledger_account_id ? `Mapped ID ${line.id ?? line.ledger_account_id}` : "NOT MAPPED")}</td><td className="px-3 py-2">{account ? `${account.ledger_type} / ${account.account_kind}` : "—"}</td><td className="px-3 py-2 text-right">{isDebit ? money(debit) : "—"}</td><td className="px-3 py-2 text-right">{!isDebit ? money(credit) : "—"}</td></tr>; })}</tbody><tfoot className="border-t-2 border-border bg-muted/30 font-semibold"><tr><td colSpan={3} className="px-3 py-2">Totals {journalBalanced ? "(balanced)" : "(NOT BALANCED)"}</td><td className="px-3 py-2 text-right">{money(journalDebit)}</td><td className="px-3 py-2 text-right">{money(journalCredit)}</td></tr></tfoot></table></div>
+            {generating && <p className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">Posting this exact entry now… Please wait.</p>}
+            {postedJournalEntryId && <p className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-800">Verified from saved journal entry <strong>{postedJournalEntryId}</strong>. The lines above are the actual posted voucher.</p>}
+            {journalPostStatus === "success" && <p className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900">Journal entry passed and the transporter bill was generated successfully.</p>}
+            {journalPostError && <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">Journal entry was not passed:
+{journalPostError}</pre>}
+          </div>
+          <DialogFooter><Button variant="outline" disabled={generating} onClick={() => setJournalPreviewOpen(false)}>Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
       <Dialog

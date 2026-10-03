@@ -29,11 +29,15 @@ type Source = {
   source_name: string;
   branch_id: string;
   liability_ledger_id: string | null;
+  freight_expenditure_ledger_id: string | null;
+  loading_expenditure_ledger_id: string | null;
   liability_ledger?: { account_name?: string | null } | null;
+  freight_expenditure_ledger?: { account_name?: string | null } | null;
+  loading_expenditure_ledger?: { account_name?: string | null } | null;
   is_active: boolean;
   inactive_at: string | null;
 };
-type Ledger = { id: string; account_name: string };
+type Ledger = { id: string; account_name: string; ledger_type: string };
 const TABLE = "ltms_transporter_entries" as never;
 
 export function TransporterEntries({
@@ -53,6 +57,8 @@ export function TransporterEntries({
   const [editingSourceId, setEditingSourceId] = useState<string | null>(null);
   const [sourceName, setSourceName] = useState("");
   const [liabilityLedgerId, setLiabilityLedgerId] = useState("");
+  const [freightLedgerId, setFreightLedgerId] = useState("");
+  const [loadingLedgerId, setLoadingLedgerId] = useState("");
   const [savingSource, setSavingSource] = useState(false);
   const [filter, setFilter] = useState<"active" | "inactive" | "all">("active");
   const selectedSource = sources.find((source) => source.id === sourceId) ?? null;
@@ -68,7 +74,7 @@ export function TransporterEntries({
     let query = supabase
       .from("ltms_transporter_sources" as never)
       .select(
-        "id,source_name,branch_id,liability_ledger_id,is_active,inactive_at,liability_ledger:ledger_accounts(account_name)",
+        "id,source_name,branch_id,liability_ledger_id,freight_expenditure_ledger_id,loading_expenditure_ledger_id,is_active,inactive_at,liability_ledger:ledger_accounts!liability_ledger_id(account_name),freight_expenditure_ledger:ledger_accounts!freight_expenditure_ledger_id(account_name),loading_expenditure_ledger:ledger_accounts!loading_expenditure_ledger_id(account_name)",
       )
       .eq("transporter_id", transporter.id)
       .order("source_name");
@@ -120,16 +126,15 @@ export function TransporterEntries({
     setLoading(false);
   }
 
-  async function loadLiabilityLedgers() {
+  async function loadLedgers() {
     if (!transporter.branch_id) return;
     const { data, error } = await supabase
       .from("ledger_accounts" as never)
-      .select("id,account_name")
+      .select("id,account_name,ledger_type")
       .eq("branch_id", transporter.branch_id)
-      .eq("ledger_type", "liability")
       .eq("is_active", true)
       .order("account_name");
-    if (error) toast.error(`Could not load branch liability ledgers: ${error.message}`);
+    if (error) toast.error(`Could not load branch ledger accounts: ${error.message}`);
     setLedgers((data ?? []) as Ledger[]);
   }
 
@@ -144,20 +149,24 @@ export function TransporterEntries({
     setEditingSourceId(source?.id ?? null);
     setSourceName(source?.source_name ?? "");
     setLiabilityLedgerId(source?.liability_ledger_id ?? "");
-    void loadLiabilityLedgers();
+    setFreightLedgerId(source?.freight_expenditure_ledger_id ?? "");
+    setLoadingLedgerId(source?.loading_expenditure_ledger_id ?? "");
+    void loadLedgers();
     setSourceDialog(true);
   }
 
   async function saveSource() {
     if (!transporter.branch_id) return toast.error("Assign the transporter to a branch first");
     if (!sourceName.trim()) return toast.error("Source name is required");
-    if (!liabilityLedgerId) return toast.error("Select the branch liability ledger");
+    if (!liabilityLedgerId || !freightLedgerId || !loadingLedgerId) return toast.error("Select the transporter source, Freight and Loading ledger accounts");
     setSavingSource(true);
     const payload = {
       transporter_id: transporter.id,
       branch_id: transporter.branch_id,
       source_name: sourceName.trim(),
       liability_ledger_id: liabilityLedgerId,
+      freight_expenditure_ledger_id: freightLedgerId,
+      loading_expenditure_ledger_id: loadingLedgerId,
     };
     const query = editingSourceId
       ? supabase
@@ -167,7 +176,7 @@ export function TransporterEntries({
       : supabase.from("ltms_transporter_sources" as never).insert(payload);
     const { data, error } = await query
       .select(
-        "id,source_name,branch_id,liability_ledger_id,is_active,inactive_at,liability_ledger:ledger_accounts(account_name)",
+        "id,source_name,branch_id,liability_ledger_id,freight_expenditure_ledger_id,loading_expenditure_ledger_id,is_active,inactive_at,liability_ledger:ledger_accounts!liability_ledger_id(account_name),freight_expenditure_ledger:ledger_accounts!freight_expenditure_ledger_id(account_name),loading_expenditure_ledger:ledger_accounts!loading_expenditure_ledger_id(account_name)",
       )
       .single();
     setSavingSource(false);
@@ -244,7 +253,7 @@ export function TransporterEntries({
             <FileText className="size-8 text-primary" />
             <p className="mt-4 text-sm font-medium">No transporter sources yet</p>
             <p className="mt-1 text-sm text-muted-foreground">
-              Create a source and link it to a liability ledger for this branch.
+              Create a source and map its source liability, Freight expenditure and Loading expenditure ledgers for this branch.
             </p>
             <Button className="mt-5" onClick={openSourceDialog}>
               <Plus className="size-4" /> New source
@@ -302,7 +311,7 @@ export function TransporterEntries({
                         ) : null}
                       </div>
                       <p className="truncate text-xs text-muted-foreground">
-                        Liability ledger: {source.liability_ledger?.account_name ?? "—"}
+                        Source ledger: {source.liability_ledger?.account_name ?? "—"} · Freight: {source.freight_expenditure_ledger?.account_name ?? "—"} · Loading: {source.loading_expenditure_ledger?.account_name ?? "—"}
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -351,18 +360,24 @@ export function TransporterEntries({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Branch Liability Ledger *</Label>
+                <Label>Transporter Source Ledger *</Label>
                 <Select value={liabilityLedgerId} onValueChange={setLiabilityLedgerId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select liability ledger" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {ledgers.map((ledger) => (
-                      <SelectItem key={ledger.id} value={ledger.id}>
-                        {ledger.account_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
+                  <SelectTrigger><SelectValue placeholder="Select liability ledger" /></SelectTrigger>
+                  <SelectContent>{ledgers.filter((ledger) => ledger.ledger_type === "liability").map((ledger) => <SelectItem key={ledger.id} value={ledger.id}>{ledger.account_name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Freight Expenditure Ledger *</Label>
+                <Select value={freightLedgerId} onValueChange={setFreightLedgerId}>
+                  <SelectTrigger><SelectValue placeholder="Select Freight expenditure ledger" /></SelectTrigger>
+                  <SelectContent>{ledgers.filter((ledger) => ledger.ledger_type === "expenditure").map((ledger) => <SelectItem key={ledger.id} value={ledger.id}>{ledger.account_name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Loading Expenditure Ledger *</Label>
+                <Select value={loadingLedgerId} onValueChange={setLoadingLedgerId}>
+                  <SelectTrigger><SelectValue placeholder="Select Loading expenditure ledger" /></SelectTrigger>
+                  <SelectContent>{ledgers.filter((ledger) => ledger.ledger_type === "expenditure").map((ledger) => <SelectItem key={ledger.id} value={ledger.id}>{ledger.account_name}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
             </div>
@@ -392,7 +407,7 @@ export function TransporterEntries({
               {transporter.transporter_name} · {selectedSource.source_name}
             </h2>
             <p className="text-sm text-muted-foreground">
-              Liability ledger: {selectedSource.liability_ledger?.account_name ?? "—"}
+              Source ledger: {selectedSource.liability_ledger?.account_name ?? "—"} · Freight: {selectedSource.freight_expenditure_ledger?.account_name ?? "—"} · Loading: {selectedSource.loading_expenditure_ledger?.account_name ?? "—"}
             </p>
           </div>
         </div>
