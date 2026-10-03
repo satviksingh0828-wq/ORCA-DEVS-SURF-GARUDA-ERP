@@ -192,6 +192,7 @@ export function SourceBilling() {
   const [journalPreviewOpen, setJournalPreviewOpen] = useState(false);
   const [journalPostStatus, setJournalPostStatus] = useState<"pending" | "success" | "error">("pending");
   const [journalPostError, setJournalPostError] = useState<string | null>(null);
+  const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{ freight: number; loading: number } | null>(null);
 
   async function loadBillItems(billId: string) {
     setViewItemsLoading(true);
@@ -429,6 +430,7 @@ export function SourceBilling() {
       return toast.error(
         "Adjusted final Freight and Loading total must be greater than zero before posting the journal entry",
       );
+    setJournalPreviewAmounts({ freight: totals.freight, loading: totals.loading });
     setJournalPostError(null);
     setJournalPostStatus("pending");
     setJournalPreviewOpen(true);
@@ -501,18 +503,19 @@ export function SourceBilling() {
     [lines],
   );
   const selectedBillingSource = sources.find((source) => source.id === form.source);
+  const previewTotals = journalPreviewAmounts ?? totals;
   const journalPreviewLines = useMemo(() => {
     const source = selectedBillingSource;
     const mapped = [
-      { key: "source", label: "Source account (debit)", id: source?.source_asset_ledger_id, amount: totals.freight + totals.loading, side: "debit" },
-      { key: "freight", label: "Freight income (credit)", id: source?.freight_income_ledger_id, amount: totals.freight, side: "credit" },
-      { key: "loading", label: "Loading income (credit)", id: source?.loading_income_ledger_id, amount: totals.loading, side: "credit" },
+      { key: "source", label: "Source account (debit)", id: source?.source_asset_ledger_id, amount: previewTotals.freight + previewTotals.loading, side: "debit" },
+      { key: "freight", label: "Freight income (credit)", id: source?.freight_income_ledger_id, amount: previewTotals.freight, side: "credit" },
+      { key: "loading", label: "Loading income (credit)", id: source?.loading_income_ledger_id, amount: previewTotals.loading, side: "credit" },
     ];
     return mapped.filter((line) => line.amount > 0 || line.key === "source").map((line) => ({
       ...line,
       account: line.id ? ledgerAccounts[line.id] : undefined,
     }));
-  }, [ledgerAccounts, selectedBillingSource, totals]);
+  }, [ledgerAccounts, previewTotals, selectedBillingSource]);
   const journalDebit = journalPreviewLines.reduce((sum, line) => sum + (line.side === "debit" ? line.amount : 0), 0);
   const journalCredit = journalPreviewLines.reduce((sum, line) => sum + (line.side === "credit" ? line.amount : 0), 0);
   const journalBalanced = Math.abs(journalDebit - journalCredit) < 0.005;
@@ -1027,7 +1030,7 @@ export function SourceBilling() {
             <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
               <div className="flex flex-wrap justify-between gap-2">
                 <span><strong>Basis:</strong> adjusted final freight/loading only</span>
-                <span><strong>Total:</strong> {money(totals.freight + totals.loading)}</span>
+                <span><strong>Total:</strong> {money(previewTotals.freight + previewTotals.loading)}</span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 Gross calculated values are stored for audit but are not posted to this journal.
