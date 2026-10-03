@@ -299,6 +299,29 @@ function getScreenPoint(container: HTMLElement, clientX: number, clientY: number
   return { x, y };
 }
 
+function getScreenOverlayPosition(container: HTMLElement, x: number, y: number) {
+  const video = container.querySelector<HTMLVideoElement>("[data-screen-control-video]");
+  if (!video || !video.videoWidth || !video.videoHeight) return null;
+  const containerRect = container.getBoundingClientRect();
+  const videoRect = video.getBoundingClientRect();
+  const frameRatio = video.videoWidth / video.videoHeight;
+  let frameWidth = videoRect.width;
+  let frameHeight = videoRect.height;
+  let frameLeft = videoRect.left;
+  let frameTop = videoRect.top;
+  if (videoRect.width / videoRect.height > frameRatio) {
+    frameWidth = videoRect.height * frameRatio;
+    frameLeft += (videoRect.width - frameWidth) / 2;
+  } else {
+    frameHeight = videoRect.width / frameRatio;
+    frameTop += (videoRect.height - frameHeight) / 2;
+  }
+  return {
+    left: frameLeft - containerRect.left + x * frameWidth,
+    top: frameTop - containerRect.top + y * frameHeight,
+  };
+}
+
 export function ScreenControlWidget() {
   const { user } = useSession();
   const routePath = useRouterState({ select: (state) => state.location.pathname });
@@ -312,6 +335,7 @@ export function ScreenControlWidget() {
   const [sessions, setSessions] = useState<ScreenControlSession[]>([]);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [remotePointer, setRemotePointer] = useState<RemotePointerPosition | null>(null);
+  const [controllerPointer, setControllerPointer] = useState<RemotePointerPosition | null>(null);
   const [localShareReady, setLocalShareReady] = useState(false);
   const [agentStatus, setAgentStatus] = useState<WindowsAgentStatus>({ state: "checking" });
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState | "waiting">(
@@ -336,6 +360,7 @@ export function ScreenControlWidget() {
     timer: number | null;
   }>({ sessionId: null, attempts: 0, timer: null });
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const controlSurfaceRef = useRef<HTMLDivElement>(null);
   const installerUrl = getWindowsAgentInstallerUrl();
 
   useEffect(() => {
@@ -483,6 +508,9 @@ export function ScreenControlWidget() {
     window.addEventListener("screen-control:pointer", onRemotePointer);
     return () => window.removeEventListener("screen-control:pointer", onRemotePointer);
   }, [activeSessionId, activeSessionTargetId, user?.id]);
+  useEffect(() => {
+    setControllerPointer(null);
+  }, [activeSessionId, activeShareScope]);
   const incomingRequests = useMemo(
     () =>
       sessions.filter((session) => session.status === "pending" && session.target_id === user?.id),
@@ -1341,6 +1369,7 @@ export function ScreenControlWidget() {
             </div>
           </header>
           <div
+            ref={controlSurfaceRef}
             className="relative min-h-0 flex-1 overflow-hidden bg-black focus:outline-none"
             tabIndex={0}
             role="application"
@@ -1350,16 +1379,18 @@ export function ScreenControlWidget() {
                 : "Remote app screen. Click here to send mouse and keyboard input."
             }
             onPointerMove={(event) => {
+              const point = getScreenPoint(event.currentTarget, event.clientX, event.clientY);
+              if (point && activeSession.share_scope === "system") setControllerPointer(point);
               const now = Date.now();
               if (now - lastMoveSentAt.current < 45) return;
               lastMoveSentAt.current = now;
-              const point = getScreenPoint(event.currentTarget, event.clientX, event.clientY);
               if (point) sendInput({ type: "move", ...point, buttons: event.buttons });
             }}
             onPointerDown={(event) => {
               event.preventDefault();
               event.currentTarget.focus();
               const point = getScreenPoint(event.currentTarget, event.clientX, event.clientY);
+              if (point && activeSession.share_scope === "system") setControllerPointer(point);
               if (point)
                 sendInput({
                   type: "pointerdown",
@@ -1370,6 +1401,7 @@ export function ScreenControlWidget() {
             }}
             onPointerUp={(event) => {
               const point = getScreenPoint(event.currentTarget, event.clientX, event.clientY);
+              if (point && activeSession.share_scope === "system") setControllerPointer(point);
               if (point)
                 sendInput({
                   type: "pointerup",
@@ -1446,6 +1478,22 @@ export function ScreenControlWidget() {
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 text-center text-white">
                 <LoaderCircle className="size-8 animate-spin" />
                 <p className="text-sm">{connectionLabel}. Waiting for the screen stream…</p>
+              </div>
+            )}
+            {activeSession.share_scope === "system" && controllerPointer && remoteStream && (
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute z-10"
+                data-no-remote-control
+                style={
+                  getScreenOverlayPosition(
+                    controlSurfaceRef.current ?? document.body,
+                    controllerPointer.x,
+                    controllerPointer.y,
+                  ) ?? undefined
+                }
+              >
+                <MousePointer2 className="size-7 -translate-x-1 -translate-y-1 fill-red-600 stroke-white text-red-600 drop-shadow-[0_2px_3px_rgba(0,0,0,0.65)]" />
               </div>
             )}
             {connectionState === "connected" && (
