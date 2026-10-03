@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
+  Download,
   LoaderCircle,
   Maximize2,
   Minimize2,
@@ -19,6 +20,14 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSession } from "@/lib/session";
+import {
+  getWindowsAgentInstallerUrl,
+  probeWindowsDesktopAgent,
+  sendWindowsDesktopAgentInput,
+  startWindowsDesktopAgentCapture,
+  stopWindowsDesktopAgentCapture,
+  type WindowsAgentStatus,
+} from "@/lib/windows-desktop-agent";
 import {
   createScreenControlRequest,
   endScreenControlSession,
@@ -130,6 +139,8 @@ function dispatchRemoteInput(input: RemoteInput, systemShare = false) {
       void nativeInput(input).catch(() => undefined);
       return;
     }
+    sendWindowsDesktopAgentInput(input);
+    return;
   }
   const focused =
     document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
@@ -302,6 +313,7 @@ export function ScreenControlWidget() {
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [remotePointer, setRemotePointer] = useState<RemotePointerPosition | null>(null);
   const [localShareReady, setLocalShareReady] = useState(false);
+  const [agentStatus, setAgentStatus] = useState<WindowsAgentStatus>({ state: "checking" });
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState | "waiting">(
     "waiting",
   );
@@ -324,6 +336,27 @@ export function ScreenControlWidget() {
     timer: number | null;
   }>({ sessionId: null, attempts: 0, timer: null });
   const workspaceRef = useRef<HTMLDivElement>(null);
+  const installerUrl = getWindowsAgentInstallerUrl();
+
+  useEffect(() => {
+    let mounted = true;
+    if (window.electronAPI) {
+      setAgentStatus({ state: "available", version: "Electron host" });
+      return () => {
+        mounted = false;
+      };
+    }
+    const checkAgent = async () => {
+      const status = await probeWindowsDesktopAgent();
+      if (mounted) setAgentStatus(status);
+    };
+    void checkAgent();
+    const timer = window.setInterval(() => void checkAgent(), 15_000);
+    return () => {
+      mounted = false;
+      window.clearInterval(timer);
+    };
+  }, []);
 
   useEffect(() => {
     const syncFullscreenState = () =>
@@ -475,10 +508,13 @@ export function ScreenControlWidget() {
   );
 
   const closeLocalStream = useCallback(() => {
-    localStreamRef.current?.getTracks().forEach((track) => track.stop());
+    const sessionId = localStreamSessionRef.current;
+    const stream = localStreamRef.current;
     localStreamRef.current = null;
     localStreamSessionRef.current = null;
     setLocalShareReady(false);
+    stopWindowsDesktopAgentCapture(sessionId ?? undefined);
+    stream?.getTracks().forEach((track) => track.stop());
   }, []);
 
   const finishSession = useCallback(
@@ -534,32 +570,41 @@ export function ScreenControlWidget() {
     let captured: MediaStream | null = null;
     try {
       if (accept) {
-        if (!navigator.mediaDevices?.getDisplayMedia)
-          throw new Error(
-            "Screen sharing is not available in this browser. Use the app over HTTPS in a supported browser.",
-          );
-        // This call must happen directly from the user's Accept click. The browser
-        // shows its own chooser; the app cannot capture without the owner choosing.
-        const captureOptions: DisplayMediaStreamOptions & { preferCurrentTab?: boolean } = {
-          video: {
-            displaySurface: session.share_scope === "system" ? "monitor" : "window",
-            frameRate: { ideal: 15, max: 24 },
-          },
-          audio: false,
-          preferCurrentTab: session.share_scope === "app",
-        };
-        const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
-          ((scope: string) => Promise<unknown>) | undefined;
-        await setElectronCaptureScope?.(session.share_scope);
+        if (session.share_scope === "system" && !window.electronAPI) {
+          captured = await startWindowsDesktopAgentCapture(session.id, session.requester.name);
+        } else {
+          if (!navigator.mediaDevices?.getDisplayMedia)
+            throw new Error(
+              "Screen sharing is not available in this browser. Use the app over HTTPS in a supported browser.",
+            );
+          // App-only sharing continues to use the browser's existing chooser.
+          const captureOptions: DisplayMediaStreamOptions & { preferCurrentTab?: boolean } = {
+            video: {
+              displaySurface: session.share_scope === "system" ? "monitor" : "window",
+              frameRate: { ideal: 15, max: 24 },
+            },
+            audio: false,
+            preferCurrentTab: session.share_scope === "app",
+          };
+          const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
+            ((scope: string) => Promise<unknown>) | undefined;
+          await setElectronCaptureScope?.(session.share_scope);
+          captured = await navigator.mediaDevices.getDisplayMedia(captureOptions);
+        }
         const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
         if (backgroundVideo) {
           backgroundVideo.dataset.screenControlPaused = "true";
           backgroundVideo.pause();
         }
-        captured = await navigator.mediaDevices.getDisplayMedia(captureOptions);
         localStreamRef.current = captured;
         localStreamSessionRef.current = session.id;
         setLocalShareReady(true);
+        captured.getTracks().forEach((track) => {
+          track.onended = () => {
+            if (localStreamSessionRef.current === session.id)
+              void finishSession(session.id, "screen_share_stopped");
+          };
+        });
       }
       await respondToScreenControlRequest({
         data: { sessionToken: token, sessionId: session.id, accept },
@@ -614,19 +659,23 @@ export function ScreenControlWidget() {
     if (!automatic) setBusyId(session.id);
     let captured: MediaStream | null = null;
     try {
-      if (!navigator.mediaDevices?.getDisplayMedia)
-        throw new Error("Screen sharing is not available in this browser.");
-      const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
-        ((scope: string) => Promise<unknown>) | undefined;
-      await setElectronCaptureScope?.(session.share_scope);
-      captured = await navigator.mediaDevices.getDisplayMedia({
-        video: {
-          displaySurface: session.share_scope === "system" ? "monitor" : "window",
-          frameRate: { ideal: 15, max: 24 },
-        },
-        audio: false,
-        preferCurrentTab: session.share_scope === "app",
-      } as DisplayMediaStreamOptions & { preferCurrentTab?: boolean });
+      if (session.share_scope === "system" && !window.electronAPI) {
+        captured = await startWindowsDesktopAgentCapture(session.id, session.requester.name);
+      } else {
+        if (!navigator.mediaDevices?.getDisplayMedia)
+          throw new Error("Screen sharing is not available in this browser.");
+        const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
+          ((scope: string) => Promise<unknown>) | undefined;
+        await setElectronCaptureScope?.(session.share_scope);
+        captured = await navigator.mediaDevices.getDisplayMedia({
+          video: {
+            displaySurface: session.share_scope === "system" ? "monitor" : "window",
+            frameRate: { ideal: 15, max: 24 },
+          },
+          audio: false,
+          preferCurrentTab: session.share_scope === "app",
+        } as DisplayMediaStreamOptions & { preferCurrentTab?: boolean });
+      }
       localStreamRef.current = captured;
       localStreamSessionRef.current = session.id;
       setLocalShareReady(true);
@@ -1011,9 +1060,33 @@ export function ScreenControlWidget() {
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {request.share_scope === "system"
-                            ? "Accepting shares the full Windows desktop. Do not share passwords or other sensitive windows."
+                            ? "Accepting lets the Windows tray agent share and control your full desktop after you approve in Windows. Do not share passwords or other sensitive windows."
                             : "Accepting shares only the ERP app surface. You can stop sharing at any time."}
                         </p>
+                        {request.share_scope === "system" && agentStatus.state !== "available" && (
+                          <div className="mt-2 rounded-md border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
+                            <p>
+                              {agentStatus.state === "checking"
+                                ? "Checking for the Windows desktop tray agent…"
+                                : agentStatus.reason ||
+                                  "The Windows desktop tray agent is not detected. Install and start it to share the full desktop."}
+                            </p>
+                            {agentStatus.state === "missing" && installerUrl ? (
+                              <a
+                                href={installerUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="mt-2 inline-flex items-center gap-1 font-semibold underline"
+                              >
+                                <Download className="size-3.5" /> Install Windows tray agent
+                              </a>
+                            ) : agentStatus.state === "missing" ? (
+                              <p className="mt-1">
+                                Ask your administrator for the signed installer.
+                              </p>
+                            ) : null}
+                          </div>
+                        )}
                         <div className="mt-3 flex justify-end gap-2">
                           <Button
                             size="sm"
@@ -1025,7 +1098,11 @@ export function ScreenControlWidget() {
                           </Button>
                           <Button
                             size="sm"
-                            disabled={busyId === request.id}
+                            disabled={
+                              busyId === request.id ||
+                              (request.share_scope === "system" &&
+                                agentStatus.state !== "available")
+                            }
                             onClick={() => void answerRequest(request, true)}
                           >
                             {busyId === request.id ? (
@@ -1150,8 +1227,8 @@ export function ScreenControlWidget() {
                 )}
               </div>
               <div className="border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
-                No recording. The screen owner must accept. The installed Windows app shares the
-                primary desktop; browser control remains limited to the app page.
+                No recording. The screen owner must accept in the app and approve again in the
+                Windows tray agent for full-desktop control. App-only sharing is unchanged.
               </div>
             </PopoverContent>
           </Popover>,
@@ -1167,8 +1244,13 @@ export function ScreenControlWidget() {
           <div className="flex max-w-3xl flex-wrap items-center justify-center gap-2 rounded-xl border border-amber-400 bg-amber-50 px-4 py-2 text-xs text-amber-950 shadow-lg">
             <ShieldAlert className="size-4 shrink-0" />
             <span>
-              Your selected screen is being shared with <strong>{target}</strong>; control is
-              limited to this app tab.
+              {activeSession.share_scope === "system"
+                ? "Your full Windows desktop is being shared with "
+                : "Your selected app screen is being shared with "}
+              <strong>{target}</strong>
+              {activeSession.share_scope === "system"
+                ? "; remote desktop control is enabled."
+                : "."}
             </span>
             {!localShareReady &&
               (activeSession.share_scope !== "app" ||
@@ -1198,7 +1280,7 @@ export function ScreenControlWidget() {
         <section
           ref={workspaceRef}
           className="fixed inset-0 z-[80] flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-950 text-white"
-          aria-label={`Remote app session with ${controller}`}
+          aria-label={`${activeSession.share_scope === "system" ? "Remote Windows desktop" : "Remote app session"} with ${controller}`}
         >
           <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-700 bg-background px-3 text-foreground shadow-sm sm:px-5">
             <div className="flex min-w-0 items-center gap-3">
@@ -1207,10 +1289,15 @@ export function ScreenControlWidget() {
               </span>
               <div className="min-w-0">
                 <h1 className="truncate text-sm font-semibold sm:text-base">
-                  Remote app session · {controller}
+                  {activeSession.share_scope === "system"
+                    ? "Remote Windows desktop"
+                    : "Remote app session"}{" "}
+                  · {controller}
                 </h1>
                 <p className="hidden text-xs text-muted-foreground sm:block">
-                  Mouse, keyboard, drag, and scroll control · no recording
+                  {activeSession.share_scope === "system"
+                    ? "Full desktop · mouse and keyboard control · no recording"
+                    : "App window · mouse, keyboard, drag, and scroll control · no recording"}
                 </p>
               </div>
               <span
@@ -1257,7 +1344,11 @@ export function ScreenControlWidget() {
             className="relative min-h-0 flex-1 overflow-hidden bg-black focus:outline-none"
             tabIndex={0}
             role="application"
-            aria-label="Remote app screen. Click here to send mouse and keyboard input."
+            aria-label={
+              activeSession.share_scope === "system"
+                ? "Remote Windows desktop. Click here to send mouse and keyboard input."
+                : "Remote app screen. Click here to send mouse and keyboard input."
+            }
             onPointerMove={(event) => {
               const now = Date.now();
               if (now - lastMoveSentAt.current < 45) return;
@@ -1360,7 +1451,7 @@ export function ScreenControlWidget() {
             {connectionState === "connected" && (
               <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-1.5 rounded-md bg-black/70 px-3 py-2 text-xs text-white">
                 <MousePointer2 className="size-3.5" /> Click, scroll, and use your keyboard to
-                control the app
+                control {activeSession.share_scope === "system" ? "the desktop" : "the app"}
               </div>
             )}
           </div>
