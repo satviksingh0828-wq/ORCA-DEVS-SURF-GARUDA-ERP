@@ -305,8 +305,19 @@ export function ScreenControlWidget() {
   }, []);
 
   useEffect(() => {
-    setHeaderTarget(document.querySelector<HTMLElement>("[data-app-shell-header-actions]"));
-  }, [routePath]);
+    let disposed = false;
+    const findHeaderTarget = () => {
+      if (!disposed)
+        setHeaderTarget(document.querySelector<HTMLElement>("[data-app-shell-header-actions]"));
+    };
+    findHeaderTarget();
+    const observer = new MutationObserver(findHeaderTarget);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => {
+      disposed = true;
+      observer.disconnect();
+    };
+  }, [routePath, user?.id]);
 
   const refreshState = useCallback(
     async (quiet = false) => {

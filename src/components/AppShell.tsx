@@ -152,8 +152,11 @@ export function AppShell({
           </Link>
           {breadcrumb && <div className="ml-2 hidden md:block shrink-0">{breadcrumb}</div>}
           {headerEnd && <div className="ml-2 hidden lg:block">{headerEnd}</div>}
-          <div data-app-shell-header-actions className="contents" />
           <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
+            <div
+              data-app-shell-header-actions
+              className="flex shrink-0 items-center gap-1.5 sm:gap-2"
+            />
             {isAdmin && (
               <Link
                 to="/system"
