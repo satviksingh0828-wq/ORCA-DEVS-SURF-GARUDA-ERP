@@ -11,11 +11,7 @@ import { ensureLocationsForPins } from "@/lib/ensure-location";
 import { logAction } from "@/lib/log-actions";
 import { ItemLogsButton } from "@/components/shared/ItemLogsDrawer";
 import { ContractForm, EMPTY_CONTRACT, type ContractRow } from "./ContractForm";
-import {
-  ContractEntryForm,
-  emptyEntry,
-  type EntryRow,
-} from "./ContractEntryForm";
+import { ContractEntryForm, emptyEntry, type EntryRow } from "./ContractEntryForm";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 import { useBranches } from "@/lib/use-branches";
@@ -23,6 +19,9 @@ import { useBranches } from "@/lib/use-branches";
 const CONTRACT_COLUMNS = [
   "contract_name",
   "branch_id",
+  "source_asset_ledger_id",
+  "freight_income_ledger_id",
+  "loading_income_ledger_id",
   "fixed_monthly_charge",
   "fixed_monthly_charge_note",
   "fixed_yearly_charge",
@@ -170,19 +169,17 @@ export function Contracts() {
         view={view}
         onBack={() => setView({ kind: "list" })}
         onNew={() => setView({ kind: "new-entry", contract: view.contract })}
-        onEdit={(e) =>
-          setView({ kind: "edit-entry", contract: view.contract, entry: e })
-        }
+        onEdit={(e) => setView({ kind: "edit-entry", contract: view.contract, entry: e })}
         onCancelForm={() => setView({ kind: "entries", contract: view.contract })}
       />
     );
   }
 
-  const activeCount   = contracts.filter((c) => c.status !== "inactive").length;
+  const activeCount = contracts.filter((c) => c.status !== "inactive").length;
   const inactiveCount = contracts.filter((c) => c.status === "inactive").length;
 
   const visibleContracts = contracts.filter((c) => {
-    if (filter === "active")   return c.status !== "inactive";
+    if (filter === "active") return c.status !== "inactive";
     if (filter === "inactive") return c.status === "inactive";
     return true;
   });
@@ -193,8 +190,7 @@ export function Contracts() {
         <div>
           <h2 className="text-lg font-semibold tracking-tight">Sources</h2>
           <p className="mt-1 text-sm text-muted-foreground">
-            Freight sources with weight or quantity slabs. Open a source to add
-            route-wise entries.
+            Freight sources with weight or quantity slabs. Open a source to add route-wise entries.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -216,9 +212,11 @@ export function Contracts() {
       <div className="flex gap-1 rounded-xl bg-muted/50 p-1 w-fit">
         {(["active", "inactive", "all"] as const).map((f) => {
           const label =
-            f === "active"   ? `Active (${activeCount})` :
-            f === "inactive" ? `Inactive (${inactiveCount})` :
-            `All (${contracts.length})`;
+            f === "active"
+              ? `Active (${activeCount})`
+              : f === "inactive"
+                ? `Inactive (${inactiveCount})`
+                : `All (${contracts.length})`;
           return (
             <button
               key={f}
@@ -265,73 +263,71 @@ export function Contracts() {
           {visibleContracts.map((c, i) => {
             const inactive = c.status === "inactive";
             return (
-            <li
-              key={c.id}
-              style={{ animationDelay: `${i * 40}ms` }}
-              className={`surface-card animate-fade-up flex items-center gap-4 p-4 transition-shadow hover:shadow-[var(--shadow-lift)] ${inactive ? "opacity-60" : ""}`}
-            >
-              <span className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${inactive ? "bg-muted text-muted-foreground" : "bg-primary-soft text-primary"}`}>
-                <FileText className="size-5" />
-              </span>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <p className="truncate text-sm font-semibold">{c.contract_name}</p>
-                  {inactive ? (
-                    <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
-                      Inactive
-                    </span>
-                  ) : (
-                    <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
-                      Active
-                    </span>
+              <li
+                key={c.id}
+                style={{ animationDelay: `${i * 40}ms` }}
+                className={`surface-card animate-fade-up flex items-center gap-4 p-4 transition-shadow hover:shadow-[var(--shadow-lift)] ${inactive ? "opacity-60" : ""}`}
+              >
+                <span
+                  className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${inactive ? "bg-muted text-muted-foreground" : "bg-primary-soft text-primary"}`}
+                >
+                  <FileText className="size-5" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-semibold">{c.contract_name}</p>
+                    {inactive ? (
+                      <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        Inactive
+                      </span>
+                    ) : (
+                      <span className="shrink-0 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400">
+                        Active
+                      </span>
+                    )}
+                  </div>
+                  <p className="truncate text-xs text-muted-foreground">
+                    Per-route rate slabs
+                    {Number(c.fixed_monthly_charge) > 0 || Number(c.fixed_yearly_charge) > 0
+                      ? " · Has fixed charges"
+                      : ""}
+                    {c.start_date ? ` · From ${c.start_date}` : ""}
+                    {c.end_date ? ` · To ${c.end_date}` : ""}
+                    {c.branch_id
+                      ? ` · ${branches.find((branch) => branch.id === c.branch_id)?.branch_name ?? "Unknown branch"}`
+                      : " · No branch"}
+                  </p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1">
+                  {/* Admin-only per-row logs */}
+                  {isAdmin && c.id ? (
+                    <ItemLogsButton
+                      entityType="contract"
+                      entityId={c.id}
+                      entityLabel={c.contract_name}
+                    />
+                  ) : null}
+                  <Button
+                    size="sm"
+                    variant={inactive ? "outline" : "default"}
+                    onClick={() => setView({ kind: "entries", contract: c })}
+                  >
+                    {inactive ? "View" : "Open"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setView({ kind: "edit-contract", contract: c })}
+                  >
+                    {inactive ? "View" : "Edit"}
+                  </Button>
+                  {!inactive && (
+                    <Button variant="ghost" size="sm" onClick={() => removeContract(c)}>
+                      <Trash2 className="size-4 text-destructive" />
+                    </Button>
                   )}
                 </div>
-                <p className="truncate text-xs text-muted-foreground">
-                  Per-route rate slabs
-                  {Number(c.fixed_monthly_charge) > 0 || Number(c.fixed_yearly_charge) > 0
-                    ? " · Has fixed charges"
-                    : ""}
-                  {c.start_date ? ` · From ${c.start_date}` : ""}
-                  {c.end_date   ? ` · To ${c.end_date}` : ""}
-                  {c.branch_id
-                    ? ` · ${branches.find((branch) => branch.id === c.branch_id)?.branch_name ?? "Unknown branch"}`
-                    : " · No branch"}
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-1">
-                {/* Admin-only per-row logs */}
-                {isAdmin && c.id ? (
-                  <ItemLogsButton
-                    entityType="contract"
-                    entityId={c.id}
-                    entityLabel={c.contract_name}
-                  />
-                ) : null}
-                <Button
-                  size="sm"
-                  variant={inactive ? "outline" : "default"}
-                  onClick={() => setView({ kind: "entries", contract: c })}
-                >
-                  {inactive ? "View" : "Open"}
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setView({ kind: "edit-contract", contract: c })}
-                >
-                  {inactive ? "View" : "Edit"}
-                </Button>
-                {!inactive && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => removeContract(c)}
-                >
-                  <Trash2 className="size-4 text-destructive" />
-                </Button>
-                )}
-              </div>
-            </li>
+              </li>
             );
           })}
         </ul>
@@ -360,12 +356,31 @@ function EntriesView({
   const [locNames, setLocNames] = useState<Record<string, string>>({});
 
   const entryColumns = useMemo(() => {
-    const nF = Math.max(3, entries.length > 0 ? Math.max(...entries.map((e) => (e.freight_route_ranges ?? []).length)) : 0);
-    const nL = Math.max(3, entries.length > 0 ? Math.max(...entries.map((e) => (e.loading_route_ranges ?? []).length)) : 0);
-    const cols: string[] = ["mode", "from_location", "from_pin_code", "to_location", "to_pin_code", "freight_range_type"];
-    for (let i = 1; i <= nF; i++) cols.push(`f_r${i}_start`, `f_r${i}_end`, `f_r${i}_working`, `f_r${i}_value`);
+    const nF = Math.max(
+      3,
+      entries.length > 0
+        ? Math.max(...entries.map((e) => (e.freight_route_ranges ?? []).length))
+        : 0,
+    );
+    const nL = Math.max(
+      3,
+      entries.length > 0
+        ? Math.max(...entries.map((e) => (e.loading_route_ranges ?? []).length))
+        : 0,
+    );
+    const cols: string[] = [
+      "mode",
+      "from_location",
+      "from_pin_code",
+      "to_location",
+      "to_pin_code",
+      "freight_range_type",
+    ];
+    for (let i = 1; i <= nF; i++)
+      cols.push(`f_r${i}_start`, `f_r${i}_end`, `f_r${i}_working`, `f_r${i}_value`);
     cols.push("loading_range_type");
-    for (let i = 1; i <= nL; i++) cols.push(`l_r${i}_start`, `l_r${i}_end`, `l_r${i}_working`, `l_r${i}_value`);
+    for (let i = 1; i <= nL; i++)
+      cols.push(`l_r${i}_start`, `l_r${i}_end`, `l_r${i}_working`, `l_r${i}_value`);
     cols.push("per_manifest_amount", "per_manifest_note");
     return cols;
   }, [entries]);
@@ -382,9 +397,7 @@ function EntriesView({
       );
       setEntries(rows);
       const ids = Array.from(
-        new Set(
-          rows.flatMap((r) => [r.from_location_id, r.to_location_id]).filter(Boolean),
-        ),
+        new Set(rows.flatMap((r) => [r.from_location_id, r.to_location_id]).filter(Boolean)),
       ) as string[];
       if (ids.length) {
         const locs = await fetchAll<{ id: string; location_name: string }>(() =>
@@ -417,8 +430,8 @@ function EntriesView({
   }
 
   async function onImport(rows: Record<string, string>[]) {
-    const all = await fetchAll<{ id: string; location_name: string; pin_code: string | null }>(
-      () => supabase.from("locations").select("id,location_name,pin_code"),
+    const all = await fetchAll<{ id: string; location_name: string; pin_code: string | null }>(() =>
+      supabase.from("locations").select("id,location_name,pin_code"),
     );
     const nameToId = new Map(all.map((l) => [l.location_name.trim().toLowerCase(), l.id]));
     let pinToId = new Map(
@@ -439,12 +452,14 @@ function EntriesView({
       const n = (name ?? "").trim().toLowerCase();
       const p = (pin ?? "").trim();
       const id = pinToId.get(p) ?? nameToId.get(n) ?? null;
-      return { id, pin: p || (id ? pinById.get(id) ?? "" : "") };
+      return { id, pin: p || (id ? (pinById.get(id) ?? "") : "") };
     };
 
     const payload = rows.map((r) => {
       const freight_route_range_type =
-        (r.freight_range_type ?? "weight").trim().toLowerCase() === "quantity" ? "quantity" : "weight";
+        (r.freight_range_type ?? "weight").trim().toLowerCase() === "quantity"
+          ? "quantity"
+          : "weight";
       const freight_route_ranges: RouteRange[] = [];
       for (let i = 1; i <= 20; i++) {
         const start = (r[`f_r${i}_start`] ?? "").trim();
@@ -458,7 +473,9 @@ function EntriesView({
         });
       }
       const loading_route_range_type =
-        (r.loading_range_type ?? "weight").trim().toLowerCase() === "quantity" ? "quantity" : "weight";
+        (r.loading_range_type ?? "weight").trim().toLowerCase() === "quantity"
+          ? "quantity"
+          : "weight";
       const loading_route_ranges: RouteRange[] = [];
       for (let i = 1; i <= 20; i++) {
         const start = (r[`l_r${i}_start`] ?? "").trim();
@@ -475,7 +492,9 @@ function EntriesView({
       const to = resolve(r.to_location ?? "", r.to_pin_code ?? "");
       return {
         contract_id: contract.id!,
-        mode: ["ROAD", "RAIL", "AIR", "SHIP"].includes((r.mode ?? "ROAD").trim().toUpperCase()) ? (r.mode ?? "ROAD").trim().toUpperCase() : "ROAD",
+        mode: ["ROAD", "RAIL", "AIR", "SHIP"].includes((r.mode ?? "ROAD").trim().toUpperCase())
+          ? (r.mode ?? "ROAD").trim().toUpperCase()
+          : "ROAD",
         from_location_id: from.id,
         to_location_id: to.id,
         from_pin_code: from.pin,
@@ -503,9 +522,9 @@ function EntriesView({
   const exportRows = entries.map((e) => {
     const row: Record<string, unknown> = {
       mode: e.mode ?? "ROAD",
-      from_location: e.from_location_id ? locNames[e.from_location_id] ?? "" : "",
+      from_location: e.from_location_id ? (locNames[e.from_location_id] ?? "") : "",
       from_pin_code: e.from_pin_code,
-      to_location: e.to_location_id ? locNames[e.to_location_id] ?? "" : "",
+      to_location: e.to_location_id ? (locNames[e.to_location_id] ?? "") : "",
       to_pin_code: e.to_pin_code,
       freight_range_type: e.freight_route_range_type ?? "weight",
     };
@@ -563,9 +582,7 @@ function EntriesView({
             Sources
           </Button>
           <div>
-            <h2 className="text-lg font-semibold tracking-tight">
-              {contract.contract_name}
-            </h2>
+            <h2 className="text-lg font-semibold tracking-tight">{contract.contract_name}</h2>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -623,7 +640,12 @@ function EntriesView({
                     {(from || "—") + " → " + (to || "—")}
                   </p>
                   <p className="truncate text-xs text-muted-foreground">
-                    {[e.mode ?? "ROAD", [e.from_pin_code, e.to_pin_code].filter(Boolean).join(" → ")].filter(Boolean).join(" · ")}
+                    {[
+                      e.mode ?? "ROAD",
+                      [e.from_pin_code, e.to_pin_code].filter(Boolean).join(" → "),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                     {preview ? " · " + preview : ""}
                   </p>
                 </div>
@@ -631,11 +653,7 @@ function EntriesView({
                   <Button variant="outline" size="sm" onClick={() => onEdit(e)}>
                     Edit
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => e.id && remove(e.id)}
-                  >
+                  <Button variant="ghost" size="sm" onClick={() => e.id && remove(e.id)}>
                     <Trash2 className="size-4 text-destructive" />
                   </Button>
                 </div>

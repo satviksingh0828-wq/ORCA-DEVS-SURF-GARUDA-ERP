@@ -30,6 +30,7 @@ type ConsignmentRow = {
   consignment_date: string | null;
   source_id: string | null;
   transporter_source_id: string | null;
+  source_bill_id?: string | null;
   branch?: { branch_name?: string | null } | null;
   source?: { contract_name?: string | null } | null;
   transporter_source?: { source_name?: string | null } | null;
@@ -69,6 +70,7 @@ export function SourcesReport() {
   const [currentValue, setCurrentValue] = useState("");
   const [replacementValue, setReplacementValue] = useState("");
   const [updating, setUpdating] = useState(false);
+  const [selectedConsignmentIds, setSelectedConsignmentIds] = useState<string[]>([]);
 
   async function loadBranches() {
     const { data, error } = await supabase
@@ -87,7 +89,7 @@ export function SourcesReport() {
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,branch_id,consignment_date,source_id,transporter_source_id,branch:branches(branch_name),source:contracts(contract_name),transporter_source:ltms_transporter_sources(source_name)",
+          "id,consignment_number,branch_id,consignment_date,source_id,transporter_source_id,source_bill_id,branch:branches(branch_name),source:contracts(contract_name),transporter_source:ltms_transporter_sources(source_name)",
         )
         .gte("consignment_date", fromDate)
         .lte("consignment_date", toDate)
@@ -217,14 +219,17 @@ export function SourcesReport() {
       return toast.error("Select both the current and replacement values");
     if (currentValue === replacementValue)
       return toast.error("Replacement value must be different");
+    if (!selectedConsignmentIds.length)
+      return toast.error("Select at least one consignment in the report first");
     setUpdating(true);
     try {
       if (updateType === "source" || updateType === "transporter_source") {
         const affectedIds = rows
           .filter(
             (row) =>
+              selectedConsignmentIds.includes(row.id) &&
               (updateType === "source" ? row.source_id : row.transporter_source_id) ===
-              currentValue,
+                currentValue,
           )
           .map((row) => row.id);
         if (!affectedIds.length)
@@ -239,7 +244,7 @@ export function SourcesReport() {
         const affected = packageRows.filter(
           (item) =>
             item.package_rate_type_id === currentValue &&
-            rows.some((row) => row.id === item.consignment_id),
+            selectedConsignmentIds.includes(item.consignment_id),
         );
         if (!affected.length)
           throw new Error("The current package type is not used in the selected date range");
@@ -275,6 +280,11 @@ export function SourcesReport() {
   useEffect(() => {
     void loadData();
   }, [fromDate, toDate, branchId]);
+  useEffect(() => {
+    setSelectedConsignmentIds((current) =>
+      current.filter((id) => rows.some((row) => row.id === id)),
+    );
+  }, [rows]);
 
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -351,8 +361,13 @@ export function SourcesReport() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-muted-foreground">{filtered.length} consignment(s)</p>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => setUpdateOpen(true)}>
-            Update value
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setUpdateOpen(true)}
+            disabled={!selectedConsignmentIds.length}
+          >
+            Update with selection ({selectedConsignmentIds.length})
           </Button>
           <Button variant="outline" size="sm" onClick={() => void loadData()} disabled={loading}>
             <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} /> Refresh
@@ -367,7 +382,21 @@ export function SourcesReport() {
         <table className="w-full min-w-[900px] text-sm">
           <thead className="bg-muted/40 text-left text-xs uppercase tracking-wide text-muted-foreground">
             <tr>
-              <th className="px-3 py-3">#</th>
+              <th className="px-3 py-3 text-center">
+                <input
+                  type="checkbox"
+                  aria-label="Select all visible consignments"
+                  checked={
+                    filtered.length > 0 &&
+                    filtered.every((row) => selectedConsignmentIds.includes(row.id))
+                  }
+                  onChange={(event) =>
+                    setSelectedConsignmentIds(
+                      event.target.checked ? filtered.map((row) => row.id) : [],
+                    )
+                  }
+                />
+              </th>
               <th className="px-3 py-3">Consignment Number</th>
               <th className="px-3 py-3">Date</th>
               <th className="px-3 py-3">Branch</th>
@@ -390,13 +419,33 @@ export function SourcesReport() {
                 </td>
               </tr>
             ) : (
-              filtered.map((row, index) => (
+              filtered.map((row) => (
                 <tr key={row.id} className="border-t border-border/60">
-                  <td className="px-3 py-3 text-muted-foreground">{index + 1}</td>
+                  <td className="px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${row.consignment_number}`}
+                      checked={selectedConsignmentIds.includes(row.id)}
+                      onChange={(event) =>
+                        setSelectedConsignmentIds((current) =>
+                          event.target.checked
+                            ? [...current, row.id]
+                            : current.filter((id) => id !== row.id),
+                        )
+                      }
+                    />
+                  </td>
                   <td className="px-3 py-3 font-medium">{row.consignment_number}</td>
                   <td className="px-3 py-3">{row.consignment_date ?? "—"}</td>
                   <td className="px-3 py-3">{row.branch?.branch_name ?? "—"}</td>
-                  <td className="px-3 py-3">{row.source?.contract_name ?? "—"}</td>
+                  <td className="px-3 py-3">
+                    {row.source?.contract_name ?? "—"}
+                    {row.source_bill_id ? (
+                      <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+                        Source billed · editable
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-3">{row.transporter_source?.source_name ?? "—"}</td>
                   <td className="px-3 py-3">{row.package_types || "—"}</td>
                 </tr>

@@ -25,7 +25,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-type Source = { id: string; contract_name: string; branch_id?: string | null };
+type Source = {
+  id: string;
+  contract_name: string;
+  branch_id?: string | null;
+  company_name?: string | null;
+  legal_business_name?: string | null;
+  gstin?: string | null;
+  address_line1?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  country?: string | null;
+  pin_code?: string | null;
+};
 type Bill = {
   id: string;
   bill_number: string;
@@ -40,6 +53,16 @@ type Bill = {
   deleted_at: string | null;
   branch?: { branch_name?: string | null } | null;
   source?: { contract_name?: string | null } | null;
+  source_company_name?: string | null;
+  source_legal_business_name?: string | null;
+  source_gstin?: string | null;
+  source_address?: string | null;
+  source_address_line1?: string | null;
+  source_address_line2?: string | null;
+  source_city?: string | null;
+  source_state?: string | null;
+  source_country?: string | null;
+  source_pin_code?: string | null;
 };
 type Consignment = {
   id: string;
@@ -125,7 +148,7 @@ function routeEntry(entries: Entry[], row: Consignment, fromPin: string, toPin: 
 export function SourceBilling() {
   const branches = useBranches();
   const { user } = useSession();
-  const [screen, setScreen] = useState<"list" | "create">("list");
+  const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [bills, setBills] = useState<Bill[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [branchSources, setBranchSources] = useState<Source[]>([]);
@@ -189,7 +212,9 @@ export function SourceBilling() {
   async function loadSources() {
     const { data, error } = await (supabase as any)
       .from("contracts")
-      .select("id,contract_name,branch_id")
+      .select(
+        "id,contract_name,branch_id,company_name,legal_business_name,gstin,address_line1,address_line2,city,state,country,pin_code",
+      )
       .order("contract_name");
     if (error) return toast.error(`Could not load sources: ${error.message}`);
     setSources((data ?? []) as Source[]);
@@ -200,7 +225,7 @@ export function SourceBilling() {
       let query = (supabase as any)
         .from("ltms_source_bills")
         .select(
-          "id,bill_number,branch_id,source_id,bill_date,due_date,period_from,period_to,total_freight,total_loading,deleted_at,branch:branches(branch_name),source:contracts(contract_name)",
+          "id,bill_number,branch_id,source_id,bill_date,due_date,period_from,period_to,total_freight,total_loading,deleted_at,source_company_name,source_legal_business_name,source_gstin,source_address,source_address_line1,source_address_line2,source_city,source_state,source_country,source_pin_code,branch:branches(branch_name),source:contracts(contract_name)",
         )
         .gte("bill_date", listFilters.from)
         .lte("bill_date", listFilters.to)
@@ -441,6 +466,19 @@ export function SourceBilling() {
       ...(key === "branch" ? { source: "" } : {}),
     }));
   const sourceList = listFilters.branch === "all" ? sources : sources;
+  const selectedSource = sources.find((source) => source.id === form.source);
+  const selectedSourceAddress = selectedSource
+    ? [
+        selectedSource.address_line1,
+        selectedSource.address_line2,
+        selectedSource.city,
+        selectedSource.state,
+        selectedSource.country,
+        selectedSource.pin_code,
+      ]
+        .filter(Boolean)
+        .join(", ")
+    : "";
   return (
     <div className="space-y-6">
       {screen === "list" && (
@@ -562,7 +600,14 @@ export function SourceBilling() {
                       <td className="px-3 py-3 text-right">{money(bill.total_loading)}</td>
                       <td className="px-3 py-3">
                         <div className="flex justify-center gap-2">
-                          <Button size="sm" variant="outline" onClick={() => setViewing(bill)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setViewing(bill);
+                              setScreen("view");
+                            }}
+                          >
                             <Eye className="size-3.5" /> View
                           </Button>
                           {!bill.deleted_at && (
@@ -670,6 +715,26 @@ export function SourceBilling() {
               />
             </label>
           </div>
+          {selectedSource && (
+            <div className="grid gap-3 rounded-xl border border-primary/20 bg-primary/5 p-4 text-sm sm:grid-cols-3">
+              <div>
+                <span className="text-xs text-muted-foreground">Source company</span>
+                <p className="font-medium">
+                  {selectedSource.company_name ||
+                    selectedSource.legal_business_name ||
+                    selectedSource.contract_name}
+                </p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">GSTIN</span>
+                <p>{selectedSource.gstin || "—"}</p>
+              </div>
+              <div>
+                <span className="text-xs text-muted-foreground">Address</span>
+                <p>{selectedSourceAddress || "—"}</p>
+              </div>
+            </div>
+          )}
           <div className="flex justify-end">
             <Button
               variant="outline"
@@ -895,8 +960,140 @@ export function SourceBilling() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {screen === "view" && viewing && (
+        <section className="space-y-5 rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="text-lg font-semibold">Source Bill {viewing.bill_number}</h2>
+              <p className="text-xs text-muted-foreground">
+                Full bill view · source-billed consignments remain non-deletable.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setViewing(null);
+                setScreen("list");
+              }}
+            >
+              Back to bills
+            </Button>
+          </div>
+          <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <span className="text-muted-foreground">Branch</span>
+              <p className="font-medium">{viewing.branch?.branch_name ?? "—"}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Source</span>
+              <p className="font-medium">{viewing.source?.contract_name ?? "—"}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Bill date / Due date</span>
+              <p>
+                {viewing.bill_date} / {viewing.due_date}
+              </p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Billing period</span>
+              <p>
+                {viewing.period_from} → {viewing.period_to}
+              </p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Company / GSTIN</span>
+              <p className="font-medium">
+                {viewing.source_company_name || viewing.source_legal_business_name || "—"}
+              </p>
+              <p className="text-xs">{viewing.source_gstin || "GSTIN —"}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Company address</span>
+              <p>
+                {viewing.source_address ||
+                  [
+                    viewing.source_address_line1,
+                    viewing.source_address_line2,
+                    viewing.source_city,
+                    viewing.source_state,
+                    viewing.source_country,
+                    viewing.source_pin_code,
+                  ]
+                    .filter(Boolean)
+                    .join(", ") ||
+                  "—"}
+              </p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Consignments</span>
+              <p className="font-medium">{viewItems.length}</p>
+            </div>
+            <div>
+              <span className="text-muted-foreground">Bill totals</span>
+              <p className="font-semibold">
+                {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading
+              </p>
+            </div>
+          </div>
+          <div className="overflow-x-auto rounded-xl border border-border">
+            <table className="w-full min-w-[1050px] text-sm">
+              <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                <tr>
+                  <th className="px-3 py-2">Consignment</th>
+                  <th className="px-3 py-2">Date</th>
+                  <th className="px-3 py-2">Route</th>
+                  <th className="px-3 py-2 text-right">Freight</th>
+                  <th className="px-3 py-2 text-right">Loading</th>
+                  <th className="px-3 py-2 text-right">Total</th>
+                  <th className="px-3 py-2 text-center">Details</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {viewItemsLoading ? (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                      Loading billed consignments…
+                    </td>
+                  </tr>
+                ) : viewItems.length ? (
+                  viewItems.map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-3 py-2 font-medium">{item.consignment_number}</td>
+                      <td className="px-3 py-2">{item.consignment_date ?? "—"}</td>
+                      <td className="px-3 py-2">
+                        {item.from_pin_code || "—"} → {item.to_pin_code || "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right">{money(item.final_freight)}</td>
+                      <td className="px-3 py-2 text-right">{money(item.final_loading)}</td>
+                      <td className="px-3 py-2 text-right font-medium">
+                        {money(num(item.final_freight) + num(item.final_loading))}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setConsignmentViewing(item.consignment_id)}
+                        >
+                          <Eye className="size-3.5" /> View details
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                      No consignments found for this bill.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
       <Dialog
-        open={viewing !== null}
+        open={false}
         onOpenChange={(open) => {
           if (!open) {
             setViewing(null);

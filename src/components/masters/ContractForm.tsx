@@ -20,6 +20,8 @@ export type ContractRow = {
   contract_name: string;
   branch_id?: string | null;
   source_asset_ledger_id?: string | null;
+  freight_income_ledger_id?: string | null;
+  loading_income_ledger_id?: string | null;
   // Contract period & status
   start_date?: string;
   end_date?: string;
@@ -65,6 +67,8 @@ export const EMPTY_CONTRACT: ContractRow = {
   contract_name: "",
   branch_id: null,
   source_asset_ledger_id: null,
+  freight_income_ledger_id: null,
+  loading_income_ledger_id: null,
   start_date: "",
   end_date: "",
   status: "active",
@@ -327,6 +331,44 @@ export function ContractForm({
             >
               <option value="">Select asset account</option>
               {assetLedgers.map((ledger) => (
+                <option key={ledger.id} value={ledger.id}>
+                  {ledger.account_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">
+              Freight Account (Income) <span className="text-destructive">*</span>
+            </Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={form.freight_income_ledger_id ?? ""}
+              onChange={(e) => patch({ freight_income_ledger_id: e.target.value || null })}
+              disabled={isInactive || !form.branch_id}
+              required
+            >
+              <option value="">Select freight income account</option>
+              {incomeLedgers.map((ledger) => (
+                <option key={ledger.id} value={ledger.id}>
+                  {ledger.account_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">
+              Loading Account (Income) <span className="text-destructive">*</span>
+            </Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={form.loading_income_ledger_id ?? ""}
+              onChange={(e) => patch({ loading_income_ledger_id: e.target.value || null })}
+              disabled={isInactive || !form.branch_id}
+              required
+            >
+              <option value="">Select loading income account</option>
+              {incomeLedgers.map((ledger) => (
                 <option key={ledger.id} value={ledger.id}>
                   {ledger.account_name}
                 </option>
