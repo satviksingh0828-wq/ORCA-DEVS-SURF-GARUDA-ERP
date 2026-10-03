@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
   LoaderCircle,
+  Maximize2,
+  Minimize2,
   MonitorUp,
   MousePointer2,
   RefreshCw,
@@ -13,14 +15,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSession } from "@/lib/session";
 import {
@@ -281,6 +275,7 @@ export function ScreenControlWidget() {
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState | "waiting">(
     "waiting",
   );
+  const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);
   const localStreamRef = useRef<MediaStream | null>(null);
   const localStreamSessionRef = useRef<string | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
@@ -288,6 +283,14 @@ export function ScreenControlWidget() {
   const lastMoveSentAt = useRef(0);
   const pollLock = useRef(false);
   const signalErrorShown = useRef(false);
+  const workspaceRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const syncFullscreenState = () =>
+      setIsWorkspaceFullscreen(document.fullscreenElement === workspaceRef.current);
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+    return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
+  }, []);
 
   const refreshState = useCallback(
     async (quiet = false) => {
@@ -639,9 +642,19 @@ export function ScreenControlWidget() {
     if (video && video.srcObject !== remoteStream) video.srcObject = remoteStream;
   }, [remoteStream]);
 
+  const controller =
+    user && isController && activeSession ? displayName(activeSession, user.id) : null;
+  useEffect(() => {
+    if (!controller) return;
+    const previousTitle = document.title;
+    document.title = `Remote app session · ${controller}`;
+    return () => {
+      document.title = previousTitle;
+    };
+  }, [controller]);
+
   if (!user) return null;
 
-  const controller = isController && activeSession ? displayName(activeSession, user.id) : null;
   const target = activeSession?.target_id === user.id ? displayName(activeSession, user.id) : null;
   const connectionLabel =
     connectionState === "connected"
@@ -649,6 +662,15 @@ export function ScreenControlWidget() {
       : connectionState === "failed"
         ? "Connection failed"
         : "Connecting…";
+
+  async function toggleWorkspaceFullscreen() {
+    try {
+      if (document.fullscreenElement === workspaceRef.current) await document.exitFullscreen();
+      else await workspaceRef.current?.requestFullscreen();
+    } catch {
+      toast.error("Could not enter fullscreen mode in this browser.");
+    }
+  }
 
   return (
     <>
@@ -879,23 +901,67 @@ export function ScreenControlWidget() {
         </div>
       )}
 
-      <Dialog
-        open={Boolean(controller && activeSession)}
-        onOpenChange={(nextOpen) => {
-          if (!nextOpen && isController && activeSession)
-            void finishSession(activeSession.id, "controller_closed_view");
-        }}
-      >
-        <DialogContent className="max-h-[92vh] max-w-6xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Remote app session · {controller}</DialogTitle>
-            <DialogDescription>
-              {connectionLabel}. Mouse and keyboard input is relayed only within this app tab. The
-              other user can stop sharing at any time.
-            </DialogDescription>
-          </DialogHeader>
+      {controller && activeSession && (
+        <section
+          ref={workspaceRef}
+          className="fixed inset-0 z-[80] flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-950 text-white"
+          aria-label={`Remote app session with ${controller}`}
+        >
+          <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-700 bg-background px-3 text-foreground shadow-sm sm:px-5">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
+                <MonitorUp className="size-5" />
+              </span>
+              <div className="min-w-0">
+                <h1 className="truncate text-sm font-semibold sm:text-base">
+                  Remote app session · {controller}
+                </h1>
+                <p className="hidden text-xs text-muted-foreground sm:block">
+                  Mouse, keyboard, drag, and scroll control · no recording
+                </p>
+              </div>
+              <span
+                className={`ml-1 hidden shrink-0 rounded-full px-2.5 py-1 text-xs font-medium sm:inline-flex ${
+                  connectionState === "connected"
+                    ? "bg-green-100 text-green-800"
+                    : connectionState === "failed"
+                      ? "bg-red-100 text-red-800"
+                      : "bg-amber-100 text-amber-800"
+                }`}
+                role="status"
+                aria-live="polite"
+              >
+                {connectionLabel}
+              </span>
+            </div>
+            <div className="flex shrink-0 items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => void toggleWorkspaceFullscreen()}
+                aria-label={isWorkspaceFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+              >
+                {isWorkspaceFullscreen ? (
+                  <Minimize2 className="size-4" />
+                ) : (
+                  <Maximize2 className="size-4" />
+                )}
+                <span className="hidden sm:inline">
+                  {isWorkspaceFullscreen ? "Exit fullscreen" : "Fullscreen"}
+                </span>
+              </Button>
+              <Button
+                size="sm"
+                variant="destructive"
+                onClick={() => void finishSession(activeSession.id, "ended_by_controller")}
+              >
+                <X className="size-4" />
+                <span>Disconnect</span>
+              </Button>
+            </div>
+          </header>
           <div
-            className="relative min-h-64 overflow-hidden rounded-lg border border-border bg-slate-950 focus:outline-none focus:ring-2 focus:ring-primary"
+            className="relative min-h-0 flex-1 overflow-hidden bg-black focus:outline-none"
             tabIndex={0}
             role="application"
             aria-label="Remote app screen. Click here to send mouse and keyboard input."
@@ -986,37 +1052,24 @@ export function ScreenControlWidget() {
                 autoPlay
                 playsInline
                 muted
-                className="block max-h-[72vh] min-h-64 w-full bg-black object-contain"
+                className="block h-full w-full bg-black object-contain"
                 onLoadedMetadata={(event) => void event.currentTarget.play().catch(() => undefined)}
               />
             ) : (
-              <div className="flex min-h-64 flex-col items-center justify-center gap-3 p-8 text-center text-white">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 text-center text-white">
                 <LoaderCircle className="size-8 animate-spin" />
                 <p className="text-sm">{connectionLabel}. Waiting for the screen stream…</p>
               </div>
             )}
             {connectionState === "connected" && (
-              <div className="absolute bottom-3 left-3 flex items-center gap-1.5 rounded-md bg-black/70 px-2.5 py-1.5 text-xs text-white">
-                <MousePointer2 className="size-3.5" /> Click the shared screen, then use your mouse
-                and keyboard to control the app
+              <div className="pointer-events-none absolute bottom-4 left-4 flex items-center gap-1.5 rounded-md bg-black/70 px-3 py-2 text-xs text-white">
+                <MousePointer2 className="size-3.5" /> Click, scroll, and use your keyboard to
+                control the app
               </div>
             )}
           </div>
-          <DialogFooter>
-            <p className="mr-auto flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ShieldAlert className="size-3.5" /> No video or input is recorded.
-            </p>
-            {activeSession && (
-              <Button
-                variant="destructive"
-                onClick={() => void finishSession(activeSession.id, "ended_by_controller")}
-              >
-                End remote session
-              </Button>
-            )}
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </section>
+      )}
     </>
   );
 }
