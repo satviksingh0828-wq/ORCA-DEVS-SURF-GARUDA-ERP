@@ -324,6 +324,8 @@ function getScreenOverlayPosition(container: HTMLElement, x: number, y: number) 
 
 export function ScreenControlWidget() {
   const { user } = useSession();
+  const isPopupWindow =
+    typeof window !== "undefined" && window.location.search.includes("screen_control_popup=1");
   const routePath = useRouterState({ select: (state) => state.location.pathname });
   const token = user?.sessionToken ?? "";
   const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
@@ -342,6 +344,7 @@ export function ScreenControlWidget() {
     "waiting",
   );
   const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);
+  const [popupWindow, setPopupWindow] = useState<Window | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const localStreamSessionRef = useRef<string | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
@@ -748,7 +751,13 @@ export function ScreenControlWidget() {
   }, [activeSession, localShareReady, user?.id]);
 
   useEffect(() => {
-    if (!activeSessionId || activeSessionStatus !== "active" || !token || !user?.id) {
+    if (
+      !activeSessionId ||
+      activeSessionStatus !== "active" ||
+      !token ||
+      !user?.id ||
+      (!isPopupWindow && Boolean(popupWindow))
+    ) {
       peerRef.current?.close();
       peerRef.current = null;
       channelRef.current = null;
@@ -975,6 +984,8 @@ export function ScreenControlWidget() {
     refreshState,
     token,
     user?.id,
+    isPopupWindow,
+    popupWindow,
   ]);
 
   useEffect(() => {
@@ -993,6 +1004,42 @@ export function ScreenControlWidget() {
       document.title = previousTitle;
     };
   }, [controller]);
+
+  useEffect(() => {
+    if (isPopupWindow || !user || !controller || popupWindow) return;
+    const popup = window.open(
+      `${window.location.origin}/screen-control-popup?screen_control_popup=1`,
+      "orca-screen-control",
+      "popup=yes,width=420,height=280,resizable=yes,scrollbars=no",
+    );
+    if (!popup) {
+      toast.error("Please allow popups to open the screen-control window.");
+      return;
+    }
+    const sendSession = (event: MessageEvent) => {
+      if (
+        event.origin === window.location.origin &&
+        event.source === popup &&
+        event.data?.type === "orca-screen-popup-ready"
+      )
+        popup.postMessage(
+          { type: "orca-screen-popup-session", session: user },
+          window.location.origin,
+        );
+    };
+    const timer = window.setInterval(() => {
+      if (popup.closed) {
+        window.clearInterval(timer);
+        setPopupWindow(null);
+      }
+    }, 500);
+    window.addEventListener("message", sendSession);
+    setPopupWindow(popup);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener("message", sendSession);
+    };
+  }, [controller, isPopupWindow, popupWindow, user]);
 
   if (!user) return null;
 
@@ -1309,8 +1356,12 @@ export function ScreenControlWidget() {
           ref={workspaceRef}
           className="fixed inset-0 z-[80] flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-950 text-white"
           aria-label={`${activeSession.share_scope === "system" ? "Remote Windows desktop" : "Remote app session"} with ${controller}`}
+          style={!isPopupWindow && popupWindow ? { display: "none" } : undefined}
         >
-          <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-700 bg-background px-3 text-foreground shadow-sm sm:px-5">
+          <header
+            className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-700 bg-background px-3 text-foreground shadow-sm sm:px-5"
+            style={isPopupWindow ? { display: "none" } : undefined}
+          >
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                 <MonitorUp className="size-5" />
@@ -1368,6 +1419,12 @@ export function ScreenControlWidget() {
               </Button>
             </div>
           </header>
+          {isPopupWindow && (
+            <div className="flex items-center justify-center gap-2 border-b border-slate-700 bg-slate-950 py-1 text-[10px] text-slate-300">
+              <img src="/orca-logo.svg" alt="ORCA" className="size-4" /> ORCA · Powered by ORCA DEVS
+              SURF
+            </div>
+          )}
           <div
             ref={controlSurfaceRef}
             className="relative min-h-0 flex-1 overflow-hidden bg-black focus:outline-none"
@@ -1503,9 +1560,14 @@ export function ScreenControlWidget() {
               </div>
             )}
           </div>
+          {isPopupWindow && (
+            <footer className="flex h-6 shrink-0 items-center justify-center border-t border-slate-700 bg-slate-950 text-[9px] text-slate-400">
+              Powered by ORCA DEVS SURF
+            </footer>
+          )}
         </section>
       )}
-      {target && activeSession && remotePointer && (
+      {!isPopupWindow && !popupWindow && target && activeSession && remotePointer && (
         <div
           aria-hidden="true"
           className="pointer-events-none fixed z-[200] -translate-x-1 -translate-y-1"

@@ -227,6 +227,22 @@ function OrcaAIPanelMount() {
   );
 }
 
+function PopupSessionBootstrap() {
+  const { adoptSession } = useSession();
+  useEffect(() => {
+    if (window.opener === null || !window.location.search.includes("screen_control_popup=1")) return;
+    const sendReady = () => window.opener?.postMessage({ type: "orca-screen-popup-ready" }, window.location.origin);
+    const receiveSession = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== window.opener) return;
+      if (event.data?.type === "orca-screen-popup-session" && event.data.session)
+        adoptSession(event.data.session);
+    };
+    window.addEventListener("message", receiveSession);
+    sendReady();
+    return () => window.removeEventListener("message", receiveSession);
+  }, [adoptSession]);
+  return null;
+}
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -260,6 +276,7 @@ function RootComponent() {
                 <SecurityInit />
                 <SessionExpiredListener />
                 <DynamicImportRecovery />
+                <PopupSessionBootstrap />
                 <Outlet />
                 <ScreenControlWidget />
                 <InactivityChallenge />
