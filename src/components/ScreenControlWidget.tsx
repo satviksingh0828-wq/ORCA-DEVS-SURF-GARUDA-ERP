@@ -345,6 +345,7 @@ export function ScreenControlWidget() {
   );
   const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);
   const [popupWindow, setPopupWindow] = useState<Window | null>(null);
+  const popupWindowRef = useRef<Window | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const localStreamSessionRef = useRef<string | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
@@ -578,6 +579,8 @@ export function ScreenControlWidget() {
 
   async function requestControl(targetId: string, shareScope: "app" | "system") {
     if (!token || participantBusy) return;
+    // Open synchronously from the user click so browser popup blockers allow it.
+    openScreenPopup();
     setBusyId(targetId);
     try {
       await createScreenControlRequest({ data: { sessionToken: token, targetId, shareScope } });
@@ -1005,8 +1008,9 @@ export function ScreenControlWidget() {
     };
   }, [controller]);
 
-  useEffect(() => {
-    if (isPopupWindow || !user || !controller || popupWindow) return;
+  const openScreenPopup = useCallback(() => {
+    if (isPopupWindow || !user || (popupWindowRef.current && !popupWindowRef.current.closed))
+      return;
     const popup = window.open(
       `${window.location.origin}/screen-control-popup?screen_control_popup=1`,
       "orca-screen-control",
@@ -1016,6 +1020,7 @@ export function ScreenControlWidget() {
       toast.error("Please allow popups to open the screen-control window.");
       return;
     }
+    popupWindowRef.current = popup;
     const sendSession = (event: MessageEvent) => {
       if (
         event.origin === window.location.origin &&
@@ -1030,16 +1035,19 @@ export function ScreenControlWidget() {
     const timer = window.setInterval(() => {
       if (popup.closed) {
         window.clearInterval(timer);
+        popupWindowRef.current = null;
         setPopupWindow(null);
       }
     }, 500);
     window.addEventListener("message", sendSession);
     setPopupWindow(popup);
-    return () => {
-      window.clearInterval(timer);
-      window.removeEventListener("message", sendSession);
-    };
-  }, [controller, isPopupWindow, popupWindow, user]);
+  }, [isPopupWindow, user]);
+
+  useEffect(() => {
+    if (isPopupWindow || !user || !controller || popupWindow) return;
+    // This is useful after a main-app reload when a named popup already exists.
+    openScreenPopup();
+  }, [controller, isPopupWindow, openScreenPopup, popupWindow, user]);
 
   if (!user) return null;
 
