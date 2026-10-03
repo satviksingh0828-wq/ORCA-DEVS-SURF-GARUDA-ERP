@@ -99,6 +99,48 @@ function runCommand(command, args, options = {}) {
   });
 }
 
+// Temporary support-agent bridge for system-scope sessions. It uses user32.dll
+// through PowerShell so normal Windows applications can receive input.
+async function sendWindowsInput(input) {
+  if (!input || typeof input !== 'object') return { ok: false };
+  const encoded = Buffer.from(JSON.stringify(input), 'utf16le').toString('base64');
+  const script = `
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class NativeInput {
+ [DllImport("user32.dll")] public static extern bool SetCursorPos(int X,int Y);
+ [DllImport("user32.dll")] public static extern void mouse_event(uint f,uint x,uint y,int d,UIntPtr e);
+ [DllImport("user32.dll")] public static extern void keybd_event(byte v,byte s,uint f,UIntPtr e);
+}
+'@
+$i=[Text.Encoding]::Unicode.GetString([Convert]::FromBase64String('${encoded}'))|ConvertFrom-Json
+$b=[Windows.Forms.Screen]::PrimaryScreen.Bounds
+if($i.type -in @('move','pointerdown','pointerup','click','contextmenu')){
+ [NativeInput]::SetCursorPos([int]($i.x*$b.Width),[int]($i.y*$b.Height))|Out-Null
+ $f=0; if($i.type -eq 'pointerdown' -or $i.type -eq 'click'){$f=if($i.button -eq 2){8}else{2}}
+ if($i.type -eq 'pointerup'){$f=if($i.button -eq 2){16}else{4}}; if($i.type -eq 'contextmenu'){$f=8}
+ if($f){[NativeInput]::mouse_event($f,0,0,0,[UIntPtr]::Zero)}
+}elseif($i.type -eq 'wheel'){[NativeInput]::mouse_event(0x800,0,0,[int]$i.deltaY,[UIntPtr]::Zero)
+}elseif($i.type -eq 'key'){
+ $v=switch($i.code){'Enter'{13}'Escape'{27}'Backspace'{8}'Tab'{9}'Space'{32}'ArrowUp'{38}'ArrowDown'{40}'ArrowLeft'{37}'ArrowRight'{39}'Delete'{46}default{if($i.key.Length -eq 1){[int][char]$i.key.ToUpperInvariant()}else{0}}}
+ if($v){
+  $mods=@(); if($i.ctrl){$mods+=162}; if($i.alt){$mods+=164}; if($i.shift){$mods+=160}
+  if($i.down){foreach($m in $mods){[NativeInput]::keybd_event([byte]$m,0,0,[UIntPtr]::Zero)}}
+  [NativeInput]::keybd_event([byte]$v,0,($(if($i.down){0}else{2})),[UIntPtr]::Zero)
+  if(-not $i.down){foreach($m in ($mods|Sort-Object -Descending)){[NativeInput]::keybd_event([byte]$m,0,2,[UIntPtr]::Zero)}}
+ }
+}elseif($i.type -eq 'text' -and $i.text){[Windows.Forms.SendKeys]::SendWait([string]$i.text)}
+`;
+  try {
+    await runCommand('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script]);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error.message };
+  }
+}
+
 function powershellQuote(value) {
   return `'${String(value).replace(/'/g, "''")}'`;
 }
@@ -624,6 +666,8 @@ ipcMain.handle('screen-capture-scope', async (_event, scope) => {
   requestedCaptureScope = scope === 'system' ? 'system' : 'app';
   return { ok: true };
 });
+
+ipcMain.handle('system-input', async (_event, input) => sendWindowsInput(input));
 
 ipcMain.handle('wa-status', async () => waState);
 

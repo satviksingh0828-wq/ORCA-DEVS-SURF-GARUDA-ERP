@@ -2,6 +2,7 @@ const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
   screenCaptureScope: (scope) => ipcRenderer.invoke('screen-capture-scope', scope),
+  systemInput: (input) => ipcRenderer.invoke('system-input', input),
   /** Execute a per-company database operation and return { data, error } */
   dbOp: (descriptor) => ipcRenderer.invoke('db-op', descriptor),
 

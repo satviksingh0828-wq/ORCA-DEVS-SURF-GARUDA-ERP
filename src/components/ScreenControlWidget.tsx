@@ -121,7 +121,16 @@ function editTextControl(
   );
 }
 
-function dispatchRemoteInput(input: RemoteInput) {
+function dispatchRemoteInput(input: RemoteInput, systemShare = false) {
+  if (systemShare) {
+    const nativeInput = window.electronAPI?.systemInput as
+      | ((payload: RemoteInput) => Promise<unknown>)
+      | undefined;
+    if (nativeInput) {
+      void nativeInput(input).catch(() => undefined);
+      return;
+    }
+  }
   const focused =
     document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
 
@@ -391,6 +400,7 @@ export function ScreenControlWidget() {
   const activeSessionId = activeSession?.id;
   const activeSessionStatus = activeSession?.status;
   const activeSessionTargetId = activeSession?.target_id;
+  const activeShareScope = activeSession?.share_scope;
   useEffect(() => {
     const active = Boolean(activeSessionId && activeSessionStatus === "active");
     if (active) document.body.dataset.screenControlActive = "true";
@@ -682,7 +692,7 @@ export function ScreenControlWidget() {
         if (!isOwner) return;
         try {
           const message = JSON.parse(String(event.data)) as RemoteInput;
-          dispatchRemoteInput(message);
+          dispatchRemoteInput(message, activeShareScope === "system");
         } catch {
           // Ignore malformed data-channel messages.
         }
@@ -824,6 +834,7 @@ export function ScreenControlWidget() {
     activeSessionId,
     activeSessionStatus,
     activeSessionTargetId,
+    activeShareScope,
     closeLocalStream,
     finishSession,
     localShareReady,
