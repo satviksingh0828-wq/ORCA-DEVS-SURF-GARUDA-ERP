@@ -81,6 +81,7 @@ import { Route as ApiDriverThemeRouteImport } from './routes/api/driver/theme'
 import { Route as ApiHrPayrollEmailRouteImport } from './routes/api/hr/payroll-email'
 import { Route as ApiMobileOutwardPodRouteImport } from './routes/api/mobile/outward-pod'
 import { Route as ApiMobileVerifyRouteImport } from './routes/api/mobile/verify'
+import { Route as ApiScreenControlDisconnectRouteImport } from './routes/api/screen-control/disconnect'
 import { Route as AttendanceHistoryIndexRouteImport } from './routes/attendance.history.index'
 import { Route as AttendanceHistoryIdRouteImport } from './routes/attendance.history.$id'
 import { Route as EmployeesIdIndexRouteImport } from './routes/employees.$id.index'
@@ -462,6 +463,12 @@ const ApiMobileVerifyRoute = ApiMobileVerifyRouteImport.update({
   path: '/api/mobile/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiScreenControlDisconnectRoute =
+  ApiScreenControlDisconnectRouteImport.update({
+    id: '/api/screen-control/disconnect',
+    path: '/api/screen-control/disconnect',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AttendanceHistoryIndexRoute = AttendanceHistoryIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -638,6 +645,7 @@ export interface FileRoutesByFullPath {
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
+  '/api/screen-control/disconnect': typeof ApiScreenControlDisconnectRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
   '/employees/departments/new': typeof EmployeesDepartmentsNewRoute
@@ -723,6 +731,7 @@ export interface FileRoutesByTo {
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
+  '/api/screen-control/disconnect': typeof ApiScreenControlDisconnectRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
   '/employees/departments/new': typeof EmployeesDepartmentsNewRoute
@@ -817,6 +826,7 @@ export interface FileRoutesById {
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
+  '/api/screen-control/disconnect': typeof ApiScreenControlDisconnectRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
   '/employees/departments/new': typeof EmployeesDepartmentsNewRoute
@@ -912,6 +922,7 @@ export interface FileRouteTypes {
     | '/api/hr/payroll-email'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
+    | '/api/screen-control/disconnect'
     | '/attendance/history/$id'
     | '/employees/$id/edit'
     | '/employees/departments/new'
@@ -997,6 +1008,7 @@ export interface FileRouteTypes {
     | '/api/hr/payroll-email'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
+    | '/api/screen-control/disconnect'
     | '/attendance/history/$id'
     | '/employees/$id/edit'
     | '/employees/departments/new'
@@ -1090,6 +1102,7 @@ export interface FileRouteTypes {
     | '/api/hr/payroll-email'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
+    | '/api/screen-control/disconnect'
     | '/attendance/history/$id'
     | '/employees/$id/edit'
     | '/employees/departments/new'
@@ -1150,6 +1163,7 @@ export interface RootRouteChildren {
   ApiHrPayrollEmailRoute: typeof ApiHrPayrollEmailRoute
   ApiMobileOutwardPodRoute: typeof ApiMobileOutwardPodRoute
   ApiMobileVerifyRoute: typeof ApiMobileVerifyRoute
+  ApiScreenControlDisconnectRoute: typeof ApiScreenControlDisconnectRoute
   ApiDriverTripsClaimRoute: typeof ApiDriverTripsClaimRoute
   ApiDriverTripsCurrentRoute: typeof ApiDriverTripsCurrentRoute
   ApiDriverTripsEndRoute: typeof ApiDriverTripsEndRoute
@@ -1669,6 +1683,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMobileVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/screen-control/disconnect': {
+      id: '/api/screen-control/disconnect'
+      path: '/api/screen-control/disconnect'
+      fullPath: '/api/screen-control/disconnect'
+      preLoaderRoute: typeof ApiScreenControlDisconnectRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/attendance/history/': {
       id: '/attendance/history/'
       path: '/'
@@ -2016,6 +2037,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiHrPayrollEmailRoute: ApiHrPayrollEmailRoute,
   ApiMobileOutwardPodRoute: ApiMobileOutwardPodRoute,
   ApiMobileVerifyRoute: ApiMobileVerifyRoute,
+  ApiScreenControlDisconnectRoute: ApiScreenControlDisconnectRoute,
   ApiDriverTripsClaimRoute: ApiDriverTripsClaimRoute,
   ApiDriverTripsCurrentRoute: ApiDriverTripsCurrentRoute,
   ApiDriverTripsEndRoute: ApiDriverTripsEndRoute,

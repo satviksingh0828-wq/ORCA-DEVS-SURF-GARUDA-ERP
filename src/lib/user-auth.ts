@@ -422,6 +422,12 @@ export const serverSignOut = createServerFn({ method: "POST" })
     const { uid } = parsed;
     try {
       const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+      try {
+        const screenControl = await import("@/lib/screen-control.server");
+        await screenControl.endScreenControlSessionsForToken(token, "user_signed_out");
+      } catch {
+        // Screen-control teardown is best-effort; sign-out must always complete.
+      }
       // Match on BOTH columns: a stale token from a previous session cannot
       // delete the row that now belongs to a newer login.
       await supabaseAdmin

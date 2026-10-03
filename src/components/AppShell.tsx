@@ -6,6 +6,7 @@ import { useOrcaAI } from "@/lib/orca-context";
 import { Button } from "@/components/ui/button";
 import { OrcaAITrigger } from "@/components/OrcaAI";
 import { NotificationBell } from "@/components/NotificationBell";
+import { ScreenControlWidget } from "@/components/ScreenControlWidget";
 import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
 import { useTheme } from "@/lib/theme";
@@ -164,6 +165,7 @@ export function AppShell({
               </Link>
             )}
             {(isAdmin || user?.role === "viewer") && <NotificationBell />}
+            <ScreenControlWidget />
             {isAdmin && <OrcaAITrigger />}
             <span className="hidden items-center gap-2 text-sm text-muted-foreground sm:flex min-w-0">
               {isAdmin ? (
