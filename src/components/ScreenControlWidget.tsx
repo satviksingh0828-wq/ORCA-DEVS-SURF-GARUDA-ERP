@@ -1,3 +1,5 @@
+import { useRouterState } from "@tanstack/react-router";
+import { createPortal } from "react-dom";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Check,
@@ -50,6 +52,8 @@ type RemoteInput =
     }
   | { type: "text"; text: string }
   | { type: "edit"; key: "Backspace" | "Delete" };
+
+type RemotePointerPosition = { x: number; y: number };
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
@@ -116,6 +120,7 @@ function dispatchRemoteInput(input: RemoteInput) {
   );
   const focused =
     document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
+  if (focused.closest("[data-no-remote-control]")) return;
 
   if (
     input.type === "move" ||
@@ -124,13 +129,17 @@ function dispatchRemoteInput(input: RemoteInput) {
     input.type === "click" ||
     input.type === "wheel"
   ) {
+    const x = input.x * window.innerWidth;
+    const y = input.y * window.innerHeight;
+    if (input.type !== "wheel")
+      window.dispatchEvent(
+        new CustomEvent<RemotePointerPosition>("screen-control:pointer", { detail: { x, y } }),
+      );
     if (
       !target ||
       target.closest("[data-no-remote-control],input[type='password'],input[type='file']")
     )
       return;
-    const x = input.x * window.innerWidth;
-    const y = input.y * window.innerHeight;
     if (input.type === "move") {
       target.dispatchEvent(
         new PointerEvent("pointermove", {
@@ -264,7 +273,9 @@ function getScreenPoint(container: HTMLElement, clientX: number, clientY: number
 
 export function ScreenControlWidget() {
   const { user } = useSession();
+  const routePath = useRouterState({ select: (state) => state.location.pathname });
   const token = user?.sessionToken ?? "";
+  const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -272,6 +283,7 @@ export function ScreenControlWidget() {
   const [onlineUsers, setOnlineUsers] = useState<ScreenControlState["onlineUsers"]>([]);
   const [sessions, setSessions] = useState<ScreenControlSession[]>([]);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
+  const [remotePointer, setRemotePointer] = useState<RemotePointerPosition | null>(null);
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState | "waiting">(
     "waiting",
   );
@@ -291,6 +303,10 @@ export function ScreenControlWidget() {
     document.addEventListener("fullscreenchange", syncFullscreenState);
     return () => document.removeEventListener("fullscreenchange", syncFullscreenState);
   }, []);
+
+  useEffect(() => {
+    setHeaderTarget(document.querySelector<HTMLElement>("[data-app-shell-header-actions]"));
+  }, [routePath]);
 
   const refreshState = useCallback(
     async (quiet = false) => {
@@ -361,6 +377,18 @@ export function ScreenControlWidget() {
   const activeSessionId = activeSession?.id;
   const activeSessionStatus = activeSession?.status;
   const activeSessionTargetId = activeSession?.target_id;
+  useEffect(() => {
+    if (!activeSessionId || activeSessionTargetId !== user?.id) {
+      setRemotePointer(null);
+      return;
+    }
+    const onRemotePointer = (event: Event) => {
+      const position = (event as CustomEvent<RemotePointerPosition>).detail;
+      if (Number.isFinite(position?.x) && Number.isFinite(position?.y)) setRemotePointer(position);
+    };
+    window.addEventListener("screen-control:pointer", onRemotePointer);
+    return () => window.removeEventListener("screen-control:pointer", onRemotePointer);
+  }, [activeSessionId, activeSessionTargetId, user?.id]);
   const incomingRequests = useMemo(
     () =>
       sessions.filter((session) => session.status === "pending" && session.target_id === user?.id),
@@ -674,214 +702,221 @@ export function ScreenControlWidget() {
 
   return (
     <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            size="sm"
-            className="relative h-8 shrink-0 gap-1.5 px-2"
-            aria-label={`Share screen${incomingRequests.length ? `, ${incomingRequests.length} incoming request` : ""}`}
-          >
-            <MonitorUp className="size-4" />
-            <span className="hidden xl:inline">Share screen</span>
-            {incomingRequests.length > 0 && (
-              <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white">
-                {incomingRequests.length}
-              </span>
-            )}
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="end"
-          sideOffset={10}
-          className="w-[min(23rem,calc(100vw-1.5rem))] p-0"
-        >
-          <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <div className="flex items-center gap-2">
-              <ScreenShare className="size-4 text-primary" />
-              <div>
-                <h2 className="text-sm font-semibold">Screen sharing</h2>
-                <p className="text-[11px] text-muted-foreground">
-                  Only users currently online are listed
-                </p>
-              </div>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="size-7"
-              onClick={() => void refreshState()}
-              aria-label="Refresh online users"
+      {headerTarget &&
+        createPortal(
+          <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="relative h-8 shrink-0 gap-1.5 px-2"
+                data-no-remote-control
+                aria-label={`Share screen${incomingRequests.length ? `, ${incomingRequests.length} incoming request` : ""}`}
+              >
+                <MonitorUp className="size-4" />
+                <span className="hidden xl:inline">Share screen</span>
+                {incomingRequests.length > 0 && (
+                  <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-white">
+                    {incomingRequests.length}
+                  </span>
+                )}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="end"
+              sideOffset={10}
+              className="w-[min(23rem,calc(100vw-1.5rem))] p-0"
+              data-no-remote-control
             >
-              {loading ? (
-                <LoaderCircle className="size-4 animate-spin" />
-              ) : (
-                <RefreshCw className="size-4" />
-              )}
-            </Button>
-          </div>
-          <div className="max-h-[min(70vh,34rem)] space-y-4 overflow-y-auto p-3">
-            {error && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
-                <ShieldAlert className="mt-0.5 size-4 shrink-0" />
-                <span>{error}</span>
-              </div>
-            )}
-            {incomingRequests.length > 0 && (
-              <section className="space-y-2">
-                <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Requests for your screen
-                </h3>
-                {incomingRequests.map((request) => (
-                  <div
-                    key={request.id}
-                    className="rounded-lg border border-primary/30 bg-primary/5 p-3"
-                  >
-                    <p className="text-sm font-medium">
-                      {request.requester.name} wants to view and control this app
+              <div className="flex items-center justify-between border-b border-border px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <ScreenShare className="size-4 text-primary" />
+                  <div>
+                    <h2 className="text-sm font-semibold">Screen sharing</h2>
+                    <p className="text-[11px] text-muted-foreground">
+                      Only users currently online are listed
                     </p>
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      Accepting opens the browser’s screen-sharing chooser. Choose this app tab if
-                      you only want to share it; you can stop sharing at any time.
-                    </p>
-                    <div className="mt-3 flex justify-end gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={busyId === request.id}
-                        onClick={() => void answerRequest(request, false)}
-                      >
-                        <X className="size-3.5" /> Decline
-                      </Button>
-                      <Button
-                        size="sm"
-                        disabled={busyId === request.id}
-                        onClick={() => void answerRequest(request, true)}
-                      >
-                        {busyId === request.id ? (
-                          <LoaderCircle className="size-3.5 animate-spin" />
-                        ) : (
-                          <Check className="size-3.5" />
-                        )}
-                        Accept & share
-                      </Button>
-                    </div>
                   </div>
-                ))}
-              </section>
-            )}
-            {activeSession && (
-              <div className="flex items-start gap-2 rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950">
-                <MousePointer2 className="mt-0.5 size-4 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold">
-                    {isController
-                      ? `Controlling ${controller}`
-                      : `Sharing your screen with ${target}`}
-                  </p>
-                  <p className="mt-0.5">
-                    {isController
-                      ? connectionLabel
-                      : "Your app tab is being shared. You can end this session at any time."}
-                  </p>
                 </div>
                 <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => void finishSession(activeSession.id)}
+                  variant="ghost"
+                  size="icon"
+                  className="size-7"
+                  onClick={() => void refreshState()}
+                  aria-label="Refresh online users"
                 >
-                  End
+                  {loading ? (
+                    <LoaderCircle className="size-4 animate-spin" />
+                  ) : (
+                    <RefreshCw className="size-4" />
+                  )}
                 </Button>
               </div>
-            )}
-            {outgoingRequests.map((request) => (
-              <div
-                key={request.id}
-                className="flex items-center justify-between gap-2 rounded-lg border border-border p-3 text-xs"
-              >
-                <span>Waiting for {request.target.name} to accept…</span>
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void finishSession(request.id, "cancelled_by_requester")}
-                >
-                  Cancel
-                </Button>
-              </div>
-            ))}
-            <section className="space-y-2">
-              <h3 className="flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                <Users className="size-3.5" /> Online users ({onlineUsers.length})
-              </h3>
-              {onlineUsers.length === 0 ? (
-                <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
-                  No other users are online right now.
-                </p>
-              ) : (
-                onlineUsers.map((person) => (
-                  <div
-                    key={person.id}
-                    className="flex items-center gap-2 rounded-lg border border-border px-3 py-2"
-                  >
-                    <span className="relative flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
-                      <UserRound className="size-4" />
-                      <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-card bg-green-500" />
-                    </span>
+              <div className="max-h-[min(70vh,34rem)] space-y-4 overflow-y-auto p-3">
+                {error && (
+                  <div className="flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
+                    <ShieldAlert className="mt-0.5 size-4 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
+                {incomingRequests.length > 0 && (
+                  <section className="space-y-2">
+                    <h3 className="px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Requests for your screen
+                    </h3>
+                    {incomingRequests.map((request) => (
+                      <div
+                        key={request.id}
+                        className="rounded-lg border border-primary/30 bg-primary/5 p-3"
+                      >
+                        <p className="text-sm font-medium">
+                          {request.requester.name} wants to view and control this app
+                        </p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          Accepting opens the browser’s screen-sharing chooser. Choose this app tab
+                          if you only want to share it; you can stop sharing at any time.
+                        </p>
+                        <div className="mt-3 flex justify-end gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            disabled={busyId === request.id}
+                            onClick={() => void answerRequest(request, false)}
+                          >
+                            <X className="size-3.5" /> Decline
+                          </Button>
+                          <Button
+                            size="sm"
+                            disabled={busyId === request.id}
+                            onClick={() => void answerRequest(request, true)}
+                          >
+                            {busyId === request.id ? (
+                              <LoaderCircle className="size-3.5 animate-spin" />
+                            ) : (
+                              <Check className="size-3.5" />
+                            )}
+                            Accept & share
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </section>
+                )}
+                {activeSession && (
+                  <div className="flex items-start gap-2 rounded-lg border border-green-300 bg-green-50 p-3 text-xs text-green-950">
+                    <MousePointer2 className="mt-0.5 size-4 shrink-0" />
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">{person.name}</p>
-                      <p className="truncate text-[11px] text-muted-foreground">
-                        @{person.username} · {person.role}
+                      <p className="font-semibold">
+                        {isController
+                          ? `Controlling ${controller}`
+                          : `Sharing your screen with ${target}`}
+                      </p>
+                      <p className="mt-0.5">
+                        {isController
+                          ? connectionLabel
+                          : "Your app tab is being shared. You can end this session at any time."}
                       </p>
                     </div>
                     <Button
                       size="sm"
-                      variant="outline"
-                      disabled={participantBusy || busyId === person.id}
-                      onClick={() => void requestControl(person.id)}
+                      variant="destructive"
+                      onClick={() => void finishSession(activeSession.id)}
                     >
-                      {busyId === person.id ? (
-                        <LoaderCircle className="size-3.5 animate-spin" />
-                      ) : (
-                        <MonitorUp className="size-3.5" />
-                      )}
-                      Request
+                      End
                     </Button>
                   </div>
-                ))
-              )}
-            </section>
-            {recentResults.length > 0 && (
-              <div className="border-t border-border pt-3">
-                <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                  Recent sessions
-                </h3>
-                <ul className="space-y-1.5 text-xs text-muted-foreground">
-                  {recentResults.map((session) => (
-                    <li key={session.id} className="flex justify-between gap-2">
-                      <span>{displayName(session, user.id)}</span>
-                      <span className="capitalize">
-                        {session.status === "declined"
-                          ? "Declined"
-                          : session.end_reason === "request_timeout"
-                            ? "Timed out"
-                            : session.status}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
+                )}
+                {outgoingRequests.map((request) => (
+                  <div
+                    key={request.id}
+                    className="flex items-center justify-between gap-2 rounded-lg border border-border p-3 text-xs"
+                  >
+                    <span>Waiting for {request.target.name} to accept…</span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void finishSession(request.id, "cancelled_by_requester")}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ))}
+                <section className="space-y-2">
+                  <h3 className="flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    <Users className="size-3.5" /> Online users ({onlineUsers.length})
+                  </h3>
+                  {onlineUsers.length === 0 ? (
+                    <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+                      No other users are online right now.
+                    </p>
+                  ) : (
+                    onlineUsers.map((person) => (
+                      <div
+                        key={person.id}
+                        className="flex items-center gap-2 rounded-lg border border-border px-3 py-2"
+                      >
+                        <span className="relative flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                          <UserRound className="size-4" />
+                          <span className="absolute bottom-0 right-0 size-2.5 rounded-full border-2 border-card bg-green-500" />
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium">{person.name}</p>
+                          <p className="truncate text-[11px] text-muted-foreground">
+                            @{person.username} · {person.role}
+                          </p>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={participantBusy || busyId === person.id}
+                          onClick={() => void requestControl(person.id)}
+                        >
+                          {busyId === person.id ? (
+                            <LoaderCircle className="size-3.5 animate-spin" />
+                          ) : (
+                            <MonitorUp className="size-3.5" />
+                          )}
+                          Request
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </section>
+                {recentResults.length > 0 && (
+                  <div className="border-t border-border pt-3">
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Recent sessions
+                    </h3>
+                    <ul className="space-y-1.5 text-xs text-muted-foreground">
+                      {recentResults.map((session) => (
+                        <li key={session.id} className="flex justify-between gap-2">
+                          <span>{displayName(session, user.id)}</span>
+                          <span className="capitalize">
+                            {session.status === "declined"
+                              ? "Declined"
+                              : session.end_reason === "request_timeout"
+                                ? "Timed out"
+                                : session.status}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
-          <div className="border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
-            No recording. The screen owner must accept, then choose what to share in the browser
-            prompt. Control is limited to this app tab.
-          </div>
-        </PopoverContent>
-      </Popover>
+              <div className="border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
+                No recording. The screen owner must accept, then choose what to share in the browser
+                prompt. Control is limited to this app tab.
+              </div>
+            </PopoverContent>
+          </Popover>,
+          headerTarget,
+        )}
 
       {target && activeSession && (
         <div
           className="fixed inset-x-0 top-16 z-[60] flex items-center justify-center px-3 py-2"
+          data-no-remote-control
           role="status"
         >
           <div className="flex max-w-3xl flex-wrap items-center justify-center gap-2 rounded-xl border border-amber-400 bg-amber-50 px-4 py-2 text-xs text-amber-950 shadow-lg">
@@ -1069,6 +1104,16 @@ export function ScreenControlWidget() {
             )}
           </div>
         </section>
+      )}
+      {target && activeSession && remotePointer && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none fixed z-[120]"
+          data-no-remote-control
+          style={{ left: remotePointer.x, top: remotePointer.y }}
+        >
+          <MousePointer2 className="size-7 fill-red-600 stroke-white text-red-600 drop-shadow-lg" />
+        </div>
       )}
     </>
   );

@@ -27,6 +27,7 @@ import { useSession } from "../lib/session";
 import { SplashScreen } from "../components/SplashScreen";
 import { OrcaLogo } from "../components/OrcaLogo";
 import { PasskeyGate } from "../components/PasskeyGate";
+import { ScreenControlWidget } from "../components/ScreenControlWidget";
 import { useAppSettings } from "../lib/hooks";
 
 function NotFoundComponent() {
@@ -260,6 +261,7 @@ function RootComponent() {
                 <SessionExpiredListener />
                 <DynamicImportRecovery />
                 <Outlet />
+                <ScreenControlWidget />
                 <InactivityChallenge />
                 <Toaster position="top-right" />
                 <OrcaAIPanelMount />
