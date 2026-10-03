@@ -398,7 +398,7 @@ export function SourceBilling() {
       return toast.error("Check bill and billing period dates");
     if (totals.freight + totals.loading <= 0)
       return toast.error(
-        "Gross calculated Freight and Loading total must be greater than zero before posting the journal entry",
+        "Adjusted final Freight and Loading total must be greater than zero before posting the journal entry",
       );
     setGenerating(true);
     const { error } = await (supabase as any).rpc("generate_ltms_source_bill", {
@@ -456,8 +456,8 @@ export function SourceBilling() {
     () =>
       lines.reduce(
         (result, row) => ({
-          freight: result.freight + row.calculated_freight,
-          loading: result.loading + row.calculated_loading,
+          freight: result.freight + row.final_freight,
+          loading: result.loading + row.final_loading,
         }),
         { freight: 0, loading: 0 },
       ),
