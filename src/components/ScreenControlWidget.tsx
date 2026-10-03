@@ -286,6 +286,7 @@ export function ScreenControlWidget() {
   const [sessions, setSessions] = useState<ScreenControlSession[]>([]);
   const [remoteStream, setRemoteStream] = useState<MediaStream | null>(null);
   const [remotePointer, setRemotePointer] = useState<RemotePointerPosition | null>(null);
+  const [localShareReady, setLocalShareReady] = useState(false);
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState | "waiting">(
     "waiting",
   );
@@ -370,20 +371,9 @@ export function ScreenControlWidget() {
     };
     void poll();
     const timer = window.setInterval(() => void poll(), 5_000);
-    const disconnectOnPageExit = (event: PageTransitionEvent) => {
-      // pagehide also fires when a page enters the back/forward cache. Keep
-      // the session alive because the page may be restored immediately.
-      if (event.persisted) return;
-      const body = new Blob([JSON.stringify({ sessionToken: token })], {
-        type: "application/json",
-      });
-      navigator.sendBeacon?.("/api/screen-control/disconnect", body);
-    };
-    window.addEventListener("pagehide", disconnectOnPageExit);
     return () => {
       mounted = false;
       window.clearInterval(timer);
-      window.removeEventListener("pagehide", disconnectOnPageExit);
     };
   }, [token]);
 
@@ -452,6 +442,7 @@ export function ScreenControlWidget() {
     localStreamRef.current?.getTracks().forEach((track) => track.stop());
     localStreamRef.current = null;
     localStreamSessionRef.current = null;
+    setLocalShareReady(false);
   }, []);
 
   const finishSession = useCallback(
@@ -524,6 +515,7 @@ export function ScreenControlWidget() {
         captured = await navigator.mediaDevices.getDisplayMedia(captureOptions);
         localStreamRef.current = captured;
         localStreamSessionRef.current = session.id;
+        setLocalShareReady(true);
       }
       await respondToScreenControlRequest({
         data: { sessionToken: token, sessionId: session.id, accept },
@@ -542,6 +534,31 @@ export function ScreenControlWidget() {
       toast.error(
         cause instanceof Error ? cause.message : "Could not respond to the screen-control request.",
       );
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function resumeScreenShare(session: ScreenControlSession) {
+    if (!token || session.status !== "active" || session.target_id !== user?.id) return;
+    setBusyId(session.id);
+    try {
+      if (!navigator.mediaDevices?.getDisplayMedia)
+        throw new Error("Screen sharing is not available in this browser.");
+      const captured = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: "browser", frameRate: { ideal: 15, max: 24 } },
+        audio: false,
+        preferCurrentTab: true,
+      } as DisplayMediaStreamOptions & { preferCurrentTab?: boolean });
+      localStreamRef.current = captured;
+      localStreamSessionRef.current = session.id;
+      setLocalShareReady(true);
+      captured.getTracks().forEach((track) => {
+        track.onended = () => void finishSession(session.id, "screen_share_stopped");
+      });
+      toast.success("Screen sharing resumed.");
+    } catch (cause) {
+      toast.error(cause instanceof Error ? cause.message : "Could not resume screen sharing.");
     } finally {
       setBusyId(null);
     }
@@ -765,6 +782,7 @@ export function ScreenControlWidget() {
     activeSessionTargetId,
     closeLocalStream,
     finishSession,
+    localShareReady,
     refreshState,
     token,
     user?.id,
@@ -1031,6 +1049,16 @@ export function ScreenControlWidget() {
               Your selected screen is being shared with <strong>{target}</strong>; control is
               limited to this app tab.
             </span>
+            {!localShareReady && (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busyId === activeSession.id}
+                onClick={() => void resumeScreenShare(activeSession)}
+              >
+                {busyId === activeSession.id ? "Resuming…" : "Resume sharing"}
+              </Button>
+            )}
             <Button
               size="sm"
               variant="destructive"

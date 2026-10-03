@@ -78,6 +78,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     if (!userRef.current) return; // not logged in — skip
     if (inactivityTimer.current) clearTimeout(inactivityTimer.current);
     inactivityTimer.current = setTimeout(() => {
+      // A live screen-control session is an intentional active workflow. Do
+      // not log the user out while they are sharing or controlling the app.
+      if (document.body.dataset.screenControlActive === "true") {
+        resetInactivity();
+        return;
+      }
       const token = userRef.current?.sessionToken;
       clearSession(token);
       // Dispatch a custom event so UI can show an "inactivity" toast/modal
@@ -165,6 +171,20 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   // ── Sign out (manual) ─────────────────────────────────────────────────────
   const signOut = useCallback((_reason?: "inactivity" | "elsewhere" | "manual") => {
     const token = userRef.current?.sessionToken;
+    if (token && _reason !== "elsewhere") {
+      // Manual sign-out must end any remote-control session. keepalive lets
+      // the request finish even though the app immediately navigates away.
+      const body = JSON.stringify({ sessionToken: token });
+      const blob = new Blob([body], { type: "application/json" });
+      if (!navigator.sendBeacon?.("/api/screen-control/disconnect", blob)) {
+        void fetch("/api/screen-control/disconnect", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body,
+          keepalive: true,
+        }).catch(() => undefined);
+      }
+    }
     clearSession(token);
   }, [clearSession]);
 
