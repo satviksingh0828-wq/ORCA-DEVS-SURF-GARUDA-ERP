@@ -181,7 +181,12 @@ export function SourcesReport() {
 
   const currentOptions = useMemo(() => {
     if (updateType === "source") {
-      const ids = new Set(rows.map((row) => row.source_id).filter(Boolean));
+      const ids = new Set(
+        rows
+          .filter((row) => !row.source_bill_id)
+          .map((row) => row.source_id)
+          .filter(Boolean),
+      );
       return sourceOptions.filter((option) => ids.has(option.id));
     }
     if (updateType === "transporter_source") {
@@ -213,8 +218,6 @@ export function SourcesReport() {
 
   async function replaceValue() {
     if (branchId === "all") return toast.error("Select a branch before replacing values safely");
-    if (!fromDate || !toDate || fromDate > toDate)
-      return toast.error("Select a valid From Date and To Date");
     if (!currentValue || !replacementValue)
       return toast.error("Select both the current and replacement values");
     if (currentValue === replacementValue)
@@ -228,6 +231,7 @@ export function SourcesReport() {
           .filter(
             (row) =>
               selectedConsignmentIds.includes(row.id) &&
+              (updateType !== "source" || !row.source_bill_id) &&
               (updateType === "source" ? row.source_id : row.transporter_source_id) ===
                 currentValue,
           )
@@ -497,24 +501,10 @@ export function SourcesReport() {
                 </SelectContent>
               </Select>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label>From Date</Label>
-                <Input
-                  type="date"
-                  value={fromDate}
-                  onChange={(event) => setFromDate(event.target.value)}
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>To Date</Label>
-                <Input
-                  type="date"
-                  value={toDate}
-                  onChange={(event) => setToDate(event.target.value)}
-                />
-              </div>
-            </div>
+            <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
+              This update works only on the consignments selected in the report. Source values are
+              protected after Source Billing; transporter source and package type remain editable.
+            </p>
             <div className="space-y-1.5">
               <Label>Current Value</Label>
               <Select value={currentValue} onValueChange={setCurrentValue}>
