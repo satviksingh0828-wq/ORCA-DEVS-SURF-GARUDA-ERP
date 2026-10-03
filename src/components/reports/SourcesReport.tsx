@@ -31,6 +31,7 @@ type ConsignmentRow = {
   source_id: string | null;
   transporter_source_id: string | null;
   source_bill_id?: string | null;
+  transporter_bill_id?: string | null;
   branch?: { branch_name?: string | null } | null;
   source?: { contract_name?: string | null } | null;
   transporter_source?: { source_name?: string | null } | null;
@@ -89,7 +90,7 @@ export function SourcesReport() {
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,branch_id,consignment_date,source_id,transporter_source_id,source_bill_id,branch:branches(branch_name),source:contracts(contract_name),transporter_source:ltms_transporter_sources(source_name)",
+          "id,consignment_number,branch_id,consignment_date,source_id,transporter_source_id,source_bill_id,transporter_bill_id,branch:branches(branch_name),source:contracts(contract_name),transporter_source:ltms_transporter_sources(source_name)",
         )
         .gte("consignment_date", fromDate)
         .lte("consignment_date", toDate)
@@ -190,7 +191,12 @@ export function SourcesReport() {
       return sourceOptions.filter((option) => ids.has(option.id));
     }
     if (updateType === "transporter_source") {
-      const ids = new Set(rows.map((row) => row.transporter_source_id).filter(Boolean));
+      const ids = new Set(
+        rows
+          .filter((row) => !row.transporter_bill_id)
+          .map((row) => row.transporter_source_id)
+          .filter(Boolean),
+      );
       return transporterSourceOptions.filter((option) => ids.has(option.id));
     }
     const ids = new Set(
@@ -224,6 +230,11 @@ export function SourcesReport() {
       return toast.error("Replacement value must be different");
     if (!selectedConsignmentIds.length)
       return toast.error("Select at least one consignment in the report first");
+    const lockedTransporterCount =
+      updateType === "transporter_source"
+        ? rows.filter((row) => selectedConsignmentIds.includes(row.id) && row.transporter_bill_id)
+            .length
+        : 0;
     setUpdating(true);
     try {
       if (updateType === "source" || updateType === "transporter_source") {
@@ -232,10 +243,13 @@ export function SourcesReport() {
             (row) =>
               selectedConsignmentIds.includes(row.id) &&
               (updateType !== "source" || !row.source_bill_id) &&
+              (updateType !== "transporter_source" || !row.transporter_bill_id) &&
               (updateType === "source" ? row.source_id : row.transporter_source_id) ===
                 currentValue,
           )
           .map((row) => row.id);
+        if (!affectedIds.length && lockedTransporterCount)
+          throw new Error("Transporter source cannot be changed after transporter bill generation");
         if (!affectedIds.length)
           throw new Error("The current value is not used in the selected date range");
         const column = updateType === "source" ? "source_id" : "transporter_source_id";
@@ -267,7 +281,11 @@ export function SourcesReport() {
           );
         if (error) throw error;
       }
-      toast.success("Selected consignments updated; calculations will use the replacement master");
+      toast.success(
+        lockedTransporterCount
+          ? `Eligible consignments updated; ${lockedTransporterCount} transporter-billed consignment(s) skipped because their source is locked.`
+          : "Selected consignments updated; calculations will use the replacement master",
+      );
       setReplacementValue("");
       setUpdateOpen(false);
       await loadData();
@@ -450,7 +468,14 @@ export function SourcesReport() {
                       </span>
                     ) : null}
                   </td>
-                  <td className="px-3 py-3">{row.transporter_source?.source_name ?? "—"}</td>
+                  <td className="px-3 py-3">
+                    {row.transporter_source?.source_name ?? "—"}
+                    {row.transporter_bill_id ? (
+                      <span className="ml-2 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-700">
+                        Transporter billed · locked
+                      </span>
+                    ) : null}
+                  </td>
                   <td className="px-3 py-3">{row.package_types || "—"}</td>
                 </tr>
               ))
@@ -503,7 +528,8 @@ export function SourcesReport() {
             </div>
             <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
               This update works only on the consignments selected in the report. Source values are
-              protected after Source Billing; transporter source and package type remain editable.
+              protected after Source Billing, and transporter source is locked after Transporter
+              Billing. Package type remains editable.
             </p>
             <div className="space-y-1.5">
               <Label>Current Value</Label>

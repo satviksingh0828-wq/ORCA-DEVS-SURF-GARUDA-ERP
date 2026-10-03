@@ -150,7 +150,7 @@ function findEntry(entries: Entry[], row: Consignment, sourceId: string) {
 export function TransporterBilling() {
   const branches = useBranches();
   const { user } = useSession();
-  const [screen, setScreen] = useState<"list" | "create">("list");
+  const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [bills, setBills] = useState<Bill[]>([]);
   const [transporters, setTransporters] = useState<Transporter[]>([]);
   const [sources, setSources] = useState<TransporterSource[]>([]);
@@ -706,7 +706,14 @@ export function TransporterBilling() {
                       <td className="px-3 py-3 text-right">{money(bill.total_loading)}</td>
                       <td className="px-3 py-3">
                         <div className="flex justify-center gap-2">
-                          <Button size="sm" variant="outline" onClick={() => setViewing(bill)}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setViewing(bill);
+                              setScreen("view");
+                            }}
+                          >
                             <Eye className="size-3.5" /> View
                           </Button>
                           {!bill.deleted_at && (
@@ -1073,21 +1080,28 @@ export function TransporterBilling() {
           <DialogFooter><Button variant="outline" disabled={generating} onClick={() => setJournalPreviewOpen(false)}>Close</Button></DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog
-        open={viewing !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setViewing(null);
-            setConsignmentViewing(null);
-          }
-        }}
-      >
-        <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Transporter Bill {viewing?.transporter_bill_number}</DialogTitle>
-          </DialogHeader>
-          {viewing && (
-            <div className="space-y-5">
+      {screen === "view" && viewing && (
+        <section className="space-y-5 rounded-xl border border-border bg-card p-4 shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">
+                Transporter Bill {viewing.transporter_bill_number}
+              </h2>
+              <p className="text-xs text-muted-foreground">Bill details and billed consignments</p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setViewing(null);
+                setConsignmentViewing(null);
+                setScreen("list");
+              }}
+            >
+              Back to bills
+            </Button>
+          </div>
+          <div className="space-y-5">
               <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
                 <div>
                   <span className="text-muted-foreground">System No. / Date</span>
@@ -1192,15 +1206,9 @@ export function TransporterBilling() {
                   </table>
                 </div>
               </section>
-            </div>
-          )}
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setViewing(null)}>
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </section>
+      )}
       <ConsignmentDetailsDialog
         consignmentId={consignmentViewing}
         open={consignmentViewing !== null}
