@@ -111,7 +111,8 @@ export function AppShell({
       video.load();
     }
     if (sharedBackgroundVideoReady) video.classList.add("background-video-ready");
-    void video.play().catch(() => undefined);
+    if (document.body.dataset.screenControlActive !== "true")
+      void video.play().catch(() => undefined);
   }, [backgroundVideoEnabled, backgroundVideoUrl]);
 
   useEffect(() => {

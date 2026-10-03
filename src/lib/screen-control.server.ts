@@ -23,8 +23,11 @@ type AppUserRow = {
   is_paused: boolean;
 };
 
-const ONLINE_WINDOW_MS = 90_000;
-const REQUEST_WINDOW_MS = 120_000;
+// Browsers throttle timers aggressively in background tabs. Keep a live
+// screen-share participant online long enough for its 30-second app heartbeat
+// to recover after throttling or a short network suspension.
+const ONLINE_WINDOW_MS = 5 * 60_000;
+const REQUEST_WINDOW_MS = 2 * 60_000;
 const ACTIVE_STATUSES: ScreenStatus[] = ["pending", "active"];
 
 async function requireCurrentUser(sessionToken: string) {

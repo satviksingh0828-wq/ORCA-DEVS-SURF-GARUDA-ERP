@@ -57,6 +57,8 @@ type RemotePointerPosition = { x: number; y: number };
 
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
+  bundlePolicy: "max-bundle",
+  iceCandidatePoolSize: 10,
 };
 
 function isTextControl(element: Element | null): element is HTMLInputElement | HTMLTextAreaElement {
@@ -368,7 +370,10 @@ export function ScreenControlWidget() {
     };
     void poll();
     const timer = window.setInterval(() => void poll(), 5_000);
-    const disconnectOnPageExit = () => {
+    const disconnectOnPageExit = (event: PageTransitionEvent) => {
+      // pagehide also fires when a page enters the back/forward cache. Keep
+      // the session alive because the page may be restored immediately.
+      if (event.persisted) return;
       const body = new Blob([JSON.stringify({ sessionToken: token })], {
         type: "application/json",
       });
@@ -389,6 +394,24 @@ export function ScreenControlWidget() {
   const activeSessionId = activeSession?.id;
   const activeSessionStatus = activeSession?.status;
   const activeSessionTargetId = activeSession?.target_id;
+  useEffect(() => {
+    const active = Boolean(activeSessionId && activeSessionStatus === "active");
+    if (active) document.body.dataset.screenControlActive = "true";
+    else delete document.body.dataset.screenControlActive;
+
+    const video = document.querySelector<HTMLVideoElement>(".background-video-layer");
+    if (!video) return;
+    if (active) {
+      video.dataset.screenControlPaused = "true";
+      video.pause();
+    } else if (video.dataset.screenControlPaused === "true") {
+      delete video.dataset.screenControlPaused;
+      void video.play().catch(() => undefined);
+    }
+    return () => {
+      delete document.body.dataset.screenControlActive;
+    };
+  }, [activeSessionId, activeSessionStatus]);
   useEffect(() => {
     if (!activeSessionId || activeSessionTargetId !== user?.id) {
       setRemotePointer(null);
@@ -493,6 +516,11 @@ export function ScreenControlWidget() {
           audio: false,
           preferCurrentTab: true,
         };
+        const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
+        if (backgroundVideo) {
+          backgroundVideo.dataset.screenControlPaused = "true";
+          backgroundVideo.pause();
+        }
         captured = await navigator.mediaDevices.getDisplayMedia(captureOptions);
         localStreamRef.current = captured;
         localStreamSessionRef.current = session.id;
@@ -506,6 +534,11 @@ export function ScreenControlWidget() {
     } catch (cause) {
       captured?.getTracks().forEach((track) => track.stop());
       if (localStreamRef.current === captured) closeLocalStream();
+      const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
+      if (backgroundVideo?.dataset.screenControlPaused === "true") {
+        delete backgroundVideo.dataset.screenControlPaused;
+        void backgroundVideo.play().catch(() => undefined);
+      }
       toast.error(
         cause instanceof Error ? cause.message : "Could not respond to the screen-control request.",
       );
@@ -538,6 +571,9 @@ export function ScreenControlWidget() {
     let remoteDescriptionSet = false;
     const queuedCandidates: RTCIceCandidateInit[] = [];
     const peer = new RTCPeerConnection(RTC_CONFIG);
+    let restartTimer: number | null = null;
+    let restartInFlight = false;
+    let restartAttempts = 0;
     peerRef.current = peer;
     setConnectionState("connecting");
     signalErrorShown.current = false;
@@ -550,6 +586,25 @@ export function ScreenControlWidget() {
       await sendScreenControlSignal({
         data: { sessionToken: token, sessionId, signalType, payload },
       });
+    };
+    const restartConnection = async () => {
+      if (disposed || !isOwner || restartInFlight || restartAttempts >= 3) return;
+      restartInFlight = true;
+      restartAttempts += 1;
+      try {
+        peer.restartIce();
+        const offer = await peer.createOffer({ iceRestart: true });
+        await peer.setLocalDescription(offer);
+        if (peer.localDescription)
+          await sendSignal(
+            "offer",
+            peer.localDescription.toJSON() as unknown as Record<string, unknown>,
+          );
+      } catch {
+        // The next connection-state change or manual retry can try again.
+      } finally {
+        restartInFlight = false;
+      }
     };
     const installControlChannel = (channel: RTCDataChannel) => {
       channelRef.current = channel;
@@ -590,7 +645,18 @@ export function ScreenControlWidget() {
     peer.onconnectionstatechange = () => {
       if (disposed) return;
       setConnectionState(peer.connectionState);
-      if (peer.connectionState === "failed") void finishSession(sessionId, "connection_failed");
+      if (peer.connectionState === "connected") {
+        restartAttempts = 0;
+        if (restartTimer !== null) window.clearTimeout(restartTimer);
+        restartTimer = null;
+      } else if (
+        isOwner &&
+        (peer.connectionState === "disconnected" || peer.connectionState === "failed") &&
+        restartAttempts < 3
+      ) {
+        if (restartTimer !== null) window.clearTimeout(restartTimer);
+        restartTimer = window.setTimeout(() => void restartConnection(), 800);
+      }
     };
     peer.ontrack = (event) => {
       if (!isOwner) setRemoteStream(event.streams[0] ?? new MediaStream([event.track]));
@@ -643,7 +709,7 @@ export function ScreenControlWidget() {
                 "answer",
                 peer.localDescription.toJSON() as unknown as Record<string, unknown>,
               );
-          } else if (signal.signal_type === "answer" && isOwner && !peer.remoteDescription) {
+          } else if (signal.signal_type === "answer" && isOwner) {
             await peer.setRemoteDescription(signal.payload as unknown as RTCSessionDescriptionInit);
             remoteDescriptionSet = true;
             for (const candidate of queuedCandidates.splice(0))
@@ -667,11 +733,14 @@ export function ScreenControlWidget() {
       }
     };
     void pollSignals();
-    const signalTimer = window.setInterval(() => void pollSignals(), 750);
+    // Keep handshake and ICE-restart latency low without creating an unbounded
+    // request loop; receiveScreenControlSignals returns at most 50 rows.
+    const signalTimer = window.setInterval(() => void pollSignals(), 400);
 
     return () => {
       disposed = true;
       window.clearInterval(signalTimer);
+      if (restartTimer !== null) window.clearTimeout(restartTimer);
       peer.ontrack = null;
       peer.onicecandidate = null;
       peer.onconnectionstatechange = null;
@@ -718,8 +787,8 @@ export function ScreenControlWidget() {
   const connectionLabel =
     connectionState === "connected"
       ? "Connected"
-      : connectionState === "failed"
-        ? "Connection failed"
+      : connectionState === "failed" || connectionState === "disconnected"
+        ? "Reconnecting…"
         : "Connecting…";
 
   async function toggleWorkspaceFullscreen() {
