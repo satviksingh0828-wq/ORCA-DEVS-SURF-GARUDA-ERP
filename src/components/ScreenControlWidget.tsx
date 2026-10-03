@@ -640,7 +640,8 @@ export function ScreenControlWidget() {
                 frameRate: { ideal: 15, max: 24 },
               },
               audio: false,
-              preferCurrentTab: session.share_scope === "app",
+              preferCurrentTab: false,
+              selfBrowserSurface: session.share_scope === "app" ? "exclude" : "include",
             };
             const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
               ((scope: string) => Promise<unknown>) | undefined;
@@ -731,7 +732,8 @@ export function ScreenControlWidget() {
             frameRate: { ideal: 15, max: 24 },
           },
           audio: false,
-          preferCurrentTab: session.share_scope === "app",
+          preferCurrentTab: false,
+          selfBrowserSurface: session.share_scope === "app" ? "exclude" : "include",
         } as DisplayMediaStreamOptions & { preferCurrentTab?: boolean });
       }
       localStreamRef.current = captured;
@@ -1078,12 +1080,6 @@ export function ScreenControlWidget() {
     window.addEventListener("message", sendSession);
     setPopupWindow(popup);
   }, [isPopupWindow, user]);
-
-  useEffect(() => {
-    if (isPopupWindow || !user || !controller || popupWindow) return;
-    // This is useful after a main-app reload when a named popup already exists.
-    openScreenPopup();
-  }, [controller, isPopupWindow, openScreenPopup, popupWindow, user]);
 
   if (!user) return null;
 
