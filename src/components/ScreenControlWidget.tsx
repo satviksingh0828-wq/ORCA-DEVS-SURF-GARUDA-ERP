@@ -708,7 +708,8 @@ export function ScreenControlWidget() {
 
   async function resumeScreenShare(session: ScreenControlSession, automatic = false) {
     if (!token || session.status !== "active" || session.target_id !== user?.id) return;
-    if (automatic && (session.share_scope !== "app" || !window.electronAPI)) return;
+    if (automatic && (session.share_scope !== "app" || (!window.electronAPI && !isPopupWindow)))
+      return;
     if (!automatic) setBusyId(session.id);
     let captured: MediaStream | null = null;
     try {
@@ -761,7 +762,7 @@ export function ScreenControlWidget() {
     // Electron's media handler can restore an active capture without another
     // picker. Regular browsers must wait for an owner gesture to restart capture.
     if (
-      !window.electronAPI ||
+      (!window.electronAPI && !isPopupWindow) ||
       !activeSession ||
       activeSession.target_id !== user?.id ||
       localShareReady ||
@@ -770,7 +771,7 @@ export function ScreenControlWidget() {
       return;
     autoResumeSessionRef.current = activeSession.id;
     void resumeScreenShareRef.current(activeSession);
-  }, [activeSession, localShareReady, user?.id]);
+  }, [activeSession, isPopupWindow, localShareReady, user?.id]);
 
   useEffect(() => {
     if (
