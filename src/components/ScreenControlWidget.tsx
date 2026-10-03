@@ -33,7 +33,7 @@ import {
 
 type RemoteInput =
   | {
-      type: "move" | "pointerdown" | "pointerup" | "click";
+      type: "move" | "pointerdown" | "pointerup" | "click" | "contextmenu";
       x: number;
       y: number;
       button?: number;
@@ -114,32 +114,30 @@ function editTextControl(
 }
 
 function dispatchRemoteInput(input: RemoteInput) {
-  const target = document.elementFromPoint(
-    Math.round(Math.max(0, Math.min(1, "x" in input ? input.x : 0)) * window.innerWidth),
-    Math.round(Math.max(0, Math.min(1, "y" in input ? input.y : 0)) * window.innerHeight),
-  );
   const focused =
     document.activeElement instanceof HTMLElement ? document.activeElement : document.body;
-  if (focused.closest("[data-no-remote-control]")) return;
 
   if (
     input.type === "move" ||
     input.type === "pointerdown" ||
     input.type === "pointerup" ||
     input.type === "click" ||
+    input.type === "contextmenu" ||
     input.type === "wheel"
   ) {
     const x = input.x * window.innerWidth;
     const y = input.y * window.innerHeight;
-    if (input.type !== "wheel")
-      window.dispatchEvent(
-        new CustomEvent<RemotePointerPosition>("screen-control:pointer", { detail: { x, y } }),
-      );
+    const target = document.elementFromPoint(Math.round(x), Math.round(y));
     if (
       !target ||
       target.closest("[data-no-remote-control],input[type='password'],input[type='file']")
     )
       return;
+    window.dispatchEvent(
+      new CustomEvent<RemotePointerPosition>("screen-control:pointer", {
+        detail: { x, y },
+      }),
+    );
     if (input.type === "move") {
       target.dispatchEvent(
         new PointerEvent("pointermove", {
@@ -179,9 +177,9 @@ function dispatchRemoteInput(input: RemoteInput) {
       window.scrollBy({ left: input.deltaX, top: input.deltaY, behavior: "instant" });
       return;
     }
-    if (input.type === "click") {
+    if (input.type === "click" || input.type === "contextmenu") {
       target.dispatchEvent(
-        new MouseEvent("click", {
+        new MouseEvent(input.type, {
           bubbles: true,
           cancelable: true,
           clientX: x,
@@ -213,8 +211,9 @@ function dispatchRemoteInput(input: RemoteInput) {
     if (input.ctrl && ["r", "w", "l", "t", "n"].includes(input.key.toLowerCase())) return;
     if (input.alt && input.key === "F4") return;
     if (
-      focused instanceof HTMLInputElement &&
-      ["password", "file"].includes(focused.type.toLowerCase())
+      focused.closest("[data-no-remote-control]") ||
+      (focused instanceof HTMLInputElement &&
+        ["password", "file"].includes(focused.type.toLowerCase()))
     )
       return;
     const keyboardEvent = new KeyboardEvent(input.down ? "keydown" : "keyup", {
@@ -238,6 +237,7 @@ function dispatchRemoteInput(input: RemoteInput) {
     return;
   }
 
+  if (focused.closest("[data-no-remote-control]")) return;
   if (input.type === "text" && isTextControl(focused)) {
     editTextControl(focused, input.text);
     return;
@@ -292,6 +292,7 @@ export function ScreenControlWidget() {
   const localStreamSessionRef = useRef<string | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
+  const inputQueueRef = useRef<RemoteInput[]>([]);
   const lastMoveSentAt = useRef(0);
   const pollLock = useRef(false);
   const signalErrorShown = useRef(false);
@@ -443,6 +444,7 @@ export function ScreenControlWidget() {
       }
       closeLocalStream();
       setRemoteStream(null);
+      inputQueueRef.current = [];
       setSessions((current) => current.filter((session) => session.id !== sessionId));
     },
     [closeLocalStream, token],
@@ -452,6 +454,9 @@ export function ScreenControlWidget() {
     const channel = channelRef.current;
     if (channel?.readyState === "open" && channel.bufferedAmount < 128_000)
       channel.send(JSON.stringify(payload));
+    else if (payload.type !== "move" && payload.type !== "wheel") {
+      inputQueueRef.current = [...inputQueueRef.current, payload].slice(-40);
+    }
   }, []);
 
   async function requestControl(targetId: string) {
@@ -516,6 +521,7 @@ export function ScreenControlWidget() {
       channelRef.current = null;
       setRemoteStream(null);
       setConnectionState("waiting");
+      inputQueueRef.current = [];
       if (!activeSessionId && localStreamRef.current) closeLocalStream();
       return;
     }
@@ -547,6 +553,19 @@ export function ScreenControlWidget() {
     };
     const installControlChannel = (channel: RTCDataChannel) => {
       channelRef.current = channel;
+      const flushQueuedInputs = () => {
+        if (channel.readyState !== "open") return;
+        const queued = inputQueueRef.current.splice(0);
+        for (const payload of queued) {
+          if (channel.bufferedAmount >= 128_000) {
+            inputQueueRef.current.unshift(payload);
+            break;
+          }
+          channel.send(JSON.stringify(payload));
+        }
+      };
+      channel.onopen = flushQueuedInputs;
+      flushQueuedInputs();
       channel.onmessage = (event) => {
         if (!isOwner) return;
         try {
@@ -661,6 +680,7 @@ export function ScreenControlWidget() {
       if (peerRef.current === peer) peerRef.current = null;
       if (channelRef.current?.readyState !== "closed") channelRef.current?.close();
       channelRef.current = null;
+      inputQueueRef.current = [];
       setRemoteStream(null);
       setConnectionState("waiting");
     };
@@ -1011,7 +1031,6 @@ export function ScreenControlWidget() {
             tabIndex={0}
             role="application"
             aria-label="Remote app screen. Click here to send mouse and keyboard input."
-            onContextMenu={(event) => event.preventDefault()}
             onPointerMove={(event) => {
               const now = Date.now();
               if (now - lastMoveSentAt.current < 45) return;
@@ -1022,7 +1041,6 @@ export function ScreenControlWidget() {
             onPointerDown={(event) => {
               event.preventDefault();
               event.currentTarget.focus();
-              if (event.button !== 0) return;
               const point = getScreenPoint(event.currentTarget, event.clientX, event.clientY);
               if (point)
                 sendInput({
@@ -1033,7 +1051,6 @@ export function ScreenControlWidget() {
                 });
             }}
             onPointerUp={(event) => {
-              if (event.button !== 0) return;
               const point = getScreenPoint(event.currentTarget, event.clientX, event.clientY);
               if (point)
                 sendInput({
@@ -1042,7 +1059,13 @@ export function ScreenControlWidget() {
                   button: event.button,
                   buttons: event.buttons,
                 });
-              if (point) sendInput({ type: "click", ...point, button: event.button });
+              if (point && event.button === 0)
+                sendInput({ type: "click", ...point, button: event.button });
+            }}
+            onContextMenu={(event) => {
+              event.preventDefault();
+              const point = getScreenPoint(event.currentTarget, event.clientX, event.clientY);
+              if (point) sendInput({ type: "contextmenu", ...point, button: 2 });
             }}
             onWheel={(event) => {
               event.preventDefault();
@@ -1119,11 +1142,14 @@ export function ScreenControlWidget() {
       {target && activeSession && remotePointer && (
         <div
           aria-hidden="true"
-          className="pointer-events-none fixed z-[120]"
+          className="pointer-events-none fixed z-[200] -translate-x-1 -translate-y-1"
           data-no-remote-control
           style={{ left: remotePointer.x, top: remotePointer.y }}
         >
-          <MousePointer2 className="size-7 fill-red-600 stroke-white text-red-600 drop-shadow-lg" />
+          <MousePointer2
+            className="size-7 fill-red-600 stroke-white text-red-600 drop-shadow-[0_2px_3px_rgba(0,0,0,0.65)]"
+            aria-label={`Remote cursor controlled by ${target}`}
+          />
         </div>
       )}
     </>
