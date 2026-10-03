@@ -1,6 +1,6 @@
 @echo off
 echo ============================================
-echo  HRMS Payroll - Build Portable EXE
+echo  HRMS Payroll - Build Windows Installer and Portable EXE
 echo ============================================
 echo.
 
@@ -24,7 +24,8 @@ if errorlevel 1 (
 echo.
 echo ============================================
 echo  Build complete!
-echo  Find HRMS-portable.exe in the release/ folder.
+echo  Find the NSIS installer and portable ZIP in the release/ folder.
+echo  Run the Garuda HRMS Setup.exe installer for automatic Windows installation.
 echo  Copy the rclone-v1.74.4-windows-386 folder beside the EXE.
 echo  It must contain rclone.exe and rclone.conf.
 echo  The app creates a "data/" folder beside the exe on first launch.

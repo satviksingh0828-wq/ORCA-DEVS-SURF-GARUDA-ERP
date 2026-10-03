@@ -32,8 +32,18 @@ extraFiles:
 
 win:
   target:
+    - target: nsis
+      arch: [x64]
     - target: zip
       arch: [x64]
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Garuda HRMS
 
 linux:
   target:

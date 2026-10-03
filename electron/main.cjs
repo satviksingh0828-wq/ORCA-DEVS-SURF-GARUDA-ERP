@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, desktopCapturer, ipcMain, session, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
@@ -717,6 +717,23 @@ function createWindow() {
 
 app.whenReady().then(() => {
   ensureDataDir();
+
+  // The packaged Windows app can resume an active screen-control session
+  // without showing a second picker. Capture the primary desktop only when
+  // the renderer explicitly calls getDisplayMedia for an active share.
+  if (typeof session?.defaultSession?.setDisplayMediaRequestHandler === 'function') {
+    session.defaultSession.setDisplayMediaRequestHandler(async (_request, callback) => {
+      try {
+        const sources = await desktopCapturer.getSources({
+          types: ['screen'],
+          thumbnailSize: { width: 1, height: 1 },
+        });
+        callback(sources[0] ? { video: sources[0] } : {});
+      } catch {
+        callback({});
+      }
+    });
+  }
 
   createWindow();
 

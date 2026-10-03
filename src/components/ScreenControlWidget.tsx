@@ -55,6 +55,12 @@ type RemoteInput =
 
 type RemotePointerPosition = { x: number; y: number };
 
+declare global {
+  interface Window {
+    electronAPI?: Record<string, unknown>;
+  }
+}
+
 const RTC_CONFIG: RTCConfiguration = {
   iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
   bundlePolicy: "max-bundle",
@@ -299,6 +305,7 @@ export function ScreenControlWidget() {
   const lastMoveSentAt = useRef(0);
   const pollLock = useRef(false);
   const signalErrorShown = useRef(false);
+  const autoResumeSessionRef = useRef<string | null>(null);
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -503,9 +510,9 @@ export function ScreenControlWidget() {
         // This call must happen directly from the user's Accept click. The browser
         // shows its own chooser; the app cannot capture without the owner choosing.
         const captureOptions: DisplayMediaStreamOptions & { preferCurrentTab?: boolean } = {
-          video: { displaySurface: "browser", frameRate: { ideal: 15, max: 24 } },
+          video: { displaySurface: "monitor", frameRate: { ideal: 15, max: 24 } },
           audio: false,
-          preferCurrentTab: true,
+          preferCurrentTab: false,
         };
         const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
         if (backgroundVideo) {
@@ -546,9 +553,9 @@ export function ScreenControlWidget() {
       if (!navigator.mediaDevices?.getDisplayMedia)
         throw new Error("Screen sharing is not available in this browser.");
       const captured = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: "browser", frameRate: { ideal: 15, max: 24 } },
+        video: { displaySurface: "monitor", frameRate: { ideal: 15, max: 24 } },
         audio: false,
-        preferCurrentTab: true,
+        preferCurrentTab: false,
       } as DisplayMediaStreamOptions & { preferCurrentTab?: boolean });
       localStreamRef.current = captured;
       localStreamSessionRef.current = session.id;
@@ -563,6 +570,22 @@ export function ScreenControlWidget() {
       setBusyId(null);
     }
   }
+
+  useEffect(() => {
+    // Electron's main process selects the primary desktop through its media
+    // handler. Regular browsers must wait for the owner to click Resume so
+    // the browser can show its mandatory capture permission prompt.
+    if (
+      !window.electronAPI ||
+      !activeSession ||
+      activeSession.target_id !== user?.id ||
+      localShareReady ||
+      autoResumeSessionRef.current === activeSession.id
+    )
+      return;
+    autoResumeSessionRef.current = activeSession.id;
+    void resumeScreenShare(activeSession);
+  }, [activeSession, localShareReady, user?.id]);
 
   useEffect(() => {
     if (!activeSessionId || activeSessionStatus !== "active" || !token || !user?.id) {
@@ -589,6 +612,7 @@ export function ScreenControlWidget() {
     const queuedCandidates: RTCIceCandidateInit[] = [];
     const peer = new RTCPeerConnection(RTC_CONFIG);
     let restartTimer: number | null = null;
+    let connectionTimeout: number | null = null;
     let restartInFlight = false;
     let restartAttempts = 0;
     peerRef.current = peer;
@@ -605,7 +629,7 @@ export function ScreenControlWidget() {
       });
     };
     const restartConnection = async () => {
-      if (disposed || !isOwner || restartInFlight || restartAttempts >= 3) return;
+      if (disposed || !isOwner || restartInFlight || restartAttempts >= 8) return;
       restartInFlight = true;
       restartAttempts += 1;
       try {
@@ -672,10 +696,12 @@ export function ScreenControlWidget() {
         restartAttempts = 0;
         if (restartTimer !== null) window.clearTimeout(restartTimer);
         restartTimer = null;
+        if (connectionTimeout !== null) window.clearTimeout(connectionTimeout);
+        connectionTimeout = null;
       } else if (
         isOwner &&
         (peer.connectionState === "disconnected" || peer.connectionState === "failed") &&
-        restartAttempts < 3
+        restartAttempts < 8
       ) {
         if (restartTimer !== null) window.clearTimeout(restartTimer);
         restartTimer = window.setTimeout(() => void restartConnection(), 800);
@@ -685,6 +711,7 @@ export function ScreenControlWidget() {
       if (!isOwner) setRemoteStream(event.streams[0] ?? new MediaStream([event.track]));
     };
     peer.ondatachannel = (event) => installControlChannel(event.channel);
+    connectionTimeout = window.setTimeout(() => void restartConnection(), 8_000);
 
     if (isOwner && ownedStream) {
       ownedStream.getTracks().forEach((track) => {
@@ -764,6 +791,7 @@ export function ScreenControlWidget() {
       disposed = true;
       window.clearInterval(signalTimer);
       if (restartTimer !== null) window.clearTimeout(restartTimer);
+      if (connectionTimeout !== null) window.clearTimeout(connectionTimeout);
       peer.ontrack = null;
       peer.onicecandidate = null;
       peer.onconnectionstatechange = null;
@@ -897,8 +925,8 @@ export function ScreenControlWidget() {
                           {request.requester.name} wants to view and control this app
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Accepting opens the browser’s screen-sharing chooser. Choose this app tab
-                          if you only want to share it; you can stop sharing at any time.
+                          Accepting shares the desktop in the installed Windows app; browsers show
+                          their native screen chooser. You can stop sharing at any time.
                         </p>
                         <div className="mt-3 flex justify-end gap-2">
                           <Button
@@ -1029,8 +1057,8 @@ export function ScreenControlWidget() {
                 )}
               </div>
               <div className="border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
-                No recording. The screen owner must accept, then choose what to share in the browser
-                prompt. Control is limited to this app tab.
+                No recording. The screen owner must accept. The installed Windows app shares the
+                primary desktop; browser control remains limited to the app page.
               </div>
             </PopoverContent>
           </Popover>,
