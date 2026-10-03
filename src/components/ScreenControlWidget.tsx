@@ -70,29 +70,10 @@ declare global {
   }
 }
 
-const TURN_URLS = (import.meta.env.VITE_SCREEN_CONTROL_TURN_URLS || "")
-  .split(",")
-  .map((url: string) => url.trim())
-  .filter(Boolean);
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-    ...(TURN_URLS.length > 0 &&
-    import.meta.env.VITE_SCREEN_CONTROL_TURN_USERNAME &&
-    import.meta.env.VITE_SCREEN_CONTROL_TURN_CREDENTIAL
-      ? [
-          {
-            urls: TURN_URLS,
-            username: import.meta.env.VITE_SCREEN_CONTROL_TURN_USERNAME,
-            credential: import.meta.env.VITE_SCREEN_CONTROL_TURN_CREDENTIAL,
-          },
-        ]
-      : []),
-  ],
+  iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
   bundlePolicy: "max-bundle",
-  rtcpMuxPolicy: "require",
-  iceCandidatePoolSize: 16,
+  iceCandidatePoolSize: 10,
 };
 const MAX_AUTO_RESHARE_ATTEMPTS = 5;
 
@@ -343,8 +324,6 @@ function getScreenOverlayPosition(container: HTMLElement, x: number, y: number) 
 
 export function ScreenControlWidget() {
   const { user } = useSession();
-  const isPopupWindow =
-    typeof window !== "undefined" && window.location.search.includes("screen_control_popup=1");
   const routePath = useRouterState({ select: (state) => state.location.pathname });
   const token = user?.sessionToken ?? "";
   const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
@@ -363,8 +342,6 @@ export function ScreenControlWidget() {
     "waiting",
   );
   const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);
-  const [popupWindow, setPopupWindow] = useState<Window | null>(null);
-  const popupWindowRef = useRef<Window | null>(null);
   const localStreamRef = useRef<MediaStream | null>(null);
   const localStreamSessionRef = useRef<string | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
@@ -598,8 +575,6 @@ export function ScreenControlWidget() {
 
   async function requestControl(targetId: string, shareScope: "app" | "system") {
     if (!token || participantBusy) return;
-    // Open synchronously from the user click so browser popup blockers allow it.
-    openScreenPopup();
     setBusyId(targetId);
     try {
       await createScreenControlRequest({ data: { sessionToken: token, targetId, shareScope } });
@@ -623,47 +598,41 @@ export function ScreenControlWidget() {
     let captured: MediaStream | null = null;
     try {
       if (accept) {
-        // The sharing owner gets the popup. The main page only accepts the request;
-        // the popup owns capture so refreshing the ERP page cannot stop it.
-        if (!isPopupWindow) openScreenPopup();
-        if (isPopupWindow) {
-          if (session.share_scope === "system" && !window.electronAPI) {
-            captured = await startWindowsDesktopAgentCapture(session.id, session.requester.name);
-          } else {
-            if (!navigator.mediaDevices?.getDisplayMedia)
-              throw new Error(
-                "Screen sharing is not available in this browser. Use the app over HTTPS in a supported browser.",
-              );
-            const captureOptions: DisplayMediaStreamOptions & { preferCurrentTab?: boolean } = {
-              video: {
-                displaySurface: session.share_scope === "system" ? "monitor" : "window",
-                frameRate: { ideal: 15, max: 24 },
-              },
-              audio: false,
-              preferCurrentTab: false,
-              selfBrowserSurface: session.share_scope === "app" ? "exclude" : "include",
-            };
-            const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
-              ((scope: string) => Promise<unknown>) | undefined;
-            await setElectronCaptureScope?.(session.share_scope);
-            captured = await navigator.mediaDevices.getDisplayMedia(captureOptions);
-          }
-          const backgroundVideo =
-            document.querySelector<HTMLVideoElement>(".background-video-layer");
-          if (backgroundVideo) {
-            backgroundVideo.dataset.screenControlPaused = "true";
-            backgroundVideo.pause();
-          }
-          localStreamRef.current = captured;
-          localStreamSessionRef.current = session.id;
-          setLocalShareReady(true);
-          captured.getTracks().forEach((track) => {
-            track.onended = () => {
-              if (localStreamSessionRef.current === session.id)
-                void finishSession(session.id, "screen_share_stopped");
-            };
-          });
+        if (session.share_scope === "system" && !window.electronAPI) {
+          captured = await startWindowsDesktopAgentCapture(session.id, session.requester.name);
+        } else {
+          if (!navigator.mediaDevices?.getDisplayMedia)
+            throw new Error(
+              "Screen sharing is not available in this browser. Use the app over HTTPS in a supported browser.",
+            );
+          // App-only sharing continues to use the browser's existing chooser.
+          const captureOptions: DisplayMediaStreamOptions & { preferCurrentTab?: boolean } = {
+            video: {
+              displaySurface: session.share_scope === "system" ? "monitor" : "window",
+              frameRate: { ideal: 15, max: 24 },
+            },
+            audio: false,
+            preferCurrentTab: session.share_scope === "app",
+          };
+          const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
+            ((scope: string) => Promise<unknown>) | undefined;
+          await setElectronCaptureScope?.(session.share_scope);
+          captured = await navigator.mediaDevices.getDisplayMedia(captureOptions);
         }
+        const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
+        if (backgroundVideo) {
+          backgroundVideo.dataset.screenControlPaused = "true";
+          backgroundVideo.pause();
+        }
+        localStreamRef.current = captured;
+        localStreamSessionRef.current = session.id;
+        setLocalShareReady(true);
+        captured.getTracks().forEach((track) => {
+          track.onended = () => {
+            if (localStreamSessionRef.current === session.id)
+              void finishSession(session.id, "screen_share_stopped");
+          };
+        });
       }
       await respondToScreenControlRequest({
         data: { sessionToken: token, sessionId: session.id, accept },
@@ -686,8 +655,9 @@ export function ScreenControlWidget() {
       setBusyId(null);
     }
   }
+
   function scheduleAutoReshare(session: ScreenControlSession) {
-    if (session.share_scope !== "app" || (!window.electronAPI && !isPopupWindow)) {
+    if (session.share_scope !== "app" || !window.electronAPI) {
       void finishSession(session.id, "screen_share_stopped");
       return;
     }
@@ -713,8 +683,7 @@ export function ScreenControlWidget() {
 
   async function resumeScreenShare(session: ScreenControlSession, automatic = false) {
     if (!token || session.status !== "active" || session.target_id !== user?.id) return;
-    if (automatic && (session.share_scope !== "app" || (!window.electronAPI && !isPopupWindow)))
-      return;
+    if (automatic && (session.share_scope !== "app" || !window.electronAPI)) return;
     if (!automatic) setBusyId(session.id);
     let captured: MediaStream | null = null;
     try {
@@ -732,8 +701,7 @@ export function ScreenControlWidget() {
             frameRate: { ideal: 15, max: 24 },
           },
           audio: false,
-          preferCurrentTab: false,
-          selfBrowserSurface: session.share_scope === "app" ? "exclude" : "include",
+          preferCurrentTab: session.share_scope === "app",
         } as DisplayMediaStreamOptions & { preferCurrentTab?: boolean });
       }
       localStreamRef.current = captured;
@@ -768,7 +736,7 @@ export function ScreenControlWidget() {
     // Electron's media handler can restore an active capture without another
     // picker. Regular browsers must wait for an owner gesture to restart capture.
     if (
-      (!window.electronAPI && !isPopupWindow) ||
+      !window.electronAPI ||
       !activeSession ||
       activeSession.target_id !== user?.id ||
       localShareReady ||
@@ -777,16 +745,10 @@ export function ScreenControlWidget() {
       return;
     autoResumeSessionRef.current = activeSession.id;
     void resumeScreenShareRef.current(activeSession);
-  }, [activeSession, isPopupWindow, localShareReady, user?.id]);
+  }, [activeSession, localShareReady, user?.id]);
 
   useEffect(() => {
-    if (
-      !activeSessionId ||
-      activeSessionStatus !== "active" ||
-      !token ||
-      !user?.id ||
-      (!isPopupWindow && Boolean(popupWindow))
-    ) {
+    if (!activeSessionId || activeSessionStatus !== "active" || !token || !user?.id) {
       peerRef.current?.close();
       peerRef.current = null;
       channelRef.current = null;
@@ -825,14 +787,6 @@ export function ScreenControlWidget() {
       await sendScreenControlSignal({
         data: { sessionToken: token, sessionId, signalType, payload },
       });
-    };
-    const scheduleRestart = (delay = 800) => {
-      if (disposed || !isOwner || restartInFlight || restartAttempts >= 8) return;
-      if (restartTimer !== null) window.clearTimeout(restartTimer);
-      restartTimer = window.setTimeout(() => {
-        restartTimer = null;
-        void restartConnection();
-      }, delay);
     };
     const restartConnection = async () => {
       if (disposed || !isOwner || restartInFlight || restartAttempts >= 8) return;
@@ -906,21 +860,18 @@ export function ScreenControlWidget() {
         connectionTimeout = null;
       } else if (
         isOwner &&
-        (peer.connectionState === "disconnected" || peer.connectionState === "failed")
+        (peer.connectionState === "disconnected" || peer.connectionState === "failed") &&
+        restartAttempts < 8
       ) {
-        scheduleRestart(Math.min(800 * 2 ** restartAttempts, 8_000));
+        if (restartTimer !== null) window.clearTimeout(restartTimer);
+        restartTimer = window.setTimeout(() => void restartConnection(), 800);
       }
-    };
-    peer.oniceconnectionstatechange = () => {
-      if (disposed || !isOwner) return;
-      if (peer.iceConnectionState === "failed") scheduleRestart(0);
-      else if (peer.iceConnectionState === "disconnected") scheduleRestart(500);
     };
     peer.ontrack = (event) => {
       if (!isOwner) setRemoteStream(event.streams[0] ?? new MediaStream([event.track]));
     };
     peer.ondatachannel = (event) => installControlChannel(event.channel);
-    connectionTimeout = window.setTimeout(() => scheduleRestart(0), 8_000);
+    connectionTimeout = window.setTimeout(() => void restartConnection(), 8_000);
 
     if (isOwner && ownedStream) {
       ownedStream.getTracks().forEach((track) => {
@@ -994,7 +945,7 @@ export function ScreenControlWidget() {
     void pollSignals();
     // Keep handshake and ICE-restart latency low without creating an unbounded
     // request loop; receiveScreenControlSignals returns at most 50 rows.
-    const signalTimer = window.setInterval(() => void pollSignals(), 300);
+    const signalTimer = window.setInterval(() => void pollSignals(), 400);
 
     return () => {
       disposed = true;
@@ -1004,7 +955,6 @@ export function ScreenControlWidget() {
       peer.ontrack = null;
       peer.onicecandidate = null;
       peer.onconnectionstatechange = null;
-      peer.oniceconnectionstatechange = null;
       peer.ondatachannel = null;
       peer.close();
       if (peerRef.current === peer) peerRef.current = null;
@@ -1025,8 +975,6 @@ export function ScreenControlWidget() {
     refreshState,
     token,
     user?.id,
-    isPopupWindow,
-    popupWindow,
   ]);
 
   useEffect(() => {
@@ -1045,41 +993,6 @@ export function ScreenControlWidget() {
       document.title = previousTitle;
     };
   }, [controller]);
-
-  const openScreenPopup = useCallback(() => {
-    if (isPopupWindow || !user || (popupWindowRef.current && !popupWindowRef.current.closed))
-      return;
-    const popup = window.open(
-      `${window.location.origin}/screen-control-popup?screen_control_popup=1`,
-      "orca-screen-control",
-      "popup=yes,width=420,height=280,resizable=yes,scrollbars=no",
-    );
-    if (!popup) {
-      toast.error("Please allow popups to open the screen-control window.");
-      return;
-    }
-    popupWindowRef.current = popup;
-    const sendSession = (event: MessageEvent) => {
-      if (
-        event.origin === window.location.origin &&
-        event.source === popup &&
-        event.data?.type === "orca-screen-popup-ready"
-      )
-        popup.postMessage(
-          { type: "orca-screen-popup-session", session: user },
-          window.location.origin,
-        );
-    };
-    const timer = window.setInterval(() => {
-      if (popup.closed) {
-        window.clearInterval(timer);
-        popupWindowRef.current = null;
-        setPopupWindow(null);
-      }
-    }, 500);
-    window.addEventListener("message", sendSession);
-    setPopupWindow(popup);
-  }, [isPopupWindow, user]);
 
   if (!user) return null;
 
@@ -1396,12 +1309,8 @@ export function ScreenControlWidget() {
           ref={workspaceRef}
           className="fixed inset-0 z-[80] flex h-[100dvh] w-screen flex-col overflow-hidden bg-slate-950 text-white"
           aria-label={`${activeSession.share_scope === "system" ? "Remote Windows desktop" : "Remote app session"} with ${controller}`}
-          style={!isPopupWindow && popupWindow ? { display: "none" } : undefined}
         >
-          <header
-            className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-700 bg-background px-3 text-foreground shadow-sm sm:px-5"
-            style={isPopupWindow ? { display: "none" } : undefined}
-          >
+          <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-slate-700 bg-background px-3 text-foreground shadow-sm sm:px-5">
             <div className="flex min-w-0 items-center gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-primary/10 text-primary">
                 <MonitorUp className="size-5" />
@@ -1459,12 +1368,6 @@ export function ScreenControlWidget() {
               </Button>
             </div>
           </header>
-          {isPopupWindow && (
-            <div className="flex items-center justify-center gap-2 border-b border-slate-700 bg-slate-950 py-1 text-[10px] text-slate-300">
-              <img src="/orca-logo.svg" alt="ORCA" className="size-4" /> ORCA · Powered by ORCA DEVS
-              SURF
-            </div>
-          )}
           <div
             ref={controlSurfaceRef}
             className="relative min-h-0 flex-1 overflow-hidden bg-black focus:outline-none"
@@ -1600,14 +1503,9 @@ export function ScreenControlWidget() {
               </div>
             )}
           </div>
-          {isPopupWindow && (
-            <footer className="flex h-6 shrink-0 items-center justify-center border-t border-slate-700 bg-slate-950 text-[9px] text-slate-400">
-              Powered by ORCA DEVS SURF
-            </footer>
-          )}
         </section>
       )}
-      {!isPopupWindow && !popupWindow && target && activeSession && remotePointer && (
+      {target && activeSession && remotePointer && (
         <div
           aria-hidden="true"
           className="pointer-events-none fixed z-[200] -translate-x-1 -translate-y-1"

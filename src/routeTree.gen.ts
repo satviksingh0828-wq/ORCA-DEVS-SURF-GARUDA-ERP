@@ -27,7 +27,6 @@ import { Route as OperationsRouteImport } from './routes/operations'
 import { Route as PayrollRouteImport } from './routes/payroll'
 import { Route as ReportMasterRouteImport } from './routes/report-master'
 import { Route as ReportsRouteImport } from './routes/reports'
-import { Route as ScreenControlPopupRouteImport } from './routes/screen-control-popup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SystemRouteImport } from './routes/system'
@@ -191,11 +190,6 @@ const ReportMasterRoute = ReportMasterRouteImport.update({
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ScreenControlPopupRoute = ScreenControlPopupRouteImport.update({
-  id: '/screen-control-popup',
-  path: '/screen-control-popup',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -598,7 +592,6 @@ export interface FileRoutesByFullPath {
   '/payroll': typeof PayrollRouteWithChildren
   '/report-master': typeof ReportMasterRoute
   '/reports': typeof ReportsRoute
-  '/screen-control-popup': typeof ScreenControlPopupRoute
   '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/system': typeof SystemRoute
@@ -688,7 +681,6 @@ export interface FileRoutesByTo {
   '/operations': typeof OperationsRoute
   '/report-master': typeof ReportMasterRoute
   '/reports': typeof ReportsRoute
-  '/screen-control-popup': typeof ScreenControlPopupRoute
   '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/system': typeof SystemRoute
@@ -781,7 +773,6 @@ export interface FileRoutesById {
   '/payroll': typeof PayrollRouteWithChildren
   '/report-master': typeof ReportMasterRoute
   '/reports': typeof ReportsRoute
-  '/screen-control-popup': typeof ScreenControlPopupRoute
   '/settings': typeof SettingsRouteWithChildren
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/system': typeof SystemRoute
@@ -878,7 +869,6 @@ export interface FileRouteTypes {
     | '/payroll'
     | '/report-master'
     | '/reports'
-    | '/screen-control-popup'
     | '/settings'
     | '/sitemap.xml'
     | '/system'
@@ -968,7 +958,6 @@ export interface FileRouteTypes {
     | '/operations'
     | '/report-master'
     | '/reports'
-    | '/screen-control-popup'
     | '/settings'
     | '/sitemap.xml'
     | '/system'
@@ -1060,7 +1049,6 @@ export interface FileRouteTypes {
     | '/payroll'
     | '/report-master'
     | '/reports'
-    | '/screen-control-popup'
     | '/settings'
     | '/sitemap.xml'
     | '/system'
@@ -1156,7 +1144,6 @@ export interface RootRouteChildren {
   PayrollRoute: typeof PayrollRouteWithChildren
   ReportMasterRoute: typeof ReportMasterRoute
   ReportsRoute: typeof ReportsRoute
-  ScreenControlPopupRoute: typeof ScreenControlPopupRoute
   SettingsRoute: typeof SettingsRouteWithChildren
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SystemRoute: typeof SystemRoute
@@ -1316,13 +1303,6 @@ declare module '@tanstack/react-router' {
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof ReportsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/screen-control-popup': {
-      id: '/screen-control-popup'
-      path: '/screen-control-popup'
-      fullPath: '/screen-control-popup'
-      preLoaderRoute: typeof ScreenControlPopupRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -2038,7 +2018,6 @@ const rootRouteChildren: RootRouteChildren = {
   PayrollRoute: PayrollRouteWithChildren,
   ReportMasterRoute: ReportMasterRoute,
   ReportsRoute: ReportsRoute,
-  ScreenControlPopupRoute: ScreenControlPopupRoute,
   SettingsRoute: SettingsRouteWithChildren,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SystemRoute: SystemRoute,
