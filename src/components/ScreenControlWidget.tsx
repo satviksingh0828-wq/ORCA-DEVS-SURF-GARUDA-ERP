@@ -994,7 +994,7 @@ export function ScreenControlWidget() {
                       <p className="mt-0.5">
                         {isController
                           ? connectionLabel
-                          : request.share_scope === "system"
+                          : activeSession.share_scope === "system"
                             ? "Your full Windows desktop is being shared. You can end this session at any time."
                             : "This app is being shared. You can end this session at any time."}
                       </p>

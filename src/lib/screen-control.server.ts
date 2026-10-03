@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
 type ScreenStatus = "pending" | "active" | "declined" | "ended" | "expired";
 type SignalType = "offer" | "answer" | "ice";
-type ScreenRecord = {
+type SessionRecord = {
   id: string;
   requester_id: string;
   target_id: string;
