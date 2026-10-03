@@ -66,6 +66,7 @@ const RTC_CONFIG: RTCConfiguration = {
   bundlePolicy: "max-bundle",
   iceCandidatePoolSize: 10,
 };
+const MAX_AUTO_RESHARE_ATTEMPTS = 5;
 
 function isTextControl(element: Element | null): element is HTMLInputElement | HTMLTextAreaElement {
   if (element instanceof HTMLTextAreaElement) return true;
@@ -124,8 +125,7 @@ function editTextControl(
 function dispatchRemoteInput(input: RemoteInput, systemShare = false) {
   if (systemShare) {
     const nativeInput = window.electronAPI?.systemInput as
-      | ((payload: RemoteInput) => Promise<unknown>)
-      | undefined;
+      ((payload: RemoteInput) => Promise<unknown>) | undefined;
     if (nativeInput) {
       void nativeInput(input).catch(() => undefined);
       return;
@@ -315,6 +315,14 @@ export function ScreenControlWidget() {
   const pollLock = useRef(false);
   const signalErrorShown = useRef(false);
   const autoResumeSessionRef = useRef<string | null>(null);
+  const resumeScreenShareRef = useRef<
+    (session: ScreenControlSession, automatic?: boolean) => Promise<void>
+  >(async () => undefined);
+  const autoReshareRef = useRef<{
+    sessionId: string | null;
+    attempts: number;
+    timer: number | null;
+  }>({ sessionId: null, attempts: 0, timer: null });
   const workspaceRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -401,6 +409,17 @@ export function ScreenControlWidget() {
   const activeSessionStatus = activeSession?.status;
   const activeSessionTargetId = activeSession?.target_id;
   const activeShareScope = activeSession?.share_scope;
+  useEffect(() => {
+    const autoReshare = autoReshareRef.current;
+    if (autoReshare.timer !== null) window.clearTimeout(autoReshare.timer);
+    autoReshare.sessionId = activeSessionId ?? null;
+    autoReshare.attempts = 0;
+    autoReshare.timer = null;
+    return () => {
+      if (autoReshare.timer !== null) window.clearTimeout(autoReshare.timer);
+      autoReshare.timer = null;
+    };
+  }, [activeSessionId]);
   useEffect(() => {
     const active = Boolean(activeSessionId && activeSessionStatus === "active");
     if (active) document.body.dataset.screenControlActive = "true";
@@ -530,8 +549,7 @@ export function ScreenControlWidget() {
           preferCurrentTab: session.share_scope === "app",
         };
         const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
-          | ((scope: string) => Promise<unknown>)
-          | undefined;
+          ((scope: string) => Promise<unknown>) | undefined;
         await setElectronCaptureScope?.(session.share_scope);
         const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
         if (backgroundVideo) {
@@ -565,17 +583,43 @@ export function ScreenControlWidget() {
     }
   }
 
-  async function resumeScreenShare(session: ScreenControlSession) {
+  function scheduleAutoReshare(session: ScreenControlSession) {
+    if (session.share_scope !== "app" || !window.electronAPI) {
+      void finishSession(session.id, "screen_share_stopped");
+      return;
+    }
+    const autoReshare = autoReshareRef.current;
+    if (autoReshare.sessionId !== session.id) {
+      if (autoReshare.timer !== null) window.clearTimeout(autoReshare.timer);
+      autoReshare.sessionId = session.id;
+      autoReshare.attempts = 0;
+      autoReshare.timer = null;
+    }
+    if (autoReshare.attempts >= MAX_AUTO_RESHARE_ATTEMPTS) {
+      toast.error("Could not restore app sharing after several attempts. The session has ended.");
+      void finishSession(session.id, "screen_share_stopped");
+      return;
+    }
+    const delay = Math.min(300 * 2 ** autoReshare.attempts, 4_800);
+    autoReshare.attempts += 1;
+    autoReshare.timer = window.setTimeout(() => {
+      autoReshare.timer = null;
+      void resumeScreenShareRef.current(session, true);
+    }, delay);
+  }
+
+  async function resumeScreenShare(session: ScreenControlSession, automatic = false) {
     if (!token || session.status !== "active" || session.target_id !== user?.id) return;
-    setBusyId(session.id);
+    if (automatic && (session.share_scope !== "app" || !window.electronAPI)) return;
+    if (!automatic) setBusyId(session.id);
+    let captured: MediaStream | null = null;
     try {
       if (!navigator.mediaDevices?.getDisplayMedia)
         throw new Error("Screen sharing is not available in this browser.");
       const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
-        | ((scope: string) => Promise<unknown>)
-        | undefined;
+        ((scope: string) => Promise<unknown>) | undefined;
       await setElectronCaptureScope?.(session.share_scope);
-      const captured = await navigator.mediaDevices.getDisplayMedia({
+      captured = await navigator.mediaDevices.getDisplayMedia({
         video: {
           displaySurface: session.share_scope === "system" ? "monitor" : "window",
           frameRate: { ideal: 15, max: 24 },
@@ -587,20 +631,33 @@ export function ScreenControlWidget() {
       localStreamSessionRef.current = session.id;
       setLocalShareReady(true);
       captured.getTracks().forEach((track) => {
-        track.onended = () => void finishSession(session.id, "screen_share_stopped");
+        track.onended = () => {
+          if (localStreamRef.current !== captured || localStreamSessionRef.current !== session.id)
+            return;
+          if (session.share_scope === "app" && window.electronAPI) {
+            localStreamRef.current = null;
+            localStreamSessionRef.current = null;
+            setLocalShareReady(false);
+            scheduleAutoReshare(session);
+          } else {
+            void finishSession(session.id, "screen_share_stopped");
+          }
+        };
       });
-      toast.success("Screen sharing resumed.");
+      if (!automatic) toast.success("Screen sharing resumed.");
     } catch (cause) {
-      toast.error(cause instanceof Error ? cause.message : "Could not resume screen sharing.");
+      captured?.getTracks().forEach((track) => track.stop());
+      if (automatic) scheduleAutoReshare(session);
+      else toast.error(cause instanceof Error ? cause.message : "Could not resume screen sharing.");
     } finally {
-      setBusyId(null);
+      if (!automatic) setBusyId(null);
     }
   }
+  resumeScreenShareRef.current = resumeScreenShare;
 
   useEffect(() => {
-    // Electron's main process selects the primary desktop through its media
-    // handler. Regular browsers must wait for the owner to click Resume so
-    // the browser can show its mandatory capture permission prompt.
+    // Electron's media handler can restore an active capture without another
+    // picker. Regular browsers must wait for an owner gesture to restart capture.
     if (
       !window.electronAPI ||
       !activeSession ||
@@ -610,7 +667,7 @@ export function ScreenControlWidget() {
     )
       return;
     autoResumeSessionRef.current = activeSession.id;
-    void resumeScreenShare(activeSession);
+    void resumeScreenShareRef.current(activeSession);
   }, [activeSession, localShareReady, user?.id]);
 
   useEffect(() => {
@@ -949,7 +1006,8 @@ export function ScreenControlWidget() {
                         className="rounded-lg border border-primary/30 bg-primary/5 p-3"
                       >
                         <p className="text-sm font-medium">
-                          {request.requester.name} requests {request.share_scope === "system" ? "full system" : "this app"}
+                          {request.requester.name} requests{" "}
+                          {request.share_scope === "system" ? "full system" : "this app"}
                         </p>
                         <p className="mt-1 text-xs text-muted-foreground">
                           {request.share_scope === "system"
@@ -1112,16 +1170,19 @@ export function ScreenControlWidget() {
               Your selected screen is being shared with <strong>{target}</strong>; control is
               limited to this app tab.
             </span>
-            {!localShareReady && (
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={busyId === activeSession.id}
-                onClick={() => void resumeScreenShare(activeSession)}
-              >
-                {busyId === activeSession.id ? "Resuming…" : "Resume sharing"}
-              </Button>
-            )}
+            {!localShareReady &&
+              (activeSession.share_scope !== "app" ||
+                typeof window === "undefined" ||
+                !window.electronAPI) && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busyId === activeSession.id}
+                  onClick={() => void resumeScreenShare(activeSession)}
+                >
+                  {busyId === activeSession.id ? "Resuming…" : "Resume sharing"}
+                </Button>
+              )}
             <Button
               size="sm"
               variant="destructive"
