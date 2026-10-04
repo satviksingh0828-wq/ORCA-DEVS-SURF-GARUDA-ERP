@@ -8,6 +8,7 @@ import {
   PackagePlus,
   Plus,
   RefreshCw,
+  Trash2,
   Eye,
   X,
 } from "lucide-react";
@@ -164,7 +165,7 @@ export function StockInward() {
     let query = db
       .from("stock_inward_receipts")
       .select(
-        "id,receipt_date,unloading_date,unloading_amount_received,additional_income_mode,approval_amount,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,source:contracts(contract_name))",
+        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,additional_income_mode,approval_amount,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,source:contracts(contract_name))",
       )
       .gte("receipt_date", filters.from)
       .lte("receipt_date", filters.to)
@@ -256,9 +257,20 @@ export function StockInward() {
       return toast.error("Approval amount is required for the selected additional income option");
 
     setSaving(true);
+    const { data: receiptNumber, error: numberError } = await db.rpc("next_branch_series_number", {
+      p_branch_id: form.branchId,
+      p_document_type: "inward_receipt",
+      p_prefix: "SI",
+      p_series_year: new Date(form.receiptDate).getFullYear(),
+    });
+    if (numberError || !receiptNumber) {
+      setSaving(false);
+      return toast.error(numberError?.message ?? "Could not generate inward receipt number");
+    }
     const { data: receipt, error: receiptError } = await db
       .from("stock_inward_receipts")
       .insert({
+        receipt_number: receiptNumber,
         branch_id: form.branchId,
         receipt_date: form.receiptDate,
         unloading_date: form.unloadingDate,
@@ -302,6 +314,21 @@ export function StockInward() {
     toast.success("Stock Inward receipt created");
     setShowCreate(false);
     resetForm();
+    await loadRows();
+  }
+
+  async function deleteReceipt(row: Row) {
+    if (
+      !window.confirm(
+        `Delete Stock Inward receipt ${row.receipt_number ?? ""}? This will remove its sources and package lines.`,
+      )
+    )
+      return;
+    const { error } = await db.from("stock_inward_receipts").delete().eq("id", row.id);
+    if (error) return toast.error(`Could not delete receipt: ${error.message}`);
+    setViewId(null);
+    setExpandedId(null);
+    toast.success("Stock Inward receipt deleted");
     await loadRows();
   }
 
@@ -660,8 +687,21 @@ export function StockInward() {
                 Complete receipt, source and package information
               </p>
             </div>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              className="ml-auto"
+              onClick={() => void deleteReceipt(selectedRow)}
+            >
+              <Trash2 className="size-4" /> Delete receipt
+            </Button>
           </div>
           <div className="grid gap-4 rounded-lg border border-border p-4 text-sm md:grid-cols-3">
+            <div>
+              <p className="text-muted-foreground">Inward receipt number</p>
+              <p className="font-medium">{selectedRow.receipt_number}</p>
+            </div>
             <div>
               <p className="text-muted-foreground">Receipt date</p>
               <p className="font-medium">
@@ -795,6 +835,7 @@ export function StockInward() {
                         onClick={() => setExpandedId(open ? null : row.id)}
                       >
                         <span className="font-semibold">
+                          {row.receipt_number} ·{" "}
                           {new Date(row.receipt_date).toLocaleDateString("en-GB")}
                         </span>
                         <span>{row.branch?.branch_name ?? "—"}</span>
@@ -818,6 +859,14 @@ export function StockInward() {
                         onClick={() => setViewId(row.id)}
                       >
                         <Eye className="size-4" /> View
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="destructive"
+                        onClick={() => void deleteReceipt(row)}
+                      >
+                        <Trash2 className="size-4" /> Delete
                       </Button>
                     </div>
                     {open && (
