@@ -14,7 +14,7 @@ import {
 } from "@/lib/screen-control-host-bridge";
 import {
   sendWindowsDesktopAgentInput,
-  startWindowsDesktopAgentCapture,
+  startWindowsDesktopAgentInputSession,
   stopWindowsDesktopAgentCapture,
   type AgentRemoteInput,
 } from "@/lib/windows-desktop-agent";
@@ -236,10 +236,35 @@ export function ScreenControlConnectionHost({
       captureRequestIds.add(request.requestId);
       session = { ...request.session, status: "pending" };
       sessionToken = request.sessionToken;
+      let pendingCapture: MediaStream | null = null;
       try {
         let captured: MediaStream;
         if (request.session.share_scope === "system" && !window.electronAPI) {
-          captured = await startWindowsDesktopAgentCapture(
+          if (!navigator.mediaDevices?.getDisplayMedia)
+            throw new Error(
+              "Full-screen capture is not available in this browser. Use the ERP over HTTPS in Chrome or Edge.",
+            );
+          // Use the same browser capture path as App sharing so the screen track
+          // enters the working host-to-controller WebRTC peer directly.
+          captured = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              displaySurface: "monitor",
+              frameRate: { ideal: 15, max: 24 },
+            },
+            audio: false,
+            preferCurrentTab: false,
+            selfBrowserSurface: "exclude",
+            monitorTypeSurfaces: "include",
+          } as DisplayMediaStreamOptions & {
+            preferCurrentTab?: boolean;
+            selfBrowserSurface?: string;
+            monitorTypeSurfaces?: string;
+          });
+          pendingCapture = captured;
+          const displaySurface = captured.getVideoTracks()[0]?.getSettings().displaySurface;
+          if (displaySurface && displaySurface !== "monitor")
+            throw new Error("For System sharing, choose Entire Screen in the browser picker.");
+          await startWindowsDesktopAgentInputSession(
             request.session.id,
             request.session.requester.name,
           );
@@ -263,6 +288,7 @@ export function ScreenControlConnectionHost({
             preferCurrentTab?: boolean;
             selfBrowserSurface?: string;
           });
+          pendingCapture = captured;
         }
         if (
           disposed ||
@@ -272,9 +298,11 @@ export function ScreenControlConnectionHost({
           if (request.session.share_scope === "system")
             stopWindowsDesktopAgentCapture(request.session.id);
           captured.getTracks().forEach((track) => track.stop());
+          pendingCapture = null;
           return;
         }
         stream = captured;
+        pendingCapture = null;
         captureRequestId = null;
         const completedRequestIds = [...captureRequestIds];
         captureRequestIds.clear();
@@ -288,6 +316,7 @@ export function ScreenControlConnectionHost({
         for (const requestId of completedRequestIds)
           sendToMain({ type: "host:capture-ready", requestId });
       } catch (cause) {
+        pendingCapture?.getTracks().forEach((track) => track.stop());
         if (request.session.share_scope === "system")
           stopWindowsDesktopAgentCapture(request.session.id);
         if (captureRequestId !== request.requestId || session?.id !== request.session.id) return;

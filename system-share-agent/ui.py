@@ -227,7 +227,7 @@ def _font(size_px: int, weight: QFont.Weight = QFont.Weight.Normal, spacing: flo
 def level_for_state(state: str) -> str:
     """Map the agent's status text to a colour level (display only)."""
     low = state.lower()
-    if low.startswith("sharing"):
+    if low.startswith("sharing") or low.startswith("remote control active"):
         return "sharing"
     if low.startswith("waiting"):
         return "waiting"

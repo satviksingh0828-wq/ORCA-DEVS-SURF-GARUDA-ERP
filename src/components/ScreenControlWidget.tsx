@@ -1349,8 +1349,8 @@ export function ScreenControlWidget() {
                 )}
               </div>
               <div className="border-t border-border px-4 py-2 text-[10px] text-muted-foreground">
-                No recording. The screen owner must accept in the app and approve again in the
-                Windows tray agent for full-desktop control. App-only sharing is unchanged.
+                No recording. System sharing opens the browser picker—select Entire Screen—then
+                approve remote input in the Windows tray agent. App-only sharing is unchanged.
               </div>
             </PopoverContent>
           </Popover>,
