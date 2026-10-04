@@ -11,6 +11,7 @@ import {
   FilePenLine,
   PanelLeftClose,
   PanelLeftOpen,
+  PackagePlus,
   Route as RouteIcon,
   TrendingDown,
   TrendingUp,
@@ -39,6 +40,7 @@ import { MovementList } from "@/components/operations/MovementList";
 import { ManifestList } from "@/components/operations/ManifestList";
 import { LtmsManifestList } from "@/components/operations/LtmsManifestList";
 import { OutwardPOD } from "@/components/operations/OutwardPOD";
+import { StockInward } from "@/components/operations/StockInward";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -131,6 +133,14 @@ const ALL_TABS = [
     dividerBefore: false,
   },
   {
+    id: "stock-inward",
+    label: "Stock Inward",
+    desc: "Receive stock and unloading details",
+    icon: PackagePlus,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
     id: "trip-averages",
     label: "Trip Averages",
     desc: "Monthly distribution analysis",
@@ -190,6 +200,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       t.id === "movements" ||
       t.id === "ltms-manifest" ||
       t.id === "outward-pod" ||
+      t.id === "stock-inward" ||
       t.id === "fastag-report" ||
       t.id === "rental-advance";
     if (mode === "ltms" && !isLtmsTab) return false;
@@ -339,6 +350,11 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           {safeTab === "outward-pod" && (
             <TabErrorBoundary label="Outward POD">
               <OutwardPOD />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "stock-inward" && (
+            <TabErrorBoundary label="Stock Inward">
+              <StockInward />
             </TabErrorBoundary>
           )}
           {safeTab === "trip-averages" && (isAdmin || isViewer) && (
