@@ -239,8 +239,8 @@ function RootComponent() {
     [],
   );
 
-  // The owner-side WebRTC host is an intentionally blank auxiliary window.
-  // It must not mount the ERP shell, screen-control request UI, or controls.
+  // The owner-side WebRTC host has its own branded page, but no ERP shell,
+  // screen-control request UI, or controls.
   if (pathname === "/screen-control-host") return <Outlet />;
 
   return (

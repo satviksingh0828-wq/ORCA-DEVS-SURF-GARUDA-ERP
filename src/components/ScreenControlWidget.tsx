@@ -689,7 +689,15 @@ export function ScreenControlWidget() {
     const popup = window.open(
       url.toString(),
       `orca-screen-control-${user.id}-${crypto.randomUUID()}`,
-      "popup=yes,width=360,height=180,resizable=no,scrollbars=no",
+      [
+        "popup=yes",
+        `width=${window.screen.availWidth}`,
+        `height=${window.screen.availHeight}`,
+        `left=${window.screen.availLeft ?? 0}`,
+        `top=${window.screen.availTop ?? 0}`,
+        "resizable=yes",
+        "scrollbars=no",
+      ].join(","),
     );
     if (!popup)
       throw new Error(
