@@ -98,23 +98,30 @@ export function ScreenControlConnectionHost({
 
     const hostId = crypto.randomUUID();
     const channel = new BroadcastChannel(screenControlHostChannelName(ownerId, hostKey));
+    type PeerContext = {
+      sessionId: string;
+      sessionToken: string;
+      startedAt: number;
+      signalCursor: number;
+      polling: boolean;
+      remoteDescriptionSet: boolean;
+      queuedCandidates: RTCIceCandidateInit[];
+    };
     let session: HostSession | null = null;
     let sessionToken = "";
     let stream: MediaStream | null = null;
     let peer: RTCPeerConnection | null = null;
+    let peerContext: PeerContext | null = null;
     let captureRequestId: string | null = null;
     const captureRequestIds = new Set<string>();
-    let signalCursor = 0;
     let signalTimer: number | null = null;
     let stateTimer: number | null = null;
     let terminalDisconnectTimer: number | null = null;
+    let popupCloseTimer: number | null = null;
     let disposed = false;
-    let polling = false;
     let restartInFlight = false;
     let restartAttempts = 0;
     let wasConnected = false;
-    let remoteDescriptionSet = false;
-    const queuedCandidates: RTCIceCandidateInit[] = [];
 
     const sendToMain = (message: HostToMainPayload) => {
       channel.postMessage({ ...message, ownerId, hostId } satisfies HostToMainMessage);
@@ -136,16 +143,13 @@ export function ScreenControlConnectionHost({
       terminalDisconnectTimer = null;
       const currentPeer = peer;
       peer = null;
+      peerContext = null;
       if (currentPeer) {
         currentPeer.onicecandidate = null;
         currentPeer.onconnectionstatechange = null;
         currentPeer.oniceconnectionstatechange = null;
         currentPeer.close();
       }
-      signalCursor = 0;
-      polling = false;
-      remoteDescriptionSet = false;
-      queuedCandidates.length = 0;
       restartAttempts = 0;
       restartInFlight = false;
       wasConnected = false;
@@ -159,8 +163,20 @@ export function ScreenControlConnectionHost({
         track.stop();
       });
     };
+    const cancelPopupClose = () => {
+      if (popupCloseTimer !== null) window.clearTimeout(popupCloseTimer);
+      popupCloseTimer = null;
+    };
     const closePopupSoon = () => {
-      if (!inlineOwnerId) window.setTimeout(() => window.close(), 150);
+      if (inlineOwnerId) return;
+      cancelPopupClose();
+      popupCloseTimer = window.setTimeout(() => {
+        popupCloseTimer = null;
+        const hasLiveCapture = stream
+          ?.getVideoTracks()
+          .some((track) => track.readyState === "live");
+        if (!session && !captureRequestId && !hasLiveCapture) window.close();
+      }, 150);
     };
     const stopSession = async (endOnServer: boolean, reason = "ended_by_user") => {
       const current = session;
@@ -184,6 +200,7 @@ export function ScreenControlConnectionHost({
 
     const captureScreen = async (request: HostCaptureRequest) => {
       if (disposed || request.session.target_id !== ownerId) return;
+      cancelPopupClose();
       if (captureRequestId === request.requestId) return;
       if (captureRequestId) {
         if (session?.id === request.session.id) {
@@ -203,6 +220,8 @@ export function ScreenControlConnectionHost({
         if (session?.id === request.session.id) {
           session = { ...request.session, status: "active" };
           sessionToken = request.sessionToken;
+          if (peerContext?.sessionId === request.session.id)
+            peerContext.sessionToken = request.sessionToken;
         }
         sendToMain({ type: "host:capture-ready", requestId: request.requestId });
         return;
@@ -280,37 +299,64 @@ export function ScreenControlConnectionHost({
     };
 
     const sendSignal = async (
+      context: PeerContext,
       signalType: "offer" | "answer" | "ice",
       payload: Record<string, unknown>,
     ) => {
-      if (disposed || !session || !sessionToken) return;
+      if (
+        disposed ||
+        peerContext !== context ||
+        session?.id !== context.sessionId ||
+        !context.sessionToken
+      )
+        return;
       await sendScreenControlSignal({
-        data: { sessionToken, sessionId: session.id, signalType, payload },
+        data: {
+          sessionToken: context.sessionToken,
+          sessionId: context.sessionId,
+          signalType,
+          payload,
+        },
       });
     };
 
-    const restartConnection = async (currentPeer: RTCPeerConnection) => {
-      if (peer !== currentPeer || !session || restartInFlight || restartAttempts >= 8) return;
+    const restartConnection = async (currentPeer: RTCPeerConnection, context: PeerContext) => {
+      if (
+        peer !== currentPeer ||
+        peerContext !== context ||
+        session?.id !== context.sessionId ||
+        restartInFlight ||
+        restartAttempts >= 8
+      )
+        return;
       restartInFlight = true;
       restartAttempts += 1;
+      context.startedAt = Date.now();
       try {
         currentPeer.restartIce();
         const offer = await currentPeer.createOffer({ iceRestart: true });
+        if (peer !== currentPeer || peerContext !== context) return;
         await currentPeer.setLocalDescription(offer);
-        if (peer === currentPeer && currentPeer.localDescription)
+        if (peer === currentPeer && peerContext === context && currentPeer.localDescription)
           await sendSignal(
+            context,
             "offer",
             currentPeer.localDescription.toJSON() as unknown as Record<string, unknown>,
           );
       } catch {
         // Retry on the next ICE/connection state change.
       } finally {
-        if (peer === currentPeer) {
+        if (peer === currentPeer && peerContext === context) {
           restartInFlight = false;
           if (wasConnected && restartAttempts >= 8 && terminalDisconnectTimer === null) {
             terminalDisconnectTimer = window.setTimeout(() => {
               terminalDisconnectTimer = null;
-              if (peer === currentPeer && currentPeer.connectionState !== "connected")
+              if (
+                peer === currentPeer &&
+                peerContext === context &&
+                session?.id === context.sessionId &&
+                currentPeer.connectionState !== "connected"
+              )
                 void stopSession(true, "connection_failed");
             }, 8_000);
           }
@@ -320,6 +366,7 @@ export function ScreenControlConnectionHost({
 
     const startPeer = async (start: Extract<MainToHostMessage, { type: "main:start" }>) => {
       if (start.ownerId !== ownerId || start.session.target_id !== ownerId) return;
+      cancelPopupClose();
       if (!stream?.getVideoTracks().some((track) => track.readyState === "live")) {
         sendToMain({
           type: "host:capture-error",
@@ -329,33 +376,47 @@ export function ScreenControlConnectionHost({
         });
         return;
       }
-      if (peer && session?.id === start.session.id) {
+      if (peer && peerContext?.sessionId === start.session.id) {
         session = { ...start.session, status: "active" };
         sessionToken = start.sessionToken;
+        peerContext.sessionToken = start.sessionToken;
+        const negotiationStalled =
+          peer.connectionState !== "connected" && Date.now() - peerContext.startedAt > 15_000;
         if (
           peer.connectionState !== "failed" &&
           peer.connectionState !== "closed" &&
-          restartAttempts < 8
+          restartAttempts < 8 &&
+          !negotiationStalled
         ) {
-          if (peer.connectionState === "disconnected") void restartConnection(peer);
+          if (peer.connectionState === "disconnected") void restartConnection(peer, peerContext);
           return;
         }
       }
       stopPeer();
       session = { ...start.session, status: "active" };
       sessionToken = start.sessionToken;
-      signalCursor = 0;
+      const context: PeerContext = {
+        sessionId: start.session.id,
+        sessionToken: start.sessionToken,
+        startedAt: Date.now(),
+        signalCursor: 0,
+        polling: false,
+        remoteDescriptionSet: false,
+        queuedCandidates: [],
+      };
+      peerContext = context;
       const currentPeer = new RTCPeerConnection(RTC_CONFIG);
       peer = currentPeer;
       currentPeer.onicecandidate = (event) => {
         if (event.candidate)
           void sendSignal(
+            context,
             "ice",
             event.candidate.toJSON() as unknown as Record<string, unknown>,
           ).catch(() => undefined);
       };
       currentPeer.onconnectionstatechange = () => {
-        if (peer !== currentPeer) return;
+        if (peer !== currentPeer || peerContext !== context) return;
         reportState();
         if (currentPeer.connectionState === "connected") {
           wasConnected = true;
@@ -363,16 +424,18 @@ export function ScreenControlConnectionHost({
           if (terminalDisconnectTimer !== null) window.clearTimeout(terminalDisconnectTimer);
           terminalDisconnectTimer = null;
         } else if (["disconnected", "failed"].includes(currentPeer.connectionState))
-          window.setTimeout(() => void restartConnection(currentPeer), 800);
+          window.setTimeout(() => void restartConnection(currentPeer, context), 800);
       };
       currentPeer.oniceconnectionstatechange = () => {
-        if (peer !== currentPeer) return;
-        if (currentPeer.iceConnectionState === "failed") void restartConnection(currentPeer);
+        if (peer !== currentPeer || peerContext !== context) return;
+        if (currentPeer.iceConnectionState === "failed")
+          void restartConnection(currentPeer, context);
       };
       stream.getTracks().forEach((track) => currentPeer.addTrack(track, stream as MediaStream));
       const control = currentPeer.createDataChannel("app-control", { ordered: true });
       control.onmessage = (event) => {
-        if (peer !== currentPeer || session?.id !== start.session.id) return;
+        if (peer !== currentPeer || peerContext !== context || session?.id !== context.sessionId)
+          return;
         let input: AgentRemoteInput | null = null;
         try {
           input = asRemoteInput(JSON.parse(String(event.data)));
@@ -383,57 +446,89 @@ export function ScreenControlConnectionHost({
         if (start.session.share_scope === "system") sendWindowsDesktopAgentInput(input);
         else sendToMain({ type: "host:input", sessionId: start.session.id, input });
       };
-      const offer = await currentPeer.createOffer();
-      await currentPeer.setLocalDescription(offer);
-      if (currentPeer.localDescription)
-        await sendSignal(
-          "offer",
-          currentPeer.localDescription.toJSON() as unknown as Record<string, unknown>,
-        );
+      try {
+        const offer = await currentPeer.createOffer();
+        if (peer !== currentPeer || peerContext !== context) return;
+        await currentPeer.setLocalDescription(offer);
+        if (peer !== currentPeer || peerContext !== context) return;
+        if (currentPeer.localDescription)
+          await sendSignal(
+            context,
+            "offer",
+            currentPeer.localDescription.toJSON() as unknown as Record<string, unknown>,
+          );
+        if (peer !== currentPeer || peerContext !== context) return;
+      } catch (cause) {
+        if (peer !== currentPeer || peerContext !== context) return;
+        throw cause;
+      }
       reportState();
 
       const pollSignals = async () => {
-        if (disposed || peer !== currentPeer || polling || !session) return;
-        polling = true;
+        if (
+          disposed ||
+          peer !== currentPeer ||
+          peerContext !== context ||
+          context.polling ||
+          session?.id !== context.sessionId
+        )
+          return;
+        context.polling = true;
         try {
           const signals = (await receiveScreenControlSignals({
-            data: { sessionToken, sessionId: start.session.id, afterId: signalCursor },
+            data: {
+              sessionToken: context.sessionToken,
+              sessionId: context.sessionId,
+              afterId: context.signalCursor,
+            },
           })) as ScreenSignal[];
           for (const signal of signals) {
-            if (disposed || peer !== currentPeer || signal.id <= signalCursor) continue;
-            signalCursor = signal.id;
+            if (
+              disposed ||
+              peer !== currentPeer ||
+              peerContext !== context ||
+              signal.id <= context.signalCursor
+            )
+              continue;
+            context.signalCursor = signal.id;
             if (signal.signal_type === "answer") {
               await currentPeer.setRemoteDescription(
                 signal.payload as unknown as RTCSessionDescriptionInit,
               );
-              remoteDescriptionSet = true;
-              for (const candidate of queuedCandidates.splice(0))
+              context.remoteDescriptionSet = true;
+              for (const candidate of context.queuedCandidates.splice(0))
                 await currentPeer.addIceCandidate(candidate);
             } else if (signal.signal_type === "offer") {
               await currentPeer.setRemoteDescription(
                 signal.payload as unknown as RTCSessionDescriptionInit,
               );
-              remoteDescriptionSet = true;
-              for (const candidate of queuedCandidates.splice(0))
+              context.remoteDescriptionSet = true;
+              for (const candidate of context.queuedCandidates.splice(0))
                 await currentPeer.addIceCandidate(candidate);
               const answer = await currentPeer.createAnswer();
               await currentPeer.setLocalDescription(answer);
               if (currentPeer.localDescription)
                 await sendSignal(
+                  context,
                   "answer",
                   currentPeer.localDescription.toJSON() as unknown as Record<string, unknown>,
                 );
             } else if (signal.signal_type === "ice") {
               const candidate = signal.payload as RTCIceCandidateInit;
-              if (remoteDescriptionSet) await currentPeer.addIceCandidate(candidate);
-              else queuedCandidates.push(candidate);
+              if (context.remoteDescriptionSet) await currentPeer.addIceCandidate(candidate);
+              else context.queuedCandidates.push(candidate);
             }
           }
         } catch (cause) {
-          if (/ended|active|session/i.test(cause instanceof Error ? cause.message : ""))
+          if (
+            peer === currentPeer &&
+            peerContext === context &&
+            session?.id === context.sessionId &&
+            /ended|active|session/i.test(cause instanceof Error ? cause.message : "")
+          )
             void stopSession(false, "session_ended");
         } finally {
-          polling = false;
+          context.polling = false;
         }
       };
       void pollSignals();
@@ -449,6 +544,8 @@ export function ScreenControlConnectionHost({
         void captureScreen(message);
       } else if (message.type === "main:start") {
         void startPeer(message).catch((cause) => {
+          if (session?.id !== message.session.id || peerContext?.sessionId !== message.session.id)
+            return;
           sendToMain({
             type: "host:capture-error",
             requestId: `active:${message.session.id}`,
@@ -486,6 +583,7 @@ export function ScreenControlConnectionHost({
       disposed = true;
       if (stateTimer !== null) window.clearInterval(stateTimer);
       if (signalTimer !== null) window.clearInterval(signalTimer);
+      cancelPopupClose();
       window.removeEventListener("pagehide", onPageHide);
       channel.close();
       stopPeer();
