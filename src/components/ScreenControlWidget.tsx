@@ -20,12 +20,18 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useSession } from "@/lib/session";
+import { ScreenControlConnectionHost } from "@/components/ScreenControlConnectionHost";
+import {
+  getScreenControlHostKey,
+  screenControlHostChannelName,
+  type HostCaptureRequest,
+  type MainToHostMessage,
+  type HostToMainMessage,
+} from "@/lib/screen-control-host-bridge";
 import {
   getWindowsAgentInstallerUrl,
   probeWindowsDesktopAgent,
   sendWindowsDesktopAgentInput,
-  startWindowsDesktopAgentCapture,
-  stopWindowsDesktopAgentCapture,
   type WindowsAgentStatus,
 } from "@/lib/windows-desktop-agent";
 import {
@@ -75,7 +81,8 @@ const RTC_CONFIG: RTCConfiguration = {
   bundlePolicy: "max-bundle",
   iceCandidatePoolSize: 10,
 };
-const MAX_AUTO_RESHARE_ATTEMPTS = 5;
+
+type HostCaptureWaiter = { resolve: () => void; reject: (error: Error) => void; timer: number };
 
 function isTextControl(element: Element | null): element is HTMLInputElement | HTMLTextAreaElement {
   if (element instanceof HTMLTextAreaElement) return true;
@@ -342,26 +349,31 @@ export function ScreenControlWidget() {
     "waiting",
   );
   const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);
-  const localStreamRef = useRef<MediaStream | null>(null);
-  const localStreamSessionRef = useRef<string | null>(null);
+  const [hostCaptureState, setHostCaptureState] = useState<{
+    sessionId: string | null;
+    captureActive: boolean;
+    peerState: RTCPeerConnectionState | "waiting";
+  }>({ sessionId: null, captureActive: false, peerState: "waiting" });
+  const [hostAvailable, setHostAvailable] = useState(false);
+  const hostChannelRef = useRef<BroadcastChannel | null>(null);
+  const hostChannelKeyRef = useRef("");
+  const hostWindowRef = useRef<Window | null>(null);
+  const hostLastSeenAtRef = useRef(0);
+  const pendingHostCaptureRef = useRef<HostCaptureRequest | null>(null);
+  const hostCaptureWaitersRef = useRef(new Map<string, HostCaptureWaiter>());
+  const activeSessionRef = useRef<ScreenControlSession | null>(null);
   const peerRef = useRef<RTCPeerConnection | null>(null);
   const channelRef = useRef<RTCDataChannel | null>(null);
   const inputQueueRef = useRef<RemoteInput[]>([]);
   const lastMoveSentAt = useRef(0);
   const pollLock = useRef(false);
   const signalErrorShown = useRef(false);
-  const autoResumeSessionRef = useRef<string | null>(null);
-  const resumeScreenShareRef = useRef<
-    (session: ScreenControlSession, automatic?: boolean) => Promise<void>
-  >(async () => undefined);
-  const autoReshareRef = useRef<{
-    sessionId: string | null;
-    attempts: number;
-    timer: number | null;
-  }>({ sessionId: null, attempts: 0, timer: null });
   const workspaceRef = useRef<HTMLDivElement>(null);
   const controlSurfaceRef = useRef<HTMLDivElement>(null);
   const installerUrl = getWindowsAgentInstallerUrl();
+
+  if (typeof window !== "undefined" && !hostChannelKeyRef.current)
+    hostChannelKeyRef.current = getScreenControlHostKey();
 
   useEffect(() => {
     let mounted = true;
@@ -463,21 +475,89 @@ export function ScreenControlWidget() {
     () => sessions.find((session) => session.status === "active") ?? null,
     [sessions],
   );
+  activeSessionRef.current = activeSession;
   const activeSessionId = activeSession?.id;
   const activeSessionStatus = activeSession?.status;
   const activeSessionTargetId = activeSession?.target_id;
   const activeShareScope = activeSession?.share_scope;
   useEffect(() => {
-    const autoReshare = autoReshareRef.current;
-    if (autoReshare.timer !== null) window.clearTimeout(autoReshare.timer);
-    autoReshare.sessionId = activeSessionId ?? null;
-    autoReshare.attempts = 0;
-    autoReshare.timer = null;
-    return () => {
-      if (autoReshare.timer !== null) window.clearTimeout(autoReshare.timer);
-      autoReshare.timer = null;
+    if (!user?.id || typeof BroadcastChannel === "undefined") return;
+    const hostKey = hostChannelKeyRef.current || getScreenControlHostKey();
+    hostChannelKeyRef.current = hostKey;
+    const channel = new BroadcastChannel(screenControlHostChannelName(user.id, hostKey));
+    const captureWaiters = hostCaptureWaitersRef.current;
+    hostChannelRef.current = channel;
+    hostLastSeenAtRef.current = 0;
+    channel.onmessage = (event: MessageEvent<HostToMainMessage>) => {
+      const message = event.data;
+      if (!message || message.ownerId !== user.id) return;
+      if (message.type === "host:ready" || message.type === "host:alive") {
+        hostLastSeenAtRef.current = Date.now();
+        setHostAvailable(true);
+        const pending = pendingHostCaptureRef.current;
+        if (pending) {
+          channel.postMessage({
+            type: "main:capture",
+            ownerId: user.id,
+            ...pending,
+          } satisfies MainToHostMessage);
+        }
+      } else if (message.type === "host:state") {
+        hostLastSeenAtRef.current = Date.now();
+        setHostAvailable(true);
+        setHostCaptureState({
+          sessionId: message.sessionId,
+          captureActive: message.captureActive,
+          peerState: message.peerState,
+        });
+      } else if (message.type === "host:capture-ready" || message.type === "host:capture-error") {
+        const waiter = captureWaiters.get(message.requestId);
+        if (!waiter) return;
+        window.clearTimeout(waiter.timer);
+        captureWaiters.delete(message.requestId);
+        if (pendingHostCaptureRef.current?.requestId === message.requestId)
+          pendingHostCaptureRef.current = null;
+        if (message.type === "host:capture-ready") waiter.resolve();
+        else waiter.reject(new Error(message.message));
+      } else if (message.type === "host:input") {
+        const current = activeSessionRef.current;
+        if (
+          current?.id === message.sessionId &&
+          current.target_id === user.id &&
+          current.share_scope === "app"
+        )
+          dispatchRemoteInput(message.input);
+      } else if (message.type === "host:ended") {
+        if (activeSessionRef.current?.id === message.sessionId) {
+          setHostCaptureState({
+            sessionId: message.sessionId,
+            captureActive: false,
+            peerState: "waiting",
+          });
+          void refreshState(true);
+        }
+      } else if (message.type === "host:closed") {
+        hostLastSeenAtRef.current = 0;
+        hostWindowRef.current = null;
+        setHostAvailable(false);
+        setHostCaptureState({ sessionId: null, captureActive: false, peerState: "waiting" });
+      }
     };
-  }, [activeSessionId]);
+    channel.postMessage({ type: "main:probe", ownerId: user.id } satisfies MainToHostMessage);
+    const staleCheck = window.setInterval(() => {
+      if (Date.now() - hostLastSeenAtRef.current > 4_000) setHostAvailable(false);
+    }, 1_000);
+    return () => {
+      window.clearInterval(staleCheck);
+      if (hostChannelRef.current === channel) hostChannelRef.current = null;
+      channel.close();
+      captureWaiters.forEach((waiter) => {
+        window.clearTimeout(waiter.timer);
+        waiter.reject(new Error("The main ERP window closed before screen sharing started."));
+      });
+      captureWaiters.clear();
+    };
+  }, [refreshState, user?.id]);
   useEffect(() => {
     const active = Boolean(activeSessionId && activeSessionStatus === "active");
     if (active) document.body.dataset.screenControlActive = "true";
@@ -535,15 +615,19 @@ export function ScreenControlWidget() {
     (session) => session.status === "pending" || session.status === "active",
   );
 
-  const closeLocalStream = useCallback(() => {
-    const sessionId = localStreamSessionRef.current;
-    const stream = localStreamRef.current;
-    localStreamRef.current = null;
-    localStreamSessionRef.current = null;
-    setLocalShareReady(false);
-    stopWindowsDesktopAgentCapture(sessionId ?? undefined);
-    stream?.getTracks().forEach((track) => track.stop());
-  }, []);
+  const closeLocalStream = useCallback(
+    (sessionId?: string) => {
+      const id = sessionId ?? activeSessionRef.current?.id;
+      if (id && user?.id)
+        hostChannelRef.current?.postMessage({
+          type: "main:stop",
+          ownerId: user.id,
+          sessionId: id,
+        } satisfies MainToHostMessage);
+      setLocalShareReady(false);
+    },
+    [user?.id],
+  );
 
   const finishSession = useCallback(
     async (sessionId: string, reason = "ended_by_user") => {
@@ -556,7 +640,7 @@ export function ScreenControlWidget() {
           );
         }
       }
-      closeLocalStream();
+      closeLocalStream(sessionId);
       setRemoteStream(null);
       inputQueueRef.current = [];
       setSessions((current) => current.filter((session) => session.id !== sessionId));
@@ -592,62 +676,94 @@ export function ScreenControlWidget() {
     }
   }
 
+  function openScreenControlHost() {
+    if (!user?.id || typeof BroadcastChannel === "undefined")
+      throw new Error("This browser cannot open the screen-control connection host.");
+    const hostIsRecent = hostAvailable && Date.now() - hostLastSeenAtRef.current < 4_000;
+    if (window.electronAPI) return;
+    if (hostIsRecent) return;
+    if (hostWindowRef.current && !hostWindowRef.current.closed) return;
+    const url = new URL("/screen-control-host", window.location.origin);
+    url.searchParams.set("owner", user.id);
+    url.hash = `host=${encodeURIComponent(hostChannelKeyRef.current || getScreenControlHostKey())}`;
+    const popup = window.open(
+      url.toString(),
+      `orca-screen-control-${user.id}-${crypto.randomUUID()}`,
+      "popup=yes,width=360,height=180,resizable=no,scrollbars=no",
+    );
+    if (!popup)
+      throw new Error(
+        "Please allow the screen-control popup. It stays blank and only maintains the connection.",
+      );
+    hostWindowRef.current = popup;
+  }
+
+  function captureInHost(session: ScreenControlSession) {
+    if (!user?.id || !token || !hostChannelRef.current)
+      return Promise.reject(new Error("The main ERP window is not ready to start screen sharing."));
+    const requestId = crypto.randomUUID();
+    const request: HostCaptureRequest = {
+      requestId,
+      session: {
+        id: session.id,
+        requester_id: session.requester_id,
+        target_id: session.target_id,
+        share_scope: session.share_scope,
+        requester: session.requester,
+        target: session.target,
+      },
+      sessionToken: token,
+    };
+    pendingHostCaptureRef.current = request;
+    openScreenControlHost();
+    const promise = new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(() => {
+        hostCaptureWaitersRef.current.delete(requestId);
+        pendingHostCaptureRef.current = null;
+        reject(new Error("The screen-sharing window did not finish opening. Please try again."));
+      }, 60_000);
+      hostCaptureWaitersRef.current.set(requestId, { resolve, reject, timer });
+    });
+    hostChannelRef.current.postMessage({
+      type: "main:capture",
+      ownerId: user.id,
+      ...request,
+    } satisfies MainToHostMessage);
+    return promise;
+  }
+
   async function answerRequest(session: ScreenControlSession, accept: boolean) {
-    if (!token) return;
+    if (!token || !user?.id) return;
     setBusyId(session.id);
-    let captured: MediaStream | null = null;
     try {
+      if (accept) await captureInHost(session);
+      await respondToScreenControlRequest({
+        data: { sessionToken: token, sessionId: session.id, accept },
+      });
       if (accept) {
-        if (session.share_scope === "system" && !window.electronAPI) {
-          captured = await startWindowsDesktopAgentCapture(session.id, session.requester.name);
-        } else {
-          if (!navigator.mediaDevices?.getDisplayMedia)
-            throw new Error(
-              "Screen sharing is not available in this browser. Use the app over HTTPS in a supported browser.",
-            );
-          // App-only sharing continues to use the browser's existing chooser.
-          const captureOptions: DisplayMediaStreamOptions & { preferCurrentTab?: boolean } = {
-            video: {
-              displaySurface: session.share_scope === "system" ? "monitor" : "window",
-              frameRate: { ideal: 15, max: 24 },
-            },
-            audio: false,
-            preferCurrentTab: session.share_scope === "app",
-          };
-          const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
-            ((scope: string) => Promise<unknown>) | undefined;
-          await setElectronCaptureScope?.(session.share_scope);
-          captured = await navigator.mediaDevices.getDisplayMedia(captureOptions);
-        }
+        hostChannelRef.current?.postMessage({
+          type: "main:start",
+          ownerId: user.id,
+          session: { ...session, status: "active" },
+          sessionToken: token,
+        } satisfies MainToHostMessage);
+        setLocalShareReady(true);
         const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
         if (backgroundVideo) {
           backgroundVideo.dataset.screenControlPaused = "true";
           backgroundVideo.pause();
         }
-        localStreamRef.current = captured;
-        localStreamSessionRef.current = session.id;
-        setLocalShareReady(true);
-        captured.getTracks().forEach((track) => {
-          track.onended = () => {
-            if (localStreamSessionRef.current === session.id)
-              void finishSession(session.id, "screen_share_stopped");
-          };
-        });
-      }
-      await respondToScreenControlRequest({
-        data: { sessionToken: token, sessionId: session.id, accept },
-      });
-      if (!accept) toast.info("Screen-control request declined.");
+      } else toast.info("Screen-control request declined.");
+      pendingHostCaptureRef.current = null;
       setOpen(false);
       await refreshState(true);
     } catch (cause) {
-      captured?.getTracks().forEach((track) => track.stop());
-      if (localStreamRef.current === captured) closeLocalStream();
-      const backgroundVideo = document.querySelector<HTMLVideoElement>(".background-video-layer");
-      if (backgroundVideo?.dataset.screenControlPaused === "true") {
-        delete backgroundVideo.dataset.screenControlPaused;
-        void backgroundVideo.play().catch(() => undefined);
-      }
+      pendingHostCaptureRef.current = null;
+      hostChannelRef.current?.postMessage({
+        type: "main:stop",
+        ownerId: user.id,
+        sessionId: session.id,
+      } satisfies MainToHostMessage);
       toast.error(
         cause instanceof Error ? cause.message : "Could not respond to the screen-control request.",
       );
@@ -656,96 +772,57 @@ export function ScreenControlWidget() {
     }
   }
 
-  function scheduleAutoReshare(session: ScreenControlSession) {
-    if (session.share_scope !== "app" || !window.electronAPI) {
-      void finishSession(session.id, "screen_share_stopped");
-      return;
-    }
-    const autoReshare = autoReshareRef.current;
-    if (autoReshare.sessionId !== session.id) {
-      if (autoReshare.timer !== null) window.clearTimeout(autoReshare.timer);
-      autoReshare.sessionId = session.id;
-      autoReshare.attempts = 0;
-      autoReshare.timer = null;
-    }
-    if (autoReshare.attempts >= MAX_AUTO_RESHARE_ATTEMPTS) {
-      toast.error("Could not restore app sharing after several attempts. The session has ended.");
-      void finishSession(session.id, "screen_share_stopped");
-      return;
-    }
-    const delay = Math.min(300 * 2 ** autoReshare.attempts, 4_800);
-    autoReshare.attempts += 1;
-    autoReshare.timer = window.setTimeout(() => {
-      autoReshare.timer = null;
-      void resumeScreenShareRef.current(session, true);
-    }, delay);
-  }
-
-  async function resumeScreenShare(session: ScreenControlSession, automatic = false) {
-    if (!token || session.status !== "active" || session.target_id !== user?.id) return;
-    if (automatic && (session.share_scope !== "app" || !window.electronAPI)) return;
-    if (!automatic) setBusyId(session.id);
-    let captured: MediaStream | null = null;
+  async function resumeScreenShare(session: ScreenControlSession) {
+    if (!token || !user?.id || session.status !== "active" || session.target_id !== user.id) return;
+    setBusyId(session.id);
     try {
-      if (session.share_scope === "system" && !window.electronAPI) {
-        captured = await startWindowsDesktopAgentCapture(session.id, session.requester.name);
-      } else {
-        if (!navigator.mediaDevices?.getDisplayMedia)
-          throw new Error("Screen sharing is not available in this browser.");
-        const setElectronCaptureScope = window.electronAPI?.screenCaptureScope as
-          ((scope: string) => Promise<unknown>) | undefined;
-        await setElectronCaptureScope?.(session.share_scope);
-        captured = await navigator.mediaDevices.getDisplayMedia({
-          video: {
-            displaySurface: session.share_scope === "system" ? "monitor" : "window",
-            frameRate: { ideal: 15, max: 24 },
-          },
-          audio: false,
-          preferCurrentTab: session.share_scope === "app",
-        } as DisplayMediaStreamOptions & { preferCurrentTab?: boolean });
-      }
-      localStreamRef.current = captured;
-      localStreamSessionRef.current = session.id;
+      await captureInHost(session);
+      hostChannelRef.current?.postMessage({
+        type: "main:start",
+        ownerId: user.id,
+        session: { ...session, status: "active" },
+        sessionToken: token,
+      } satisfies MainToHostMessage);
       setLocalShareReady(true);
-      captured.getTracks().forEach((track) => {
-        track.onended = () => {
-          if (localStreamRef.current !== captured || localStreamSessionRef.current !== session.id)
-            return;
-          if (session.share_scope === "app" && window.electronAPI) {
-            localStreamRef.current = null;
-            localStreamSessionRef.current = null;
-            setLocalShareReady(false);
-            scheduleAutoReshare(session);
-          } else {
-            void finishSession(session.id, "screen_share_stopped");
-          }
-        };
-      });
-      if (!automatic) toast.success("Screen sharing resumed.");
+      toast.success("Screen sharing resumed in the connection window.");
     } catch (cause) {
-      captured?.getTracks().forEach((track) => track.stop());
-      if (automatic) scheduleAutoReshare(session);
-      else toast.error(cause instanceof Error ? cause.message : "Could not resume screen sharing.");
+      toast.error(cause instanceof Error ? cause.message : "Could not resume screen sharing.");
     } finally {
-      if (!automatic) setBusyId(null);
+      pendingHostCaptureRef.current = null;
+      setBusyId(null);
     }
   }
-  resumeScreenShareRef.current = resumeScreenShare;
 
   useEffect(() => {
-    // Electron's media handler can restore an active capture without another
-    // picker. Regular browsers must wait for an owner gesture to restart capture.
+    const ownerIsSharing = activeSession?.target_id === user?.id;
+    setLocalShareReady(
+      Boolean(
+        ownerIsSharing &&
+        hostCaptureState.sessionId === activeSession?.id &&
+        hostCaptureState.captureActive,
+      ),
+    );
+  }, [activeSession?.id, activeSession?.target_id, hostCaptureState, user?.id]);
+
+  useEffect(() => {
     if (
-      !window.electronAPI ||
       !activeSession ||
       activeSession.target_id !== user?.id ||
-      localShareReady ||
-      autoResumeSessionRef.current === activeSession.id
+      activeSession.status !== "active" ||
+      hostCaptureState.sessionId !== activeSession.id ||
+      !hostCaptureState.captureActive ||
+      hostCaptureState.peerState !== "waiting" ||
+      !token ||
+      !user?.id
     )
       return;
-    autoResumeSessionRef.current = activeSession.id;
-    void resumeScreenShareRef.current(activeSession);
-  }, [activeSession, localShareReady, user?.id]);
+    hostChannelRef.current?.postMessage({
+      type: "main:start",
+      ownerId: user.id,
+      session: { ...activeSession, status: "active" },
+      sessionToken: token,
+    } satisfies MainToHostMessage);
+  }, [activeSession, hostCaptureState, token, user?.id]);
 
   useEffect(() => {
     if (!activeSessionId || activeSessionStatus !== "active" || !token || !user?.id) {
@@ -755,15 +832,19 @@ export function ScreenControlWidget() {
       setRemoteStream(null);
       setConnectionState("waiting");
       inputQueueRef.current = [];
-      if (!activeSessionId && localStreamRef.current) closeLocalStream();
       return;
     }
 
     const sessionId = activeSessionId;
     const isOwner = activeSessionTargetId === user.id;
-    const ownedStream =
-      isOwner && localStreamSessionRef.current === sessionId ? localStreamRef.current : null;
-    if (isOwner && !ownedStream) return;
+    if (isOwner) {
+      peerRef.current?.close();
+      peerRef.current = null;
+      channelRef.current = null;
+      setRemoteStream(null);
+      setConnectionState("waiting");
+      return;
+    }
 
     let disposed = false;
     let signalCursor = 0;
@@ -872,30 +953,6 @@ export function ScreenControlWidget() {
     };
     peer.ondatachannel = (event) => installControlChannel(event.channel);
     connectionTimeout = window.setTimeout(() => void restartConnection(), 8_000);
-
-    if (isOwner && ownedStream) {
-      ownedStream.getTracks().forEach((track) => {
-        track.onended = () => void finishSession(sessionId, "screen_share_stopped");
-        peer.addTrack(track, ownedStream);
-      });
-      installControlChannel(peer.createDataChannel("app-control", { ordered: true }));
-      void (async () => {
-        try {
-          const offer = await peer.createOffer();
-          await peer.setLocalDescription(offer);
-          if (peer.localDescription)
-            await sendSignal(
-              "offer",
-              peer.localDescription.toJSON() as unknown as Record<string, unknown>,
-            );
-        } catch (cause) {
-          if (!disposed) {
-            toast.error(cause instanceof Error ? cause.message : "Could not start screen sharing.");
-            void finishSession(sessionId, "connection_failed");
-          }
-        }
-      })();
-    }
 
     const pollSignals = async () => {
       if (disposed || pollingSignals) return;
@@ -1015,6 +1072,9 @@ export function ScreenControlWidget() {
 
   return (
     <>
+      {window.electronAPI && (
+        <ScreenControlConnectionHost ownerId={user.id} hostKey={hostChannelKeyRef.current} />
+      )}
       {headerTarget &&
         createPortal(
           <Popover open={open} onOpenChange={setOpen}>
