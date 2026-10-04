@@ -107,7 +107,6 @@ export function ScreenControlConnectionHost({
     let signalCursor = 0;
     let signalTimer: number | null = null;
     let stateTimer: number | null = null;
-    let terminalDisconnectTimer: number | null = null;
     let disposed = false;
     let polling = false;
     let restartInFlight = false;
@@ -131,8 +130,6 @@ export function ScreenControlConnectionHost({
     const stopPeer = () => {
       if (signalTimer !== null) window.clearInterval(signalTimer);
       signalTimer = null;
-      if (terminalDisconnectTimer !== null) window.clearTimeout(terminalDisconnectTimer);
-      terminalDisconnectTimer = null;
       const currentPeer = peer;
       peer = null;
       if (currentPeer) {
@@ -299,16 +296,7 @@ export function ScreenControlConnectionHost({
       } catch {
         // Retry on the next ICE/connection state change.
       } finally {
-        if (peer === currentPeer) {
-          restartInFlight = false;
-          if (restartAttempts >= 8 && terminalDisconnectTimer === null) {
-            terminalDisconnectTimer = window.setTimeout(() => {
-              terminalDisconnectTimer = null;
-              if (peer === currentPeer && currentPeer.connectionState !== "connected")
-                void stopSession(true, "connection_failed");
-            }, 8_000);
-          }
-        }
+        if (peer === currentPeer) restartInFlight = false;
       }
     };
 
@@ -340,11 +328,8 @@ export function ScreenControlConnectionHost({
       currentPeer.onconnectionstatechange = () => {
         if (peer !== currentPeer) return;
         reportState();
-        if (currentPeer.connectionState === "connected") {
-          restartAttempts = 0;
-          if (terminalDisconnectTimer !== null) window.clearTimeout(terminalDisconnectTimer);
-          terminalDisconnectTimer = null;
-        } else if (["disconnected", "failed"].includes(currentPeer.connectionState))
+        if (currentPeer.connectionState === "connected") restartAttempts = 0;
+        else if (["disconnected", "failed"].includes(currentPeer.connectionState))
           window.setTimeout(() => void restartConnection(currentPeer), 800);
       };
       currentPeer.oniceconnectionstatechange = () => {
