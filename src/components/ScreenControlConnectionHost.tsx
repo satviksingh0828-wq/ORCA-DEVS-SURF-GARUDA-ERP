@@ -21,6 +21,8 @@ import {
 import { OrcaLogo } from "@/components/OrcaLogo";
 import { PoweredBy } from "@/components/PoweredBy";
 
+const ERP_THEME_CACHE_KEY = "garuda.theme";
+
 declare global {
   interface Window {
     electronAPI?: Record<string, unknown>;
@@ -68,6 +70,25 @@ export function ScreenControlConnectionHost({
   hostKey?: string;
 } = {}) {
   useEffect(() => {
+    if (inlineOwnerId) return;
+    const applySavedTheme = () => {
+      let theme = "sky";
+      try {
+        theme = window.localStorage.getItem(ERP_THEME_CACHE_KEY) || "sky";
+      } catch {
+        // Keep the default light theme if storage is unavailable.
+      }
+      document.documentElement.setAttribute("data-theme", theme);
+    };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === ERP_THEME_CACHE_KEY || event.key === null) applySavedTheme();
+    };
+    applySavedTheme();
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [inlineOwnerId]);
+
+  useEffect(() => {
     const ownerId = inlineOwnerId ?? new URLSearchParams(window.location.search).get("owner");
     const hostKey = inlineHostKey ?? new URLSearchParams(window.location.hash.slice(1)).get("host");
     if (!ownerId || !hostKey || typeof BroadcastChannel === "undefined") {
@@ -86,6 +107,7 @@ export function ScreenControlConnectionHost({
     let signalCursor = 0;
     let signalTimer: number | null = null;
     let stateTimer: number | null = null;
+    let terminalDisconnectTimer: number | null = null;
     let disposed = false;
     let polling = false;
     let restartInFlight = false;
@@ -109,6 +131,8 @@ export function ScreenControlConnectionHost({
     const stopPeer = () => {
       if (signalTimer !== null) window.clearInterval(signalTimer);
       signalTimer = null;
+      if (terminalDisconnectTimer !== null) window.clearTimeout(terminalDisconnectTimer);
+      terminalDisconnectTimer = null;
       const currentPeer = peer;
       peer = null;
       if (currentPeer) {
@@ -133,6 +157,9 @@ export function ScreenControlConnectionHost({
         track.stop();
       });
     };
+    const closePopupSoon = () => {
+      if (!inlineOwnerId) window.setTimeout(() => window.close(), 150);
+    };
     const stopSession = async (endOnServer: boolean, reason = "ended_by_user") => {
       const current = session;
       const currentToken = sessionToken;
@@ -147,7 +174,10 @@ export function ScreenControlConnectionHost({
         await endScreenControlSession({
           data: { sessionToken: currentToken, sessionId: current.id, reason },
         }).catch(() => undefined);
-      if (current) sendToMain({ type: "host:ended", sessionId: current.id, reason });
+      if (current) {
+        sendToMain({ type: "host:ended", sessionId: current.id, reason });
+        closePopupSoon();
+      }
     };
 
     const captureScreen = async (request: HostCaptureRequest) => {
@@ -239,7 +269,7 @@ export function ScreenControlConnectionHost({
             message: cause instanceof Error ? cause.message : "Could not start screen sharing.",
           });
         reportState();
-        if (!inlineOwnerId) window.setTimeout(() => window.close(), 150);
+        closePopupSoon();
       }
     };
 
@@ -269,7 +299,16 @@ export function ScreenControlConnectionHost({
       } catch {
         // Retry on the next ICE/connection state change.
       } finally {
-        if (peer === currentPeer) restartInFlight = false;
+        if (peer === currentPeer) {
+          restartInFlight = false;
+          if (restartAttempts >= 8 && terminalDisconnectTimer === null) {
+            terminalDisconnectTimer = window.setTimeout(() => {
+              terminalDisconnectTimer = null;
+              if (peer === currentPeer && currentPeer.connectionState !== "connected")
+                void stopSession(true, "connection_failed");
+            }, 8_000);
+          }
+        }
       }
     };
 
@@ -301,8 +340,11 @@ export function ScreenControlConnectionHost({
       currentPeer.onconnectionstatechange = () => {
         if (peer !== currentPeer) return;
         reportState();
-        if (currentPeer.connectionState === "connected") restartAttempts = 0;
-        else if (["disconnected", "failed"].includes(currentPeer.connectionState))
+        if (currentPeer.connectionState === "connected") {
+          restartAttempts = 0;
+          if (terminalDisconnectTimer !== null) window.clearTimeout(terminalDisconnectTimer);
+          terminalDisconnectTimer = null;
+        } else if (["disconnected", "failed"].includes(currentPeer.connectionState))
           window.setTimeout(() => void restartConnection(currentPeer), 800);
       };
       currentPeer.oniceconnectionstatechange = () => {
@@ -399,7 +441,6 @@ export function ScreenControlConnectionHost({
         });
       } else if (message.type === "main:stop" && session?.id === message.sessionId) {
         void stopSession(false, "ended_by_user");
-        if (!inlineOwnerId) window.setTimeout(() => window.close(), 100);
       }
     };
 
@@ -437,45 +478,44 @@ export function ScreenControlConnectionHost({
   if (inlineOwnerId) return null;
 
   return (
-    <main className="relative flex min-h-screen w-full flex-col overflow-hidden bg-[#07101d] text-slate-50">
+    <main
+      data-screen-control-host="true"
+      className="relative flex min-h-screen w-full flex-col overflow-hidden bg-background text-foreground transition-colors duration-300"
+    >
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="absolute -left-32 -top-40 size-[34rem] rounded-full bg-cyan-500/10 blur-[120px]" />
-        <div className="absolute -bottom-48 -right-32 size-[38rem] rounded-full bg-blue-600/10 blur-[140px]" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(15,36,57,0.28),transparent_62%)]" />
+        <div className="absolute -left-32 -top-40 size-[34rem] rounded-full bg-primary/10 blur-[120px]" />
+        <div className="absolute -bottom-48 -right-32 size-[38rem] rounded-full bg-primary/10 blur-[140px]" />
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(120,140,170,0.10),transparent_62%)]" />
       </div>
 
       <div className="relative flex flex-1 items-center justify-center px-6 py-12">
         <section className="w-full max-w-2xl text-center">
-          <div className="relative mx-auto mb-10 flex size-36 items-center justify-center rounded-full border border-cyan-100/15 bg-white/[0.035] shadow-[0_0_100px_rgba(34,211,238,0.10)] sm:size-44">
-            <div className="absolute inset-2 rounded-full border border-white/[0.08]" />
-            <OrcaLogo className="size-24 text-white drop-shadow-[0_0_24px_rgba(103,232,249,0.45)] sm:size-28" />
+          <div className="relative mx-auto mb-9 flex size-36 items-center justify-center rounded-full border border-primary/20 bg-card/70 shadow-[0_0_100px_rgba(34,211,238,0.10)] transition-colors duration-300 sm:size-44">
+            <div className="absolute inset-2 rounded-full border border-border/80" />
+            <OrcaLogo className="size-24 text-foreground transition-colors duration-300 sm:size-28" />
           </div>
 
-          <p className="text-xs font-semibold uppercase tracking-[0.28em] text-cyan-200/75">
-            ORCA DEVS SURF · CONNECTION WINDOW
-          </p>
-          <h1 className="mt-5 text-3xl font-semibold tracking-tight sm:text-5xl">
-            Screen sharing stays connected here
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-4xl">
+            Do not close this window
           </h1>
-          <p className="mx-auto mt-5 max-w-xl text-base leading-7 text-slate-300 sm:text-lg">
-            Do not close this window. Return to the main ERP site to manage screen-sharing requests
-            and controls.
+          <p className="mx-auto mt-4 max-w-xl text-base leading-7 text-muted-foreground sm:text-lg">
+            Return to the main ERP site to manage screen-sharing requests and controls.
           </p>
 
-          <div className="mt-9 inline-flex items-center gap-2.5 rounded-full border border-white/10 bg-white/[0.045] px-4 py-2.5 text-sm text-slate-300">
+          <div className="mt-9 inline-flex items-center gap-2.5 rounded-full border border-border bg-card/70 px-4 py-2.5 text-sm text-muted-foreground transition-colors duration-300">
             <span className="relative flex size-2.5" aria-hidden="true">
-              <span className="absolute inline-flex size-full animate-ping rounded-full bg-emerald-300/60" />
-              <span className="relative inline-flex size-2.5 rounded-full bg-emerald-300" />
+              <span className="absolute inline-flex size-full animate-ping rounded-full bg-primary/40" />
+              <span className="relative inline-flex size-2.5 rounded-full bg-primary" />
             </span>
             Leave this window open while sharing
           </div>
         </section>
       </div>
 
-      <footer className="relative flex min-h-16 items-center justify-center border-t border-white/[0.08] px-4 py-4">
+      <footer className="relative flex min-h-16 items-center justify-center border-t border-border px-4 py-4 transition-colors duration-300">
         <PoweredBy
-          className="gap-2 text-[11px] tracking-[0.16em] text-slate-400 transition-colors hover:text-white"
-          logoClassName="size-4 text-cyan-200"
+          className="gap-2 text-[11px] tracking-[0.16em] text-muted-foreground transition-colors hover:text-foreground"
+          logoClassName="size-4 text-primary"
         />
       </footer>
     </main>

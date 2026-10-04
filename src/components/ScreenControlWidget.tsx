@@ -683,6 +683,7 @@ export function ScreenControlWidget() {
     if (window.electronAPI) return;
     if (hostIsRecent) return;
     if (hostWindowRef.current && !hostWindowRef.current.closed) return;
+    const popupScreen = window.screen as Screen & { availLeft?: number; availTop?: number };
     const url = new URL("/screen-control-host", window.location.origin);
     url.searchParams.set("owner", user.id);
     url.hash = `host=${encodeURIComponent(hostChannelKeyRef.current || getScreenControlHostKey())}`;
@@ -693,8 +694,8 @@ export function ScreenControlWidget() {
         "popup=yes",
         `width=${window.screen.availWidth}`,
         `height=${window.screen.availHeight}`,
-        `left=${window.screen.availLeft ?? 0}`,
-        `top=${window.screen.availTop ?? 0}`,
+        `left=${popupScreen.availLeft ?? 0}`,
+        `top=${popupScreen.availTop ?? 0}`,
         "resizable=yes",
         "scrollbars=no",
       ].join(","),
