@@ -43,6 +43,13 @@ type PackageType = {
   branch_id: string;
   package_type: string;
   basis: "quantity" | "weight";
+  charge_mode: "fixed" | "rate";
+};
+type UnloadingSlab = {
+  package_rate_type_id: string;
+  from_value: number | string;
+  to_value: number | string | null;
+  amount: number | string;
 };
 type Source = { id: string; branch_id: string | null; contract_name: string };
 type Row = any;
@@ -78,6 +85,7 @@ export function StockInward() {
   const branches = useBranches();
   const [sources, setSources] = useState<Source[]>([]);
   const [packageTypes, setPackageTypes] = useState<PackageType[]>([]);
+  const [unloadingSlabs, setUnloadingSlabs] = useState<UnloadingSlab[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -124,18 +132,22 @@ export function StockInward() {
         .order("contract_name"),
       db
         .from("package_rate_types")
-        .select("id,branch_id,package_type,basis")
+        .select("id,branch_id,package_type,basis,charge_mode")
         .eq("is_active", true)
         .order("package_type"),
-      db.from("package_rate_entries").select("package_rate_type_id").eq("rate_kind", "unloading"),
+      db
+        .from("package_rate_entries")
+        .select("package_rate_type_id,from_value,to_value,amount")
+        .eq("rate_kind", "unloading")
+        .order("from_value"),
     ]);
     if (sourceResult.error) toast.error(`Could not load sources: ${sourceResult.error.message}`);
     else setSources((sourceResult.data ?? []) as Source[]);
     if (typeResult.error) toast.error(`Could not load package types: ${typeResult.error.message}`);
     else {
-      const unloadingIds = new Set(
-        (entryResult.data ?? []).map((item: any) => item.package_rate_type_id),
-      );
+      const unloadingRows = (entryResult.data ?? []) as UnloadingSlab[];
+      const unloadingIds = new Set(unloadingRows.map((item) => item.package_rate_type_id));
+      setUnloadingSlabs(unloadingRows);
       setPackageTypes(
         (typeResult.data ?? []).filter((item: PackageType) =>
           unloadingIds.has(item.id),
@@ -162,6 +174,28 @@ export function StockInward() {
     else setRows(data ?? []);
     setLoading(false);
   }, [filters.branch, filters.from, filters.source, filters.to]);
+
+  function packageAmount(line: PackageLine) {
+    const type = packageTypes.find((item) => item.id === line.packageTypeId);
+    if (!type) return 0;
+    const measure = type.basis === "weight" ? Number(line.weightKg) : Number(line.quantity);
+    if (!Number.isFinite(measure) || measure <= 0) return 0;
+    const slab = unloadingSlabs
+      .filter((item) => item.package_rate_type_id === type.id)
+      .sort((a, b) => Number(b.from_value) - Number(a.from_value))
+      .find(
+        (item) =>
+          Number(item.from_value) <= measure &&
+          (item.to_value == null || measure <= Number(item.to_value)),
+      );
+    if (!slab) return 0;
+    return type.charge_mode === "rate" ? Number(slab.amount) * measure : Number(slab.amount);
+  }
+
+  const calculatedUnloadingAmount = packageLines.reduce(
+    (total, line) => total + packageAmount(line),
+    0,
+  );
 
   useEffect(() => {
     void loadMasters();
@@ -206,14 +240,10 @@ export function StockInward() {
     if (
       packageLines.some(
         (line) =>
-          !line.packageTypeId ||
-          !line.sourceId ||
-          (!Number(line.quantity) && !Number(line.weightKg)),
+          !line.packageTypeId || !line.sourceId || !Number(line.quantity) || !Number(line.weightKg),
       )
     )
-      return toast.error("Each package line needs a type, source and quantity or weight");
-    if (packageLines.some((line) => Number(line.quantity) > 0 && Number(line.weightKg) > 0))
-      return toast.error("Enter either quantity or weight for each package type, not both");
+      return toast.error("Each package line needs a type, source, quantity and weight");
     if (["approval", "both"].includes(form.additionalIncomeMode) && !Number(form.approvalAmount))
       return toast.error("Approval amount is required for the selected additional income option");
 
@@ -224,7 +254,9 @@ export function StockInward() {
         branch_id: form.branchId,
         receipt_date: form.receiptDate,
         unloading_date: form.unloadingDate,
-        unloading_amount_received: Number(form.unloadingAmountReceived || 0),
+        unloading_amount_received: Number(
+          form.unloadingAmountReceived || calculatedUnloadingAmount || 0,
+        ),
         additional_income_mode: form.additionalIncomeMode,
         approval_amount: ["approval", "both"].includes(form.additionalIncomeMode)
           ? Number(form.approvalAmount)
@@ -245,8 +277,8 @@ export function StockInward() {
         receipt_id: receipt.id,
         package_rate_type_id: line.packageTypeId,
         source_id: line.sourceId,
-        quantity: Number(line.quantity || 0) || null,
-        weight_kg: Number(line.weightKg || 0) || null,
+        quantity: Number(line.quantity),
+        weight_kg: Number(line.weightKg),
       })),
     );
     if (sourceResult.error || packageResult.error) {
@@ -491,9 +523,7 @@ export function StockInward() {
                       min="0"
                       step="0.001"
                       value={line.quantity}
-                      onChange={(e) =>
-                        updateLine(index, { quantity: e.target.value, weightKg: "" })
-                      }
+                      onChange={(e) => updateLine(index, { quantity: e.target.value })}
                       placeholder="0"
                     />
                   </div>
@@ -504,11 +534,20 @@ export function StockInward() {
                       min="0"
                       step="0.001"
                       value={line.weightKg}
-                      onChange={(e) =>
-                        updateLine(index, { weightKg: e.target.value, quantity: "" })
-                      }
+                      onChange={(e) => updateLine(index, { weightKg: e.target.value })}
                       placeholder="0"
                     />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Label>
+                      Live unloading amount (
+                      {packageTypes.find((type) => type.id === line.packageTypeId)?.basis ??
+                        "basis"}
+                      )
+                    </Label>
+                    <div className="flex h-10 items-center rounded-md border border-border bg-muted/40 px-3 font-medium">
+                      ₹ {money(packageAmount(line))}
+                    </div>
                   </div>
                   <Button
                     type="button"
@@ -577,6 +616,12 @@ export function StockInward() {
                 </div>
               )}
             </div>
+            <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
+              <span className="text-muted-foreground">
+                Calculated unloading amount from package slabs
+              </span>
+              <strong>₹ {money(calculatedUnloadingAmount)}</strong>
+            </div>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
                 Cancel
@@ -589,84 +634,86 @@ export function StockInward() {
         </section>
       )}
 
-      <section className="space-y-3">
-        {loading ? (
-          <p className="p-8 text-center text-sm text-muted-foreground">Loading Stock Inward…</p>
-        ) : rows.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-            No Stock Inward receipts found for the selected filters.
-          </div>
-        ) : (
-          rows.map((row) => {
-            const sourcesInRow = row.stock_inward_sources ?? [];
-            const packages = row.stock_inward_packages ?? [];
-            const open = expandedId === row.id;
-            return (
-              <article
-                key={row.id}
-                className="overflow-hidden rounded-xl border border-border bg-card"
-              >
-                <button
-                  type="button"
-                  className="grid w-full gap-2 p-4 text-left md:grid-cols-[1fr_1fr_1.4fr_1fr_auto] md:items-center"
-                  onClick={() => setExpandedId(open ? null : row.id)}
+      {!showCreate && (
+        <section className="space-y-3">
+          {loading ? (
+            <p className="p-8 text-center text-sm text-muted-foreground">Loading Stock Inward…</p>
+          ) : rows.length === 0 ? (
+            <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+              No Stock Inward receipts found for the selected filters.
+            </div>
+          ) : (
+            rows.map((row) => {
+              const sourcesInRow = row.stock_inward_sources ?? [];
+              const packages = row.stock_inward_packages ?? [];
+              const open = expandedId === row.id;
+              return (
+                <article
+                  key={row.id}
+                  className="overflow-hidden rounded-xl border border-border bg-card"
                 >
-                  <span className="font-semibold">
-                    {new Date(row.receipt_date).toLocaleDateString("en-GB")}
-                  </span>
-                  <span>{row.branch?.branch_name ?? "—"}</span>
-                  <span className="text-sm text-muted-foreground">
-                    {sourcesInRow
-                      .map((item: any) => item.source?.contract_name)
-                      .filter(Boolean)
-                      .join(", ") || "—"}
-                  </span>
-                  <span className="text-sm">₹ {money(row.unloading_amount_received)}</span>
-                  {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-                </button>
-                {open && (
-                  <div className="grid gap-4 border-t border-border p-4 text-sm md:grid-cols-2">
-                    <div>
-                      <p className="text-muted-foreground">Unloading date</p>
-                      <p>{new Date(row.unloading_date).toLocaleDateString("en-GB")}</p>
-                      <p className="mt-3 text-muted-foreground">Additional income</p>
-                      <p>
-                        {row.additional_income_mode === "none"
-                          ? "None"
-                          : row.additional_income_mode}
-                        {row.approval_amount != null ? ` — ₹ ${money(row.approval_amount)}` : ""}
-                      </p>
-                    </div>
-                    <div>
-                      <p className="mb-2 text-muted-foreground">Packages</p>
-                      <div className="space-y-2">
-                        {packages.map((item: any) => (
-                          <div
-                            key={item.id}
-                            className="flex flex-wrap justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
-                          >
-                            <span>
-                              {item.package_type}{" "}
-                              <span className="text-muted-foreground">
-                                ({item.source?.contract_name ?? "—"})
+                  <button
+                    type="button"
+                    className="grid w-full gap-2 p-4 text-left md:grid-cols-[1fr_1fr_1.4fr_1fr_auto] md:items-center"
+                    onClick={() => setExpandedId(open ? null : row.id)}
+                  >
+                    <span className="font-semibold">
+                      {new Date(row.receipt_date).toLocaleDateString("en-GB")}
+                    </span>
+                    <span>{row.branch?.branch_name ?? "—"}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {sourcesInRow
+                        .map((item: any) => item.source?.contract_name)
+                        .filter(Boolean)
+                        .join(", ") || "—"}
+                    </span>
+                    <span className="text-sm">₹ {money(row.unloading_amount_received)}</span>
+                    {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
+                  </button>
+                  {open && (
+                    <div className="grid gap-4 border-t border-border p-4 text-sm md:grid-cols-2">
+                      <div>
+                        <p className="text-muted-foreground">Unloading date</p>
+                        <p>{new Date(row.unloading_date).toLocaleDateString("en-GB")}</p>
+                        <p className="mt-3 text-muted-foreground">Additional income</p>
+                        <p>
+                          {row.additional_income_mode === "none"
+                            ? "None"
+                            : row.additional_income_mode}
+                          {row.approval_amount != null ? ` — ₹ ${money(row.approval_amount)}` : ""}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="mb-2 text-muted-foreground">Packages</p>
+                        <div className="space-y-2">
+                          {packages.map((item: any) => (
+                            <div
+                              key={item.id}
+                              className="flex flex-wrap justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
+                            >
+                              <span>
+                                {item.package_type}{" "}
+                                <span className="text-muted-foreground">
+                                  ({item.source?.contract_name ?? "—"})
+                                </span>
                               </span>
-                            </span>
-                            <span>
-                              {item.quantity != null
-                                ? `${item.quantity} qty`
-                                : `${item.weight_kg} KG`}
-                            </span>
-                          </div>
-                        ))}
+                              <span>
+                                {item.quantity != null
+                                  ? `${item.quantity} qty`
+                                  : `${item.weight_kg} KG`}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </article>
-            );
-          })
-        )}
-      </section>
+                  )}
+                </article>
+              );
+            })
+          )}
+        </section>
+      )}
     </div>
   );
 }
