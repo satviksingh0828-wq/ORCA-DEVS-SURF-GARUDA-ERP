@@ -30,7 +30,12 @@ declare global {
 }
 
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
+  // STUN discovers direct peer addresses; no TURN relay is configured.
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun.cloudflare.com:3478" },
+  ],
   bundlePolicy: "max-bundle",
   iceCandidatePoolSize: 10,
 };
