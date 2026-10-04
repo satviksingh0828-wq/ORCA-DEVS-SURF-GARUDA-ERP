@@ -1,12 +1,14 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
+  ArrowLeft,
   CalendarDays,
   ChevronDown,
   ChevronUp,
   PackagePlus,
   Plus,
   RefreshCw,
+  Eye,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -91,6 +93,7 @@ export function StockInward() {
   const [saving, setSaving] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [viewId, setViewId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
     from: firstOfMonth,
     to: isoToday,
@@ -161,7 +164,7 @@ export function StockInward() {
     let query = db
       .from("stock_inward_receipts")
       .select(
-        "id,receipt_date,unloading_date,unloading_amount_received,additional_income_mode,approval_amount,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_packages(id,package_type,quantity,weight_kg,source_id,source:contracts(contract_name))",
+        "id,receipt_date,unloading_date,unloading_amount_received,additional_income_mode,approval_amount,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,source:contracts(contract_name))",
       )
       .gte("receipt_date", filters.from)
       .lte("receipt_date", filters.to)
@@ -176,9 +179,13 @@ export function StockInward() {
   }, [filters.branch, filters.from, filters.source, filters.to]);
 
   function packageAmount(line: PackageLine) {
-    const type = packageTypes.find((item) => item.id === line.packageTypeId);
+    return calculatePackageAmount(line.packageTypeId, line.quantity, line.weightKg);
+  }
+
+  function calculatePackageAmount(packageTypeId: string, quantity: unknown, weightKg: unknown) {
+    const type = packageTypes.find((item) => item.id === packageTypeId);
     if (!type) return 0;
-    const measure = type.basis === "weight" ? Number(line.weightKg) : Number(line.quantity);
+    const measure = type.basis === "weight" ? Number(weightKg) : Number(quantity);
     if (!Number.isFinite(measure) || measure <= 0) return 0;
     const slab = unloadingSlabs
       .filter((item) => item.package_rate_type_id === type.id)
@@ -196,6 +203,7 @@ export function StockInward() {
     (total, line) => total + packageAmount(line),
     0,
   );
+  const selectedRow = rows.find((row) => row.id === viewId) ?? null;
 
   useEffect(() => {
     void loadMasters();
@@ -634,85 +642,240 @@ export function StockInward() {
         </section>
       )}
 
-      {!showCreate && (
-        <section className="space-y-3">
-          {loading ? (
-            <p className="p-8 text-center text-sm text-muted-foreground">Loading Stock Inward…</p>
-          ) : rows.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
-              No Stock Inward receipts found for the selected filters.
+      {!showCreate && selectedRow ? (
+        <section className="space-y-5 rounded-xl border border-border bg-card p-4">
+          <div className="flex items-center gap-3 border-b border-border pb-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              onClick={() => setViewId(null)}
+              aria-label="Back to Stock Inward list"
+            >
+              <ArrowLeft className="size-4" />
+            </Button>
+            <div>
+              <h3 className="text-lg font-semibold">Stock Inward Details</h3>
+              <p className="text-sm text-muted-foreground">
+                Complete receipt, source and package information
+              </p>
             </div>
-          ) : (
-            rows.map((row) => {
-              const sourcesInRow = row.stock_inward_sources ?? [];
-              const packages = row.stock_inward_packages ?? [];
-              const open = expandedId === row.id;
-              return (
-                <article
-                  key={row.id}
-                  className="overflow-hidden rounded-xl border border-border bg-card"
+          </div>
+          <div className="grid gap-4 rounded-lg border border-border p-4 text-sm md:grid-cols-3">
+            <div>
+              <p className="text-muted-foreground">Receipt date</p>
+              <p className="font-medium">
+                {new Date(selectedRow.receipt_date).toLocaleDateString("en-GB")}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Unloading date</p>
+              <p className="font-medium">
+                {new Date(selectedRow.unloading_date).toLocaleDateString("en-GB")}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Branch</p>
+              <p className="font-medium">{selectedRow.branch?.branch_name ?? "—"}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Unloading amount received</p>
+              <p className="font-medium">₹ {money(selectedRow.unloading_amount_received)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Additional income</p>
+              <p className="font-medium">
+                {selectedRow.additional_income_mode === "none"
+                  ? "None"
+                  : selectedRow.additional_income_mode}
+                {selectedRow.approval_amount != null
+                  ? ` — ₹ ${money(selectedRow.approval_amount)}`
+                  : ""}
+              </p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Created</p>
+              <p className="font-medium">
+                {selectedRow.created_at
+                  ? new Date(selectedRow.created_at).toLocaleString("en-GB")
+                  : "—"}
+              </p>
+            </div>
+          </div>
+          <div>
+            <h4 className="mb-2 font-semibold">Sources</h4>
+            <div className="flex flex-wrap gap-2">
+              {(selectedRow.stock_inward_sources ?? []).map((item: any) => (
+                <span
+                  key={item.source_id}
+                  className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
                 >
-                  <button
-                    type="button"
-                    className="grid w-full gap-2 p-4 text-left md:grid-cols-[1fr_1fr_1.4fr_1fr_auto] md:items-center"
-                    onClick={() => setExpandedId(open ? null : row.id)}
+                  {item.source?.contract_name ?? "—"}
+                </span>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h4 className="mb-2 font-semibold">Packages and expense</h4>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full min-w-[700px] text-sm">
+                <thead className="bg-muted/50 text-left">
+                  <tr>
+                    <th className="px-3 py-2">Package type</th>
+                    <th className="px-3 py-2">Source</th>
+                    <th className="px-3 py-2">Quantity</th>
+                    <th className="px-3 py-2">Weight (KG)</th>
+                    <th className="px-3 py-2">Basis</th>
+                    <th className="px-3 py-2 text-right">Expense</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(selectedRow.stock_inward_packages ?? []).map((item: any) => {
+                    const type = packageTypes.find(
+                      (entry) => entry.id === item.package_rate_type_id,
+                    );
+                    return (
+                      <tr key={item.id} className="border-t border-border">
+                        <td className="px-3 py-2 font-medium">{item.package_type}</td>
+                        <td className="px-3 py-2">{item.source?.contract_name ?? "—"}</td>
+                        <td className="px-3 py-2">{item.quantity}</td>
+                        <td className="px-3 py-2">{item.weight_kg}</td>
+                        <td className="px-3 py-2">{type?.basis ?? "—"}</td>
+                        <td className="px-3 py-2 text-right font-medium">
+                          ₹{" "}
+                          {money(
+                            calculatePackageAmount(
+                              item.package_rate_type_id,
+                              item.quantity,
+                              item.weight_kg,
+                            ),
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      ) : (
+        !showCreate && (
+          <section className="space-y-3">
+            {loading ? (
+              <p className="p-8 text-center text-sm text-muted-foreground">Loading Stock Inward…</p>
+            ) : rows.length === 0 ? (
+              <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
+                No Stock Inward receipts found for the selected filters.
+              </div>
+            ) : (
+              rows.map((row) => {
+                const sourcesInRow = row.stock_inward_sources ?? [];
+                const packages = row.stock_inward_packages ?? [];
+                const open = expandedId === row.id;
+                const packageExpense = packages.reduce(
+                  (total: number, item: any) =>
+                    total +
+                    calculatePackageAmount(
+                      item.package_rate_type_id,
+                      item.quantity,
+                      item.weight_kg,
+                    ),
+                  0,
+                );
+                return (
+                  <article
+                    key={row.id}
+                    className="overflow-hidden rounded-xl border border-border bg-card"
                   >
-                    <span className="font-semibold">
-                      {new Date(row.receipt_date).toLocaleDateString("en-GB")}
-                    </span>
-                    <span>{row.branch?.branch_name ?? "—"}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {sourcesInRow
-                        .map((item: any) => item.source?.contract_name)
-                        .filter(Boolean)
-                        .join(", ") || "—"}
-                    </span>
-                    <span className="text-sm">₹ {money(row.unloading_amount_received)}</span>
-                    {open ? <ChevronUp className="size-4" /> : <ChevronDown className="size-4" />}
-                  </button>
-                  {open && (
-                    <div className="grid gap-4 border-t border-border p-4 text-sm md:grid-cols-2">
-                      <div>
-                        <p className="text-muted-foreground">Unloading date</p>
-                        <p>{new Date(row.unloading_date).toLocaleDateString("en-GB")}</p>
-                        <p className="mt-3 text-muted-foreground">Additional income</p>
-                        <p>
-                          {row.additional_income_mode === "none"
-                            ? "None"
-                            : row.additional_income_mode}
-                          {row.approval_amount != null ? ` — ₹ ${money(row.approval_amount)}` : ""}
-                        </p>
-                      </div>
-                      <div>
-                        <p className="mb-2 text-muted-foreground">Packages</p>
-                        <div className="space-y-2">
-                          {packages.map((item: any) => (
-                            <div
-                              key={item.id}
-                              className="flex flex-wrap justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
-                            >
-                              <span>
-                                {item.package_type}{" "}
-                                <span className="text-muted-foreground">
-                                  ({item.source?.contract_name ?? "—"})
+                    <div className="flex flex-wrap items-center gap-3 p-4">
+                      <button
+                        type="button"
+                        className="grid min-w-0 flex-1 gap-2 text-left md:grid-cols-[1fr_1fr_1.2fr_1fr_auto] md:items-center"
+                        onClick={() => setExpandedId(open ? null : row.id)}
+                      >
+                        <span className="font-semibold">
+                          {new Date(row.receipt_date).toLocaleDateString("en-GB")}
+                        </span>
+                        <span>{row.branch?.branch_name ?? "—"}</span>
+                        <span className="text-sm text-muted-foreground">
+                          {sourcesInRow
+                            .map((item: any) => item.source?.contract_name)
+                            .filter(Boolean)
+                            .join(", ") || "—"}
+                        </span>
+                        <span className="text-sm">Expense ₹ {money(packageExpense)}</span>
+                        {open ? (
+                          <ChevronUp className="size-4" />
+                        ) : (
+                          <ChevronDown className="size-4" />
+                        )}
+                      </button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setViewId(row.id)}
+                      >
+                        <Eye className="size-4" /> View
+                      </Button>
+                    </div>
+                    {open && (
+                      <div className="grid gap-4 border-t border-border p-4 text-sm md:grid-cols-2">
+                        <div>
+                          <p className="text-muted-foreground">Unloading date</p>
+                          <p>{new Date(row.unloading_date).toLocaleDateString("en-GB")}</p>
+                          <p className="mt-3 text-muted-foreground">Additional income</p>
+                          <p>
+                            {row.additional_income_mode === "none"
+                              ? "None"
+                              : row.additional_income_mode}
+                            {row.approval_amount != null
+                              ? ` — ₹ ${money(row.approval_amount)}`
+                              : ""}
+                          </p>
+                        </div>
+                        <div>
+                          <p className="mb-2 text-muted-foreground">Packages</p>
+                          <div className="space-y-2">
+                            {packages.map((item: any) => (
+                              <div
+                                key={item.id}
+                                className="flex flex-wrap justify-between gap-2 rounded-lg bg-muted/40 px-3 py-2"
+                              >
+                                <span>
+                                  {item.package_type}{" "}
+                                  <span className="text-muted-foreground">
+                                    ({item.source?.contract_name ?? "—"})
+                                  </span>
                                 </span>
-                              </span>
-                              <span>
-                                {item.quantity != null
-                                  ? `${item.quantity} qty`
-                                  : `${item.weight_kg} KG`}
-                              </span>
-                            </div>
-                          ))}
+                                <span>
+                                  {item.quantity != null
+                                    ? `${item.quantity} qty · ${item.weight_kg} KG`
+                                    : `${item.weight_kg} KG`}
+                                </span>
+                                <span className="font-medium">
+                                  Expense ₹{" "}
+                                  {money(
+                                    calculatePackageAmount(
+                                      item.package_rate_type_id,
+                                      item.quantity,
+                                      item.weight_kg,
+                                    ),
+                                  )}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
-                </article>
-              );
-            })
-          )}
-        </section>
+                    )}
+                  </article>
+                );
+              })
+            )}
+          </section>
+        )
       )}
     </div>
   );
