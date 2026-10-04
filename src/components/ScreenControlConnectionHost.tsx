@@ -264,6 +264,8 @@ export function ScreenControlConnectionHost({
           captureRequestId !== request.requestId ||
           session?.id !== request.session.id
         ) {
+          if (request.session.share_scope === "system")
+            stopWindowsDesktopAgentCapture(request.session.id);
           captured.getTracks().forEach((track) => track.stop());
           return;
         }
@@ -281,6 +283,8 @@ export function ScreenControlConnectionHost({
         for (const requestId of completedRequestIds)
           sendToMain({ type: "host:capture-ready", requestId });
       } catch (cause) {
+        if (request.session.share_scope === "system")
+          stopWindowsDesktopAgentCapture(request.session.id);
         if (captureRequestId !== request.requestId || session?.id !== request.session.id) return;
         captureRequestId = null;
         const failedRequestIds = [...captureRequestIds];
