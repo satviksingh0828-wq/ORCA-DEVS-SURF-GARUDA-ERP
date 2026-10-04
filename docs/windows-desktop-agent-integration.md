@@ -22,14 +22,14 @@ Prefer a signed installer and signed executable. The installer should be per-use
 1. The signed-in user opens the web app. The app probes the loopback endpoint and displays whether the agent is ready.
 2. A user requests **System** sharing from another online participant. The existing backend creates the same pending screen-control session; the existing **App** action is unchanged.
 3. The Windows screen owner sees the request in the web app and clicks Accept. If the companion is absent, the app says the agent is required and offers the configured installer link (or tells the user to obtain it from their administrator if no link is configured).
-4. The web app connects to the tray agent and sends `capture.request`. The agent presents its own native tray/Windows confirmation identifying the requester and asks the local user to allow full-desktop capture and remote input. The browser's Accept click alone is not sufficient consent.
-5. After approval, the agent captures the interactive desktop and starts a **local WebRTC** media connection to the browser tab. The browser republishes that stream through the existing screen-control WebRTC connection, whose SDP/ICE signaling remains on the app's existing authenticated server path.
+4. The browser opens its native screen picker. The Windows user selects **Entire Screen**; the web app then connects to the tray agent and sends `capture.request` with `mediaSource: "browser"`. The agent presents a separate native Windows confirmation identifying the requester and asks permission for remote input. Browser selection alone is not sufficient consent.
+5. The browser adds its native display-capture track directly to the existing screen-control WebRTC connection, the same host-to-controller media path used by App sharing. The tray agent does not send video in this mode; it validates and applies approved remote input over its local WebSocket.
 6. Remote pointer/keyboard events arrive through the existing WebRTC data channel and are forwarded over the local WebSocket. The agent validates the active session, applies input only while approved, and displays a red, click-through pointer on the controlled Windows desktop while the remote user moves the mouse.
 7. End/Stop, tray Stop, user sign-out, agent exit, browser disconnect, or session end stops capture and input. The app closes the local peer/socket; the agent must also stop on socket loss and on its own timeout.
 
 The browser-to-browser WebRTC peer uses Google and Cloudflare **STUN only** for direct ICE address discovery; no TURN/relay server is configured. If a firewall or NAT prevents a direct peer-to-peer path, that network pair cannot connect under this direct-only policy. The app reports the ICE failure rather than claiming the remote desktop is connected.
 
-This is a two-hop media path: **Windows capture → local agent/browser WebRTC → existing browser-to-browser WebRTC**. The browser acts as a media relay. The web app does not receive a blanket filesystem or process-execution API from the agent.
+System and App video now use the same single browser-to-browser WebRTC media path. The Python agent remains a loopback-only input/consent service; it does not relay video, and the web app does not receive a blanket filesystem or process-execution API from the agent.
 
 ## Local WebSocket handshake
 
@@ -45,8 +45,8 @@ The agent responds:
 {
   "type": "agent.hello",
   "protocol": 1,
-  "version": "1.0.0",
-  "capabilities": ["desktop-capture", "input"]
+  "version": "1.1.0",
+  "capabilities": ["desktop-capture", "input", "input-only"]
 }
 ```
 
@@ -62,7 +62,8 @@ After the handshake, the browser sends:
   "protocol": 1,
   "sessionId": "<existing app session UUID>",
   "requesterName": "<display name shown in the app>",
-  "appOrigin": "https://<approved-app-host>"
+  "appOrigin": "https://<approved-app-host>",
+  "mediaSource": "browser"
 }
 ```
 
@@ -76,31 +77,9 @@ After the local user approves, the agent sends:
 
 On decline it sends `capture.denied`; on a safe, user-readable failure it may send `capture.error` with a short `message`. Approval should time out after 120 seconds. The app keeps the existing server session pending until it has a usable capture stream and can then accept the request.
 
-## Local media negotiation
+## Browser media capture
 
-The agent is the media sender. Following approval, it creates an `RTCPeerConnection` with no public STUN/TURN servers (the browser and agent run on the same machine) and sends:
-
-```json
-{
-  "type": "rtc.offer",
-  "protocol": 1,
-  "sessionId": "...",
-  "description": { "type": "offer", "sdp": "..." }
-}
-```
-
-The browser returns `rtc.answer` with the `RTCLocalSessionDescriptionInit` JSON. Both sides exchange trickled candidates as:
-
-```json
-{
-  "type": "rtc.ice",
-  "protocol": 1,
-  "sessionId": "...",
-  "candidate": { "candidate": "...", "sdpMid": "0", "sdpMLineIndex": 0 }
-}
-```
-
-The agent must send a video track for the selected interactive desktop and should target 15 fps (up to 24 fps) at a bandwidth-appropriate resolution. Audio is not requested in protocol v1. The browser waits for a video track before marking capture ready and adding it to the existing remote-control WebRTC stream.
+The browser's native `getDisplayMedia` picker captures the selected entire monitor. The web app adds that track to the existing host-side screen-control `RTCPeerConnection` and sends it to the controller using the current authenticated SDP/ICE signaling flow. System and App sharing therefore have one identical remote video hop. No local agent WebRTC peer is created for the current System flow, and the agent's `input-only` capability identifies builds that support this mode. Audio is not requested.
 
 ## Input and stop messages
 
@@ -115,7 +94,7 @@ Remote input is sent only after local approval and only for that approved sessio
 }
 ```
 
-Input `type` values and fields match the web app's `RemoteInput` union: `move`, `pointerdown`, `pointerup`, `click`, `contextmenu`, `wheel`, `key`, `text`, and `edit`. Pointer coordinates are normalized to 0..1 against the desktop stream; the agent maps them to the selected monitor/virtual desktop. Validate bounds, event fields, key codes, payload size and rate; discard all commands unless the session remains approved and active. Do not try to bypass Windows secure desktop/UAC, lock screen, login screen, or integrity boundaries. Report unsupported/elevated surfaces clearly.
+Input `type` values and fields match the web app's `RemoteInput` union: `move`, `pointerdown`, `pointerup`, `click`, `contextmenu`, `wheel`, `key`, `text`, and `edit`. Pointer coordinates are normalized to 0..1 against the desktop stream; the agent maps them to the primary Windows monitor. Select the primary monitor in the browser picker for correct control. Validate bounds, event fields, key codes, payload size and rate; discard all commands unless the session remains approved and active. Do not try to bypass Windows secure desktop/UAC, lock screen, login screen, or integrity boundaries. Report unsupported/elevated surfaces clearly.
 
 The browser sends:
 

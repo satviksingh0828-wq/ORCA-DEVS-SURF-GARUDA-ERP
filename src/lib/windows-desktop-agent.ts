@@ -37,28 +37,22 @@ type AgentMessage = Record<string, unknown> & { type: string };
 const PROTOCOL_VERSION = 1;
 const CONNECT_TIMEOUT_MS = 1_800;
 const CAPTURE_APPROVAL_TIMEOUT_MS = 120_000;
-const LOCAL_RTC_CONFIG: RTCConfiguration = { iceServers: [] };
 const AGENT_WS_URL = import.meta.env.VITE_WINDOWS_AGENT_WS_URL || "ws://127.0.0.1:17654/v1";
 const INSTALLER_URL = import.meta.env.VITE_WINDOWS_DESKTOP_AGENT_INSTALLER_URL || "";
 
 type ActiveCapture = {
   sessionId: string;
   socket: WebSocket;
-  peer: RTCPeerConnection;
-  stream: MediaStream | null;
 };
 
 let activeCapture: ActiveCapture | null = null;
 
 function disposeCapture(capture: ActiveCapture, reason: string) {
   if (activeCapture === capture) activeCapture = null;
-  const { socket, peer } = capture;
+  const { socket } = capture;
   socket.onmessage = null;
   socket.onerror = null;
   socket.onclose = null;
-  peer.onicecandidate = null;
-  peer.ontrack = null;
-  peer.onconnectionstatechange = null;
 
   if (socket.readyState === WebSocket.OPEN) {
     try {
@@ -72,21 +66,6 @@ function disposeCapture(capture: ActiveCapture, reason: string) {
     }
   }
 
-  const stream = capture.stream;
-  capture.stream = null;
-  stream?.getTracks().forEach((track) => {
-    track.onended = null;
-    try {
-      track.stop();
-    } catch {
-      // Continue releasing the peer and socket if a track is already gone.
-    }
-  });
-  try {
-    if (peer.signalingState !== "closed") peer.close();
-  } catch {
-    // Best-effort teardown; the socket is also a session boundary.
-  }
   try {
     if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING)
       socket.close(1000, reason.slice(0, 100));
@@ -182,10 +161,10 @@ export async function probeWindowsDesktopAgent(): Promise<WindowsAgentStatus> {
   try {
     const { socket, hello } = await openAgentSocket();
     socket.close(1000, "discovery complete");
-    if (!hello.capabilities.includes("desktop-capture") || !hello.capabilities.includes("input"))
+    if (!hello.capabilities.includes("input") || !hello.capabilities.includes("input-only"))
       return {
         state: "missing",
-        reason: "The installed agent is missing desktop-control capabilities.",
+        reason: "Update the Windows desktop agent to version 1.1.0 or later.",
       };
     return { state: "available", version: hello.version };
   } catch (cause) {
@@ -196,148 +175,60 @@ export async function probeWindowsDesktopAgent(): Promise<WindowsAgentStatus> {
   }
 }
 
-export async function startWindowsDesktopAgentCapture(
+export async function startWindowsDesktopAgentInputSession(
   sessionId: string,
   requesterName: string,
-): Promise<MediaStream> {
+): Promise<void> {
   stopWindowsDesktopAgentCapture();
   const { socket, hello } = await openAgentSocket();
-  if (!hello.capabilities.includes("desktop-capture") || !hello.capabilities.includes("input")) {
+  if (!hello.capabilities.includes("input") || !hello.capabilities.includes("input-only")) {
     socket.close();
-    throw new Error(
-      "This Windows desktop agent does not support desktop capture and input control.",
-    );
+    throw new Error("Update the Windows desktop agent before starting system sharing.");
   }
 
-  const peer = new RTCPeerConnection(LOCAL_RTC_CONFIG);
-  const capture: ActiveCapture = { sessionId, socket, peer, stream: null };
+  const capture: ActiveCapture = { sessionId, socket };
   activeCapture = capture;
-  let settled = false;
-  let approvalReceived = false;
-  let pendingStream: MediaStream | null = null;
-  let remoteDescriptionSet = false;
-  const queuedCandidates: RTCIceCandidateInit[] = [];
-
-  return await new Promise<MediaStream>((resolve, reject) => {
+  return await new Promise<void>((resolve, reject) => {
+    let settled = false;
     const timeout = window.setTimeout(() => {
-      fail(new Error("The Windows user did not approve desktop sharing in time."));
+      fail(new Error("The Windows user did not approve remote control in time."));
     }, CAPTURE_APPROVAL_TIMEOUT_MS);
     const cleanupListeners = () => {
       window.clearTimeout(timeout);
       socket.onmessage = null;
       socket.onerror = null;
       socket.onclose = null;
-      peer.onicecandidate = null;
-      peer.ontrack = null;
-      peer.onconnectionstatechange = null;
     };
     const fail = (error: Error) => {
       if (settled) return;
       settled = true;
       cleanupListeners();
-      disposeCapture(capture, "capture setup failed");
+      disposeCapture(capture, "control setup failed");
       reject(error);
     };
-    const resolveApprovedStream = (stream: MediaStream) => {
-      if (settled || !approvalReceived) return;
+    const approve = () => {
+      if (settled) return;
       settled = true;
       cleanupListeners();
-      capture.stream = stream;
-      socket.onclose = () => {
-        disposeCapture(capture, "agent disconnected");
-      };
+      socket.onclose = () => disposeCapture(capture, "agent disconnected");
       socket.onerror = () => disposeCapture(capture, "agent connection error");
-      stream.getTracks().forEach((track) => {
-        track.onended = () => disposeCapture(capture, "desktop capture ended");
-      });
-      peer.onconnectionstatechange = () => {
-        if (
-          activeCapture === capture &&
-          (peer.connectionState === "failed" || peer.connectionState === "closed")
-        ) {
-          disposeCapture(capture, "local media connection ended");
-        }
-      };
-      resolve(stream);
+      resolve();
     };
 
-    peer.onicecandidate = (event) => {
-      if (!event.candidate || socket.readyState !== WebSocket.OPEN) return;
-      try {
-        sendJson(socket, {
-          type: "rtc.ice",
-          protocol: PROTOCOL_VERSION,
-          sessionId,
-          candidate: event.candidate.toJSON(),
-        });
-      } catch {
-        fail(new Error("The Windows desktop agent disconnected during connection setup."));
-      }
-    };
-    peer.ontrack = (event) => {
-      if (settled) return;
-      const stream = event.streams[0] ?? new MediaStream([event.track]);
-      if (!stream.getVideoTracks().length) return;
-      pendingStream = stream;
-      resolveApprovedStream(stream);
-    };
-    peer.onconnectionstatechange = () => {
-      if (peer.connectionState === "failed" || peer.connectionState === "closed")
-        fail(new Error("Could not establish the local connection to the Windows desktop agent."));
-    };
     socket.onmessage = (event) => {
       const message = parseAgentMessage(event.data);
       if (!message || message.sessionId !== sessionId) return;
-      if (message.type === "capture.approved") {
-        approvalReceived = true;
-        if (pendingStream) resolveApprovedStream(pendingStream);
-        return;
-      }
-      if (message.type === "capture.denied") {
-        fail(new Error("The Windows user declined desktop sharing in the tray app."));
-        return;
-      }
-      if (message.type === "capture.error") {
+      if (message.type === "capture.approved") approve();
+      else if (message.type === "capture.denied")
+        fail(new Error("The Windows user declined remote control in the tray app."));
+      else if (message.type === "capture.error")
         fail(
           new Error(
             typeof message.message === "string"
               ? message.message
-              : "The agent could not capture the desktop.",
+              : "The Windows agent could not start remote control.",
           ),
         );
-        return;
-      }
-      if (message.type === "rtc.offer") {
-        void (async () => {
-          try {
-            await peer.setRemoteDescription(message.description as RTCSessionDescriptionInit);
-            remoteDescriptionSet = true;
-            for (const candidate of queuedCandidates.splice(0))
-              await peer.addIceCandidate(candidate);
-            const answer = await peer.createAnswer();
-            await peer.setLocalDescription(answer);
-            if (!peer.localDescription)
-              throw new Error("Could not create a desktop stream answer.");
-            sendJson(socket, {
-              type: "rtc.answer",
-              protocol: PROTOCOL_VERSION,
-              sessionId,
-              description: peer.localDescription.toJSON(),
-            });
-          } catch (cause) {
-            fail(
-              cause instanceof Error ? cause : new Error("Could not negotiate desktop streaming."),
-            );
-          }
-        })();
-        return;
-      }
-      if (message.type === "rtc.ice") {
-        const candidate = message.candidate as RTCIceCandidateInit;
-        if (!candidate) return;
-        if (remoteDescriptionSet) void peer.addIceCandidate(candidate).catch(() => undefined);
-        else queuedCandidates.push(candidate);
-      }
     };
     socket.onerror = () => fail(new Error("The Windows desktop agent disconnected."));
     socket.onclose = () => fail(new Error("The Windows desktop agent disconnected."));
@@ -349,9 +240,10 @@ export async function startWindowsDesktopAgentCapture(
         sessionId,
         requesterName,
         appOrigin: window.location.origin,
+        mediaSource: "browser",
       });
     } catch {
-      fail(new Error("Could not request desktop sharing from the Windows tray app."));
+      fail(new Error("Could not request remote control from the Windows tray app."));
     }
   });
 }

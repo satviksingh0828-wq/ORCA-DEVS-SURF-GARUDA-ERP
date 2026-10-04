@@ -327,8 +327,8 @@ class AgentServer:
             await websocket.send(self._json({
                 "type": "agent.hello",
                 "protocol": PROTOCOL_VERSION,
-                "version": "1.0.0",
-                "capabilities": ["desktop-capture", "input"],
+                "version": "1.1.0",
+                "capabilities": ["desktop-capture", "input", "input-only"],
             }))
             async for raw in websocket:
                 message = self._decode_json(raw)
@@ -343,7 +343,8 @@ class AgentServer:
                     return
                 session_id = self._valid_session_id(message.get("sessionId"))
                 requester = self._safe_name(message.get("requesterName"))
-                if not session_id or not requester:
+                media_source = message.get("mediaSource", "agent")
+                if not session_id or not requester or media_source not in {"agent", "browser"}:
                     await websocket.close(code=1008, reason="Invalid capture request")
                     return
                 if self.active_session_id:
@@ -352,7 +353,12 @@ class AgentServer:
                         "sessionId": session_id, "message": "Another desktop-sharing session is already active.",
                     }))
                     continue
-                await self._run_capture(websocket, session_id, requester)
+                await self._run_capture(
+                    websocket,
+                    session_id,
+                    requester,
+                    capture_media=media_source == "agent",
+                )
         except asyncio.TimeoutError:
             await websocket.close(code=1008, reason="Handshake timed out")
         except (ConnectionClosed, asyncio.CancelledError):
@@ -370,7 +376,13 @@ class AgentServer:
             except Exception:
                 pass
 
-    async def _run_capture(self, websocket: ServerConnection, session_id: str, requester: str) -> None:
+    async def _run_capture(
+        self,
+        websocket: ServerConnection,
+        session_id: str,
+        requester: str,
+        capture_media: bool = True,
+    ) -> None:
         stop_event = asyncio.Event()
         self.active_stop_event = stop_event
         self.active_session_id = session_id
@@ -391,25 +403,50 @@ class AgentServer:
                 self.status_callback("Ready — request declined")
                 return
 
-            self.status_callback(f"Sharing desktop with {requester} — Stop in tray to end")
+            if capture_media:
+                track = DesktopVideoTrack()
+                monitor = {
+                    "left": track.left,
+                    "top": track.top,
+                    "width": track.width,
+                    "height": track.height,
+                }
+                pc = RTCPeerConnection()
+                pc.addTrack(track)
+            else:
+                capture = mss.mss()
+                try:
+                    primary = dict(capture.monitors[1])
+                finally:
+                    capture.close()
+                monitor = {
+                    "left": int(primary["left"]),
+                    "top": int(primary["top"]),
+                    "width": int(primary["width"]),
+                    "height": int(primary["height"]),
+                }
+
+            self.status_callback(
+                f"Sharing desktop with {requester} — Stop in tray to end"
+                if capture_media
+                else f"Remote control active with {requester} — Stop in tray to end"
+            )
             self._hide_remote_cursor()
             await websocket.send(self._json({
                 "type": "capture.approved", "protocol": PROTOCOL_VERSION, "sessionId": session_id,
             }))
-            track = DesktopVideoTrack()
-            pc = RTCPeerConnection()
-            pc.addTrack(track)
-            offer = await pc.createOffer()
-            await pc.setLocalDescription(offer)
-            local = pc.localDescription
-            if not local:
-                raise RuntimeError("The local WebRTC offer could not be created.")
-            await websocket.send(self._json({
-                "type": "rtc.offer", "protocol": PROTOCOL_VERSION, "sessionId": session_id,
-                "description": {"type": local.type, "sdp": local.sdp},
-            }))
-
-            await self._capture_message_loop(websocket, pc, stop_event, session_id, track)
+            if capture_media:
+                assert pc is not None
+                offer = await pc.createOffer()
+                await pc.setLocalDescription(offer)
+                local = pc.localDescription
+                if not local:
+                    raise RuntimeError("The local WebRTC offer could not be created.")
+                await websocket.send(self._json({
+                    "type": "rtc.offer", "protocol": PROTOCOL_VERSION, "sessionId": session_id,
+                    "description": {"type": local.type, "sdp": local.sdp},
+                }))
+            await self._capture_message_loop(websocket, pc, stop_event, session_id, monitor)
             try:
                 await websocket.send(self._json({
                     "type": "capture.stopped", "protocol": PROTOCOL_VERSION, "sessionId": session_id,
@@ -465,10 +502,10 @@ class AgentServer:
     async def _capture_message_loop(
         self,
         websocket: ServerConnection,
-        pc: RTCPeerConnection,
+        pc: RTCPeerConnection | None,
         stop_event: asyncio.Event,
         session_id: str,
-        track: DesktopVideoTrack,
+        monitor: dict[str, int],
     ) -> None:
         while not stop_event.is_set():
             receive_task = asyncio.create_task(websocket.recv())
@@ -492,7 +529,7 @@ class AgentServer:
             kind = message.get("type")
             if kind == "capture.stop":
                 return
-            if kind == "rtc.answer":
+            if kind == "rtc.answer" and pc is not None:
                 description = message.get("description")
                 if not isinstance(description, dict) or description.get("type") != "answer":
                     continue
@@ -500,7 +537,7 @@ class AgentServer:
                 if not isinstance(sdp, str) or len(sdp) > 32_000:
                     continue
                 await pc.setRemoteDescription(RTCSessionDescription(sdp=sdp, type="answer"))
-            elif kind == "rtc.ice":
+            elif kind == "rtc.ice" and pc is not None:
                 await self._add_ice_candidate(pc, message.get("candidate"))
             elif kind == "control.input":
                 payload = message.get("input")
@@ -508,7 +545,7 @@ class AgentServer:
                     await asyncio.to_thread(
                         self._input.apply,
                         payload,
-                        {"left": track.left, "top": track.top, "width": track.width, "height": track.height},
+                        monitor,
                     )
                 except Exception as exc:
                     LOGGER.debug("Ignored remote input: %s", exc)

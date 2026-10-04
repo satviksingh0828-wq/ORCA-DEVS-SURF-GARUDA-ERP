@@ -14,7 +14,7 @@ The Python source passed syntax/import and protocol/input smoke tests in the San
 - **Allow / Deny consent card** pops up near the tray (fade-in, 2:00 auto-decline countdown; Esc = Deny) instead of a plain Windows dialog.
 - Logo fix: the tray/EXE icon is now the ORCA mark on a navy badge with a solid-filled silhouette for 16–64 px (the dot-matrix logo went grey at small sizes). A red dot marks an active share in the tray icon and status UI; amber marks a pending approval.
 - Starts automatically at sign-in (HKCU Run key, unchanged).
-- Session teardown now closes the local WebRTC peer, capture track and WebSocket, releases held mouse/keyboard input, cancels pending receive tasks, and clears the active session even if one cleanup step fails. Diagnostic logs are retained; only live session resources/state are cleared.
+- Browser-native system capture sends video directly through the same host-to-controller WebRTC path as App sharing. The tray agent now handles per-session Windows approval and input over loopback WebSocket only; it does not create a second video WebRTC hop for this mode. Diagnostic logs are retained; only live session resources/state are cleared.
 
 ## Branding
 
@@ -76,11 +76,11 @@ On first launch, the app registers itself for the current Windows user at sign-i
 
 - Endpoint: `ws://127.0.0.1:17654/v1`
 - Protocol: `1`
-- Initial handshake: browser sends `client.hello`; agent replies `agent.hello` with `desktop-capture` and `input` capabilities.
-- Session: web app sends `capture.request`; the agent shows a Windows consent dialog naming the requester.
-- On approval: agent sends `capture.approved`, captures the **primary monitor**, and publishes video through a local WebRTC peer connection to the browser. The browser relays it to the remote participant over the app's existing WebRTC connection.
+- Initial handshake: browser sends `client.hello`; agent replies `agent.hello` with `desktop-capture`, `input`, and `input-only` capabilities.
+- Session: web app opens the browser's screen picker and asks the user to select **Entire Screen**, then sends `capture.request` with `mediaSource: "browser"`. The agent shows a separate Windows consent dialog naming the requester.
+- On approval: the browser sends the selected display track directly over the existing host-to-controller WebRTC connection, the same media path used by App sharing. The agent does not relay video; it remains connected only to validate remote pointer/keyboard input.
 - Input: validated pointer and keyboard messages are applied only while the approved session is active. A red, click-through pointer follows the connected controller's mouse on the local Windows desktop and disappears when the session ends.
-- Stop: tray menu's **Stop current share**, web-app Stop/Disconnect, WebRTC failure, websocket loss, or app exit tears down the capture, local peer and socket, cancels pending receive tasks, releases held input, and clears the active session so the next share can connect.
+- Stop: tray menu's **Stop current share**, web-app Stop/Disconnect, browser capture end, websocket loss, or app exit stops the browser capture, closes the agent's input socket, cancels pending receive tasks, releases held input, and clears the active session so the next share can connect.
 
 The logo and app name are set in the source. The app has an always-visible red tray indicator while a session is running. The controller's red pointer overlay is excluded from desktop capture on supported Windows builds (the web app draws its own pointer in the shared view). Diagnostic logs are intentionally not erased on disconnect so troubleshooting information remains available.
 
@@ -90,7 +90,7 @@ The logo and app name are set in the source. The app has an always-visible red t
 - The app does not expose filesystem browsing, a command shell, arbitrary process execution, or unattended access.
 - The user must accept each share in the app and again in the Windows consent dialog.
 - It does not attempt to bypass UAC, secure desktop, lock screen, or Windows privilege boundaries.
-- The first version captures the primary monitor only. Audio capture, file browser, upload/rename/delete, and multi-monitor selection are not included.
+- Browser video capture can select an entire monitor, but remote input is mapped to the primary Windows monitor. Select the primary monitor for correct control. Audio capture, file browser, upload/rename/delete, and multi-monitor input targeting are not included.
 - Test the loopback WebSocket from the production Chrome/Edge versions. Browser local-network controls may require user permission. Do not disable browser protections or bind the agent to the LAN.
 
 ## Troubleshooting
@@ -107,7 +107,7 @@ The logo and app name are set in the source. The app has an always-visible red t
 - `main.py` — tray service wiring, config, startup registration, shutdown handling
 - `ui.py` — theme manager (auto light/dark), glass status window, consent card, tray menu header
 - `launcher.py` — startup crash logging and error dialog for windowed builds
-- `agent.py` — WebSocket protocol v1, local WebRTC, primary-screen capture and input validation
+- `agent.py` — WebSocket protocol v1, Windows approval, input validation and optional legacy local video mode
 - `settings.py` — constants and user-data paths
 - `requirements.txt` — pinned package versions
 - `BUILD_WINDOWS.bat` — build script
