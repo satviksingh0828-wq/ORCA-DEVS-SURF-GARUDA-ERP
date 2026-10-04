@@ -19,13 +19,6 @@ body,
   zoom: 0.9;
 }
 
-/* The standalone WebRTC host fills its own screen instead of inheriting ERP UI scaling. */
-#root:has([data-screen-control-host="true"]) {
-  min-height: 100vh;
-  width: 100%;
-  zoom: 1;
-}
-
 /* Thin, theme-aware scrollbars across the application. Tracks remain subtle
    while thumbs follow the active muted/primary theme colours. */
 * {
