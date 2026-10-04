@@ -27,6 +27,8 @@ Prefer a signed installer and signed executable. The installer should be per-use
 6. Remote pointer/keyboard events arrive through the existing WebRTC data channel and are forwarded over the local WebSocket. The agent validates the active session, applies input only while approved, and displays a red, click-through pointer on the controlled Windows desktop while the remote user moves the mouse.
 7. End/Stop, tray Stop, user sign-out, agent exit, browser disconnect, or session end stops capture and input. The app closes the local peer/socket; the agent must also stop on socket loss and on its own timeout.
 
+The browser-to-browser WebRTC peer uses Google and Cloudflare **STUN only** for direct ICE address discovery; no TURN/relay server is configured. If a firewall or NAT prevents a direct peer-to-peer path, that network pair cannot connect under this direct-only policy. The app reports the ICE failure rather than claiming the remote desktop is connected.
+
 This is a two-hop media path: **Windows capture → local agent/browser WebRTC → existing browser-to-browser WebRTC**. The browser acts as a media relay. The web app does not receive a blanket filesystem or process-execution API from the agent.
 
 ## Local WebSocket handshake

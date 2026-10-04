@@ -77,7 +77,12 @@ declare global {
 }
 
 const RTC_CONFIG: RTCConfiguration = {
-  iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }],
+  // STUN discovers direct peer addresses; no TURN relay is configured.
+  iceServers: [
+    { urls: "stun:stun.l.google.com:19302" },
+    { urls: "stun:stun1.l.google.com:19302" },
+    { urls: "stun:stun.cloudflare.com:3478" },
+  ],
   bundlePolicy: "max-bundle",
   iceCandidatePoolSize: 10,
 };
@@ -346,6 +351,9 @@ export function ScreenControlWidget() {
   const [localShareReady, setLocalShareReady] = useState(false);
   const [agentStatus, setAgentStatus] = useState<WindowsAgentStatus>({ state: "checking" });
   const [connectionState, setConnectionState] = useState<RTCPeerConnectionState | "waiting">(
+    "waiting",
+  );
+  const [iceConnectionState, setIceConnectionState] = useState<RTCIceConnectionState | "waiting">(
     "waiting",
   );
   const [isWorkspaceFullscreen, setIsWorkspaceFullscreen] = useState(false);
@@ -840,6 +848,7 @@ export function ScreenControlWidget() {
       channelRef.current = null;
       setRemoteStream(null);
       setConnectionState("waiting");
+      setIceConnectionState("waiting");
       inputQueueRef.current = [];
       return;
     }
@@ -852,6 +861,7 @@ export function ScreenControlWidget() {
       channelRef.current = null;
       setRemoteStream(null);
       setConnectionState("waiting");
+      setIceConnectionState("waiting");
       return;
     }
 
@@ -867,6 +877,7 @@ export function ScreenControlWidget() {
     let restartAttempts = 0;
     peerRef.current = peer;
     setConnectionState("connecting");
+    setIceConnectionState(peer.iceConnectionState);
     signalErrorShown.current = false;
 
     const sendSignal = async (
@@ -938,6 +949,9 @@ export function ScreenControlWidget() {
           "ice",
           event.candidate.toJSON() as unknown as Record<string, unknown>,
         ).catch(() => undefined);
+    };
+    peer.oniceconnectionstatechange = () => {
+      if (!disposed) setIceConnectionState(peer.iceConnectionState);
     };
     peer.onconnectionstatechange = () => {
       if (disposed) return;
@@ -1020,6 +1034,7 @@ export function ScreenControlWidget() {
       if (connectionTimeout !== null) window.clearTimeout(connectionTimeout);
       peer.ontrack = null;
       peer.onicecandidate = null;
+      peer.oniceconnectionstatechange = null;
       peer.onconnectionstatechange = null;
       peer.ondatachannel = null;
       peer.close();
@@ -1029,6 +1044,7 @@ export function ScreenControlWidget() {
       inputQueueRef.current = [];
       setRemoteStream(null);
       setConnectionState("waiting");
+      setIceConnectionState("waiting");
     };
   }, [
     activeSessionId,
@@ -1063,12 +1079,21 @@ export function ScreenControlWidget() {
   if (!user) return null;
 
   const target = activeSession?.target_id === user.id ? displayName(activeSession, user.id) : null;
+  const hostPeerStateForSession =
+    hostCaptureState.sessionId === activeSession?.id ? hostCaptureState.peerState : "waiting";
+  const hostWebRtcConnected = hostPeerStateForSession === "connected";
   const connectionLabel =
     connectionState === "connected"
       ? "Connected"
       : connectionState === "failed" || connectionState === "disconnected"
         ? "Reconnecting…"
         : "Connecting…";
+  const directIceHint =
+    connectionState === "failed" || iceConnectionState === "failed"
+      ? "Direct WebRTC connection failed. No relay is enabled; both networks must allow the direct peer-to-peer ICE path."
+      : connectionState === "disconnected" || iceConnectionState === "disconnected"
+        ? "Direct WebRTC connection was interrupted. Trying to reconnect…"
+        : null;
 
   async function toggleWorkspaceFullscreen() {
     try {
@@ -1342,12 +1367,18 @@ export function ScreenControlWidget() {
             <ShieldAlert className="size-4 shrink-0" />
             <span>
               {activeSession.share_scope === "system"
-                ? "Your full Windows desktop is being shared with "
-                : "Your selected app screen is being shared with "}
+                ? hostWebRtcConnected
+                  ? "Your full Windows desktop is being shared with "
+                  : "Windows capture is active for "
+                : hostWebRtcConnected
+                  ? "Your selected app screen is being shared with "
+                  : "Screen capture is active for "}
               <strong>{target}</strong>
-              {activeSession.share_scope === "system"
-                ? "; remote desktop control is enabled."
-                : "."}
+              {hostWebRtcConnected
+                ? activeSession.share_scope === "system"
+                  ? "; direct WebRTC is connected and remote desktop control is enabled."
+                  : "; direct WebRTC is connected."
+                : `; waiting for the direct WebRTC peer connection (${hostPeerStateForSession}). No TURN relay is used.`}
             </span>
             {!localShareReady &&
               (activeSession.share_scope !== "app" ||
@@ -1547,6 +1578,11 @@ export function ScreenControlWidget() {
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-8 text-center text-white">
                 <LoaderCircle className="size-8 animate-spin" />
                 <p className="text-sm">{connectionLabel}. Waiting for the screen stream…</p>
+              </div>
+            )}
+            {directIceHint && (
+              <div className="pointer-events-none absolute bottom-4 left-1/2 z-20 w-max max-w-[90%] -translate-x-1/2 rounded-md bg-black/80 px-3 py-2 text-center text-xs text-amber-200">
+                {directIceHint}
               </div>
             )}
             {activeSession.share_scope === "system" && controllerPointer && remoteStream && (
