@@ -2,6 +2,8 @@
 
 This document is the implementation contract between the Garuda ERP web app and the Windows companion executable. The web app change is designed for a **separate user-session tray agent**. It does not replace or change the app-only screen-share mode.
 
+The buildable Python companion source is included in [`system-share-agent/`](../system-share-agent/); follow its README and `BUILD_WINDOWS.bat` to build the Windows tray app. It shows a click-through red pointer locally while a remote controller moves the mouse, then hides it at disconnect. The web app continues to render its own red pointer in the shared view.
+
 ## What to build
 
 Build a Windows 10/11 x64 per-user tray application and installer, provisionally named:
@@ -22,7 +24,7 @@ Prefer a signed installer and signed executable. The installer should be per-use
 3. The Windows screen owner sees the request in the web app and clicks Accept. If the companion is absent, the app says the agent is required and offers the configured installer link (or tells the user to obtain it from their administrator if no link is configured).
 4. The web app connects to the tray agent and sends `capture.request`. The agent presents its own native tray/Windows confirmation identifying the requester and asks the local user to allow full-desktop capture and remote input. The browser's Accept click alone is not sufficient consent.
 5. After approval, the agent captures the interactive desktop and starts a **local WebRTC** media connection to the browser tab. The browser republishes that stream through the existing screen-control WebRTC connection, whose SDP/ICE signaling remains on the app's existing authenticated server path.
-6. Remote pointer/keyboard events arrive through the existing WebRTC data channel and are forwarded over the local WebSocket. The agent validates the active session and applies input only while approved.
+6. Remote pointer/keyboard events arrive through the existing WebRTC data channel and are forwarded over the local WebSocket. The agent validates the active session, applies input only while approved, and displays a red, click-through pointer on the controlled Windows desktop while the remote user moves the mouse.
 7. End/Stop, tray Stop, user sign-out, agent exit, browser disconnect, or session end stops capture and input. The app closes the local peer/socket; the agent must also stop on socket loss and on its own timeout.
 
 This is a two-hop media path: **Windows capture → local agent/browser WebRTC → existing browser-to-browser WebRTC**. The browser acts as a media relay. The web app does not receive a blanket filesystem or process-execution API from the agent.
