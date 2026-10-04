@@ -1,0 +1,7 @@
+{
+  "allowed_origins": [
+    "https://*.orca.devs.surf",
+    "https://orca.devs.surf"
+  ],
+  "start_with_windows": true
+}

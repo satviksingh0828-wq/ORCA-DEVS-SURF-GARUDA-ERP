@@ -50,6 +50,51 @@ type ActiveCapture = {
 
 let activeCapture: ActiveCapture | null = null;
 
+function disposeCapture(capture: ActiveCapture, reason: string) {
+  if (activeCapture === capture) activeCapture = null;
+  const { socket, peer } = capture;
+  socket.onmessage = null;
+  socket.onerror = null;
+  socket.onclose = null;
+  peer.onicecandidate = null;
+  peer.ontrack = null;
+  peer.onconnectionstatechange = null;
+
+  if (socket.readyState === WebSocket.OPEN) {
+    try {
+      sendJson(socket, {
+        type: "capture.stop",
+        protocol: PROTOCOL_VERSION,
+        sessionId: capture.sessionId,
+      });
+    } catch {
+      // Closing the socket below still releases the agent-side session.
+    }
+  }
+
+  const stream = capture.stream;
+  capture.stream = null;
+  stream?.getTracks().forEach((track) => {
+    track.onended = null;
+    try {
+      track.stop();
+    } catch {
+      // Continue releasing the peer and socket if a track is already gone.
+    }
+  });
+  try {
+    if (peer.signalingState !== "closed") peer.close();
+  } catch {
+    // Best-effort teardown; the socket is also a session boundary.
+  }
+  try {
+    if (socket.readyState !== WebSocket.CLOSED && socket.readyState !== WebSocket.CLOSING)
+      socket.close(1000, reason.slice(0, 100));
+  } catch {
+    // The browser may have already closed the local agent connection.
+  }
+}
+
 export function getWindowsAgentInstallerUrl() {
   return INSTALLER_URL;
 }
@@ -190,15 +235,7 @@ export async function startWindowsDesktopAgentCapture(
       if (settled) return;
       settled = true;
       cleanupListeners();
-      if (activeCapture === capture) activeCapture = null;
-      try {
-        if (socket.readyState === WebSocket.OPEN)
-          sendJson(socket, { type: "capture.stop", protocol: PROTOCOL_VERSION, sessionId });
-      } catch {
-        // Best-effort cleanup when the agent has already disconnected.
-      }
-      peer.close();
-      socket.close();
+      disposeCapture(capture, "capture setup failed");
       reject(error);
     };
     const resolveApprovedStream = (stream: MediaStream) => {
@@ -207,19 +244,18 @@ export async function startWindowsDesktopAgentCapture(
       cleanupListeners();
       capture.stream = stream;
       socket.onclose = () => {
-        if (activeCapture !== capture) return;
-        activeCapture = null;
-        stream.getTracks().forEach((track) => track.stop());
-        peer.close();
+        disposeCapture(capture, "agent disconnected");
       };
-      socket.onerror = () => socket.close();
+      socket.onerror = () => disposeCapture(capture, "agent connection error");
+      stream.getTracks().forEach((track) => {
+        track.onended = () => disposeCapture(capture, "desktop capture ended");
+      });
       peer.onconnectionstatechange = () => {
         if (
           activeCapture === capture &&
           (peer.connectionState === "failed" || peer.connectionState === "closed")
         ) {
-          activeCapture = null;
-          stream.getTracks().forEach((track) => track.stop());
+          disposeCapture(capture, "local media connection ended");
         }
       };
       resolve(stream);
@@ -338,18 +374,5 @@ export function sendWindowsDesktopAgentInput(input: AgentRemoteInput) {
 export function stopWindowsDesktopAgentCapture(expectedSessionId?: string) {
   const capture = activeCapture;
   if (!capture || (expectedSessionId && capture.sessionId !== expectedSessionId)) return;
-  activeCapture = null;
-  try {
-    if (capture.socket.readyState === WebSocket.OPEN)
-      sendJson(capture.socket, {
-        type: "capture.stop",
-        protocol: PROTOCOL_VERSION,
-        sessionId: capture.sessionId,
-      });
-  } catch {
-    // Best-effort stop; closing the socket also terminates the agent session.
-  }
-  capture.stream?.getTracks().forEach((track) => track.stop());
-  capture.peer.close();
-  capture.socket.close(1000, "screen-control ended");
+  disposeCapture(capture, "screen-control ended");
 }
