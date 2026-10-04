@@ -67,8 +67,8 @@ const TABS = [
   },
   {
     id: "loading-charges",
-    label: "Loading Charges",
-    desc: "Package-rate loading with deductions and additions",
+    label: "Workmen Charges",
+    desc: "Loading and unloading charges with deductions and additions",
     icon: Package,
   },
   {

@@ -128,7 +128,7 @@ function packageCharge(packageRow: PackageRow, type: RateType | undefined, entri
   };
 }
 
-export function LoadingChargesReport() {
+function LoadingChargesReportContent() {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [branchId, setBranchId] = useState("all");
@@ -669,6 +669,432 @@ export function LoadingChargesReport() {
           </table>
         </div>
       </div>
+    </div>
+  );
+}
+
+type ChargesType = "loading" | "unloading";
+type InwardReceiptRow = {
+  id: string;
+  receipt_number: string;
+  receipt_date: string;
+  unloading_date: string;
+  unloading_amount_received: number | string | null;
+  unloading_deduction: number | string | null;
+  additional_unloading: number | string | null;
+  branch?: { branch_name?: string | null } | null;
+  stock_inward_sources?: { source?: { contract_name?: string | null } | null }[];
+  stock_inward_packages?: {
+    package_type?: string | null;
+    quantity?: number | string | null;
+    weight_kg?: number | string | null;
+  }[];
+};
+
+type InwardAdjustment = { deduction: string; addition: string };
+
+function InwardReceiptChargesReport() {
+  const [fromDate, setFromDate] = useState(monthStart);
+  const [toDate, setToDate] = useState(monthEnd);
+  const [branchId, setBranchId] = useState("all");
+  const [branches, setBranches] = useState<BranchOption[]>([]);
+  const [rows, setRows] = useState<InwardReceiptRow[]>([]);
+  const [adjustments, setAdjustments] = useState<Record<string, InwardAdjustment>>({});
+  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [savingId, setSavingId] = useState<string | null>(null);
+
+  async function loadBranches() {
+    const { data, error } = await supabase
+      .from("branches")
+      .select("id,branch_name")
+      .order("branch_name");
+    if (error) return toast.error(`Could not load branches: ${error.message}`);
+    setBranches((data ?? []) as BranchOption[]);
+  }
+
+  async function loadData() {
+    if (!fromDate || !toDate) return toast.error("Select both From Date and To Date");
+    if (fromDate > toDate) return toast.error("From Date cannot be after To Date");
+    setLoading(true);
+    try {
+      let query = supabase
+        .from("stock_inward_receipts")
+        .select(
+          "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_deduction,additional_unloading,branch:branches(branch_name),stock_inward_sources(source:contracts(contract_name)),stock_inward_packages(package_type,quantity,weight_kg)",
+        )
+        .gte("receipt_date", fromDate)
+        .lte("receipt_date", toDate)
+        .order("receipt_date", { ascending: false })
+        .order("created_at", { ascending: false });
+      if (branchId !== "all") query = query.eq("branch_id", branchId);
+      const data = await fetchAll<InwardReceiptRow>(() => query);
+      const nextAdjustments: Record<string, InwardAdjustment> = {};
+      setRows(
+        data.map((row) => {
+          nextAdjustments[row.id] = {
+            deduction: String(row.unloading_deduction ?? 0),
+            addition: String(row.additional_unloading ?? 0),
+          };
+          return row;
+        }),
+      );
+      setAdjustments(nextAdjustments);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load inward receipt charges");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void loadBranches();
+  }, []);
+  useEffect(() => {
+    void loadData();
+  }, [fromDate, toDate, branchId]);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return rows;
+    return rows.filter((row) => {
+      const sources = (row.stock_inward_sources ?? [])
+        .map((item) => item.source?.contract_name ?? "")
+        .join(" ");
+      const packages = (row.stock_inward_packages ?? [])
+        .map((item) => item.package_type ?? "")
+        .join(" ");
+      return [row.receipt_number, row.branch?.branch_name, sources, packages].some((value) =>
+        String(value).toLowerCase().includes(query),
+      );
+    });
+  }, [rows, search]);
+
+  const totals = useMemo(
+    () =>
+      filtered.reduce(
+        (result, row) => {
+          const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
+          const calculated = num(row.unloading_amount_received);
+          return {
+            calculated: result.calculated + calculated,
+            deduction: result.deduction + num(value.deduction),
+            addition: result.addition + num(value.addition),
+            final:
+              result.final + Math.max(0, calculated - num(value.deduction) + num(value.addition)),
+          };
+        },
+        { calculated: 0, deduction: 0, addition: 0, final: 0 },
+      ),
+    [filtered, adjustments],
+  );
+
+  function updateAdjustment(id: string, key: keyof InwardAdjustment, value: string) {
+    setAdjustments((all) => ({
+      ...all,
+      [id]: { ...(all[id] ?? { deduction: "0", addition: "0" }), [key]: value },
+    }));
+  }
+
+  async function saveAdjustment(row: InwardReceiptRow) {
+    const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
+    setSavingId(row.id);
+    const { error } = await supabase
+      .from("stock_inward_receipts")
+      .update({
+        unloading_deduction: num(value.deduction),
+        additional_unloading: num(value.addition),
+      })
+      .eq("id", row.id);
+    setSavingId(null);
+    if (error) return toast.error(`Could not save unloading adjustment: ${error.message}`);
+    setRows((all) =>
+      all.map((item) =>
+        item.id === row.id
+          ? {
+              ...item,
+              unloading_deduction: num(value.deduction),
+              additional_unloading: num(value.addition),
+            }
+          : item,
+      ),
+    );
+    toast.success(`Unloading adjustment saved for ${row.receipt_number}`);
+  }
+
+  function finalAmount(row: InwardReceiptRow) {
+    const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
+    return Math.max(
+      0,
+      num(row.unloading_amount_received) - num(value.deduction) + num(value.addition),
+    );
+  }
+
+  function exportReport() {
+    const csv = toCsv(
+      filtered.map((row) => ({
+        "Inward Receipt No.": row.receipt_number,
+        Date: row.receipt_date,
+        "Unloading Date": row.unloading_date,
+        Branch: row.branch?.branch_name ?? "",
+        Sources: (row.stock_inward_sources ?? [])
+          .map((item) => item.source?.contract_name ?? "")
+          .join(", "),
+        "Calculated Unloading": num(row.unloading_amount_received),
+        "Unloading Deduction": num(adjustments[row.id]?.deduction),
+        "Additional Unloading": num(adjustments[row.id]?.addition),
+        "Final Unloading": finalAmount(row),
+      })),
+      [
+        "Inward Receipt No.",
+        "Date",
+        "Unloading Date",
+        "Branch",
+        "Sources",
+        "Calculated Unloading",
+        "Unloading Deduction",
+        "Additional Unloading",
+        "Final Unloading",
+      ],
+    );
+    downloadCsv(csv, `unloading_charges_${fromDate}_to_${toDate}.csv`);
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-muted/30 p-3">
+        <div className="relative w-full sm:w-56">
+          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+          <Input
+            className="h-9 pl-9"
+            placeholder="Search receipt, branch or source…"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">From Date</label>
+          <Input
+            className="h-9 w-40"
+            type="date"
+            value={fromDate}
+            onChange={(event) => setFromDate(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">To Date</label>
+          <Input
+            className="h-9 w-40"
+            type="date"
+            value={toDate}
+            onChange={(event) => setToDate(event.target.value)}
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-xs font-medium text-muted-foreground">Branch</label>
+          <Select value={branchId} onValueChange={setBranchId}>
+            <SelectTrigger className="h-9 w-48">
+              <SelectValue placeholder="All branches" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All branches</SelectItem>
+              {branches.map((branch) => (
+                <SelectItem key={branch.id} value={branch.id}>
+                  {branch.branch_name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="ml-auto flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={exportReport}
+            disabled={!filtered.length}
+            className="h-9 gap-2"
+          >
+            <Download className="size-4" /> Export
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => void loadData()}
+            disabled={loading}
+            className="size-9"
+            title="Refresh"
+          >
+            <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+          </Button>
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+        {[
+          ["Inward Receipts", filtered.length.toLocaleString("en-IN"), ""],
+          ["Calculated Unloading", displayMoney(totals.calculated), "text-orange-600"],
+          ["Adjustments", displayMoney(totals.addition - totals.deduction), "text-indigo-600"],
+          ["Final Unloading", displayMoney(totals.final), "text-emerald-600"],
+        ].map(([label, value, color]) => (
+          <div key={label} className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-xs text-muted-foreground">{label}</p>
+            <p className={`mt-1 text-xl font-bold ${color}`}>{value}</p>
+          </div>
+        ))}
+      </div>
+      <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
+        Final Unloading = Calculated Unloading − Deduction + Addition.
+      </div>
+      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+        <div className="flex items-center gap-2 border-b border-border px-4 py-3">
+          <Package className="size-4 text-primary" />
+          <h2 className="text-sm font-semibold">
+            Inward Receipt — Unloading Charges ({filtered.length})
+          </h2>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[1180px] text-left text-sm">
+            <thead>
+              <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                <th className="px-4 py-3">Inward Receipt No.</th>
+                <th className="px-4 py-3">Receipt Date</th>
+                <th className="px-4 py-3">Unloading Date</th>
+                <th className="px-4 py-3">Branch</th>
+                <th className="px-4 py-3">Sources</th>
+                <th className="px-4 py-3 text-right">Calculated</th>
+                <th className="px-4 py-3 text-right">Deduction</th>
+                <th className="px-4 py-3 text-right">Addition</th>
+                <th className="px-4 py-3 text-right">Final</th>
+                <th className="px-4 py-3 text-right">Action</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {loading ? (
+                <tr>
+                  <td colSpan={10} className="py-12 text-center text-muted-foreground">
+                    <RefreshCw className="mx-auto mb-2 size-6 animate-spin opacity-20" /> Loading…
+                  </td>
+                </tr>
+              ) : !filtered.length ? (
+                <tr>
+                  <td colSpan={10} className="py-12 text-center text-muted-foreground">
+                    No Inward Receipt records found for these filters.
+                  </td>
+                </tr>
+              ) : (
+                filtered.map((row) => {
+                  const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
+                  return (
+                    <tr key={row.id} className="transition-colors hover:bg-muted/30">
+                      <td className="whitespace-nowrap px-4 py-3 font-medium">
+                        {row.receipt_number}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                        {row.receipt_date}
+                      </td>
+                      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
+                        {row.unloading_date}
+                      </td>
+                      <td className="px-4 py-3">{row.branch?.branch_name ?? "—"}</td>
+                      <td className="px-4 py-3">
+                        {(row.stock_inward_sources ?? [])
+                          .map((item) => item.source?.contract_name ?? "")
+                          .filter(Boolean)
+                          .join(", ") || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {displayMoney(
+                          row.unloading_amount_received ? num(row.unloading_amount_received) : 0,
+                        )}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          className="ml-auto h-8 w-28 text-right"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={value.deduction}
+                          onChange={(event) =>
+                            updateAdjustment(row.id, "deduction", event.target.value)
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-3">
+                        <Input
+                          className="ml-auto h-8 w-28 text-right"
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={value.addition}
+                          onChange={(event) =>
+                            updateAdjustment(row.id, "addition", event.target.value)
+                          }
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold tabular-nums">
+                        {displayMoney(finalAmount(row))}
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => void saveAdjustment(row)}
+                          disabled={savingId === row.id}
+                        >
+                          <Save className="mr-1 size-3.5" />
+                          {savingId === row.id ? "Saving…" : "Save"}
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
+            </tbody>
+            {!loading && filtered.length > 0 && (
+              <tfoot>
+                <tr className="border-t-2 border-border bg-muted/30 font-semibold">
+                  <td className="px-4 py-3" colSpan={5}>
+                    Total ({filtered.length} inward receipts)
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {displayMoney(totals.calculated)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {displayMoney(totals.deduction)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {displayMoney(totals.addition)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {displayMoney(totals.final)}
+                  </td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export function LoadingChargesReport() {
+  const [chargesType, setChargesType] = useState<ChargesType>("loading");
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3 rounded-xl border border-border bg-muted/30 px-3 py-2">
+        <label className="text-sm font-medium">Charges Type</label>
+        <Select value={chargesType} onValueChange={(value: ChargesType) => setChargesType(value)}>
+          <SelectTrigger className="h-9 w-52">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="loading">Loading Charges</SelectItem>
+            <SelectItem value="unloading">Unloading</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      {chargesType === "loading" ? <LoadingChargesReportContent /> : <InwardReceiptChargesReport />}
     </div>
   );
 }
