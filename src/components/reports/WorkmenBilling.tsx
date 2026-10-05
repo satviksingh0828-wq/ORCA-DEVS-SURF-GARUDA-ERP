@@ -106,6 +106,8 @@ export function WorkmenBilling() {
   const [pickerOpen, setPickerOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [listBranch, setListBranch] = useState("all");
+  const [listDateFrom, setListDateFrom] = useState("");
+  const [listDateTo, setListDateTo] = useState("");
   const [loading, setLoading] = useState(false);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -250,6 +252,8 @@ export function WorkmenBilling() {
       .is("deleted_at", null)
       .order("bill_date", { ascending: false });
     if (listBranch !== "all") query = query.eq("branch_id", listBranch);
+    if (listDateFrom) query = query.gte("bill_date", listDateFrom);
+    if (listDateTo) query = query.lte("bill_date", listDateTo);
     const { data, error } = await query;
     if (error) return toast.error(`Could not load Workmen Bills: ${error.message}`);
     setBills((data ?? []) as Bill[]);
@@ -280,9 +284,9 @@ export function WorkmenBilling() {
 
   useEffect(() => {
     void loadBills();
-    // loadBills intentionally follows the list branch filter.
+    // loadBills intentionally follows the list filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listBranch]);
+  }, [listBranch, listDateFrom, listDateTo]);
   useEffect(() => {
     if (screen === "create" && branchId) void loadCandidates();
     // loadCandidates intentionally follows the create form filters.
@@ -407,6 +411,22 @@ export function WorkmenBilling() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+            <div>
+              <Label>Bill Date From</Label>
+              <Input
+                type="date"
+                value={listDateFrom}
+                onChange={(e) => setListDateFrom(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Bill Date To</Label>
+              <Input
+                type="date"
+                value={listDateTo}
+                onChange={(e) => setListDateTo(e.target.value)}
+              />
             </div>
           </div>
           <div className="overflow-x-auto rounded-lg border border-border">
