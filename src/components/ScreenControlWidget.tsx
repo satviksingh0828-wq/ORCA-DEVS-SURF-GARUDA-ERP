@@ -44,6 +44,7 @@ import {
   type ScreenControlSession,
   type ScreenControlState,
   type ScreenSignal,
+  type GuestShareParticipant,
 } from "@/lib/screen-control";
 
 type RemoteInput =
@@ -334,8 +335,14 @@ function getScreenOverlayPosition(container: HTMLElement, x: number, y: number) 
   };
 }
 
-export function ScreenControlWidget() {
-  const { user } = useSession();
+export function ScreenControlWidget({
+  guestParticipant,
+}: {
+  guestParticipant?: GuestShareParticipant;
+} = {}) {
+  const { user: accountUser } = useSession();
+  const user = guestParticipant ?? accountUser;
+  const isGuestParticipant = Boolean(guestParticipant);
   const routePath = useRouterState({ select: (state) => state.location.pathname });
   const token = user?.sessionToken ?? "";
   const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
@@ -1141,7 +1148,7 @@ export function ScreenControlWidget() {
                   <div>
                     <h2 className="text-sm font-semibold">Screen sharing</h2>
                     <p className="text-[11px] text-muted-foreground">
-                      Only users currently online are listed
+                      Only participants with an active recent session are listed
                     </p>
                   </div>
                 </div>
@@ -1280,13 +1287,19 @@ export function ScreenControlWidget() {
                     </Button>
                   </div>
                 ))}
+                {isGuestParticipant && (
+                  <p className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-xs text-amber-900">
+                    Guest-to-guest sessions are disabled. Every session involving a guest must
+                    include a signed-in ERP user.
+                  </p>
+                )}
                 <section className="space-y-2">
                   <h3 className="flex items-center gap-1.5 px-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                    <Users className="size-3.5" /> Online users ({onlineUsers.length})
+                    <Users className="size-3.5" /> Online participants ({onlineUsers.length})
                   </h3>
                   {onlineUsers.length === 0 ? (
                     <p className="rounded-md bg-muted/40 p-3 text-xs text-muted-foreground">
-                      No other users are online right now.
+                      No other participants are online right now.
                     </p>
                   ) : (
                     onlineUsers.map((person) => (
@@ -1308,16 +1321,34 @@ export function ScreenControlWidget() {
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={participantBusy || busyId === person.id}
+                            disabled={
+                              participantBusy ||
+                              busyId === person.id ||
+                              (isGuestParticipant && person.kind === "guest")
+                            }
                             onClick={() => void requestControl(person.id, "app")}
+                            title={
+                              isGuestParticipant && person.kind === "guest"
+                                ? "A signed-in ERP user must be part of the session."
+                                : undefined
+                            }
                           >
                             App
                           </Button>
                           <Button
                             size="sm"
                             variant="outline"
-                            disabled={participantBusy || busyId === person.id}
+                            disabled={
+                              participantBusy ||
+                              busyId === person.id ||
+                              (isGuestParticipant && person.kind === "guest")
+                            }
                             onClick={() => void requestControl(person.id, "system")}
+                            title={
+                              isGuestParticipant && person.kind === "guest"
+                                ? "A signed-in ERP user must be part of the session."
+                                : undefined
+                            }
                           >
                             System
                           </Button>

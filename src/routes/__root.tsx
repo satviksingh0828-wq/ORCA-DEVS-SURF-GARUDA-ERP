@@ -259,18 +259,25 @@ function RootComponent() {
       >
         <SessionProvider>
           <ThemeProvider>
-            <OrcaAIProvider>
-              <PasskeyProtectionGate>
-                <SecurityInit />
-                <SessionExpiredListener />
-                <DynamicImportRecovery />
+            {pathname === "/share" ? (
+              <>
                 <Outlet />
-                <ScreenControlWidget />
-                <InactivityChallenge />
                 <Toaster position="top-right" />
-                <OrcaAIPanelMount />
-              </PasskeyProtectionGate>
-            </OrcaAIProvider>
+              </>
+            ) : (
+              <OrcaAIProvider>
+                <PasskeyProtectionGate>
+                  <SecurityInit />
+                  <SessionExpiredListener />
+                  <DynamicImportRecovery />
+                  <Outlet />
+                  <ScreenControlWidget />
+                  <InactivityChallenge />
+                  <Toaster position="top-right" />
+                  <OrcaAIPanelMount />
+                </PasskeyProtectionGate>
+              </OrcaAIProvider>
+            )}
           </ThemeProvider>
         </SessionProvider>
       </PersistQueryClientProvider>

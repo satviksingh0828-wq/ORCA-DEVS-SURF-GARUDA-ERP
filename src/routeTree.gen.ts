@@ -29,6 +29,7 @@ import { Route as ReportMasterRouteImport } from './routes/report-master'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ScreenControlHostRouteImport } from './routes/screen-control-host'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as ShareRouteImport } from './routes/share'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SystemRouteImport } from './routes/system'
 import { Route as TmsRouteImport } from './routes/tms'
@@ -201,6 +202,11 @@ const ScreenControlHostRoute = ScreenControlHostRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ShareRoute = ShareRouteImport.update({
+  id: '/share',
+  path: '/share',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
@@ -600,6 +606,7 @@ export interface FileRoutesByFullPath {
   '/reports': typeof ReportsRoute
   '/screen-control-host': typeof ScreenControlHostRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/share': typeof ShareRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/system': typeof SystemRoute
   '/tms': typeof TmsRoute
@@ -690,6 +697,7 @@ export interface FileRoutesByTo {
   '/reports': typeof ReportsRoute
   '/screen-control-host': typeof ScreenControlHostRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/share': typeof ShareRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/system': typeof SystemRoute
   '/tms': typeof TmsRoute
@@ -783,6 +791,7 @@ export interface FileRoutesById {
   '/reports': typeof ReportsRoute
   '/screen-control-host': typeof ScreenControlHostRoute
   '/settings': typeof SettingsRouteWithChildren
+  '/share': typeof ShareRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
   '/system': typeof SystemRoute
   '/tms': typeof TmsRoute
@@ -880,6 +889,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/screen-control-host'
     | '/settings'
+    | '/share'
     | '/sitemap.xml'
     | '/system'
     | '/tms'
@@ -970,6 +980,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/screen-control-host'
     | '/settings'
+    | '/share'
     | '/sitemap.xml'
     | '/system'
     | '/tms'
@@ -1062,6 +1073,7 @@ export interface FileRouteTypes {
     | '/reports'
     | '/screen-control-host'
     | '/settings'
+    | '/share'
     | '/sitemap.xml'
     | '/system'
     | '/tms'
@@ -1158,6 +1170,7 @@ export interface RootRouteChildren {
   ReportsRoute: typeof ReportsRoute
   ScreenControlHostRoute: typeof ScreenControlHostRoute
   SettingsRoute: typeof SettingsRouteWithChildren
+  ShareRoute: typeof ShareRoute
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   SystemRoute: typeof SystemRoute
   TmsRoute: typeof TmsRoute
@@ -1330,6 +1343,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/share': {
+      id: '/share'
+      path: '/share'
+      fullPath: '/share'
+      preLoaderRoute: typeof ShareRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/sitemap.xml': {
@@ -2040,6 +2060,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportsRoute: ReportsRoute,
   ScreenControlHostRoute: ScreenControlHostRoute,
   SettingsRoute: SettingsRouteWithChildren,
+  ShareRoute: ShareRoute,
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   SystemRoute: SystemRoute,
   TmsRoute: TmsRoute,

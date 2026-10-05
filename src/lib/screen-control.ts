@@ -5,6 +5,7 @@ export type OnlineScreenUser = {
   name: string;
   username: string;
   role: string;
+  kind: "user" | "guest";
 };
 
 export type ScreenControlSession = {
@@ -23,9 +24,17 @@ export type ScreenControlSession = {
 };
 
 export type ScreenControlState = {
-  me: { id: string; name: string; username: string };
+  me: { id: string; name: string; username: string; kind: "user" | "guest" };
   onlineUsers: OnlineScreenUser[];
   sessions: ScreenControlSession[];
+};
+
+export type GuestShareParticipant = {
+  id: string;
+  name: string;
+  username: string;
+  kind: "guest";
+  sessionToken: string;
 };
 
 export type ScreenSignal = {
@@ -36,6 +45,27 @@ export type ScreenSignal = {
   created_at: string;
 };
 
+export const createGuestShareSession = createServerFn({ method: "POST" })
+  .validator((input: { pin: string; username: string }) => input)
+  .handler(async ({ data }) => {
+    const server = await import("@/lib/guest-share.server");
+    return server.createGuestShareSession(data.pin, data.username);
+  });
+
+export const renameGuestShareSession = createServerFn({ method: "POST" })
+  .validator((input: { sessionToken: string; username: string }) => input)
+  .handler(async ({ data }) => {
+    const server = await import("@/lib/guest-share.server");
+    return server.renameGuestShareIdentity(data.sessionToken, data.username);
+  });
+
+export const leaveGuestShareSession = createServerFn({ method: "POST" })
+  .validator((input: { sessionToken: string }) => input)
+  .handler(async ({ data }) => {
+    const server = await import("@/lib/guest-share.server");
+    return { ended: await server.endGuestShareSession(data.sessionToken) };
+  });
+
 export const getScreenControlState = createServerFn({ method: "POST" })
   .validator((input: { sessionToken: string }) => input)
   .handler(async ({ data }) => {
@@ -44,7 +74,9 @@ export const getScreenControlState = createServerFn({ method: "POST" })
   });
 
 export const createScreenControlRequest = createServerFn({ method: "POST" })
-  .validator((input: { sessionToken: string; targetId: string; shareScope: "app" | "system" }) => input)
+  .validator(
+    (input: { sessionToken: string; targetId: string; shareScope: "app" | "system" }) => input,
+  )
   .handler(async ({ data }) => {
     const server = await import("@/lib/screen-control.server");
     return server.createScreenControlRequest(data.sessionToken, data.targetId, data.shareScope);
