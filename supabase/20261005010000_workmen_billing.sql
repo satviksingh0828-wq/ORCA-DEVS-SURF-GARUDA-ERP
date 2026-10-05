@@ -9,6 +9,11 @@ CREATE TABLE IF NOT EXISTS public.workmen_bills (
   period_to DATE,
   total_loading NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (total_loading >= 0),
   total_unloading NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (total_unloading >= 0),
+  additional_pay_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (additional_pay_amount >= 0),
+  additional_pay_note TEXT,
+  deduction_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (deduction_amount >= 0),
+  deduction_note TEXT,
+  grand_total NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (grand_total >= 0),
   created_by UUID,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -38,6 +43,20 @@ CREATE TABLE IF NOT EXISTS public.workmen_bill_items (
     (charge_type = 'unloading' AND stock_inward_receipt_id IS NOT NULL AND consignment_id IS NULL)
   )
 );
+
+ALTER TABLE public.workmen_bills
+  ADD COLUMN IF NOT EXISTS additional_pay_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS additional_pay_note TEXT,
+  ADD COLUMN IF NOT EXISTS deduction_amount NUMERIC(14,2) NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS deduction_note TEXT,
+  ADD COLUMN IF NOT EXISTS grand_total NUMERIC(14,2) NOT NULL DEFAULT 0;
+ALTER TABLE public.workmen_bills
+  DROP CONSTRAINT IF EXISTS workmen_bills_additional_pay_amount_check,
+  DROP CONSTRAINT IF EXISTS workmen_bills_deduction_amount_check,
+  DROP CONSTRAINT IF EXISTS workmen_bills_grand_total_check,
+  ADD CONSTRAINT workmen_bills_additional_pay_amount_check CHECK (additional_pay_amount >= 0),
+  ADD CONSTRAINT workmen_bills_deduction_amount_check CHECK (deduction_amount >= 0),
+  ADD CONSTRAINT workmen_bills_grand_total_check CHECK (grand_total >= 0);
 
 ALTER TABLE public.consignments
   ADD COLUMN IF NOT EXISTS workmen_loading_bill_id UUID REFERENCES public.workmen_bills(id) ON DELETE RESTRICT,
@@ -99,13 +118,18 @@ CREATE TRIGGER prevent_workmen_loading_consignment_delete
 BEFORE DELETE ON public.consignments
 FOR EACH ROW EXECUTE FUNCTION public.prevent_workmen_loading_consignment_delete();
 
+DROP FUNCTION IF EXISTS public.create_workmen_bill(UUID, DATE, DATE, DATE, UUID, JSONB);
 CREATE OR REPLACE FUNCTION public.create_workmen_bill(
   p_branch_id UUID,
   p_bill_date DATE,
   p_period_from DATE DEFAULT NULL,
   p_period_to DATE DEFAULT NULL,
   p_created_by UUID DEFAULT NULL,
-  p_items JSONB DEFAULT '[]'::JSONB
+  p_items JSONB DEFAULT '[]'::JSONB,
+  p_additional_pay_amount NUMERIC DEFAULT 0,
+  p_additional_pay_note TEXT DEFAULT NULL,
+  p_deduction_amount NUMERIC DEFAULT 0,
+  p_deduction_note TEXT DEFAULT NULL
 )
 RETURNS UUID
 LANGUAGE plpgsql
@@ -124,6 +148,8 @@ DECLARE
   v_final NUMERIC(14,2);
   v_loading NUMERIC(14,2) := 0;
   v_unloading NUMERIC(14,2) := 0;
+  v_additional_pay NUMERIC(14,2) := round(greatest(0, coalesce(p_additional_pay_amount, 0)), 2);
+  v_bill_deduction NUMERIC(14,2) := round(greatest(0, coalesce(p_deduction_amount, 0)), 2);
   v_number TEXT;
 BEGIN
   IF p_branch_id IS NULL THEN RAISE EXCEPTION 'Branch is required'; END IF;
@@ -135,8 +161,15 @@ BEGIN
   END IF;
 
   v_number := 'WB-' || to_char(coalesce(p_bill_date, current_date), 'YYYYMMDD') || '-' || upper(substr(replace(gen_random_uuid()::TEXT, '-', ''), 1, 6));
-  INSERT INTO public.workmen_bills (bill_number, branch_id, bill_date, period_from, period_to, created_by)
-  VALUES (v_number, p_branch_id, coalesce(p_bill_date, current_date), p_period_from, p_period_to, p_created_by)
+  INSERT INTO public.workmen_bills (
+    bill_number, branch_id, bill_date, period_from, period_to,
+    additional_pay_amount, additional_pay_note, deduction_amount, deduction_note, created_by
+  )
+  VALUES (
+    v_number, p_branch_id, coalesce(p_bill_date, current_date), p_period_from, p_period_to,
+    v_additional_pay, NULLIF(trim(p_additional_pay_note), ''), v_bill_deduction,
+    NULLIF(trim(p_deduction_note), ''), p_created_by
+  )
   RETURNING id INTO v_bill_id;
 
   FOR v_item IN SELECT value FROM jsonb_array_elements(p_items) LOOP
@@ -190,7 +223,10 @@ BEGIN
   END LOOP;
 
   UPDATE public.workmen_bills
-  SET total_loading = v_loading, total_unloading = v_unloading, updated_at = now()
+  SET total_loading = v_loading,
+      total_unloading = v_unloading,
+      grand_total = round(greatest(0, v_loading + v_unloading + v_additional_pay - v_bill_deduction), 2),
+      updated_at = now()
   WHERE id = v_bill_id;
   RETURN v_bill_id;
 EXCEPTION WHEN OTHERS THEN
@@ -208,7 +244,7 @@ CREATE POLICY workmen_bills_app ON public.workmen_bills FOR ALL TO anon, authent
 DROP POLICY IF EXISTS workmen_bill_items_app ON public.workmen_bill_items;
 CREATE POLICY workmen_bill_items_app ON public.workmen_bill_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 GRANT SELECT ON public.workmen_bills, public.workmen_bill_items TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.create_workmen_bill(UUID, DATE, DATE, DATE, UUID, JSONB) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.create_workmen_bill(UUID, DATE, DATE, DATE, UUID, JSONB, NUMERIC, TEXT, NUMERIC, TEXT) TO anon, authenticated, service_role;
 GRANT ALL ON public.workmen_bills, public.workmen_bill_items TO service_role;
 
 COMMIT;
