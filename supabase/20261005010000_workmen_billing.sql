@@ -237,6 +237,36 @@ EXCEPTION WHEN OTHERS THEN
 END;
 $$;
 
+CREATE OR REPLACE FUNCTION public.delete_workmen_bill(p_bill_id UUID)
+RETURNS VOID
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  IF p_bill_id IS NULL THEN
+    RAISE EXCEPTION 'Workmen Bill is required';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM public.workmen_bills WHERE id = p_bill_id) THEN
+    RAISE EXCEPTION 'Workmen Bill not found';
+  END IF;
+
+  -- Release both source types before deleting the bill. Bill items cascade-delete.
+  UPDATE public.consignments
+  SET workmen_loading_bill_id = NULL,
+      workmen_loading_billed_at = NULL
+  WHERE workmen_loading_bill_id = p_bill_id;
+
+  UPDATE public.stock_inward_receipts
+  SET workmen_unloading_bill_id = NULL,
+      workmen_unloading_billed_at = NULL
+  WHERE workmen_unloading_bill_id = p_bill_id;
+
+  DELETE FROM public.workmen_bills WHERE id = p_bill_id;
+END;
+$$;
+
 ALTER TABLE public.workmen_bills ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.workmen_bill_items ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS workmen_bills_app ON public.workmen_bills;
@@ -245,6 +275,7 @@ DROP POLICY IF EXISTS workmen_bill_items_app ON public.workmen_bill_items;
 CREATE POLICY workmen_bill_items_app ON public.workmen_bill_items FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 GRANT SELECT ON public.workmen_bills, public.workmen_bill_items TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_workmen_bill(UUID, DATE, DATE, DATE, UUID, JSONB, NUMERIC, TEXT, NUMERIC, TEXT) TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.delete_workmen_bill(UUID) TO anon, authenticated, service_role;
 GRANT ALL ON public.workmen_bills, public.workmen_bill_items TO service_role;
 
 COMMIT;

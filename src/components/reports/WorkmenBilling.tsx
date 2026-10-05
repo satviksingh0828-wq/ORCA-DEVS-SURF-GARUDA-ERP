@@ -90,7 +90,7 @@ export function WorkmenBilling() {
   const db = supabase as any;
   const { user } = useSession();
   const branches = useBranches();
-  const [screen, setScreen] = useState<"list" | "create">("list");
+  const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [branchId, setBranchId] = useState("");
   const [billDate, setBillDate] = useState(isoToday);
   const [periodFrom, setPeriodFrom] = useState(monthStart);
@@ -280,6 +280,27 @@ export function WorkmenBilling() {
         addition: 0,
       })),
     );
+    setScreen("view");
+  }
+
+  async function deleteBill(bill: Bill) {
+    if (
+      !window.confirm(
+        `Delete Workmen Bill ${bill.bill_number}? Linked loading and unloading entries will become available for billing again.`,
+      )
+    )
+      return;
+    setLoading(true);
+    const { error } = await db.rpc("delete_workmen_bill", { p_bill_id: bill.id });
+    setLoading(false);
+    if (error) return toast.error(`Could not delete Workmen Bill: ${error.message}`);
+    toast.success(`Workmen Bill ${bill.bill_number} deleted`);
+    if (viewing?.id === bill.id) {
+      setViewing(null);
+      setViewItems([]);
+      setScreen("list");
+    }
+    await loadBills();
   }
 
   useEffect(() => {
@@ -458,9 +479,19 @@ export function WorkmenBilling() {
                       {money(bill.grand_total)}
                     </td>
                     <td className="px-3 py-3 text-right">
-                      <Button size="sm" variant="outline" onClick={() => void viewBill(bill)}>
-                        <Eye className="size-3.5" /> View
-                      </Button>
+                      <div className="flex justify-end gap-2">
+                        <Button size="sm" variant="outline" onClick={() => void viewBill(bill)}>
+                          <Eye className="size-3.5" /> View
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          onClick={() => void deleteBill(bill)}
+                          disabled={loading}
+                        >
+                          <Trash2 className="size-3.5" /> Delete
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -475,83 +506,100 @@ export function WorkmenBilling() {
             </table>
           </div>
         </section>
-        <Dialog open={viewing !== null} onOpenChange={(open) => !open && setViewing(null)}>
-          <DialogContent className="max-w-5xl">
-            <DialogHeader>
-              <DialogTitle>Workmen Bill {viewing?.bill_number}</DialogTitle>
-            </DialogHeader>
-            {viewing && (
-              <div className="space-y-4">
-                <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
-                  <div>
-                    <p className="text-muted-foreground">Branch</p>
-                    <p className="font-medium">{viewing.branch?.branch_name ?? "—"}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Bill date</p>
-                    <p className="font-medium">{viewing.bill_date}</p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Period</p>
-                    <p className="font-medium">
-                      {viewing.period_from ?? "—"} to {viewing.period_to ?? "—"}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-muted-foreground">Net total</p>
-                    <p className="font-semibold">{money(viewing.grand_total)}</p>
-                  </div>
-                </div>
-                <div className="overflow-x-auto rounded-lg border border-border">
-                  <table className="w-full min-w-[700px] text-sm">
-                    <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
-                      <tr>
-                        <th className="px-3 py-3">Type</th>
-                        <th className="px-3 py-3">Reference</th>
-                        <th className="px-3 py-3">Package Type</th>
-                        <th className="px-3 py-3">Date</th>
-                        <th className="px-3 py-3 text-right">Final Amount</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {viewItems.map((item) => (
-                        <tr key={item.id} className="border-t border-border">
-                          <td className="px-3 py-3 capitalize">{item.chargeType}</td>
-                          <td className="px-3 py-3 font-medium">{item.referenceNumber}</td>
-                          <td className="px-3 py-3">{item.packageType}</td>
-                          <td className="px-3 py-3">{item.referenceDate ?? "—"}</td>
-                          <td className="px-3 py-3 text-right">{money(item.final_amount)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-lg border border-border p-3 text-sm">
-                    <p className="font-medium">Additional Pay</p>
-                    <p>{money(viewing.additional_pay_amount)}</p>
-                    <p className="mt-1 text-muted-foreground">
-                      {viewing.additional_pay_note || "No note"}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border border-border p-3 text-sm">
-                    <p className="font-medium">Deduction</p>
-                    <p>{money(viewing.deduction_amount)}</p>
-                    <p className="mt-1 text-muted-foreground">
-                      {viewing.deduction_note || "No note"}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setViewing(null)}>
-                Close
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       </div>
+    );
+  }
+
+  if (screen === "view" && viewing) {
+    return (
+      <section className="space-y-5 rounded-xl border border-border bg-card p-4 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold">Workmen Bill {viewing.bill_number}</h2>
+            <p className="text-xs text-muted-foreground">
+              Bill details and billed loading/unloading references
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setScreen("list")}>
+              Back to bills
+            </Button>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => void deleteBill(viewing)}
+              disabled={loading}
+            >
+              <Trash2 className="size-3.5" /> Delete Bill
+            </Button>
+          </div>
+        </div>
+        <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <p className="text-muted-foreground">Branch</p>
+            <p className="font-medium">{viewing.branch?.branch_name ?? "—"}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Bill Date</p>
+            <p className="font-medium">{viewing.bill_date}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Period</p>
+            <p className="font-medium">
+              {viewing.period_from ?? "—"} to {viewing.period_to ?? "—"}
+            </p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Net Total</p>
+            <p className="font-semibold">{money(viewing.grand_total)}</p>
+          </div>
+        </div>
+        <div className="overflow-x-auto rounded-lg border border-border">
+          <table className="w-full min-w-[800px] text-sm">
+            <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+              <tr>
+                <th className="px-3 py-3">Charge Type</th>
+                <th className="px-3 py-3">Reference</th>
+                <th className="px-3 py-3">Package Type</th>
+                <th className="px-3 py-3">Reference Date</th>
+                <th className="px-3 py-3 text-right">Calculated</th>
+                <th className="px-3 py-3 text-right">Final Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {viewItems.map((item) => (
+                <tr key={item.id} className="border-t border-border">
+                  <td className="px-3 py-3 capitalize">{item.chargeType}</td>
+                  <td className="px-3 py-3 font-semibold">{item.referenceNumber}</td>
+                  <td className="px-3 py-3">{item.packageType}</td>
+                  <td className="px-3 py-3">{item.referenceDate ?? "—"}</td>
+                  <td className="px-3 py-3 text-right">{money(item.calculated_amount)}</td>
+                  <td className="px-3 py-3 text-right font-semibold">{money(item.final_amount)}</td>
+                </tr>
+              ))}
+              {!viewItems.length && (
+                <tr>
+                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                    No bill entries found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-border p-3 text-sm">
+            <p className="font-medium">Additional Pay</p>
+            <p>{money(viewing.additional_pay_amount)}</p>
+            <p className="mt-1 text-muted-foreground">{viewing.additional_pay_note || "No note"}</p>
+          </div>
+          <div className="rounded-lg border border-border p-3 text-sm">
+            <p className="font-medium">Deduction</p>
+            <p>{money(viewing.deduction_amount)}</p>
+            <p className="mt-1 text-muted-foreground">{viewing.deduction_note || "No note"}</p>
+          </div>
+        </div>
+      </section>
     );
   }
 
