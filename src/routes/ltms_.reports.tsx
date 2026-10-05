@@ -23,8 +23,15 @@ import { TripExpenditureReport } from "@/components/reports/TripExpenditureRepor
 import { EwayBillList } from "@/components/operations/EwayBillList";
 import { ConsignmentNetReport } from "@/components/reports/ConsignmentNetReport";
 import { SourcesReport } from "@/components/reports/SourcesReport";
+import { MovementList } from "@/components/operations/MovementList";
 
 const TABS = [
+  {
+    id: "movements",
+    label: "Movements",
+    desc: "Monthly consignment routes and load details",
+    icon: Truck,
+  },
   {
     id: "eway-bill",
     label: "E-Way Bill",
@@ -173,6 +180,7 @@ function ReportsPage() {
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>
           {tab === "eway-bill" && <EwayBillList />}
+          {tab === "movements" && <MovementList />}
           {tab === "update-consignment" && <UpdateConsignmentReport />}
           {tab === "consignment-income" && <ConsignmentIncomeReport />}
           {tab === "transporter-expenditure" && <TransporterExpenditureReport />}

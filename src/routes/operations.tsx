@@ -36,7 +36,6 @@ import { ReportFiltersContext } from "@/lib/report-filters";
 import { ShipmentList } from "@/components/operations/ShipmentList";
 import { ConsignmentList } from "@/components/operations/ConsignmentList";
 import { LorryReceiptList } from "@/components/operations/LorryReceiptList";
-import { MovementList } from "@/components/operations/MovementList";
 import { ManifestList } from "@/components/operations/ManifestList";
 import { LtmsManifestList } from "@/components/operations/LtmsManifestList";
 import { OutwardPOD } from "@/components/operations/OutwardPOD";
@@ -91,14 +90,6 @@ const ALL_TABS = [
     label: "Consignment",
     desc: "Create shipments from E-Way Bills",
     icon: FileText,
-    adminOnly: false,
-    dividerBefore: false,
-  },
-  {
-    id: "movements",
-    label: "Movements",
-    desc: "Monthly consignment routes and load details",
-    icon: Truck,
     adminOnly: false,
     dividerBefore: false,
   },
@@ -215,7 +206,6 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       t.id === "trip" ||
       t.id === "shipments" ||
       t.id === "consignment" ||
-      t.id === "movements" ||
       t.id === "ltms-manifest" ||
       t.id === "outward-pod" ||
       t.id === "stock-inward" ||
@@ -345,11 +335,6 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
                 onSidebarVisibilityChange={setNavOpen}
                 onCreateModeChange={setConsignmentCreateOpen}
               />
-            </TabErrorBoundary>
-          )}
-          {safeTab === "movements" && (
-            <TabErrorBoundary label="Movements">
-              <MovementList />
             </TabErrorBoundary>
           )}
           {safeTab === "lr" && (
