@@ -4,7 +4,7 @@ import { useEffect, type CSSProperties, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
 import { useOrcaAI } from "@/lib/orca-context";
 import { Button } from "@/components/ui/button";
-import { OrcaAITrigger } from "@/components/OrcaAI";
+import { MeetTrigger } from "@/components/MeetPanel";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
@@ -62,7 +62,7 @@ export function AppShell({
 }) {
   const { signOut, user } = useSession();
   const navigate = useNavigate();
-  const { open } = useOrcaAI();
+  const { open, expanded } = useOrcaAI();
   const { theme, backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
@@ -135,7 +135,7 @@ export function AppShell({
       className={cn(
         "relative flex h-screen flex-col overflow-hidden transition-all duration-300",
         backgroundVideoEnabled ? "bg-transparent" : "bg-background",
-        isAdmin && open ? "lg:mr-[360px]" : "",
+        user && open && !expanded ? "lg:mr-[360px]" : "",
       )}
     >
       <header className="relative z-30 shrink-0 border-b border-border bg-card/85 backdrop-blur">
@@ -168,7 +168,7 @@ export function AppShell({
               </Link>
             )}
             {(isAdmin || user?.role === "viewer") && <NotificationBell />}
-            {isAdmin && <OrcaAITrigger />}
+            {user && <MeetTrigger />}
             <span className="hidden items-center gap-2 text-sm text-muted-foreground sm:flex min-w-0">
               {isAdmin ? (
                 <ShieldCheck className="size-3.5 text-primary shrink-0" />

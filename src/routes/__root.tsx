@@ -21,7 +21,7 @@ import { ThemeProvider } from "../lib/theme";
 import { Toaster } from "../components/ui/sonner";
 import { InactivityChallenge } from "../components/InactivityChallenge";
 import { OrcaAIProvider } from "../lib/orca-context";
-import { OrcaAIPanel } from "../components/OrcaAI";
+import { MeetPanel } from "../components/MeetPanel";
 import { useOrcaAI } from "../lib/orca-context";
 import { useSession } from "../lib/session";
 import { SplashScreen } from "../components/SplashScreen";
@@ -206,23 +206,29 @@ function PasskeyProtectionGate({ children }: { children: ReactNode }) {
   return <PasskeyGate>{children}</PasskeyGate>;
 }
 
-function OrcaAIPanelMount() {
-  const { open } = useOrcaAI();
+function MeetPanelMount() {
+  const { open, expanded, setExpanded } = useOrcaAI();
   const { user } = useSession();
 
   useEffect(() => {
-    if (!open || (user?.role !== "admin" && user?.role !== "semi_admin")) return;
+    if (!open || !user) return;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.body.style.overflow = previousOverflow;
     };
-  }, [open, user?.role]);
+  }, [open, user]);
 
-  if (!open || (user?.role !== "admin" && user?.role !== "semi_admin")) return null;
+  if (!open || !user) return null;
   return (
-    <div className="fixed inset-0 z-[60] h-[100dvh] min-h-[100svh] w-screen max-w-none overflow-hidden bg-card shadow-[-4px_0_32px_rgba(0,0,0,0.12)] lg:inset-y-0 lg:left-auto lg:right-0 lg:h-[100dvh] lg:w-[360px] lg:max-w-[360px]">
-      <OrcaAIPanel />
+    <div
+      className={
+        expanded
+          ? "fixed inset-0 z-[70] h-[100dvh] min-h-[100svh] w-screen max-w-none overflow-hidden bg-card shadow-[-4px_0_32px_rgba(0,0,0,0.12)]"
+          : "fixed inset-0 z-[60] h-[100dvh] min-h-[100svh] w-screen max-w-none overflow-hidden bg-card shadow-[-4px_0_32px_rgba(0,0,0,0.12)] lg:inset-y-0 lg:left-auto lg:right-0 lg:h-[100dvh] lg:w-[360px] lg:max-w-[360px]"
+      }
+    >
+      <MeetPanel onExpandChange={setExpanded} />
     </div>
   );
 }
@@ -274,7 +280,7 @@ function RootComponent() {
                   <ScreenControlWidget />
                   <InactivityChallenge />
                   <Toaster position="top-right" />
-                  <OrcaAIPanelMount />
+                  <MeetPanelMount />
                 </PasskeyProtectionGate>
               </OrcaAIProvider>
             )}
