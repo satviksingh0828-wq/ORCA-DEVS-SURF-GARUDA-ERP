@@ -274,6 +274,8 @@ export function WorkmenBilling() {
       (data ?? []).map((item: any) => ({
         ...item,
         chargeType: item.charge_type,
+        referenceNumber: item.reference_number,
+        referenceDate: item.reference_date,
         packageType: item.package_type ?? "—",
         calculated: num(item.calculated_amount),
         deduction: 0,
