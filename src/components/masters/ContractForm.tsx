@@ -65,8 +65,9 @@ type FixedIncomeLine = {
 
 type UnloadingChargeSlab = {
   id?: string;
-  package_type: string;
   basis: "quantity" | "weight";
+  from_value: string;
+  to_value: string;
   charge_mode: "fixed" | "rate";
   amount: string;
 };
@@ -217,12 +218,14 @@ export function ContractForm({
       );
       const { data: unloadingData } = await db
         .from("source_unloading_charge_slabs")
-        .select("id,package_type,basis,charge_mode,amount")
+        .select("id,basis,from_value,to_value,charge_mode,amount")
         .eq("contract_id", initial.id)
         .order("package_type");
       setUnloadingSlabs(
         (unloadingData ?? []).map((slab: UnloadingChargeSlab) => ({
           ...slab,
+          from_value: String(slab.from_value ?? ""),
+          to_value: slab.to_value == null ? "" : String(slab.to_value),
           amount: String(slab.amount ?? ""),
         })),
       );
@@ -283,11 +286,13 @@ export function ContractForm({
       .eq("contract_id", contractId);
     if (deleteUnloadingError) return toast.error(deleteUnloadingError.message);
     const unloadingPayload = unloadingSlabs
-      .filter((slab) => slab.package_type.trim() && Number(slab.amount) >= 0)
+      .filter((slab) => slab.from_value !== "" && Number(slab.amount) >= 0)
       .map((slab) => ({
         contract_id: contractId,
-        package_type: slab.package_type.trim(),
+        package_type: null,
         basis: slab.basis,
+        from_value: Number(slab.from_value),
+        to_value: slab.to_value === "" ? null : Number(slab.to_value),
         charge_mode: slab.charge_mode,
         amount: Number(slab.amount),
       }));
@@ -583,45 +588,63 @@ export function ContractForm({
 
       <Section title="Unloading charges slab">
         <p className="mb-4 text-xs text-muted-foreground">
-          Add unloading expenditure by package type. These source rates do not use route, from, or
-          to fields. Fixed is the default; Rate multiplies the amount by quantity or weight.
+          Select one measurement basis, then add slabs. Unloading slabs do not use package type or
+          route fields.
         </p>
+        <div className="mb-4 flex max-w-sm items-center gap-2">
+          <Label className="whitespace-nowrap">Basis</Label>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={unloadingSlabs[0]?.basis ?? "quantity"}
+            disabled={isInactive}
+            onChange={(e) =>
+              setUnloadingSlabs((rows) =>
+                rows.map((row) => ({ ...row, basis: e.target.value as "quantity" | "weight" })),
+              )
+            }
+          >
+            <option value="quantity">Quantity-wise</option>
+            <option value="weight">Weight-wise (KG)</option>
+          </select>
+        </div>
         <div className="space-y-3">
           {unloadingSlabs.map((slab, index) => (
             <div
               key={slab.id ?? index}
-              className="grid grid-cols-1 gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1.4fr_1fr_1fr_1fr_auto]"
+              className="grid grid-cols-1 gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]"
             >
               <Input
                 className="h-10"
-                placeholder="Package type"
-                value={slab.package_type}
+                type="number"
+                min="0"
+                step="0.001"
+                placeholder="From"
+                value={slab.from_value}
                 disabled={isInactive}
                 onChange={(e) =>
                   setUnloadingSlabs((rows) =>
                     rows.map((row, i) =>
-                      i === index ? { ...row, package_type: e.target.value } : row,
+                      i === index ? { ...row, from_value: e.target.value } : row,
                     ),
                   )
                 }
               />
-              <select
-                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                value={slab.basis}
+              <Input
+                className="h-10"
+                type="number"
+                min="0"
+                step="0.001"
+                placeholder="To (optional)"
+                value={slab.to_value}
                 disabled={isInactive}
                 onChange={(e) =>
                   setUnloadingSlabs((rows) =>
                     rows.map((row, i) =>
-                      i === index
-                        ? { ...row, basis: e.target.value as "quantity" | "weight" }
-                        : row,
+                      i === index ? { ...row, to_value: e.target.value } : row,
                     ),
                   )
                 }
-              >
-                <option value="quantity">Quantity-wise</option>
-                <option value="weight">Weight-wise (KG)</option>
-              </select>
+              />
               <select
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
                 value={slab.charge_mode}
@@ -644,7 +667,7 @@ export function ContractForm({
                 type="number"
                 min="0"
                 step="0.01"
-                placeholder="Amount"
+                placeholder="Value"
                 value={slab.amount}
                 disabled={isInactive}
                 onChange={(e) =>
@@ -670,15 +693,20 @@ export function ContractForm({
             onClick={() =>
               setUnloadingSlabs((rows) => [
                 ...rows,
-                { package_type: "", basis: "quantity", charge_mode: "fixed", amount: "" },
+                {
+                  basis: unloadingSlabs[0]?.basis ?? "quantity",
+                  from_value: "",
+                  to_value: "",
+                  charge_mode: "fixed",
+                  amount: "",
+                },
               ])
             }
           >
-            Add unloading slab
+            Add slab
           </Button>
         </div>
       </Section>
-
       <section className="surface-card p-6">
         <div className="flex items-center justify-between">
           <div>

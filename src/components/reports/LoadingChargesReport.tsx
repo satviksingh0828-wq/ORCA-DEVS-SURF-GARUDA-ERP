@@ -705,8 +705,9 @@ type InwardReceiptRow = {
 type InwardAdjustment = { deduction: string; addition: string };
 type SourceUnloadingSlab = {
   contract_id: string;
-  package_type: string;
   basis: "quantity" | "weight";
+  from_value: number | string;
+  to_value: number | string | null;
   charge_mode: "fixed" | "rate";
   amount: number | string;
 };
@@ -772,6 +773,15 @@ function InwardReceiptChargesReport() {
                 .order("from_value"),
             )
           : Promise.resolve([] as RateEntry[]),
+        sourceIds.length
+          ? fetchAll<SourceUnloadingSlab>(() =>
+              supabase
+                .from("source_unloading_charge_slabs")
+                .select("contract_id,basis,from_value,to_value,charge_mode,amount")
+                .in("contract_id", sourceIds)
+                .order("from_value"),
+            )
+          : Promise.resolve([] as SourceUnloadingSlab[]),
       ]);
       const types = new Map(rateTypes.map((type) => [type.id, type]));
       const nextAdjustments: Record<string, InwardAdjustment> = {};
@@ -780,12 +790,14 @@ function InwardReceiptChargesReport() {
           const calculated = (row.stock_inward_packages ?? []).reduce((total, item) => {
             const type = types.get(item.package_rate_type_id);
             const measure = type?.basis === "weight" ? num(item.weight_kg) : num(item.quantity);
-            const sourceSlab = sourceSlabs.find(
-              (slab) =>
-                slab.contract_id === item.source_id &&
-                slab.package_type === item.package_type &&
-                slab.basis === type?.basis,
-            );
+            const sourceSlab = sourceSlabs
+              .filter((slab) => slab.contract_id === item.source_id && slab.basis === type?.basis)
+              .sort((a, b) => num(b.from_value) - num(a.from_value))
+              .find(
+                (slab) =>
+                  num(slab.from_value) <= measure &&
+                  (slab.to_value == null || measure <= num(slab.to_value)),
+              );
             if (sourceSlab) {
               return (
                 total +
