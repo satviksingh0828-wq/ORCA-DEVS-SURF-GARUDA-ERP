@@ -676,15 +676,17 @@ function LoadingChargesReportContent() {
 type ChargesType = "loading" | "unloading";
 type InwardReceiptRow = {
   id: string;
+  branch_id: string;
   receipt_number: string;
   receipt_date: string;
   unloading_date: string;
   unloading_amount_received: number | string | null;
+  calculated_unloading: number;
   unloading_deduction: number | string | null;
   additional_unloading: number | string | null;
   branch?: { branch_name?: string | null } | null;
-  stock_inward_sources?: { source?: { contract_name?: string | null } | null }[];
   stock_inward_packages?: {
+    package_rate_type_id: string;
     package_type?: string | null;
     quantity?: number | string | null;
     weight_kg?: number | string | null;
@@ -721,7 +723,7 @@ function InwardReceiptChargesReport() {
       let query = supabase
         .from("stock_inward_receipts")
         .select(
-          "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_deduction,additional_unloading,branch:branches(branch_name),stock_inward_sources(source:contracts(contract_name)),stock_inward_packages(package_type,quantity,weight_kg)",
+          "id,branch_id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_deduction,additional_unloading,branch:branches(branch_name),stock_inward_packages(package_rate_type_id,package_type,quantity,weight_kg)",
         )
         .gte("receipt_date", fromDate)
         .lte("receipt_date", toDate)
@@ -729,14 +731,52 @@ function InwardReceiptChargesReport() {
         .order("created_at", { ascending: false });
       if (branchId !== "all") query = query.eq("branch_id", branchId);
       const data = await fetchAll<InwardReceiptRow>(() => query);
+      const branchIds = [...new Set(data.map((row) => row.branch_id))];
+      const [rateTypes, rateEntries] = await Promise.all([
+        branchIds.length
+          ? fetchAll<RateType>(() =>
+              supabase
+                .from("package_rate_types")
+                .select("id,branch_id,package_type,basis,charge_mode")
+                .in("branch_id", branchIds),
+            )
+          : Promise.resolve([] as RateType[]),
+        branchIds.length
+          ? fetchAll<RateEntry>(() =>
+              supabase
+                .from("package_rate_entries")
+                .select("package_rate_type_id,from_value,to_value,amount")
+                .eq("rate_kind", "unloading")
+                .in("branch_id", branchIds)
+                .order("from_value"),
+            )
+          : Promise.resolve([] as RateEntry[]),
+      ]);
+      const types = new Map(rateTypes.map((type) => [type.id, type]));
       const nextAdjustments: Record<string, InwardAdjustment> = {};
       setRows(
         data.map((row) => {
+          const calculated = (row.stock_inward_packages ?? []).reduce((total, item) => {
+            const type = types.get(item.package_rate_type_id);
+            const measure = type?.basis === "weight" ? num(item.weight_kg) : num(item.quantity);
+            const slab = rateEntries
+              .filter((entry) => entry.package_rate_type_id === item.package_rate_type_id)
+              .sort((a, b) => num(b.from_value) - num(a.from_value))
+              .find(
+                (entry) =>
+                  num(entry.from_value) <= measure &&
+                  (entry.to_value == null || measure <= num(entry.to_value)),
+              );
+            if (!type || !slab) return total;
+            return (
+              total + (type.charge_mode === "rate" ? num(slab.amount) * measure : num(slab.amount))
+            );
+          }, 0);
           nextAdjustments[row.id] = {
             deduction: String(row.unloading_deduction ?? 0),
             addition: String(row.additional_unloading ?? 0),
           };
-          return row;
+          return { ...row, calculated_unloading: calculated };
         }),
       );
       setAdjustments(nextAdjustments);
@@ -758,13 +798,10 @@ function InwardReceiptChargesReport() {
     const query = search.trim().toLowerCase();
     if (!query) return rows;
     return rows.filter((row) => {
-      const sources = (row.stock_inward_sources ?? [])
-        .map((item) => item.source?.contract_name ?? "")
-        .join(" ");
       const packages = (row.stock_inward_packages ?? [])
         .map((item) => item.package_type ?? "")
         .join(" ");
-      return [row.receipt_number, row.branch?.branch_name, sources, packages].some((value) =>
+      return [row.receipt_number, row.branch?.branch_name, packages].some((value) =>
         String(value).toLowerCase().includes(query),
       );
     });
@@ -775,7 +812,7 @@ function InwardReceiptChargesReport() {
       filtered.reduce(
         (result, row) => {
           const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
-          const calculated = num(row.unloading_amount_received);
+          const calculated = row.calculated_unloading;
           return {
             calculated: result.calculated + calculated,
             deduction: result.deduction + num(value.deduction),
@@ -824,37 +861,43 @@ function InwardReceiptChargesReport() {
 
   function finalAmount(row: InwardReceiptRow) {
     const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
-    return Math.max(
-      0,
-      num(row.unloading_amount_received) - num(value.deduction) + num(value.addition),
-    );
+    return Math.max(0, row.calculated_unloading - num(value.deduction) + num(value.addition));
   }
 
   function exportReport() {
     const csv = toCsv(
       filtered.map((row) => ({
-        "Inward Receipt No.": row.receipt_number,
+        "Consignment No.": row.receipt_number,
         Date: row.receipt_date,
-        "Unloading Date": row.unloading_date,
         Branch: row.branch?.branch_name ?? "",
-        Sources: (row.stock_inward_sources ?? [])
-          .map((item) => item.source?.contract_name ?? "")
+        "Package Information": (row.stock_inward_packages ?? [])
+          .map((item) => item.package_type ?? "")
+          .filter(Boolean)
           .join(", "),
-        "Calculated Unloading": num(row.unloading_amount_received),
-        "Unloading Deduction": num(adjustments[row.id]?.deduction),
-        "Additional Unloading": num(adjustments[row.id]?.addition),
-        "Final Unloading": finalAmount(row),
+        Quantity: (row.stock_inward_packages ?? []).reduce(
+          (total, item) => total + num(item.quantity),
+          0,
+        ),
+        "Weight (KG)": (row.stock_inward_packages ?? []).reduce(
+          (total, item) => total + num(item.weight_kg),
+          0,
+        ),
+        "Calculated Loading": row.calculated_unloading,
+        Deduction: num(adjustments[row.id]?.deduction),
+        Addition: num(adjustments[row.id]?.addition),
+        "Final Loading": finalAmount(row),
       })),
       [
-        "Inward Receipt No.",
+        "Consignment No.",
         "Date",
-        "Unloading Date",
         "Branch",
-        "Sources",
-        "Calculated Unloading",
-        "Unloading Deduction",
-        "Additional Unloading",
-        "Final Unloading",
+        "Package Information",
+        "Quantity",
+        "Weight (KG)",
+        "Calculated Loading",
+        "Deduction",
+        "Addition",
+        "Final Loading",
       ],
     );
     downloadCsv(csv, `unloading_charges_${fromDate}_to_${toDate}.csv`);
@@ -930,10 +973,10 @@ function InwardReceiptChargesReport() {
       </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[
-          ["Inward Receipts", filtered.length.toLocaleString("en-IN"), ""],
-          ["Calculated Unloading", displayMoney(totals.calculated), "text-orange-600"],
+          ["Consignments", filtered.length.toLocaleString("en-IN"), ""],
+          ["Calculated Loading", displayMoney(totals.calculated), "text-orange-600"],
           ["Adjustments", displayMoney(totals.addition - totals.deduction), "text-indigo-600"],
-          ["Final Unloading", displayMoney(totals.final), "text-emerald-600"],
+          ["Final Loading", displayMoney(totals.final), "text-emerald-600"],
         ].map(([label, value, color]) => (
           <div key={label} className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <p className="text-xs text-muted-foreground">{label}</p>
@@ -942,25 +985,25 @@ function InwardReceiptChargesReport() {
         ))}
       </div>
       <div className="rounded-lg border border-dashed border-border bg-muted/20 px-3 py-2 text-xs text-muted-foreground">
-        Final Unloading = Calculated Unloading − Deduction + Addition.
+        Unloading expenditure is calculated from the package type&apos;s Unloading Rate master.
+        Final Loading = Calculated Loading − Deduction + Addition.
       </div>
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Package className="size-4 text-primary" />
-          <h2 className="text-sm font-semibold">
-            Inward Receipt — Unloading Charges ({filtered.length})
-          </h2>
+          <h2 className="text-sm font-semibold">Unloading Charges ({filtered.length})</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1180px] text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-3">Inward Receipt No.</th>
-                <th className="px-4 py-3">Receipt Date</th>
-                <th className="px-4 py-3">Unloading Date</th>
+                <th className="px-4 py-3">Consignment No.</th>
+                <th className="px-4 py-3">Date</th>
                 <th className="px-4 py-3">Branch</th>
-                <th className="px-4 py-3">Sources</th>
-                <th className="px-4 py-3 text-right">Calculated</th>
+                <th className="px-4 py-3">Package Information</th>
+                <th className="px-4 py-3 text-right">Quantity</th>
+                <th className="px-4 py-3 text-right">Weight (KG)</th>
+                <th className="px-4 py-3 text-right">Calculated Loading</th>
                 <th className="px-4 py-3 text-right">Deduction</th>
                 <th className="px-4 py-3 text-right">Addition</th>
                 <th className="px-4 py-3 text-right">Final</th>
@@ -991,20 +1034,31 @@ function InwardReceiptChargesReport() {
                       <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
                         {row.receipt_date}
                       </td>
-                      <td className="whitespace-nowrap px-4 py-3 text-muted-foreground">
-                        {row.unloading_date}
-                      </td>
                       <td className="px-4 py-3">{row.branch?.branch_name ?? "—"}</td>
                       <td className="px-4 py-3">
-                        {(row.stock_inward_sources ?? [])
-                          .map((item) => item.source?.contract_name ?? "")
+                        {(row.stock_inward_packages ?? [])
+                          .map((item) => item.package_type ?? "")
                           .filter(Boolean)
                           .join(", ") || "—"}
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums">
-                        {displayMoney(
-                          row.unloading_amount_received ? num(row.unloading_amount_received) : 0,
+                        {displayNumber(
+                          (row.stock_inward_packages ?? []).reduce(
+                            (total, item) => total + num(item.quantity),
+                            0,
+                          ),
                         )}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {displayNumber(
+                          (row.stock_inward_packages ?? []).reduce(
+                            (total, item) => total + num(item.weight_kg),
+                            0,
+                          ),
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {displayMoney(row.calculated_unloading)}
                       </td>
                       <td className="px-4 py-3">
                         <Input
@@ -1052,8 +1106,8 @@ function InwardReceiptChargesReport() {
             {!loading && filtered.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <td className="px-4 py-3" colSpan={5}>
-                    Total ({filtered.length} inward receipts)
+                  <td className="px-4 py-3" colSpan={6}>
+                    Total ({filtered.length} consignments)
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
                     {displayMoney(totals.calculated)}
