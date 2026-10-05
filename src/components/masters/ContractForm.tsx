@@ -63,6 +63,14 @@ type FixedIncomeLine = {
   note: string;
 };
 
+type UnloadingChargeSlab = {
+  id?: string;
+  package_type: string;
+  basis: "quantity" | "weight";
+  charge_mode: "fixed" | "rate";
+  amount: string;
+};
+
 export const EMPTY_CONTRACT: ContractRow = {
   contract_name: "",
   branch_id: null,
@@ -159,6 +167,7 @@ export function ContractForm({
     [],
   );
   const [incomeLines, setIncomeLines] = useState<FixedIncomeLine[]>([]);
+  const [unloadingSlabs, setUnloadingSlabs] = useState<UnloadingChargeSlab[]>([]);
 
   useEffect(() => {
     async function loadAssetLedgers() {
@@ -204,6 +213,17 @@ export function ContractForm({
         (data ?? []).map((line: FixedIncomeLine) => ({
           ...line,
           amount: String(line.amount ?? ""),
+        })),
+      );
+      const { data: unloadingData } = await db
+        .from("source_unloading_charge_slabs")
+        .select("id,package_type,basis,charge_mode,amount")
+        .eq("contract_id", initial.id)
+        .order("package_type");
+      setUnloadingSlabs(
+        (unloadingData ?? []).map((slab: UnloadingChargeSlab) => ({
+          ...slab,
+          amount: String(slab.amount ?? ""),
         })),
       );
     }
@@ -256,6 +276,26 @@ export function ContractForm({
     if (linePayload.length > 0) {
       const { error: insertLinesError } = await db.from("fixed_income_lines").insert(linePayload);
       if (insertLinesError) return toast.error(insertLinesError.message);
+    }
+    const { error: deleteUnloadingError } = await db
+      .from("source_unloading_charge_slabs")
+      .delete()
+      .eq("contract_id", contractId);
+    if (deleteUnloadingError) return toast.error(deleteUnloadingError.message);
+    const unloadingPayload = unloadingSlabs
+      .filter((slab) => slab.package_type.trim() && Number(slab.amount) >= 0)
+      .map((slab) => ({
+        contract_id: contractId,
+        package_type: slab.package_type.trim(),
+        basis: slab.basis,
+        charge_mode: slab.charge_mode,
+        amount: Number(slab.amount),
+      }));
+    if (unloadingPayload.length > 0) {
+      const { error: insertUnloadingError } = await db
+        .from("source_unloading_charge_slabs")
+        .insert(unloadingPayload);
+      if (insertUnloadingError) return toast.error(insertUnloadingError.message);
     }
     const isNew = !id;
     logAction(isNew ? "created" : "updated", "contract", {
@@ -537,6 +577,104 @@ export function ContractForm({
             }
           >
             Add fixed income
+          </Button>
+        </div>
+      </Section>
+
+      <Section title="Unloading charges slab">
+        <p className="mb-4 text-xs text-muted-foreground">
+          Add unloading expenditure by package type. These source rates do not use route, from, or
+          to fields. Fixed is the default; Rate multiplies the amount by quantity or weight.
+        </p>
+        <div className="space-y-3">
+          {unloadingSlabs.map((slab, index) => (
+            <div
+              key={slab.id ?? index}
+              className="grid grid-cols-1 gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1.4fr_1fr_1fr_1fr_auto]"
+            >
+              <Input
+                className="h-10"
+                placeholder="Package type"
+                value={slab.package_type}
+                disabled={isInactive}
+                onChange={(e) =>
+                  setUnloadingSlabs((rows) =>
+                    rows.map((row, i) =>
+                      i === index ? { ...row, package_type: e.target.value } : row,
+                    ),
+                  )
+                }
+              />
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={slab.basis}
+                disabled={isInactive}
+                onChange={(e) =>
+                  setUnloadingSlabs((rows) =>
+                    rows.map((row, i) =>
+                      i === index
+                        ? { ...row, basis: e.target.value as "quantity" | "weight" }
+                        : row,
+                    ),
+                  )
+                }
+              >
+                <option value="quantity">Quantity-wise</option>
+                <option value="weight">Weight-wise (KG)</option>
+              </select>
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={slab.charge_mode}
+                disabled={isInactive}
+                onChange={(e) =>
+                  setUnloadingSlabs((rows) =>
+                    rows.map((row, i) =>
+                      i === index
+                        ? { ...row, charge_mode: e.target.value as "fixed" | "rate" }
+                        : row,
+                    ),
+                  )
+                }
+              >
+                <option value="fixed">Fixed ₹</option>
+                <option value="rate">Rate × units</option>
+              </select>
+              <Input
+                className="h-10"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Amount"
+                value={slab.amount}
+                disabled={isInactive}
+                onChange={(e) =>
+                  setUnloadingSlabs((rows) =>
+                    rows.map((row, i) => (i === index ? { ...row, amount: e.target.value } : row)),
+                  )
+                }
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isInactive}
+                onClick={() => setUnloadingSlabs((rows) => rows.filter((_, i) => i !== index))}
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isInactive}
+            onClick={() =>
+              setUnloadingSlabs((rows) => [
+                ...rows,
+                { package_type: "", basis: "quantity", charge_mode: "fixed", amount: "" },
+              ])
+            }
+          >
+            Add unloading slab
           </Button>
         </div>
       </Section>
