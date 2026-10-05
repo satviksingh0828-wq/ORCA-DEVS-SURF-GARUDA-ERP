@@ -41,6 +41,8 @@ import { ManifestList } from "@/components/operations/ManifestList";
 import { LtmsManifestList } from "@/components/operations/LtmsManifestList";
 import { OutwardPOD } from "@/components/operations/OutwardPOD";
 import { StockInward } from "@/components/operations/StockInward";
+import { MonthlyMISReport } from "@/components/reports/MonthlyMISReport";
+import { MonthlyMIS } from "@/components/operations/MonthlyMIS";
 
 export const Route = createFileRoute("/operations")({
   head: () => ({
@@ -141,6 +143,22 @@ const ALL_TABS = [
     dividerBefore: false,
   },
   {
+    id: "admin-mis",
+    label: "ADMIN MIS",
+    desc: "Depot submissions and compliance overview",
+    icon: BarChart2,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
+    id: "monthly-mis",
+    label: "Monthly MIS",
+    desc: "Branch-wise date-wise MIS submission calendar",
+    icon: ClipboardList,
+    adminOnly: false,
+    dividerBefore: false,
+  },
+  {
     id: "trip-averages",
     label: "Trip Averages",
     desc: "Monthly distribution analysis",
@@ -201,6 +219,8 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       t.id === "ltms-manifest" ||
       t.id === "outward-pod" ||
       t.id === "stock-inward" ||
+      t.id === "admin-mis" ||
+      t.id === "monthly-mis" ||
       t.id === "fastag-report" ||
       t.id === "rental-advance";
     if (mode === "ltms" && !isLtmsTab) return false;
@@ -355,6 +375,16 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           {safeTab === "stock-inward" && (
             <TabErrorBoundary label="Stock Inward">
               <StockInward />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "admin-mis" && (
+            <TabErrorBoundary label="ADMIN MIS">
+              <MonthlyMISReport />
+            </TabErrorBoundary>
+          )}
+          {safeTab === "monthly-mis" && (
+            <TabErrorBoundary label="Monthly MIS">
+              <MonthlyMIS />
             </TabErrorBoundary>
           )}
           {safeTab === "trip-averages" && (isAdmin || isViewer) && (

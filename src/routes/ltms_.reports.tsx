@@ -2,8 +2,6 @@ import { createFileRoute, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import {
   ChevronRight,
-  ClipboardList,
-  FileBarChart,
   FilePenLine,
   FileSearch,
   Package,
@@ -17,8 +15,6 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
-import { MonthlyMISReport } from "@/components/reports/MonthlyMISReport";
-import { MonthlyMIS } from "@/components/operations/MonthlyMIS";
 import { UpdateConsignmentReport } from "@/components/reports/UpdateConsignmentReport";
 import { ConsignmentIncomeReport } from "@/components/reports/ConsignmentIncomeReport";
 import { TransporterExpenditureReport } from "@/components/reports/TransporterExpenditureReport";
@@ -29,18 +25,6 @@ import { ConsignmentNetReport } from "@/components/reports/ConsignmentNetReport"
 import { SourcesReport } from "@/components/reports/SourcesReport";
 
 const TABS = [
-  {
-    id: "admin-mis",
-    label: "ADMIN MIS",
-    desc: "Depot submissions and compliance overview",
-    icon: FileBarChart,
-  },
-  {
-    id: "monthly-mis",
-    label: "Monthly MIS",
-    desc: "Branch-wise date-wise MIS submission calendar",
-    icon: ClipboardList,
-  },
   {
     id: "eway-bill",
     label: "E-Way Bill",
@@ -113,7 +97,7 @@ export const Route = createFileRoute("/ltms_/reports")({
 export default Route;
 
 function ReportsPage() {
-  const [tab, setTab] = useState<TabId>("admin-mis");
+  const [tab, setTab] = useState<TabId>("eway-bill");
   const [navOpen, setNavOpen] = useState(true);
   const active = TABS.find((item) => item.id === tab) ?? TABS[0];
 
@@ -188,8 +172,6 @@ function ReportsPage() {
             <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>
-          {tab === "admin-mis" && <MonthlyMISReport />}
-          {tab === "monthly-mis" && <MonthlyMIS />}
           {tab === "eway-bill" && <EwayBillList />}
           {tab === "update-consignment" && <UpdateConsignmentReport />}
           {tab === "consignment-income" && <ConsignmentIncomeReport />}
