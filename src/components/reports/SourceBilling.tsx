@@ -38,6 +38,10 @@ type Source = {
   state?: string | null;
   country?: string | null;
   pin_code?: string | null;
+  source_asset_ledger_id?: string | null;
+  freight_income_ledger_id?: string | null;
+  loading_income_ledger_id?: string | null;
+  unloading_income_ledger_id?: string | null;
 };
 type Bill = {
   id: string;
@@ -50,6 +54,7 @@ type Bill = {
   period_to: string;
   total_freight: number | string;
   total_loading: number | string;
+  total_unloading_income: number | string;
   deleted_at: string | null;
   branch?: { branch_name?: string | null } | null;
   source?: { contract_name?: string | null } | null;
@@ -107,6 +112,38 @@ type BillLine = Consignment & {
   final_freight: number;
   final_loading: number;
 };
+type StockInwardPackage = {
+  package_rate_type_id: string;
+  source_id: string;
+  quantity: number | string | null;
+  weight_kg: number | string | null;
+};
+type StockInwardReceipt = {
+  id: string;
+  receipt_number: string;
+  receipt_date: string;
+  branch_id: string;
+  additional_income_mode: "approval" | "source" | "both" | "none";
+  stock_inward_sources?: Array<{ source_id: string }>;
+  stock_inward_packages?: StockInwardPackage[];
+};
+type StockIncomeLine = {
+  id: string;
+  receipt_number: string;
+  receipt_date: string;
+  source_income_amount: number;
+};
+type StockIncomeRateType = {
+  id: string;
+  basis: "quantity" | "weight";
+  charge_mode: "fixed" | "rate";
+};
+type StockIncomeRateEntry = {
+  package_rate_type_id: string;
+  from_value: number | string;
+  to_value: number | string | null;
+  amount: number | string;
+};
 type LedgerAccount = {
   id: string;
   account_name: string;
@@ -137,6 +174,15 @@ type BillItem = {
   loading_deduction: number | string;
   additional_loading: number | string;
   final_loading: number | string;
+};
+type StockInwardBillItem = {
+  id: string;
+  bill_id: string;
+  stock_inward_receipt_id: string;
+  source_id: string;
+  receipt_number: string;
+  receipt_date: string;
+  source_income_amount: number | string;
 };
 
 const money = (value: number | string | null | undefined) =>
@@ -181,6 +227,7 @@ export function SourceBilling() {
   const [showDeleted, setShowDeleted] = useState(false);
   const [viewing, setViewing] = useState<Bill | null>(null);
   const [viewItems, setViewItems] = useState<BillItem[]>([]);
+  const [viewStockInwardItems, setViewStockInwardItems] = useState<StockInwardBillItem[]>([]);
   const [viewItemsLoading, setViewItemsLoading] = useState(false);
   const [consignmentViewing, setConsignmentViewing] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -188,6 +235,10 @@ export function SourceBilling() {
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [lines, setLines] = useState<BillLine[]>([]);
+  const [stockInwardPickerOpen, setStockInwardPickerOpen] = useState(false);
+  const [stockInwardCandidates, setStockInwardCandidates] = useState<StockIncomeLine[]>([]);
+  const [selectedStockInwardIds, setSelectedStockInwardIds] = useState<string[]>([]);
+  const [stockInwardLines, setStockInwardLines] = useState<StockIncomeLine[]>([]);
   const [form, setForm] = useState({
     branch: "",
     source: "",
@@ -200,25 +251,36 @@ export function SourceBilling() {
   const [journalPreviewOpen, setJournalPreviewOpen] = useState(false);
   const [journalPostStatus, setJournalPostStatus] = useState<"pending" | "success" | "error">("pending");
   const [journalPostError, setJournalPostError] = useState<string | null>(null);
-  const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{ freight: number; loading: number } | null>(null);
+  const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{ freight: number; loading: number; unloading: number } | null>(null);
   const [postedJournalEntryId, setPostedJournalEntryId] = useState<string | null>(null);
   const [postedJournalLines, setPostedJournalLines] = useState<JournalPreviewLine[] | null>(null);
 
   async function loadBillItems(billId: string) {
     setViewItemsLoading(true);
     try {
-      const rows = await fetchAll<BillItem>(() =>
-        (supabase as any)
-          .from("ltms_source_bill_items")
-          .select(
-            "id,bill_id,consignment_id,consignment_number,consignment_date,from_pin_code,to_pin_code,calculated_freight,freight_deduction,additional_freight,final_freight,calculated_loading,loading_deduction,additional_loading,final_loading",
-          )
-          .eq("bill_id", billId)
-          .order("consignment_date", { ascending: false }),
-      );
+      const [rows, stockItems] = await Promise.all([
+        fetchAll<BillItem>(() =>
+          (supabase as any)
+            .from("ltms_source_bill_items")
+            .select(
+              "id,bill_id,consignment_id,consignment_number,consignment_date,from_pin_code,to_pin_code,calculated_freight,freight_deduction,additional_freight,final_freight,calculated_loading,loading_deduction,additional_loading,final_loading",
+            )
+            .eq("bill_id", billId)
+            .order("consignment_date", { ascending: false }),
+        ),
+        fetchAll<StockInwardBillItem>(() =>
+          (supabase as any)
+            .from("ltms_source_bill_stock_inward_items")
+            .select("id,bill_id,stock_inward_receipt_id,source_id,receipt_number,receipt_date,source_income_amount")
+            .eq("bill_id", billId)
+            .order("receipt_date", { ascending: false }),
+        ),
+      ]);
       setViewItems(rows);
+      setViewStockInwardItems(stockItems);
     } catch (error) {
       setViewItems([]);
+      setViewStockInwardItems([]);
       toast.error(error instanceof Error ? error.message : "Could not load billed consignments");
     } finally {
       setViewItemsLoading(false);
@@ -228,6 +290,7 @@ export function SourceBilling() {
   useEffect(() => {
     if (!viewing) {
       setViewItems([]);
+      setViewStockInwardItems([]);
       return;
     }
     void loadBillItems(viewing.id);
@@ -237,7 +300,7 @@ export function SourceBilling() {
     const { data, error } = await (supabase as any)
       .from("contracts")
       .select(
-        "id,contract_name,branch_id,company_name,legal_business_name,gstin,address_line1,address_line2,city,state,country,pin_code,source_asset_ledger_id,freight_income_ledger_id,loading_income_ledger_id",
+        "id,contract_name,branch_id,company_name,legal_business_name,gstin,address_line1,address_line2,city,state,country,pin_code,source_asset_ledger_id,freight_income_ledger_id,loading_income_ledger_id,unloading_income_ledger_id",
       )
       .order("contract_name");
     if (error) return toast.error(`Could not load sources: ${error.message}`);
@@ -247,6 +310,7 @@ export function SourceBilling() {
       source.source_asset_ledger_id,
       source.freight_income_ledger_id,
       source.loading_income_ledger_id,
+      source.unloading_income_ledger_id,
     ].filter((id): id is string => Boolean(id))))];
     if (ledgerIds.length) {
       const { data: ledgerRows, error: ledgerError } = await (supabase as any)
@@ -265,7 +329,7 @@ export function SourceBilling() {
       let query = (supabase as any)
         .from("ltms_source_bills")
         .select(
-          "id,bill_number,branch_id,source_id,bill_date,due_date,period_from,period_to,total_freight,total_loading,deleted_at,source_company_name,source_legal_business_name,source_gstin,source_address,source_address_line1,source_address_line2,source_city,source_state,source_country,source_pin_code,branch:branches(branch_name),source:contracts(contract_name)",
+          "id,bill_number,branch_id,source_id,bill_date,due_date,period_from,period_to,total_freight,total_loading,total_unloading_income,deleted_at,source_company_name,source_legal_business_name,source_gstin,source_address,source_address_line1,source_address_line2,source_city,source_state,source_country,source_pin_code,branch:branches(branch_name),source:contracts(contract_name)",
         )
         .gte("bill_date", listFilters.from)
         .lte("bill_date", listFilters.to)
@@ -405,6 +469,108 @@ export function SourceBilling() {
       setPickerLoading(false);
     }
   }
+  async function loadStockInwardCandidates() {
+    if (!form.branch || !form.source) return toast.error("Select a branch and source first");
+    if (!form.from || !form.to || form.from > form.to)
+      return toast.error("Enter a valid billing period");
+    setPickerLoading(true);
+    try {
+      const receiptQuery = (supabase as any)
+        .from("stock_inward_receipts")
+        .select(
+          "id,receipt_number,receipt_date,branch_id,additional_income_mode,stock_inward_sources!inner(source_id),stock_inward_packages(package_rate_type_id,source_id,quantity,weight_kg)",
+        )
+        .eq("branch_id", form.branch)
+        .eq("stock_inward_sources.source_id", form.source)
+        .in("additional_income_mode", ["source", "both"])
+        .gte("receipt_date", form.from)
+        .lte("receipt_date", form.to)
+        .order("receipt_date", { ascending: false });
+      const [receipts, billedRows] = await Promise.all([
+        fetchAll<StockInwardReceipt>(() => receiptQuery),
+        fetchAll<{ stock_inward_receipt_id: string }>(() =>
+          (supabase as any)
+            .from("ltms_source_bill_stock_inward_items")
+            .select("stock_inward_receipt_id")
+            .eq("source_id", form.source),
+        ),
+      ]);
+      const billedIds = new Set(billedRows.map((row) => row.stock_inward_receipt_id));
+      const eligible = receipts.filter((receipt) => !billedIds.has(receipt.id));
+      const typeIds = [
+        ...new Set(
+          eligible.flatMap((receipt) =>
+            (receipt.stock_inward_packages ?? [])
+              .filter((item) => item.source_id === form.source)
+              .map((item) => item.package_rate_type_id),
+          ),
+        ),
+      ];
+      const [types, entries] = await Promise.all([
+        typeIds.length
+          ? fetchAll<StockIncomeRateType>(() =>
+              (supabase as any)
+                .from("package_rate_types")
+                .select("id,basis,charge_mode")
+                .in("id", typeIds),
+            )
+          : Promise.resolve([] as StockIncomeRateType[]),
+        typeIds.length
+          ? fetchAll<StockIncomeRateEntry>(() =>
+              (supabase as any)
+                .from("package_rate_entries")
+                .select("package_rate_type_id,from_value,to_value,amount")
+                .eq("rate_kind", "unloading")
+                .in("package_rate_type_id", typeIds)
+                .order("from_value"),
+            )
+          : Promise.resolve([] as StockIncomeRateEntry[]),
+      ]);
+      const typeById = new Map(types.map((type) => [type.id, type]));
+      const nextCandidates = eligible.flatMap((receipt) => {
+        const sourceIncome = (receipt.stock_inward_packages ?? [])
+          .filter((item) => item.source_id === form.source)
+          .reduce((sum, item) => {
+            const type = typeById.get(item.package_rate_type_id);
+            if (!type) return sum;
+            const measure = type.basis === "weight" ? num(item.weight_kg) : num(item.quantity);
+            const slab = entries
+              .filter((entry) => entry.package_rate_type_id === item.package_rate_type_id)
+              .sort((a, b) => num(b.from_value) - num(a.from_value))
+              .find(
+                (entry) =>
+                  num(entry.from_value) <= measure &&
+                  (entry.to_value == null || measure <= num(entry.to_value)),
+              );
+            const rate = num(slab?.amount);
+            return sum + (slab ? (type.charge_mode === "rate" ? rate * measure : rate) : 0);
+          }, 0);
+        if (sourceIncome <= 0) return [];
+        return [{
+          id: receipt.id,
+          receipt_number: receipt.receipt_number,
+          receipt_date: receipt.receipt_date,
+          source_income_amount: Math.round((sourceIncome + Number.EPSILON) * 100) / 100,
+        }];
+      });
+      setStockInwardCandidates(nextCandidates);
+      setSelectedStockInwardIds([]);
+      setStockInwardPickerOpen(true);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not load Stock Inward source income");
+    } finally {
+      setPickerLoading(false);
+    }
+  }
+  function addSelectedStockInward() {
+    const selected = stockInwardCandidates.filter(
+      (row) => selectedStockInwardIds.includes(row.id) && !stockInwardLines.some((line) => line.id === row.id),
+    );
+    if (!selected.length) return toast.error("Select at least one Stock Inward entry");
+    setStockInwardLines((current) => [...current, ...selected]);
+    setSelectedStockInwardIds([]);
+    setStockInwardPickerOpen(false);
+  }
   function addSelectedLines() {
     const selected = candidates.filter(
       (row) => selectedCandidateIds.includes(row.id) && !lines.some((line) => line.id === row.id),
@@ -432,15 +598,15 @@ export function SourceBilling() {
     );
   }
   async function generate() {
-    if (!form.branch || !form.source || !lines.length)
-      return toast.error("Select branch, source and at least one consignment");
+    if (!form.branch || !form.source || (!lines.length && !stockInwardLines.length))
+      return toast.error("Select branch, source and at least one consignment or Stock Inward entry");
     if (form.from > form.to || form.billDate < form.from || form.dueDate < form.billDate)
       return toast.error("Check bill and billing period dates");
-    if (totals.freight + totals.loading <= 0)
+    if (totals.freight + totals.loading + stockIncomeTotal <= 0)
       return toast.error(
-        "Adjusted final Freight and Loading total must be greater than zero before posting the journal entry",
+        "Source bill income total must be greater than zero before posting the journal entry",
       );
-    setJournalPreviewAmounts({ freight: totals.freight, loading: totals.loading });
+    setJournalPreviewAmounts({ freight: totals.freight, loading: totals.loading, unloading: stockIncomeTotal });
     setJournalPostError(null);
     setJournalPostStatus("pending");
     setPostedJournalEntryId(null);
@@ -455,20 +621,26 @@ export function SourceBilling() {
       p_period_from: form.from,
       p_period_to: form.to,
       p_created_by: user?.id ?? null,
-      p_items: lines.map((line) => ({
-        consignment_id: line.id,
-        consignment_number: line.consignment_number,
-        from_pin_code: line.from_pin_code,
-        to_pin_code: line.to_pin_code,
-        calculated_freight: line.calculated_freight,
-        freight_deduction: line.freight_deduction,
-        additional_freight: line.additional_freight,
-        final_freight: line.final_freight,
-        calculated_loading: line.calculated_loading,
-        loading_deduction: line.loading_deduction,
-        additional_loading: line.additional_loading,
-        final_loading: line.final_loading,
-      })),
+      p_items: [
+        ...lines.map((line) => ({
+          consignment_id: line.id,
+          consignment_number: line.consignment_number,
+          from_pin_code: line.from_pin_code,
+          to_pin_code: line.to_pin_code,
+          calculated_freight: line.calculated_freight,
+          freight_deduction: line.freight_deduction,
+          additional_freight: line.additional_freight,
+          final_freight: line.final_freight,
+          calculated_loading: line.calculated_loading,
+          loading_deduction: line.loading_deduction,
+          additional_loading: line.additional_loading,
+          final_loading: line.final_loading,
+        })),
+        ...stockInwardLines.map((line) => ({
+          stock_inward_receipt_id: line.id,
+          source_income_amount: line.source_income_amount,
+        })),
+      ],
     });
     setGenerating(false);
     if (error) {
@@ -509,8 +681,9 @@ export function SourceBilling() {
       ].filter((entry): entry is JournalPreviewLine => entry !== null);
     }));
     setJournalPostStatus("success");
-    toast.success("Source bill generated. Selected consignments are now locked.");
+    toast.success("Source bill and journal posted. Selected consignments and Stock Inward entries are now locked.");
     setLines([]);
+    setStockInwardLines([]);
     setScreen("list");
     await loadBills();
   }
@@ -546,14 +719,22 @@ export function SourceBilling() {
       ),
     [lines],
   );
+  const stockIncomeTotal = useMemo(
+    () => stockInwardLines.reduce((sum, line) => sum + num(line.source_income_amount), 0),
+    [stockInwardLines],
+  );
   const selectedBillingSource = sources.find((source) => source.id === form.source);
-  const previewTotals = journalPreviewAmounts ?? totals;
+  const previewTotals = useMemo(
+    () => journalPreviewAmounts ?? { ...totals, unloading: stockIncomeTotal },
+    [journalPreviewAmounts, stockIncomeTotal, totals],
+  );
   const journalPreviewLines = useMemo<JournalPreviewLine[]>(() => {
     const source = selectedBillingSource;
     const mapped = [
-      { key: "source", label: "Source account (debit)", id: source?.source_asset_ledger_id, amount: previewTotals.freight + previewTotals.loading, side: "debit" },
+      { key: "source", label: "Source account (debit)", id: source?.source_asset_ledger_id, amount: previewTotals.freight + previewTotals.loading + previewTotals.unloading, side: "debit" },
       { key: "freight", label: "Freight income (credit)", id: source?.freight_income_ledger_id, amount: previewTotals.freight, side: "credit" },
       { key: "loading", label: "Loading income (credit)", id: source?.loading_income_ledger_id, amount: previewTotals.loading, side: "credit" },
+      { key: "unloading", label: "Unloading income (credit)", id: source?.unloading_income_ledger_id, amount: previewTotals.unloading, side: "credit" },
     ];
     return mapped.filter((line) => line.amount > 0 || line.key === "source").map((line) => ({
       ...line,
@@ -569,11 +750,19 @@ export function SourceBilling() {
   const displayedJournalBalanced = Math.abs(displayedJournalDebit - displayedJournalCredit) < 0.005;
 
   const updateForm = (key: keyof typeof form, value: string) =>
-    setForm((current) => ({
-      ...current,
-      [key]: value,
-      ...(key === "branch" ? { source: "" } : {}),
-    }));
+    {
+      setForm((current) => ({
+        ...current,
+        [key]: value,
+        ...(key === "branch" ? { source: "" } : {}),
+      }));
+      if (key === "branch" || key === "source") {
+        setLines([]);
+        setStockInwardLines([]);
+        setCandidates([]);
+        setStockInwardCandidates([]);
+      }
+    };
   const sourceList = listFilters.branch === "all" ? sources : sources;
   const selectedSource = sources.find((source) => source.id === form.source);
   const selectedSourceAddress = selectedSource
@@ -686,6 +875,7 @@ export function SourceBilling() {
                   <th className="px-3 py-3">Period</th>
                   <th className="px-3 py-3 text-right">Freight</th>
                   <th className="px-3 py-3 text-right">Loading</th>
+                  <th className="px-3 py-3 text-right">Unloading Income</th>
                   <th className="px-3 py-3 text-center">Actions</th>
                 </tr>
               </thead>
@@ -707,6 +897,7 @@ export function SourceBilling() {
                       </td>
                       <td className="px-3 py-3 text-right">{money(bill.total_freight)}</td>
                       <td className="px-3 py-3 text-right">{money(bill.total_loading)}</td>
+                      <td className="px-3 py-3 text-right">{money(bill.total_unloading_income)}</td>
                       <td className="px-3 py-3">
                         <div className="flex justify-center gap-2">
                           <Button
@@ -734,7 +925,7 @@ export function SourceBilling() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={8} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={9} className="py-10 text-center text-muted-foreground">
                       {loading ? "Loading bills…" : "No source bills found."}
                     </td>
                   </tr>
@@ -756,8 +947,8 @@ export function SourceBilling() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Only consignments marked To be billed can be selected. Source, branch and billing
-              dates are stored on the bill.
+              Select consignments and/or eligible Stock Inward source income. A Stock Inward entry
+              is eligible only when Additional Income Type is Source or Both.
             </p>
           </div>
           <div className="grid gap-3 md:grid-cols-3">
@@ -844,7 +1035,7 @@ export function SourceBilling() {
               </div>
             </div>
           )}
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
             <Button
               variant="outline"
               onClick={() => void loadCandidates()}
@@ -852,6 +1043,14 @@ export function SourceBilling() {
             >
               {pickerLoading ? <RefreshCw className="animate-spin" /> : <PackageSearch />} Load
               consignments
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void loadStockInwardCandidates()}
+              disabled={pickerLoading}
+            >
+              {pickerLoading ? <RefreshCw className="animate-spin" /> : <PackageSearch />} Load
+              Stock Inward
             </Button>
           </div>
           <div className="overflow-x-auto rounded-lg border border-border">
@@ -974,8 +1173,66 @@ export function SourceBilling() {
               )}
             </table>
           </div>
+          <section className="space-y-3 rounded-lg border border-border p-3">
+            <div>
+              <h3 className="text-sm font-semibold">Stock Inward Source Income</h3>
+              <p className="text-xs text-muted-foreground">
+                Receipt reference number and date are saved with the calculated Source Income,
+                posted as Unloading Income.
+              </p>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full min-w-[650px] text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                    <th className="px-3 py-3">Stock Inward Reference No.</th>
+                    <th className="px-3 py-3">Date</th>
+                    <th className="px-3 py-3 text-right">Source Income / Unloading Income</th>
+                    <th className="px-3 py-3 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {stockInwardLines.length ? (
+                    stockInwardLines.map((line) => (
+                      <tr key={line.id}>
+                        <td className="px-3 py-3 font-medium">{line.receipt_number}</td>
+                        <td className="px-3 py-3">{line.receipt_date}</td>
+                        <td className="px-3 py-3 text-right">{money(line.source_income_amount)}</td>
+                        <td className="px-3 py-3 text-center">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setStockInwardLines((current) => current.filter((item) => item.id !== line.id))}
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                        No Stock Inward source income selected. Use Load Stock Inward.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {stockInwardLines.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 bg-muted/30 font-semibold">
+                      <td colSpan={2} className="px-3 py-3">
+                        Total ({stockInwardLines.length} Stock Inward entries)
+                      </td>
+                      <td className="px-3 py-3 text-right">{money(stockIncomeTotal)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </section>
           <div className="flex justify-end">
-            <Button onClick={() => void generate()} disabled={generating || !lines.length}>
+            <Button onClick={() => void generate()} disabled={generating || (!lines.length && !stockInwardLines.length)}>
               {generating ? "Generating…" : "Generate Source Bill"}
             </Button>
           </div>
@@ -1069,6 +1326,90 @@ export function SourceBilling() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <Dialog open={stockInwardPickerOpen} onOpenChange={setStockInwardPickerOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Select eligible Stock Inward source income</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Only entries with Additional Income Type Source or Both are listed. Source Income is
+            recalculated from the unloading package slabs for the selected source.
+          </p>
+          <div className="max-h-[60vh] overflow-auto rounded-lg border border-border">
+            <table className="w-full min-w-[650px] text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all eligible Stock Inward entries"
+                      checked={
+                        stockInwardCandidates.filter((row) => !stockInwardLines.some((line) => line.id === row.id)).length > 0 &&
+                        stockInwardCandidates
+                          .filter((row) => !stockInwardLines.some((line) => line.id === row.id))
+                          .every((row) => selectedStockInwardIds.includes(row.id))
+                      }
+                      onChange={(event) =>
+                        setSelectedStockInwardIds(
+                          event.target.checked
+                            ? stockInwardCandidates
+                                .filter((row) => !stockInwardLines.some((line) => line.id === row.id))
+                                .map((row) => row.id)
+                            : [],
+                        )
+                      }
+                    />
+                  </th>
+                  <th className="px-3 py-3">Stock Inward Reference No.</th>
+                  <th className="px-3 py-3">Receipt Date</th>
+                  <th className="px-3 py-3 text-right">Source Income / Unloading Income</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {stockInwardCandidates
+                  .filter((row) => !stockInwardLines.some((line) => line.id === row.id))
+                  .map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select Stock Inward ${row.receipt_number}`}
+                          checked={selectedStockInwardIds.includes(row.id)}
+                          onChange={(event) =>
+                            setSelectedStockInwardIds((current) =>
+                              event.target.checked
+                                ? [...current, row.id]
+                                : current.filter((id) => id !== row.id),
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="px-3 py-3 font-medium">{row.receipt_number}</td>
+                      <td className="px-3 py-3">{row.receipt_date}</td>
+                      <td className="px-3 py-3 text-right">{money(row.source_income_amount)}</td>
+                    </tr>
+                  ))}
+                {!stockInwardCandidates.length && (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                      No unbilled Stock Inward entries with positive Source Income were found for
+                      this source and billing period.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStockInwardPickerOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={addSelectedStockInward} disabled={!selectedStockInwardIds.length}>
+              <Plus className="size-3.5" /> Add selected ({selectedStockInwardIds.length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={journalPreviewOpen} onOpenChange={(open) => !generating && setJournalPreviewOpen(open)}>
         <DialogContent className="max-w-3xl">
           <DialogHeader>
@@ -1077,11 +1418,12 @@ export function SourceBilling() {
           <div className="space-y-4">
             <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
               <div className="flex flex-wrap justify-between gap-2">
-                <span><strong>Basis:</strong> adjusted final freight/loading only</span>
-                <span><strong>Total:</strong> {money(previewTotals.freight + previewTotals.loading)}</span>
+                <span><strong>Basis:</strong> adjusted final freight/loading plus Stock Inward source income</span>
+                <span><strong>Total:</strong> {money(previewTotals.freight + previewTotals.loading + previewTotals.unloading)}</span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Gross calculated values are stored for audit but are not posted to this journal.
+                Freight, loading and selected Source Income (Unloading Income) are posted to this
+                journal; approval income and unloading amounts received are not included.
               </p>
             </div>
             <div className="overflow-x-auto rounded-lg border border-border">
@@ -1106,7 +1448,7 @@ export function SourceBilling() {
               </table>
             </div>
             {journalPreviewLines.some((line) => !line.account) && (
-              <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">One or more Source Master accounts are missing or could not be loaded. The database will reject this entry until all three mapped accounts are active in this branch.</p>
+              <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">One or more Source Master accounts are missing or could not be loaded. The database will reject this entry unless the required mapped accounts are active in this branch.</p>
             )}
             {postedJournalEntryId && <p className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-800">Verified from saved journal entry <strong>{postedJournalEntryId}</strong>. The lines above are the actual posted voucher, not only the preview.</p>}
             {generating && <p className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">Posting this exact entry now… Please wait.</p>}
@@ -1123,7 +1465,7 @@ export function SourceBilling() {
             <div>
               <h2 className="text-lg font-semibold">Source Bill {viewing.bill_number}</h2>
               <p className="text-xs text-muted-foreground">
-                Full bill view · source-billed consignments remain non-deletable.
+                Full bill view · billed consignments and Stock Inward receipts are locked.
               </p>
             </div>
             <Button
@@ -1187,9 +1529,13 @@ export function SourceBilling() {
               <p className="font-medium">{viewItems.length}</p>
             </div>
             <div>
+              <span className="text-muted-foreground">Stock Inward source-income entries</span>
+              <p className="font-medium">{viewStockInwardItems.length}</p>
+            </div>
+            <div>
               <span className="text-muted-foreground">Bill totals</span>
               <p className="font-semibold">
-                {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading
+                {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading · {money(viewing.total_unloading_income)} unloading income
               </p>
             </div>
           </div>
@@ -1247,6 +1593,50 @@ export function SourceBilling() {
               </tbody>
             </table>
           </div>
+          <section className="space-y-2">
+            <div>
+              <h3 className="text-sm font-semibold">Stock Inward Source Income (Unloading Income)</h3>
+              <p className="text-xs text-muted-foreground">
+                Source Income only is billed; approval amounts and unloading amounts received are excluded.
+              </p>
+            </div>
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full min-w-[650px] text-sm">
+                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2">Reference No.</th>
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2 text-right">Source Income / Unloading Income</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {viewStockInwardItems.length ? (
+                    viewStockInwardItems.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-2 font-medium">{item.receipt_number}</td>
+                        <td className="px-3 py-2">{item.receipt_date}</td>
+                        <td className="px-3 py-2 text-right">{money(item.source_income_amount)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={3} className="py-6 text-center text-muted-foreground">
+                        No Stock Inward source-income lines on this bill.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {viewStockInwardItems.length > 0 && (
+                  <tfoot className="border-t-2 bg-muted/30 font-semibold">
+                    <tr>
+                      <td colSpan={2} className="px-3 py-2">Unloading Income subtotal</td>
+                      <td className="px-3 py-2 text-right">{money(viewing.total_unloading_income)}</td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </section>
         </section>
       )}
       <Dialog

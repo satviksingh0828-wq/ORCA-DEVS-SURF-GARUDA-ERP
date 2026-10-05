@@ -22,6 +22,7 @@ export type ContractRow = {
   source_asset_ledger_id?: string | null;
   freight_income_ledger_id?: string | null;
   loading_income_ledger_id?: string | null;
+  unloading_income_ledger_id?: string | null;
   // Contract period & status
   start_date?: string;
   end_date?: string;
@@ -78,6 +79,7 @@ export const EMPTY_CONTRACT: ContractRow = {
   source_asset_ledger_id: null,
   freight_income_ledger_id: null,
   loading_income_ledger_id: null,
+  unloading_income_ledger_id: null,
   start_date: "",
   end_date: "",
   status: "active",
@@ -413,6 +415,25 @@ export function ContractForm({
               required
             >
               <option value="">Select loading income account</option>
+              {incomeLedgers.map((ledger) => (
+                <option key={ledger.id} value={ledger.id}>
+                  {ledger.account_name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-medium text-muted-foreground">
+              Unloading Account (Income) <span className="text-destructive">*</span>
+            </Label>
+            <select
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={form.unloading_income_ledger_id ?? ""}
+              onChange={(e) => patch({ unloading_income_ledger_id: e.target.value || null })}
+              disabled={isInactive || !form.branch_id}
+              required
+            >
+              <option value="">Select unloading income account</option>
               {incomeLedgers.map((ledger) => (
                 <option key={ledger.id} value={ledger.id}>
                   {ledger.account_name}

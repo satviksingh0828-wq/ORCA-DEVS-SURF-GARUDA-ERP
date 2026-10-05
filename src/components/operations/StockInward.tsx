@@ -175,7 +175,30 @@ export function StockInward() {
       query = query.eq("stock_inward_sources.source_id", filters.source);
     const { data, error } = await query;
     if (error) toast.error(`Could not load Stock Inward: ${error.message}`);
-    else setRows(data ?? []);
+    else {
+      const receiptRows = data ?? [];
+      const receiptIds = receiptRows.map((row: Row) => row.id);
+      if (receiptIds.length) {
+        const { data: billLinks, error: linksError } = await db
+          .from("ltms_source_bill_stock_inward_items")
+          .select("stock_inward_receipt_id,source_id,bill_id")
+          .in("stock_inward_receipt_id", receiptIds);
+        if (linksError) {
+          toast.error(`Could not load source-billing locks: ${linksError.message}`);
+          setRows(receiptRows);
+        } else {
+          const links = billLinks ?? [];
+          setRows(
+            receiptRows.map((row: Row) => ({
+              ...row,
+              source_bill_items: links.filter((item: any) => item.stock_inward_receipt_id === row.id),
+            })),
+          );
+        }
+      } else {
+        setRows([]);
+      }
+    }
     setLoading(false);
   }, [filters.branch, filters.from, filters.source, filters.to]);
 
@@ -318,6 +341,9 @@ export function StockInward() {
   }
 
   async function deleteReceipt(row: Row) {
+    if (row.source_bill_items?.length) {
+      return toast.error("This Stock Inward receipt is linked to a Source Bill and cannot be deleted");
+    }
     if (
       !window.confirm(
         `Delete Stock Inward receipt ${row.receipt_number ?? ""}? This will remove its sources and package lines.`,
@@ -693,8 +719,10 @@ export function StockInward() {
               size="sm"
               className="ml-auto"
               onClick={() => void deleteReceipt(selectedRow)}
+              disabled={Boolean(selectedRow.source_bill_items?.length)}
+              title={selectedRow.source_bill_items?.length ? "This receipt is linked to a Source Bill" : undefined}
             >
-              <Trash2 className="size-4" /> Delete receipt
+              <Trash2 className="size-4" /> {selectedRow.source_bill_items?.length ? "Source-Billed" : "Delete receipt"}
             </Button>
           </div>
           <div className="grid gap-4 rounded-lg border border-border p-4 text-sm md:grid-cols-3">
@@ -865,8 +893,10 @@ export function StockInward() {
                         size="sm"
                         variant="destructive"
                         onClick={() => void deleteReceipt(row)}
+                        disabled={Boolean(row.source_bill_items?.length)}
+                        title={row.source_bill_items?.length ? "This receipt is linked to a Source Bill" : undefined}
                       >
-                        <Trash2 className="size-4" /> Delete
+                        <Trash2 className="size-4" /> {row.source_bill_items?.length ? "Source-Billed" : "Delete"}
                       </Button>
                     </div>
                     {open && (

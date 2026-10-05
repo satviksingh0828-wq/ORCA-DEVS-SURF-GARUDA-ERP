@@ -22,6 +22,7 @@ const CONTRACT_COLUMNS = [
   "source_asset_ledger_id",
   "freight_income_ledger_id",
   "loading_income_ledger_id",
+  "unloading_income_ledger_id",
   "fixed_monthly_charge",
   "fixed_monthly_charge_note",
   "fixed_yearly_charge",
