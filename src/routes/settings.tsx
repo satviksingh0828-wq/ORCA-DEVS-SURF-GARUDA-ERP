@@ -48,8 +48,7 @@ export const Route = createFileRoute("/settings")({
       { property: "og:title", content: "Settings — ORCA DEVS SURF" },
       {
         property: "og:description",
-        content:
-          "Company profile, branches, departments and theme settings for ORCA DEVS SURF.",
+        content: "Company profile, branches, departments and theme settings for ORCA DEVS SURF.",
       },
     ],
   }),
@@ -80,8 +79,8 @@ const TABS = [
   },
   {
     id: "tms-accounts",
-    label: "LTMS Account",
-    desc: "Driver payroll ledger mappings",
+    label: "LTMS Accounts Map",
+    desc: "LTMS and Workmen ledger mappings",
     icon: Building2,
   },
   {

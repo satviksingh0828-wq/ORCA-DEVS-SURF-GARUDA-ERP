@@ -38,6 +38,11 @@ type Mapping = {
   other_expenditure_payable_ledger_id?: string | null;
   other_income_ledger_id?: string | null;
   other_income_receivable_ledger_id?: string | null;
+  workmen_loading_expenditure_ledger_id?: string | null;
+  workmen_unloading_expenditure_ledger_id?: string | null;
+  workmen_payout_liability_ledger_id?: string | null;
+  workmen_additional_pay_expenditure_ledger_id?: string | null;
+  workmen_deduction_income_ledger_id?: string | null;
 };
 
 const FIELDS = [
@@ -67,6 +72,11 @@ const FIELDS = [
   ["other_expenditure_payable_ledger_id", "Other Expenditure Payable", "liability"],
   ["other_income_ledger_id", "Other Income", "income"],
   ["other_income_receivable_ledger_id", "Other Income Receivable", "asset"],
+  ["workmen_loading_expenditure_ledger_id", "Loading Expenditure", "expenditure"],
+  ["workmen_unloading_expenditure_ledger_id", "Unloading Expenditure", "expenditure"],
+  ["workmen_payout_liability_ledger_id", "Workmen Payout", "liability"],
+  ["workmen_additional_pay_expenditure_ledger_id", "Workmen Additional Pay", "expenditure"],
+  ["workmen_deduction_income_ledger_id", "Workmen Deduction", "income"],
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number][0];
@@ -145,10 +155,10 @@ export function TMSAccountsSettings() {
   return (
     <div className="animate-fade-up space-y-5">
       <section className="surface-card p-6">
-        <h3 className="text-sm font-semibold">LTMS Account</h3>
+        <h3 className="text-sm font-semibold">LTMS Accounts Map</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Map the ledgers used for driver payroll, vehicle loans, and vehicle EMI accounting. Each
-          mapping is branch-specific.
+          Map the ledgers used for LTMS, Workmen Billing, driver payroll, vehicle loans, and vehicle
+          EMI accounting. Each mapping is branch-specific.
         </p>
         <div className="mt-5 space-y-1.5">
           <label className="text-xs font-medium text-muted-foreground">Branch</label>
@@ -181,7 +191,9 @@ export function TMSAccountsSettings() {
             its own expenditure ledger, including Fuel, Toll, Driver Bata, Hire Charges, and the
             other trip-expense types below. Other Expenditure and Other Expenditure Payable are the
             defaults for general expenditure entries. Other Income and Other Income Receivable are
-            the defaults for general income entries.
+            the defaults for general income entries. Loading and Unloading use expenditure ledgers;
+            Workmen Payout uses a liability ledger; Workmen Additional Pay uses an expenditure
+            ledger; and Workmen Deduction uses an income ledger.
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map(([key, label, type]) => (
