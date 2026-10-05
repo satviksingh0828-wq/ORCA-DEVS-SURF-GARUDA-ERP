@@ -50,6 +50,7 @@ type Bill = {
   deduction_amount: number | string;
   deduction_note: string | null;
   grand_total: number | string;
+  journal_entry_id?: string | null;
   branch?: { branch_name?: string | null } | null;
 };
 type BillItem = Entry & {
@@ -247,7 +248,7 @@ export function WorkmenBilling() {
     let query = db
       .from("workmen_bills")
       .select(
-        "id,bill_number,bill_date,period_from,period_to,total_loading,total_unloading,additional_pay_amount,additional_pay_note,deduction_amount,deduction_note,grand_total,branch:branches(branch_name)",
+        "id,bill_number,bill_date,period_from,period_to,total_loading,total_unloading,additional_pay_amount,additional_pay_note,deduction_amount,deduction_note,grand_total,journal_entry_id,branch:branches(branch_name)",
       )
       .is("deleted_at", null)
       .order("bill_date", { ascending: false });
@@ -386,7 +387,7 @@ export function WorkmenBilling() {
     });
     setSaving(false);
     if (error) return toast.error(`Could not create Workmen Bill: ${error.message}`);
-    toast.success("Workmen Bill created");
+    toast.success("Workmen Bill created and journal entry posted");
     setScreen("list");
     setSelected([]);
     await Promise.all([loadCandidates(), loadBills()]);
@@ -470,7 +471,12 @@ export function WorkmenBilling() {
               <tbody>
                 {bills.map((bill) => (
                   <tr key={bill.id} className="border-t border-border">
-                    <td className="px-3 py-3 font-medium">{bill.bill_number}</td>
+                    <td className="px-3 py-3 font-medium">
+                      {bill.bill_number}
+                      {bill.journal_entry_id && (
+                        <p className="text-xs font-normal text-muted-foreground">Journal posted</p>
+                      )}
+                    </td>
                     <td className="px-3 py-3">{bill.bill_date}</td>
                     <td className="px-3 py-3">{bill.branch?.branch_name ?? "—"}</td>
                     <td className="px-3 py-3 text-right">{money(bill.total_loading)}</td>
@@ -485,14 +491,16 @@ export function WorkmenBilling() {
                         <Button size="sm" variant="outline" onClick={() => void viewBill(bill)}>
                           <Eye className="size-3.5" /> View
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="destructive"
-                          onClick={() => void deleteBill(bill)}
-                          disabled={loading}
-                        >
-                          <Trash2 className="size-3.5" /> Delete
-                        </Button>
+                        {!bill.journal_entry_id && (
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => void deleteBill(bill)}
+                            disabled={loading}
+                          >
+                            <Trash2 className="size-3.5" /> Delete
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -526,17 +534,19 @@ export function WorkmenBilling() {
             <Button variant="outline" size="sm" onClick={() => setScreen("list")}>
               Back to bills
             </Button>
-            <Button
-              variant="destructive"
-              size="sm"
-              onClick={() => void deleteBill(viewing)}
-              disabled={loading}
-            >
-              <Trash2 className="size-3.5" /> Delete Bill
-            </Button>
+            {!viewing.journal_entry_id && (
+              <Button
+                variant="destructive"
+                size="sm"
+                onClick={() => void deleteBill(viewing)}
+                disabled={loading}
+              >
+                <Trash2 className="size-3.5" /> Delete Bill
+              </Button>
+            )}
           </div>
         </div>
-        <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-5">
           <div>
             <p className="text-muted-foreground">Branch</p>
             <p className="font-medium">{viewing.branch?.branch_name ?? "—"}</p>
@@ -554,6 +564,12 @@ export function WorkmenBilling() {
           <div>
             <p className="text-muted-foreground">Net Total</p>
             <p className="font-semibold">{money(viewing.grand_total)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Journal Entry</p>
+            <p className="break-all font-medium">
+              {viewing.journal_entry_id ?? "Not posted (legacy bill)"}
+            </p>
           </div>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
