@@ -196,14 +196,6 @@ function LoadingChargesReportContent() {
                 .order("from_value"),
             )
           : Promise.resolve([] as RateEntry[]),
-        sourceIds.length
-          ? fetchAll<SourceUnloadingSlab>(() =>
-              supabase
-                .from("source_unloading_charge_slabs")
-                .select("contract_id,package_type,basis,charge_mode,amount")
-                .in("contract_id", sourceIds),
-            )
-          : Promise.resolve([] as SourceUnloadingSlab[]),
       ]);
       const types = new Map(rateTypes.map((type) => [type.id, type]));
       const packagesByConsignment = new Map<string, PackageRow[]>();
@@ -695,7 +687,6 @@ type InwardReceiptRow = {
   branch?: { branch_name?: string | null } | null;
   stock_inward_packages?: {
     package_rate_type_id: string;
-    source_id: string;
     package_type?: string | null;
     quantity?: number | string | null;
     weight_kg?: number | string | null;
@@ -703,14 +694,6 @@ type InwardReceiptRow = {
 };
 
 type InwardAdjustment = { deduction: string; addition: string };
-type SourceUnloadingSlab = {
-  contract_id: string;
-  basis: "quantity" | "weight";
-  from_value: number | string;
-  to_value: number | string | null;
-  charge_mode: "fixed" | "rate";
-  amount: number | string;
-};
 
 function InwardReceiptChargesReport() {
   const [fromDate, setFromDate] = useState(monthStart);
@@ -740,7 +723,7 @@ function InwardReceiptChargesReport() {
       let query = supabase
         .from("stock_inward_receipts")
         .select(
-          "id,branch_id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_deduction,additional_unloading,branch:branches(branch_name),stock_inward_packages(package_rate_type_id,source_id,package_type,quantity,weight_kg)",
+          "id,branch_id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_deduction,additional_unloading,branch:branches(branch_name),stock_inward_packages(package_rate_type_id,package_type,quantity,weight_kg)",
         )
         .gte("receipt_date", fromDate)
         .lte("receipt_date", toDate)
@@ -749,12 +732,7 @@ function InwardReceiptChargesReport() {
       if (branchId !== "all") query = query.eq("branch_id", branchId);
       const data = await fetchAll<InwardReceiptRow>(() => query);
       const branchIds = [...new Set(data.map((row) => row.branch_id))];
-      const sourceIds = [
-        ...new Set(
-          data.flatMap((row) => (row.stock_inward_packages ?? []).map((item) => item.source_id)),
-        ),
-      ];
-      const [rateTypes, rateEntries, sourceSlabs] = await Promise.all([
+      const [rateTypes, rateEntries] = await Promise.all([
         branchIds.length
           ? fetchAll<RateType>(() =>
               supabase
@@ -773,15 +751,6 @@ function InwardReceiptChargesReport() {
                 .order("from_value"),
             )
           : Promise.resolve([] as RateEntry[]),
-        sourceIds.length
-          ? fetchAll<SourceUnloadingSlab>(() =>
-              supabase
-                .from("source_unloading_charge_slabs")
-                .select("contract_id,basis,from_value,to_value,charge_mode,amount")
-                .in("contract_id", sourceIds)
-                .order("from_value"),
-            )
-          : Promise.resolve([] as SourceUnloadingSlab[]),
       ]);
       const types = new Map(rateTypes.map((type) => [type.id, type]));
       const nextAdjustments: Record<string, InwardAdjustment> = {};
@@ -790,22 +759,6 @@ function InwardReceiptChargesReport() {
           const calculated = (row.stock_inward_packages ?? []).reduce((total, item) => {
             const type = types.get(item.package_rate_type_id);
             const measure = type?.basis === "weight" ? num(item.weight_kg) : num(item.quantity);
-            const sourceSlab = sourceSlabs
-              .filter((slab) => slab.contract_id === item.source_id && slab.basis === type?.basis)
-              .sort((a, b) => num(b.from_value) - num(a.from_value))
-              .find(
-                (slab) =>
-                  num(slab.from_value) <= measure &&
-                  (slab.to_value == null || measure <= num(slab.to_value)),
-              );
-            if (sourceSlab) {
-              return (
-                total +
-                (sourceSlab.charge_mode === "rate"
-                  ? num(sourceSlab.amount) * measure
-                  : num(sourceSlab.amount))
-              );
-            }
             const slab = rateEntries
               .filter((entry) => entry.package_rate_type_id === item.package_rate_type_id)
               .sort((a, b) => num(b.from_value) - num(a.from_value))
