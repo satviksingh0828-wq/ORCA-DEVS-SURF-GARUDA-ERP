@@ -131,6 +131,9 @@ type StockIncomeLine = {
   id: string;
   receipt_number: string;
   receipt_date: string;
+  calculated_source_income: number;
+  source_income_deduction: number;
+  additional_source_income: number;
   source_income_amount: number;
 };
 type StockIncomeRateType = {
@@ -182,6 +185,9 @@ type StockInwardBillItem = {
   source_id: string;
   receipt_number: string;
   receipt_date: string;
+  calculated_source_income: number | string;
+  source_income_deduction: number | string;
+  additional_source_income: number | string;
   source_income_amount: number | string;
 };
 
@@ -271,7 +277,7 @@ export function SourceBilling() {
         fetchAll<StockInwardBillItem>(() =>
           (supabase as any)
             .from("ltms_source_bill_stock_inward_items")
-            .select("id,bill_id,stock_inward_receipt_id,source_id,receipt_number,receipt_date,source_income_amount")
+            .select("id,bill_id,stock_inward_receipt_id,source_id,receipt_number,receipt_date,calculated_source_income,source_income_deduction,additional_source_income,source_income_amount")
             .eq("bill_id", billId)
             .order("receipt_date", { ascending: false }),
         ),
@@ -546,11 +552,15 @@ export function SourceBilling() {
             return sum + (slab ? (type.charge_mode === "rate" ? rate * measure : rate) : 0);
           }, 0);
         if (sourceIncome <= 0) return [];
+        const calculatedSourceIncome = Math.round((sourceIncome + Number.EPSILON) * 100) / 100;
         return [{
           id: receipt.id,
           receipt_number: receipt.receipt_number,
           receipt_date: receipt.receipt_date,
-          source_income_amount: Math.round((sourceIncome + Number.EPSILON) * 100) / 100,
+          calculated_source_income: calculatedSourceIncome,
+          source_income_deduction: 0,
+          additional_source_income: 0,
+          source_income_amount: calculatedSourceIncome,
         }];
       });
       setStockInwardCandidates(nextCandidates);
@@ -567,7 +577,15 @@ export function SourceBilling() {
       (row) => selectedStockInwardIds.includes(row.id) && !stockInwardLines.some((line) => line.id === row.id),
     );
     if (!selected.length) return toast.error("Select at least one Stock Inward entry");
-    setStockInwardLines((current) => [...current, ...selected]);
+    setStockInwardLines((current) => [
+      ...current,
+      ...selected.map((line) => ({
+        ...line,
+        source_income_deduction: 0,
+        additional_source_income: 0,
+        source_income_amount: line.calculated_source_income,
+      })),
+    ]);
     setSelectedStockInwardIds([]);
     setStockInwardPickerOpen(false);
   }
@@ -592,6 +610,28 @@ export function SourceBilling() {
         next.final_loading = Math.max(
           0,
           next.calculated_loading - next.loading_deduction + next.additional_loading,
+        );
+        return next;
+      }),
+    );
+  }
+  function updateStockIncomeLine(
+    id: string,
+    key: "source_income_deduction" | "additional_source_income",
+    value: string,
+  ) {
+    setStockInwardLines((current) =>
+      current.map((line) => {
+        if (line.id !== id) return line;
+        const adjustment = Math.max(0, Number(value) || 0);
+        const roundedAdjustment = Math.round((adjustment + Number.EPSILON) * 100) / 100;
+        const next = { ...line, [key]: roundedAdjustment };
+        next.source_income_amount = Math.max(
+          0,
+          Math.round(
+            (next.calculated_source_income - next.source_income_deduction + next.additional_source_income + Number.EPSILON) *
+              100,
+          ) / 100,
         );
         return next;
       }),
@@ -638,6 +678,9 @@ export function SourceBilling() {
         })),
         ...stockInwardLines.map((line) => ({
           stock_inward_receipt_id: line.id,
+          calculated_source_income: line.calculated_source_income,
+          source_income_deduction: line.source_income_deduction,
+          additional_source_income: line.additional_source_income,
           source_income_amount: line.source_income_amount,
         })),
       ],
@@ -719,10 +762,20 @@ export function SourceBilling() {
       ),
     [lines],
   );
-  const stockIncomeTotal = useMemo(
-    () => stockInwardLines.reduce((sum, line) => sum + num(line.source_income_amount), 0),
+  const stockIncomeTotals = useMemo(
+    () =>
+      stockInwardLines.reduce(
+        (sum, line) => ({
+          calculated: sum.calculated + num(line.calculated_source_income),
+          addition: sum.addition + num(line.additional_source_income),
+          deduction: sum.deduction + num(line.source_income_deduction),
+          final: sum.final + num(line.source_income_amount),
+        }),
+        { calculated: 0, addition: 0, deduction: 0, final: 0 },
+      ),
     [stockInwardLines],
   );
+  const stockIncomeTotal = stockIncomeTotals.final;
   const selectedBillingSource = sources.find((source) => source.id === form.source);
   const previewTotals = useMemo(
     () => journalPreviewAmounts ?? { ...totals, unloading: stockIncomeTotal },
@@ -1177,17 +1230,20 @@ export function SourceBilling() {
             <div>
               <h3 className="text-sm font-semibold">Stock Inward Source Income</h3>
               <p className="text-xs text-muted-foreground">
-                Receipt reference number and date are saved with the calculated Source Income,
-                posted as Unloading Income.
+                Add or deduct against the calculated Source Income here. The final net is posted as
+                Unloading Income and all amounts are saved with the receipt reference and date.
               </p>
             </div>
             <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full min-w-[650px] text-sm">
+              <table className="w-full min-w-[1050px] text-sm">
                 <thead>
                   <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                     <th className="px-3 py-3">Stock Inward Reference No.</th>
                     <th className="px-3 py-3">Date</th>
-                    <th className="px-3 py-3 text-right">Source Income / Unloading Income</th>
+                    <th className="px-3 py-3 text-right">Calculated Source Income</th>
+                    <th className="px-3 py-3 text-right">Addition</th>
+                    <th className="px-3 py-3 text-right">Deduction</th>
+                    <th className="px-3 py-3 text-right">Final Source Income / Unloading Income</th>
                     <th className="px-3 py-3 text-center">Action</th>
                   </tr>
                 </thead>
@@ -1197,7 +1253,34 @@ export function SourceBilling() {
                       <tr key={line.id}>
                         <td className="px-3 py-3 font-medium">{line.receipt_number}</td>
                         <td className="px-3 py-3">{line.receipt_date}</td>
-                        <td className="px-3 py-3 text-right">{money(line.source_income_amount)}</td>
+                        <td className="px-3 py-3 text-right">{money(line.calculated_source_income)}</td>
+                        <td className="px-3 py-3">
+                          <Input
+                            className="ml-auto h-8 w-28 text-right"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            aria-label={`Additional source income for ${line.receipt_number}`}
+                            value={line.additional_source_income || ""}
+                            onChange={(event) =>
+                              updateStockIncomeLine(line.id, "additional_source_income", event.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-3">
+                          <Input
+                            className="ml-auto h-8 w-28 text-right"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            aria-label={`Source income deduction for ${line.receipt_number}`}
+                            value={line.source_income_deduction || ""}
+                            onChange={(event) =>
+                              updateStockIncomeLine(line.id, "source_income_deduction", event.target.value)
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-3 text-right font-medium">{money(line.source_income_amount)}</td>
                         <td className="px-3 py-3 text-center">
                           <Button
                             size="sm"
@@ -1211,7 +1294,7 @@ export function SourceBilling() {
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={4} className="py-6 text-center text-muted-foreground">
+                      <td colSpan={7} className="py-6 text-center text-muted-foreground">
                         No Stock Inward source income selected. Use Load Stock Inward.
                       </td>
                     </tr>
@@ -1223,6 +1306,9 @@ export function SourceBilling() {
                       <td colSpan={2} className="px-3 py-3">
                         Total ({stockInwardLines.length} Stock Inward entries)
                       </td>
+                      <td className="px-3 py-3 text-right">{money(stockIncomeTotals.calculated)}</td>
+                      <td className="px-3 py-3 text-right">{money(stockIncomeTotals.addition)}</td>
+                      <td className="px-3 py-3 text-right">{money(stockIncomeTotals.deduction)}</td>
                       <td className="px-3 py-3 text-right">{money(stockIncomeTotal)}</td>
                       <td />
                     </tr>
@@ -1422,8 +1508,9 @@ export function SourceBilling() {
                 <span><strong>Total:</strong> {money(previewTotals.freight + previewTotals.loading + previewTotals.unloading)}</span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Freight, loading and selected Source Income (Unloading Income) are posted to this
-                journal; approval income and unloading amounts received are not included.
+                Freight, loading and final Source Income (calculated amount plus additions minus
+                deductions) are posted as Unloading Income; approval income and unloading amounts
+                received are not included.
               </p>
             </div>
             <div className="overflow-x-auto rounded-lg border border-border">
@@ -1601,12 +1688,15 @@ export function SourceBilling() {
               </p>
             </div>
             <div className="overflow-x-auto rounded-xl border border-border">
-              <table className="w-full min-w-[650px] text-sm">
+              <table className="w-full min-w-[1000px] text-sm">
                 <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
                   <tr>
                     <th className="px-3 py-2">Reference No.</th>
                     <th className="px-3 py-2">Date</th>
-                    <th className="px-3 py-2 text-right">Source Income / Unloading Income</th>
+                    <th className="px-3 py-2 text-right">Calculated Source Income</th>
+                    <th className="px-3 py-2 text-right">Addition</th>
+                    <th className="px-3 py-2 text-right">Deduction</th>
+                    <th className="px-3 py-2 text-right">Final Source Income / Unloading Income</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -1615,12 +1705,15 @@ export function SourceBilling() {
                       <tr key={item.id}>
                         <td className="px-3 py-2 font-medium">{item.receipt_number}</td>
                         <td className="px-3 py-2">{item.receipt_date}</td>
+                        <td className="px-3 py-2 text-right">{money(item.calculated_source_income)}</td>
+                        <td className="px-3 py-2 text-right">{money(item.additional_source_income)}</td>
+                        <td className="px-3 py-2 text-right">{money(item.source_income_deduction)}</td>
                         <td className="px-3 py-2 text-right">{money(item.source_income_amount)}</td>
                       </tr>
                     ))
                   ) : (
                     <tr>
-                      <td colSpan={3} className="py-6 text-center text-muted-foreground">
+                      <td colSpan={6} className="py-6 text-center text-muted-foreground">
                         No Stock Inward source-income lines on this bill.
                       </td>
                     </tr>
@@ -1629,7 +1722,16 @@ export function SourceBilling() {
                 {viewStockInwardItems.length > 0 && (
                   <tfoot className="border-t-2 bg-muted/30 font-semibold">
                     <tr>
-                      <td colSpan={2} className="px-3 py-2">Unloading Income subtotal</td>
+                      <td colSpan={2} className="px-3 py-2">Totals</td>
+                      <td className="px-3 py-2 text-right">
+                        {money(viewStockInwardItems.reduce((sum, item) => sum + num(item.calculated_source_income), 0))}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {money(viewStockInwardItems.reduce((sum, item) => sum + num(item.additional_source_income), 0))}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {money(viewStockInwardItems.reduce((sum, item) => sum + num(item.source_income_deduction), 0))}
+                      </td>
                       <td className="px-3 py-2 text-right">{money(viewing.total_unloading_income)}</td>
                     </tr>
                   </tfoot>
