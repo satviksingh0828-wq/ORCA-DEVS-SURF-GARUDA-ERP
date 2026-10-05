@@ -24,6 +24,7 @@ import { EwayBillList } from "@/components/operations/EwayBillList";
 import { ConsignmentNetReport } from "@/components/reports/ConsignmentNetReport";
 import { SourcesReport } from "@/components/reports/SourcesReport";
 import { MovementList } from "@/components/operations/MovementList";
+import { UnloadingIncomeReport } from "@/components/reports/UnloadingIncomeReport";
 
 const TABS = [
   {
@@ -54,6 +55,12 @@ const TABS = [
     id: "transporter-expenditure",
     label: "Transporter Expenditure",
     desc: "Third-party freight and loading by transporter and route",
+    icon: ReceiptText,
+  },
+  {
+    id: "unloading-income",
+    label: "Unloading Income",
+    desc: "Stock Inward unloading receipts and additional income",
     icon: ReceiptText,
   },
   {
@@ -184,6 +191,7 @@ function ReportsPage() {
           {tab === "update-consignment" && <UpdateConsignmentReport />}
           {tab === "consignment-income" && <ConsignmentIncomeReport />}
           {tab === "transporter-expenditure" && <TransporterExpenditureReport />}
+          {tab === "unloading-income" && <UnloadingIncomeReport />}
           {tab === "loading-charges" && <LoadingChargesReport />}
           {tab === "trip-expenditure" && <TripExpenditureReport />}
           {tab === "consignment-net" && <ConsignmentNetReport />}
