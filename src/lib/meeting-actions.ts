@@ -114,7 +114,13 @@ export const serverCreateMeeting = createServerFn({ method: "POST" })
     if (meetingError || !meeting) throw new Error("Could not start the meeting.");
 
     const memberRows = [
-      { meeting_id: meeting.id, user_id: user.id, status: "joined", joined_at: now },
+      {
+        meeting_id: meeting.id,
+        user_id: user.id,
+        status: "joined",
+        joined_at: now,
+        last_seen_at: now,
+      },
       ...((invitees ?? []) as { id: string }[]).map(({ id }) => ({
         meeting_id: meeting.id,
         user_id: id,
@@ -138,6 +144,8 @@ export const serverListMeetings = createServerFn({ method: "POST" })
   .validator((data: { sessionToken: string }) => data)
   .handler(async ({ data }): Promise<MeetRecord[]> => {
     const { db, user } = await getActor(data.sessionToken);
+    const { error: cleanupError } = await db.rpc("meet_cleanup_abandoned_empty_live");
+    if (cleanupError) throw new Error("Could not refresh meetings. Please try again.");
     let meetingRows: MeetingRow[] = [];
     if (user.role === "admin") {
       const { data: rows, error } = await db
@@ -217,23 +225,13 @@ export const serverJoinMeeting = createServerFn({ method: "POST" })
   .validator((data: { sessionToken: string; meetingId: string }) => data)
   .handler(async ({ data }): Promise<{ joinedAt: string; signalCursor: number }> => {
     const { db, user } = await getActor(data.sessionToken);
-    const member = await requireMeetingAccess(db, data.meetingId, user.id);
-    const { data: meeting, error: meetingError } = await db
-      .from("meetings")
-      .select("status")
-      .eq("id", data.meetingId)
-      .maybeSingle();
-    if (meetingError || !meeting || meeting.status !== "live")
-      throw new Error("This meeting has ended.");
-    const joinedAt = new Date().toISOString();
-    if (member.status !== "joined") {
-      const { error } = await db
-        .from("meeting_participants")
-        .update({ status: "joined", joined_at: joinedAt, left_at: null })
-        .eq("meeting_id", data.meetingId)
-        .eq("user_id", user.id);
-      if (error) throw new Error("Could not join the meeting.");
-    }
+    await requireMeetingAccess(db, data.meetingId, user.id);
+    const { data: joinedAtValue, error: joinError } = await db.rpc("meet_join_participant", {
+      p_meeting_id: data.meetingId,
+      p_user_id: user.id,
+    });
+    if (joinError || !joinedAtValue) throw new Error("This meeting ended or could not be joined.");
+    const joinedAt = String(joinedAtValue);
     const { data: latestSignal } = await db
       .from("meeting_signals")
       .select("id")
@@ -286,16 +284,27 @@ export const serverMeetingSnapshot = createServerFn({ method: "POST" })
     },
   );
 
+export const serverHeartbeatMeeting = createServerFn({ method: "POST" })
+  .validator((data: { sessionToken: string; meetingId: string }) => data)
+  .handler(async ({ data }): Promise<void> => {
+    const { db, user } = await getActor(data.sessionToken);
+    await requireMeetingAccess(db, data.meetingId, user.id);
+    const { data: active, error } = await db.rpc("meet_touch_participant", {
+      p_meeting_id: data.meetingId,
+      p_user_id: user.id,
+    });
+    if (error || !active) throw new Error("This meeting is no longer active.");
+  });
+
 export const serverLeaveMeeting = createServerFn({ method: "POST" })
   .validator((data: { sessionToken: string; meetingId: string }) => data)
   .handler(async ({ data }): Promise<void> => {
     const { db, user } = await getActor(data.sessionToken);
     await requireMeetingAccess(db, data.meetingId, user.id);
-    const { error } = await db
-      .from("meeting_participants")
-      .update({ status: "left", left_at: new Date().toISOString() })
-      .eq("meeting_id", data.meetingId)
-      .eq("user_id", user.id);
+    const { error } = await db.rpc("meet_leave_and_delete_if_empty", {
+      p_meeting_id: data.meetingId,
+      p_user_id: user.id,
+    });
     if (error) throw new Error("Could not leave the meeting.");
   });
 

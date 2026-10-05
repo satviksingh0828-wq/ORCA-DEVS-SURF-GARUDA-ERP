@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 import {
   serverCreateMeeting,
   serverEndMeeting,
+  serverHeartbeatMeeting,
   serverJoinMeeting,
   serverLeaveMeeting,
   serverListMeetings,
@@ -95,6 +96,12 @@ export function MeetPanel({ onExpandChange }: { onExpandChange: (expanded: boole
         setError(err instanceof Error ? err.message : "Could not load users."),
       );
   }, [refreshMeetings, isAdmin, sessionToken]);
+
+  useEffect(() => {
+    if (!sessionToken || activeCall) return;
+    const timer = window.setInterval(() => void refreshMeetings(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [sessionToken, activeCall, refreshMeetings]);
 
   const enterMeeting = useCallback(
     async (meeting: MeetRecord) => {
@@ -554,20 +561,86 @@ function VideoCall({
   const screenStreamRef = useRef<MediaStream | null>(null);
   const peersRef = useRef(new Map<string, RTCPeerConnection>());
   const sendersRef = useRef(new Map<string, { audio?: RTCRtpSender; video?: RTCRtpSender }>());
+  const remoteStreamsRef = useRef(new Map<string, MediaStream>());
+  const remoteVideoRefs = useRef(new Map<string, HTMLVideoElement>());
   const queuedIceRef = useRef(new Map<string, RTCIceCandidateInit[]>());
+  const iceRestartingRef = useRef(new Set<string>());
   const signalCursorRef = useRef(call.signalCursor);
   const mountedRef = useRef(true);
+  const mediaRequestInProgressRef = useRef(false);
   const [participants, setParticipants] = useState<MeetParticipant[]>([]);
   const [remoteStreams, setRemoteStreams] = useState<Map<string, MediaStream>>(new Map());
+  const [peerStates, setPeerStates] = useState<Map<string, RTCPeerConnectionState>>(new Map());
   const [remoteMedia, setRemoteMedia] = useState<
     Map<string, { audio: boolean; video: boolean; sharing: boolean }>
   >(new Map());
+  const [mutedPeers, setMutedPeers] = useState<Set<string>>(new Set());
   const [mediaReady, setMediaReady] = useState(false);
   const [micOn, setMicOn] = useState(true);
   const [cameraOn, setCameraOn] = useState(true);
   const [sharing, setSharing] = useState(false);
   const [mediaError, setMediaError] = useState("");
+  const [requestingMedia, setRequestingMedia] = useState(false);
   const myId = currentUser?.id ?? "";
+
+  const requestMedia = useCallback(async () => {
+    if (mediaRequestInProgressRef.current) return;
+    mediaRequestInProgressRef.current = true;
+    setRequestingMedia(true);
+    setMediaError("");
+    try {
+      if (!navigator.mediaDevices?.getUserMedia)
+        throw new Error("Camera and microphone access is not supported by this browser.");
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: { facingMode: { ideal: "user" } },
+      });
+      if (!mountedRef.current) {
+        stream.getTracks().forEach((track) => track.stop());
+        return;
+      }
+      localStreamRef.current?.getTracks().forEach((track) => track.stop());
+      localStreamRef.current = stream;
+      const audio = stream.getAudioTracks()[0] ?? null;
+      const camera = stream.getVideoTracks()[0] ?? null;
+      for (const senders of sendersRef.current.values()) {
+        if (senders.audio) await senders.audio.replaceTrack(audio).catch(() => undefined);
+        if (senders.video && !screenStreamRef.current)
+          await senders.video.replaceTrack(camera).catch(() => undefined);
+      }
+      if (audio) audio.enabled = true;
+      if (camera) camera.enabled = true;
+      setMicOn(Boolean(audio));
+      setCameraOn(Boolean(camera));
+      if (!audio && !camera) setMediaError("No camera or microphone was found on this device.");
+    } catch (err) {
+      const errorName = err instanceof Error ? err.name : "";
+      const message =
+        errorName === "NotAllowedError" || errorName === "PermissionDeniedError"
+          ? "Camera/microphone permission is blocked. Allow access in your browser’s site settings, then retry."
+          : errorName === "NotFoundError" || errorName === "DevicesNotFoundError"
+            ? "No camera or microphone was found. Connect a device, then retry."
+            : err instanceof Error
+              ? err.message
+              : "Could not access your camera or microphone. Check browser permissions, then retry.";
+      setMediaError(message);
+      setMicOn(false);
+      setCameraOn(false);
+    } finally {
+      mediaRequestInProgressRef.current = false;
+      setRequestingMedia(false);
+      if (mountedRef.current) setMediaReady(true);
+    }
+  }, []);
+
+  const attachLocalVideo = useCallback((node: HTMLVideoElement | null) => {
+    localVideoRef.current = node;
+    const stream = screenStreamRef.current ?? localStreamRef.current;
+    if (node && stream) {
+      node.srcObject = stream;
+      void node.play().catch(() => undefined);
+    }
+  }, []);
 
   const signal = useCallback(
     async (receiverId: string, kind: MeetSignal["kind"], payload: MeetSignalPayload) => {
@@ -604,6 +677,8 @@ function VideoCall({
         if (screen) tracks.video = pc.addTrack(screen, screenStreamRef.current!);
         else if (camera) tracks.video = pc.addTrack(camera, local);
       }
+      if (!tracks.audio)
+        tracks.audio = pc.addTransceiver("audio", { direction: "sendrecv" }).sender;
       if (!tracks.video)
         tracks.video = pc.addTransceiver("video", { direction: "sendrecv" }).sender;
       pc.onicecandidate = (event) => {
@@ -617,10 +692,46 @@ function VideoCall({
         });
       };
       pc.ontrack = (event) => {
-        const stream = event.streams[0] ?? new MediaStream([event.track]);
+        const stream = remoteStreamsRef.current.get(peerId) ?? new MediaStream();
+        if (!stream.getTracks().some((track) => track.id === event.track.id))
+          stream.addTrack(event.track);
+        remoteStreamsRef.current.set(peerId, stream);
+        event.track.onended = () => {
+          stream.removeTrack(event.track);
+          if (stream.getTracks().length === 0) remoteStreamsRef.current.delete(peerId);
+          setRemoteStreams((previous) => {
+            const next = new Map(previous);
+            if (stream.getTracks().length) next.set(peerId, stream);
+            else next.delete(peerId);
+            return next;
+          });
+        };
         setRemoteStreams((previous) => new Map(previous).set(peerId, stream));
       };
+      pc.onconnectionstatechange = () => {
+        if (!mountedRef.current) return;
+        setPeerStates((previous) => new Map(previous).set(peerId, pc.connectionState));
+        if (pc.connectionState === "connected") iceRestartingRef.current.delete(peerId);
+        if (
+          pc.connectionState === "failed" &&
+          myId.localeCompare(peerId) > 0 &&
+          !iceRestartingRef.current.has(peerId)
+        ) {
+          iceRestartingRef.current.add(peerId);
+          void (async () => {
+            try {
+              const offer = await pc.createOffer({ iceRestart: true });
+              await pc.setLocalDescription(offer);
+              if (pc.localDescription)
+                await signal(peerId, "offer", toDescriptionPayload(pc.localDescription));
+            } catch {
+              iceRestartingRef.current.delete(peerId);
+            }
+          })();
+        }
+      };
       peersRef.current.set(peerId, pc);
+      setPeerStates((previous) => new Map(previous).set(peerId, pc.connectionState));
       sendersRef.current.set(peerId, tracks);
       void signal(peerId, "media", {
         audio: micOn,
@@ -629,7 +740,7 @@ function VideoCall({
       });
       return pc;
     },
-    [signal, micOn, cameraOn],
+    [signal, micOn, cameraOn, myId],
   );
 
   const processSignal = useCallback(
@@ -700,48 +811,38 @@ function VideoCall({
 
   useEffect(() => {
     mountedRef.current = true;
-    let disposed = false;
-    const stopMedia = () => {
-      for (const peer of peersRef.current.values()) peer.close();
-      peersRef.current.clear();
-      sendersRef.current.clear();
+    const peers = peersRef.current;
+    const senders = sendersRef.current;
+    const remoteStreams = remoteStreamsRef.current;
+    const remoteVideos = remoteVideoRefs.current;
+    void requestMedia();
+    return () => {
+      mountedRef.current = false;
+      for (const peer of peers.values()) peer.close();
+      peers.clear();
+      senders.clear();
+      for (const stream of remoteStreams.values())
+        stream.getTracks().forEach((track) => track.stop());
+      remoteStreams.clear();
+      remoteVideos.clear();
       localStreamRef.current?.getTracks().forEach((track) => track.stop());
       screenStreamRef.current?.getTracks().forEach((track) => track.stop());
       localStreamRef.current = null;
       screenStreamRef.current = null;
     };
-    void (async () => {
-      try {
-        if (!navigator.mediaDevices?.getUserMedia)
-          throw new Error("This browser does not support camera and microphone access.");
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: { facingMode: "user" },
-        });
-        if (disposed) {
-          stream.getTracks().forEach((track) => track.stop());
-          return;
-        }
-        localStreamRef.current = stream;
-        if (localVideoRef.current) localVideoRef.current.srcObject = stream;
-      } catch (err) {
-        const reason =
-          err instanceof Error ? err.message : "Camera or microphone permission was not granted.";
-        if (!disposed) {
-          setMediaError(reason);
-          setMicOn(false);
-          setCameraOn(false);
-        }
-      } finally {
-        if (!disposed) setMediaReady(true);
-      }
-    })();
-    return () => {
-      disposed = true;
-      mountedRef.current = false;
-      stopMedia();
+  }, [call.meeting.id, requestMedia]);
+
+  useEffect(() => {
+    if (!sessionToken || !myId) return;
+    const heartbeat = () => {
+      void serverHeartbeatMeeting({
+        data: { sessionToken, meetingId: call.meeting.id },
+      }).catch(() => undefined);
     };
-  }, [call.meeting.id]);
+    heartbeat();
+    const timer = window.setInterval(heartbeat, 20_000);
+    return () => window.clearInterval(timer);
+  }, [call.meeting.id, sessionToken, myId]);
 
   useEffect(() => {
     if (!mediaReady || !sessionToken || !myId) return;
@@ -770,8 +871,8 @@ function VideoCall({
             peersRef.current.has(person.id)
           )
             continue;
-          // Only the newer joiner sends the initial offer; this avoids glare.
-          if (person.joined_at < current.joined_at) {
+          // Stable user-id ordering picks one offerer per pair, avoiding glare after retries.
+          if (myId.localeCompare(person.id) > 0) {
             const pc = makePeer(person.id);
             try {
               const offer = await pc.createOffer();
@@ -789,6 +890,11 @@ function VideoCall({
             peer.close();
             peersRef.current.delete(peerId);
             sendersRef.current.delete(peerId);
+            remoteStreamsRef.current
+              .get(peerId)
+              ?.getTracks()
+              .forEach((track) => track.stop());
+            remoteStreamsRef.current.delete(peerId);
             setRemoteStreams((previous) => {
               const next = new Map(previous);
               next.delete(peerId);
@@ -796,6 +902,17 @@ function VideoCall({
             });
             setRemoteMedia((previous) => {
               const next = new Map(previous);
+              next.delete(peerId);
+              return next;
+            });
+            setPeerStates((previous) => {
+              const next = new Map(previous);
+              next.delete(peerId);
+              return next;
+            });
+            setMutedPeers((previous) => {
+              if (!previous.has(peerId)) return previous;
+              const next = new Set(previous);
               next.delete(peerId);
               return next;
             });
@@ -854,8 +971,18 @@ function VideoCall({
       void signal(peerId, "media", { audio: micOn, video: cameraOn, sharing });
   }, [micOn, cameraOn, sharing, mediaReady, signal]);
 
-  const toggleMic = () => setMicOn((value) => !value);
+  const toggleMic = () => {
+    if (!localStreamRef.current?.getAudioTracks().length) {
+      void requestMedia();
+      return;
+    }
+    setMicOn((value) => !value);
+  };
   const toggleCamera = () => {
+    if (!localStreamRef.current?.getVideoTracks().length) {
+      void requestMedia();
+      return;
+    }
     const next = !cameraOn;
     localStreamRef.current?.getVideoTracks().forEach((track) => {
       track.enabled = next;
@@ -927,7 +1054,11 @@ function VideoCall({
             <p className="text-xs font-semibold">{call.meeting.title}</p>
             <p className="mt-0.5 text-[10px] text-white/55">
               {allParticipants.length} participant{allParticipants.length === 1 ? "" : "s"} ·{" "}
-              {mediaReady ? "Connected" : "Connecting media…"}
+              {!mediaReady
+                ? "Requesting camera & mic…"
+                : localStreamRef.current
+                  ? "Camera & mic ready"
+                  : "Camera/mic unavailable"}
             </p>
           </div>
           <button
@@ -943,9 +1074,17 @@ function VideoCall({
         {mediaError && (
           <div
             role="alert"
-            className="mb-3 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs text-amber-100"
+            className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs text-amber-100"
           >
-            {mediaError} You can still join with camera and microphone off.
+            <span>{mediaError}</span>
+            <button
+              type="button"
+              onClick={() => void requestMedia()}
+              disabled={requestingMedia}
+              className="rounded-lg border border-amber-200/30 px-2.5 py-1.5 font-semibold hover:bg-amber-100/10 disabled:opacity-50"
+            >
+              {requestingMedia ? "Requesting…" : "Allow camera & mic"}
+            </button>
           </div>
         )}
         <div
@@ -957,6 +1096,7 @@ function VideoCall({
               ? { audio: micOn, video: cameraOn, sharing }
               : (remoteMedia.get(person.id) ?? { audio: true, video: true, sharing: false });
             const stream = isLocal ? undefined : remoteStreams.get(person.id);
+            const peerState = isLocal ? "connected" : (peerStates.get(person.id) ?? "new");
             const showVideo = isLocal ? cameraOn || sharing : media.video || media.sharing;
             return (
               <article
@@ -970,15 +1110,28 @@ function VideoCall({
                   <video
                     ref={
                       isLocal
-                        ? localVideoRef
+                        ? attachLocalVideo
                         : (node) => {
-                            if (node && stream && node.srcObject !== stream)
-                              node.srcObject = stream;
+                            if (!node) {
+                              remoteVideoRefs.current.delete(person.id);
+                              return;
+                            }
+                            remoteVideoRefs.current.set(person.id, node);
+                            if (stream && node.srcObject !== stream) node.srcObject = stream;
+                            void node.play().catch(() => {
+                              node.muted = true;
+                              setMutedPeers((previous) =>
+                                previous.has(person.id)
+                                  ? previous
+                                  : new Set(previous).add(person.id),
+                              );
+                              void node.play().catch(() => undefined);
+                            });
                           }
                     }
                     autoPlay
                     playsInline
-                    muted={isLocal}
+                    muted={isLocal || mutedPeers.has(person.id)}
                     className={cn(
                       "absolute inset-0 size-full object-cover",
                       isLocal && !sharing && "[transform:scaleX(-1)]",
@@ -990,9 +1143,39 @@ function VideoCall({
                       {initials(displayName(person))}
                     </span>
                     {!isLocal && (
-                      <p className="mt-3 text-[10px] text-white/50">Waiting for video</p>
+                      <p className="mt-3 px-3 text-center text-[10px] text-white/50">
+                        {peerState === "failed"
+                          ? "Connection failed — check the network"
+                          : peerState === "disconnected"
+                            ? "Reconnecting…"
+                            : peerState === "connected" && !media.video
+                              ? "Camera is off"
+                              : peerState === "connected"
+                                ? "Waiting for video"
+                                : "Connecting video…"}
+                      </p>
                     )}
                   </div>
+                )}
+                {!isLocal && mutedPeers.has(person.id) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const video = remoteVideoRefs.current.get(person.id);
+                      if (video) {
+                        video.muted = false;
+                        void video.play().catch(() => undefined);
+                      }
+                      setMutedPeers((previous) => {
+                        const next = new Set(previous);
+                        next.delete(person.id);
+                        return next;
+                      });
+                    }}
+                    className="absolute right-2 top-2 rounded-full bg-black/65 px-2.5 py-1.5 text-[10px] font-medium text-white backdrop-blur"
+                  >
+                    Tap to enable audio
+                  </button>
                 )}
                 <div className="absolute inset-x-0 bottom-0 flex items-end justify-between gap-2 bg-gradient-to-t from-black/75 to-transparent px-3 pb-2.5 pt-8">
                   <span className="truncate text-xs font-medium">
