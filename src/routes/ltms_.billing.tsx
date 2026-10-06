@@ -6,6 +6,7 @@ import {
   Truck,
   Package,
   Banknote,
+  CircleDollarSign,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -19,6 +20,7 @@ import { SourceBilling } from "@/components/reports/SourceBilling";
 import { TransporterBilling } from "@/components/reports/TransporterBilling";
 import { WorkmenBilling } from "@/components/reports/WorkmenBilling";
 import { UnloadingReceived } from "@/components/reports/UnloadingReceived";
+import { ApprovalIncome } from "@/components/reports/ApprovalIncome";
 
 const TABS = [
   {
@@ -38,6 +40,12 @@ const TABS = [
     label: "Unloading Received",
     desc: "Post Stock Inward unloading receipts",
     icon: Banknote,
+  },
+  {
+    id: "approval-income",
+    label: "Approval Income",
+    desc: "Post Stock Inward approval charges",
+    icon: CircleDollarSign,
   },
   {
     id: "transporter-billing",
@@ -152,6 +160,7 @@ function BillingPage() {
           {tab === "trip-billing" && <TripBilling />}
           {tab === "source-billing" && <SourceBilling />}
           {tab === "unloading-received" && <UnloadingReceived />}
+          {tab === "approval-income" && <ApprovalIncome />}
           {tab === "transporter-billing" && <TransporterBilling />}
           {tab === "workmen-billing" && <WorkmenBilling />}
         </div>
