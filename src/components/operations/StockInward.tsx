@@ -37,6 +37,7 @@ type FormState = {
   receiptDate: string;
   unloadingDate: string;
   unloadingAmountReceived: string;
+  unloadingPaymentLedgerId: string;
   additionalIncomeMode: AdditionalIncomeMode;
   approvalAmount: string;
 };
@@ -55,6 +56,12 @@ type UnloadingSlab = {
   amount: number | string;
 };
 type Source = { id: string; branch_id: string | null; contract_name: string };
+type PaymentLedger = {
+  id: string;
+  branch_id: string;
+  account_name: string;
+  ledger_type: "cash" | "bank";
+};
 type Row = any;
 
 const today = new Date();
@@ -66,6 +73,7 @@ const blankForm: FormState = {
   receiptDate: isoToday,
   unloadingDate: isoToday,
   unloadingAmountReceived: "0",
+  unloadingPaymentLedgerId: "",
   additionalIncomeMode: "none",
   approvalAmount: "",
 };
@@ -88,6 +96,7 @@ export function StockInward() {
   const branches = useBranches();
   const [sources, setSources] = useState<Source[]>([]);
   const [packageTypes, setPackageTypes] = useState<PackageType[]>([]);
+  const [paymentLedgers, setPaymentLedgers] = useState<PaymentLedger[]>([]);
   const [unloadingSlabs, setUnloadingSlabs] = useState<UnloadingSlab[]>([]);
   const [rows, setRows] = useState<Row[]>([]);
   const [loading, setLoading] = useState(true);
@@ -165,7 +174,7 @@ export function StockInward() {
     let query = db
       .from("stock_inward_receipts")
       .select(
-        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,additional_income_mode,approval_amount,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,source:contracts(contract_name))",
+        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_received_payment_ledger_id,unloading_received_journal_entry_id,additional_income_mode,approval_amount,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,source:contracts(contract_name))",
       )
       .gte("receipt_date", filters.from)
       .lte("receipt_date", filters.to)
@@ -191,7 +200,9 @@ export function StockInward() {
           setRows(
             receiptRows.map((row: Row) => ({
               ...row,
-              source_bill_items: links.filter((item: any) => item.stock_inward_receipt_id === row.id),
+              source_bill_items: links.filter(
+                (item: any) => item.stock_inward_receipt_id === row.id,
+              ),
             })),
           );
         }
@@ -232,6 +243,32 @@ export function StockInward() {
   useEffect(() => {
     void loadMasters();
   }, []);
+  useEffect(() => {
+    if (!form.branchId) {
+      setPaymentLedgers([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data, error } = await db
+        .from("ledger_accounts")
+        .select("id,branch_id,account_name,ledger_type")
+        .eq("branch_id", form.branchId)
+        .eq("is_active", true)
+        .in("ledger_type", ["cash", "bank"])
+        .order("account_name");
+      if (cancelled) return;
+      if (error) {
+        toast.error(`Could not load branch Cash / Bank accounts: ${error.message}`);
+        setPaymentLedgers([]);
+        return;
+      }
+      setPaymentLedgers((data ?? []) as PaymentLedger[]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [form.branchId]);
   useEffect(() => {
     void loadRows();
   }, [loadRows]);
@@ -278,6 +315,13 @@ export function StockInward() {
       return toast.error("Each package line needs a type, source, quantity and weight");
     if (["approval", "both"].includes(form.additionalIncomeMode) && !Number(form.approvalAmount))
       return toast.error("Approval amount is required for the selected additional income option");
+    const receivedAmount = Number(form.unloadingAmountReceived || calculatedUnloadingAmount || 0);
+    if (!Number.isFinite(receivedAmount) || receivedAmount < 0)
+      return toast.error("Unloading Amount Received must be zero or greater");
+    if (receivedAmount > 0 && !form.unloadingPaymentLedgerId)
+      return toast.error(
+        "Select a Cash / Bank account when Unloading Amount Received is greater than zero",
+      );
 
     setSaving(true);
     const { data: receiptNumber, error: numberError } = await db.rpc("next_branch_series_number", {
@@ -297,9 +341,9 @@ export function StockInward() {
         branch_id: form.branchId,
         receipt_date: form.receiptDate,
         unloading_date: form.unloadingDate,
-        unloading_amount_received: Number(
-          form.unloadingAmountReceived || calculatedUnloadingAmount || 0,
-        ),
+        unloading_amount_received: receivedAmount,
+        unloading_received_payment_ledger_id:
+          receivedAmount > 0 ? form.unloadingPaymentLedgerId : null,
         additional_income_mode: form.additionalIncomeMode,
         approval_amount: ["approval", "both"].includes(form.additionalIncomeMode)
           ? Number(form.approvalAmount)
@@ -341,8 +385,15 @@ export function StockInward() {
   }
 
   async function deleteReceipt(row: Row) {
+    if (row.unloading_received_journal_entry_id) {
+      return toast.error(
+        "This Stock Inward receipt has a posted unloading receipt journal and cannot be deleted",
+      );
+    }
     if (row.source_bill_items?.length) {
-      return toast.error("This Stock Inward receipt is linked to a Source Bill and cannot be deleted");
+      return toast.error(
+        "This Stock Inward receipt is linked to a Source Bill and cannot be deleted",
+      );
     }
     if (
       !window.confirm(
@@ -453,7 +504,14 @@ export function StockInward() {
                 <Label>Branch *</Label>
                 <Select
                   value={form.branchId}
-                  onValueChange={(branchId) => setForm((f) => ({ ...f, branchId, sourceIds: [] }))}
+                  onValueChange={(branchId) =>
+                    setForm((f) => ({
+                      ...f,
+                      branchId,
+                      sourceIds: [],
+                      unloadingPaymentLedgerId: "",
+                    }))
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="Select branch" />
@@ -640,6 +698,33 @@ export function StockInward() {
                   placeholder="0"
                 />
               </div>
+              {Number(form.unloadingAmountReceived || calculatedUnloadingAmount || 0) > 0 && (
+                <div>
+                  <Label>Cash / Bank Account *</Label>
+                  <Select
+                    value={form.unloadingPaymentLedgerId}
+                    onValueChange={(unloadingPaymentLedgerId) =>
+                      setForm((current) => ({ ...current, unloadingPaymentLedgerId }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select branch Cash / Bank account" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {paymentLedgers.map((ledger) => (
+                        <SelectItem key={ledger.id} value={ledger.id}>
+                          {ledger.account_name} ({ledger.ledger_type})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {!paymentLedgers.length && (
+                    <p className="mt-1 text-xs text-destructive">
+                      No active Cash / Bank accounts are configured for this branch.
+                    </p>
+                  )}
+                </div>
+              )}
               <div>
                 <Label>Additional Income</Label>
                 <Select
@@ -719,10 +804,24 @@ export function StockInward() {
               size="sm"
               className="ml-auto"
               onClick={() => void deleteReceipt(selectedRow)}
-              disabled={Boolean(selectedRow.source_bill_items?.length)}
-              title={selectedRow.source_bill_items?.length ? "This receipt is linked to a Source Bill" : undefined}
+              disabled={Boolean(
+                selectedRow.source_bill_items?.length ||
+                selectedRow.unloading_received_journal_entry_id,
+              )}
+              title={
+                selectedRow.unloading_received_journal_entry_id
+                  ? "This receipt has a posted unloading receipt journal"
+                  : selectedRow.source_bill_items?.length
+                    ? "This receipt is linked to a Source Bill"
+                    : undefined
+              }
             >
-              <Trash2 className="size-4" /> {selectedRow.source_bill_items?.length ? "Source-Billed" : "Delete receipt"}
+              <Trash2 className="size-4" />{" "}
+              {selectedRow.unloading_received_journal_entry_id
+                ? "Receipt Posted"
+                : selectedRow.source_bill_items?.length
+                  ? "Source-Billed"
+                  : "Delete receipt"}
             </Button>
           </div>
           <div className="grid gap-4 rounded-lg border border-border p-4 text-sm md:grid-cols-3">
@@ -749,6 +848,18 @@ export function StockInward() {
             <div>
               <p className="text-muted-foreground">Unloading amount received</p>
               <p className="font-medium">₹ {money(selectedRow.unloading_amount_received)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Cash / Bank receipt entry</p>
+              <p className="font-medium">
+                {selectedRow.unloading_received_journal_entry_id
+                  ? `Posted · ${paymentLedgers.find((ledger) => ledger.id === selectedRow.unloading_received_payment_ledger_id)?.account_name ?? "Cash / Bank"}`
+                  : selectedRow.unloading_received_payment_ledger_id
+                    ? (paymentLedgers.find(
+                        (ledger) => ledger.id === selectedRow.unloading_received_payment_ledger_id,
+                      )?.account_name ?? "Account selected · pending posting")
+                    : "Not selected"}
+              </p>
             </div>
             <div>
               <p className="text-muted-foreground">Additional income</p>
@@ -893,10 +1004,23 @@ export function StockInward() {
                         size="sm"
                         variant="destructive"
                         onClick={() => void deleteReceipt(row)}
-                        disabled={Boolean(row.source_bill_items?.length)}
-                        title={row.source_bill_items?.length ? "This receipt is linked to a Source Bill" : undefined}
+                        disabled={Boolean(
+                          row.source_bill_items?.length || row.unloading_received_journal_entry_id,
+                        )}
+                        title={
+                          row.unloading_received_journal_entry_id
+                            ? "This receipt has a posted unloading receipt journal"
+                            : row.source_bill_items?.length
+                              ? "This receipt is linked to a Source Bill"
+                              : undefined
+                        }
                       >
-                        <Trash2 className="size-4" /> {row.source_bill_items?.length ? "Source-Billed" : "Delete"}
+                        <Trash2 className="size-4" />{" "}
+                        {row.unloading_received_journal_entry_id
+                          ? "Receipt Posted"
+                          : row.source_bill_items?.length
+                            ? "Source-Billed"
+                            : "Delete"}
                       </Button>
                     </div>
                     {open && (

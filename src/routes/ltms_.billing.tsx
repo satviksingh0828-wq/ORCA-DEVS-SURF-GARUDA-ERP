@@ -5,6 +5,7 @@ import {
   ReceiptText,
   Truck,
   Package,
+  Banknote,
   PanelLeftClose,
   PanelLeftOpen,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import { TripBilling } from "@/components/reports/TripBilling";
 import { SourceBilling } from "@/components/reports/SourceBilling";
 import { TransporterBilling } from "@/components/reports/TransporterBilling";
 import { WorkmenBilling } from "@/components/reports/WorkmenBilling";
+import { UnloadingReceived } from "@/components/reports/UnloadingReceived";
 
 const TABS = [
   {
@@ -30,6 +32,12 @@ const TABS = [
     label: "Source Billing",
     desc: "Bill consignments by source",
     icon: FileText,
+  },
+  {
+    id: "unloading-received",
+    label: "Unloading Received",
+    desc: "Post Stock Inward unloading receipts",
+    icon: Banknote,
   },
   {
     id: "transporter-billing",
@@ -143,6 +151,7 @@ function BillingPage() {
           </header>
           {tab === "trip-billing" && <TripBilling />}
           {tab === "source-billing" && <SourceBilling />}
+          {tab === "unloading-received" && <UnloadingReceived />}
           {tab === "transporter-billing" && <TransporterBilling />}
           {tab === "workmen-billing" && <WorkmenBilling />}
         </div>
