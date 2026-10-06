@@ -582,6 +582,7 @@ export function ConsignmentList({
 }) {
   const branches = useBranches();
   const { user } = useSession();
+  const allowedBranchIds = user?.role === "basic" ? (user.branchIds ?? []) : null;
   const [rows, setRows] = useState<Record<string, any>[]>([]);
   const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [view, setView] = useState<Record<string, any> | null>(null);
@@ -662,12 +663,19 @@ export function ConsignmentList({
 
   async function loadRows() {
     setLoading(true);
-    const { data, error } = await db
+    let query = db
       .from("consignments")
       .select(
         "*, branch:branches(branch_name,address_line1,address_line2,area_locality,city,state,pin_code,gstin,pan), source:contracts(contract_name), vehicle:vehicles(registration_number,nickname), driver:drivers(full_name,driver_code), rental:rentals(rental_name), transporter:ltms_transporters(transporter_name,gstin,pin_code)",
       )
       .order("created_at", { ascending: false });
+    if (allowedBranchIds !== null) {
+      query = query.in(
+        "branch_id",
+        allowedBranchIds.length ? allowedBranchIds : ["00000000-0000-0000-0000-000000000000"],
+      );
+    }
+    const { data, error } = await query;
     if (error) toast.error(error.message);
     setRows((data ?? []) as Record<string, any>[]);
     setLoading(false);
@@ -737,7 +745,8 @@ export function ConsignmentList({
 
   useEffect(() => {
     void loadRows();
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id, allowedBranchIds?.join(",")]);
   useEffect(() => {
     if (branchId) {
       void loadPreview(branchId);

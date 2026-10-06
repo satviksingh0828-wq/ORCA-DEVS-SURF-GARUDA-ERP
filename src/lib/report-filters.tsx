@@ -2,13 +2,21 @@ import { createContext, useContext } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
 import { financialYearRange } from "@/lib/financial-year";
+import { useSession } from "@/lib/session";
 
 export type ReportFilters = { branchId: string; financialYear: string };
 export const ReportFiltersContext = createContext<ReportFilters>({
   branchId: "all",
   financialYear: "none",
 });
-export const useReportFilters = () => useContext(ReportFiltersContext);
+export function useReportFilters() {
+  const filters = useContext(ReportFiltersContext);
+  const { user } = useSession();
+  if (user?.role === "basic" && user.branchIds.length > 0) {
+    return { ...filters, branchId: user.branchIds[0] };
+  }
+  return filters;
+}
 
 export function reportDateRange(
   financialYear: string,

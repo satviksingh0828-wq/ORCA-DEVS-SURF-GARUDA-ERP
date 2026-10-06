@@ -86,6 +86,8 @@ function currentMonthRange() {
 
 export function TripBilling() {
   const branches = useBranches();
+  const { user } = useSession();
+  const allowedBranchIds = user?.role === "basic" ? (user.branchIds ?? []) : null;
   const defaults = currentMonthRange();
   const [rows, setRows] = useState<BillingTrip[]>([]);
   const [search, setSearch] = useState("");
@@ -96,6 +98,12 @@ export function TripBilling() {
   const [fromDate, setFromDate] = useState(defaults.from);
   const [toDate, setToDate] = useState(defaults.to);
   const [postingStatus, setPostingStatus] = useState<PostingStatus>("not_posted");
+
+  useEffect(() => {
+    if (user?.role === "basic" && branchId === "all" && branches[0]) {
+      setBranchId(branches[0].id);
+    }
+  }, [user?.role, branchId, branches]);
 
   async function load() {
     setLoading(true);
@@ -112,6 +120,12 @@ export function TripBilling() {
         .lte("end_date", toDate)
         .order("end_date", { ascending: false });
       if (branchId !== "all") query = query.eq("branch_id", branchId);
+      if (allowedBranchIds !== null) {
+        query = query.in(
+          "branch_id",
+          allowedBranchIds.length ? allowedBranchIds : ["00000000-0000-0000-0000-000000000000"],
+        );
+      }
       if (postingStatus === "posted") query = query.not("posted_journal_entry_id", "is", null);
       if (postingStatus === "not_posted") query = query.is("posted_journal_entry_id", null);
 
@@ -205,7 +219,7 @@ export function TripBilling() {
     void load();
     // `load` intentionally follows the filter values rather than being memoized.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [branchId, fromDate, toDate, postingStatus]);
+  }, [branchId, fromDate, toDate, postingStatus, user?.id, allowedBranchIds?.join(",")]);
 
   const visible = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -262,7 +276,7 @@ export function TripBilling() {
             <SelectValue placeholder="All Branches" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">All Branches</SelectItem>
+            {user?.role !== "basic" && <SelectItem value="all">All Branches</SelectItem>}
             {branches.map((branch) => (
               <SelectItem key={branch.id} value={branch.id}>
                 {branch.branch_name}

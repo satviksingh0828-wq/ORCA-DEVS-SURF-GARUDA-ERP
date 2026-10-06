@@ -3,6 +3,7 @@ import { Search, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
+import { useSession } from "@/lib/session";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -113,6 +114,8 @@ function routeLabels(m: Movement) {
 }
 export function MovementList() {
   const branches = useBranches();
+  const { user } = useSession();
+  const allowedBranchIds = user?.role === "basic" ? (user.branchIds ?? []) : null;
   const [rows, setRows] = useState<Movement[]>([]);
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
@@ -136,6 +139,12 @@ export function MovementList() {
         const end = new Date(Date.UTC(start.getUTCFullYear(), start.getUTCMonth() + 1, 1));
         q = q.gte("created_at", start.toISOString()).lt("created_at", end.toISOString());
       }
+      if (allowedBranchIds !== null) {
+        q = q.in(
+          "branch_id",
+          allowedBranchIds.length ? allowedBranchIds : ["00000000-0000-0000-0000-000000000000"],
+        ) as typeof q;
+      }
       const { data, error } = await q;
       if (!active) return;
       if (error) toast.error(error.message);
@@ -145,7 +154,7 @@ export function MovementList() {
     return () => {
       active = false;
     };
-  }, [month]);
+  }, [month, allowedBranchIds?.join(",")]);
   const movements = useMemo(() => {
     const needle = search.trim().toLowerCase();
     return rows.filter((m) => {
