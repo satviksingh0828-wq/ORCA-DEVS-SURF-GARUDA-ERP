@@ -264,13 +264,15 @@ export async function syncScheduledNotificationEmails(): Promise<{
 /**
  * Verifies that the caller is an active Admin or Viewer. Throws on any failure.
  */
-async function requireNotificationUser(userId: string): Promise<AppRole> {
+async function requireNotificationUser(
+  userId: string,
+): Promise<{ role: AppRole; branchIds: string[] }> {
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabaseAdmin as any;
   const { data, error } = await db
     .from("app_users")
-    .select("role, is_active")
+    .select("role, is_active, user_branch_access(branch_id)")
     .eq("id", userId)
     .maybeSingle();
   if (error) throw new Error(`Auth check failed: ${error.message}`);
@@ -278,13 +280,16 @@ async function requireNotificationUser(userId: string): Promise<AppRole> {
   if (!(data as { is_active: boolean }).is_active)
     throw new Error("Forbidden: account is inactive.");
   const role = (data as { role: string }).role;
-  if (role !== "admin" && role !== "semi_admin" && role !== "viewer")
+  if (role !== "admin" && role !== "semi_admin" && role !== "viewer" && role !== "basic")
     throw new Error("Forbidden: notification access required.");
-  return role;
+  const branchIds = Array.isArray(data.user_branch_access)
+    ? data.user_branch_access.map((row: { branch_id: string }) => row.branch_id)
+    : [];
+  return { role: role as AppRole, branchIds };
 }
 
 async function requireAdmin(userId: string): Promise<void> {
-  const role = await requireNotificationUser(userId);
+  const { role } = await requireNotificationUser(userId);
   if (role !== "admin" && role !== "semi_admin")
     throw new Error("Forbidden: admin access required.");
 }
@@ -605,7 +610,8 @@ async function computeItems(db: any): Promise<ComputedItem[]> {
     }
   }
 
-  return items;
+  // Trip/manifest notifications are intentionally excluded from the bell.
+  return items.filter((item) => !item.kind.startsWith("manifest_"));
 }
 
 // ── Server functions ──────────────────────────────────────────────────────────
@@ -624,7 +630,7 @@ async function computeItems(db: any): Promise<ComputedItem[]> {
 export const serverSyncNotifications = createServerFn({ method: "POST" })
   .validator(z.object({ userId: z.string() }))
   .handler(async ({ data: { userId } }): Promise<NotificationItem[]> => {
-    const notificationRole = await requireNotificationUser(userId);
+    const { role: notificationRole, branchIds } = await requireNotificationUser(userId);
 
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -663,6 +669,18 @@ export const serverSyncNotifications = createServerFn({ method: "POST" })
       if (upsertError) throw new Error(`Failed to upsert notifications: ${upsertError.message}`);
     }
 
+    const { error: tripCleanupError } = await db
+      .from("notifications")
+      .delete()
+      .in("kind", [
+        "manifest_zero_income",
+        "manifest_date_future",
+        "manifest_date_old",
+        "manifest_date_missing",
+      ]);
+    if (tripCleanupError)
+      throw new Error(`Failed to remove trip notifications: ${tripCleanupError.message}`);
+
     // Delete non-dismissed rows that are no longer in the computed set (issue resolved)
     const currentRefIds = computed.map((c) => c.ref_id);
     const { data: existing, error: existingError } = await db
@@ -671,14 +689,7 @@ export const serverSyncNotifications = createServerFn({ method: "POST" })
       .eq("dismissed", false);
     if (existingError)
       throw new Error(`Failed to read existing notifications: ${existingError.message}`);
-    const computedKinds = new Set<NotificationKind>([
-      "insurance",
-      "road_tax",
-      "manifest_zero_income",
-      "manifest_date_future",
-      "manifest_date_old",
-      "manifest_date_missing",
-    ]);
+    const computedKinds = new Set<NotificationKind>(["insurance", "road_tax"]);
     const toDelete = (existing ?? [])
       .filter(
         (r: Record<string, unknown>) =>
@@ -707,7 +718,40 @@ export const serverSyncNotifications = createServerFn({ method: "POST" })
       .order("created_at", { ascending: true });
     if (readError) throw new Error(`Failed to read notifications: ${readError.message}`);
 
-    return (data ?? []) as NotificationItem[];
+    let visible = (data ?? []) as NotificationItem[];
+    if (notificationRole === "basic") {
+      const refs = visible
+        .filter((item) => item.kind === "insurance" || item.kind === "road_tax")
+        .map((item) => item.ref_id.replace(/^(ins|rt)-/, ""));
+      const [insuranceRows, roadTaxRows] = await Promise.all([
+        refs.length
+          ? db.from("vehicle_insurance").select("id,vehicle_id").in("id", refs)
+          : { data: [] },
+        refs.length
+          ? db.from("vehicle_road_tax").select("id,vehicle_id").in("id", refs)
+          : { data: [] },
+      ]);
+      const vehicleIds = [...(insuranceRows.data ?? []), ...(roadTaxRows.data ?? [])]
+        .map((row: { vehicle_id: string }) => row.vehicle_id)
+        .filter(Boolean);
+      const { data: vehicles } = vehicleIds.length
+        ? await db.from("vehicles").select("id,branch_id").in("id", vehicleIds)
+        : { data: [] };
+      const allowedVehicles = new Set(
+        (vehicles ?? [])
+          .filter(
+            (row: { branch_id: string | null }) =>
+              row.branch_id && branchIds.includes(row.branch_id),
+          )
+          .map((row: { id: string }) => row.id),
+      );
+      const allowedRefs = new Set<string>();
+      for (const row of [...(insuranceRows.data ?? []), ...(roadTaxRows.data ?? [])]) {
+        if (allowedVehicles.has(row.vehicle_id)) allowedRefs.add(String(row.id));
+      }
+      visible = visible.filter((item) => allowedRefs.has(item.ref_id.replace(/^(ins|rt)-/, "")));
+    }
+    return visible;
   });
 
 /** Marks a notification dismissed for all admins. */

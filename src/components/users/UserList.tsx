@@ -1,5 +1,15 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, LogOut, Loader2, Plus, Save, ShieldCheck, Trash2, Unlock, User } from "lucide-react";
+import {
+  ArrowLeft,
+  LogOut,
+  Loader2,
+  Plus,
+  Save,
+  ShieldCheck,
+  Trash2,
+  Unlock,
+  User,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -112,10 +122,19 @@ export function UserList() {
   }
 
   async function forceLogout(u: AppUserPublic) {
-    if (!window.confirm(`Force-logout ${u.full_name || u.username}? They will be signed out within ~30 seconds.`)) return;
+    if (
+      !window.confirm(
+        `Force-logout ${u.full_name || u.username}? They will be signed out within ~30 seconds.`,
+      )
+    )
+      return;
     const result = await serverForceLogout({ data: u.id });
     if (result.error) return toast.error(result.error);
-    logAction("updated", "user", { entityId: u.id, entityLabel: u.username, details: { action: "force_logout" } });
+    logAction("updated", "user", {
+      entityId: u.id,
+      entityLabel: u.username,
+      details: { action: "force_logout" },
+    });
     toast.success(`${u.full_name || u.username} has been logged out`);
   }
 
@@ -133,8 +152,15 @@ export function UserList() {
     if (unpauseDialog) setUnpauseDialog({ ...unpauseDialog, busy: true });
     const result = await serverUnpauseUser({ data: { userId, code } });
     if (unpauseDialog) setUnpauseDialog(null);
-    if (result.error) { toast.error(result.error); return; }
-    logAction("updated", "user", { entityId: userId, entityLabel: label, details: { action: "unpause" } });
+    if (result.error) {
+      toast.error(result.error);
+      return;
+    }
+    logAction("updated", "user", {
+      entityId: userId,
+      entityLabel: label,
+      details: { action: "unpause" },
+    });
     toast.success(`${label} has been unpaused`);
     load();
   }
@@ -144,9 +170,7 @@ export function UserList() {
     const has = editing.branchIds.includes(bid);
     setEditing({
       ...editing,
-      branchIds: has
-        ? editing.branchIds.filter((b) => b !== bid)
-        : [...editing.branchIds, bid],
+      branchIds: has ? editing.branchIds.filter((b) => b !== bid) : [...editing.branchIds, bid],
     });
   }
 
@@ -218,9 +242,7 @@ export function UserList() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin — full access</SelectItem>
-                  <SelectItem value="semi_admin">Semi-Admin — admin access except Settings and Users</SelectItem>
                   <SelectItem value="basic">Basic user — branch-restricted</SelectItem>
-                  <SelectItem value="viewer">Manager — read-only access, all branches</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -228,9 +250,7 @@ export function UserList() {
               <Label className="text-xs font-medium text-muted-foreground">Status</Label>
               <Select
                 value={editing.is_active ? "active" : "inactive"}
-                onValueChange={(v) =>
-                  setEditing({ ...editing, is_active: v === "active" })
-                }
+                onValueChange={(v) => setEditing({ ...editing, is_active: v === "active" })}
               >
                 <SelectTrigger className="h-10">
                   <SelectValue />
@@ -314,7 +334,8 @@ export function UserList() {
             </div>
           </div>
           <p className="text-sm text-muted-foreground leading-relaxed">
-            This is an admin account. Enter the 6-character verification code that was sent to the alert email when the account was paused.
+            This is an admin account. Enter the 6-character verification code that was sent to the
+            alert email when the account was paused.
           </p>
           <div className="space-y-1.5">
             <Label className="text-xs font-medium text-muted-foreground">Verification code</Label>
@@ -323,12 +344,19 @@ export function UserList() {
               placeholder="A3FX9K"
               maxLength={6}
               value={code}
-              onChange={(e) => setUnpauseDialog({ ...unpauseDialog, code: e.target.value.toUpperCase() })}
+              onChange={(e) =>
+                setUnpauseDialog({ ...unpauseDialog, code: e.target.value.toUpperCase() })
+              }
               autoFocus
             />
           </div>
           <div className="flex gap-2 justify-end">
-            <Button type="button" variant="outline" onClick={() => setUnpauseDialog(null)} disabled={busy}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setUnpauseDialog(null)}
+              disabled={busy}
+            >
               Cancel
             </Button>
             <Button
@@ -375,9 +403,7 @@ export function UserList() {
             <User className="size-6" />
           </span>
           <p className="mt-4 text-sm font-medium">No users yet</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Create users to give others access.
-          </p>
+          <p className="mt-1 text-sm text-muted-foreground">Create users to give others access.</p>
           <Button className="mt-5" onClick={() => setEditing(emptyUser())}>
             <Plus className="size-4" />
             New user
@@ -399,9 +425,7 @@ export function UserList() {
                 )}
               </span>
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold">
-                  {u.full_name || u.username}
-                </p>
+                <p className="truncate text-sm font-semibold">{u.full_name || u.username}</p>
                 <p className="truncate text-xs text-muted-foreground">
                   {u.username} ·{" "}
                   <span
@@ -411,7 +435,13 @@ export function UserList() {
                         : "text-muted-foreground"
                     }
                   >
-                    {u.role === "admin" ? "Admin" : u.role === "semi_admin" ? "Semi-Admin" : u.role === "viewer" ? "Manager" : "Basic user"}
+                    {u.role === "admin"
+                      ? "Admin"
+                      : u.role === "semi_admin"
+                        ? "Semi-Admin"
+                        : u.role === "viewer"
+                          ? "Manager"
+                          : "Basic user"}
                   </span>
                   {u.is_paused ? (
                     <span className="ml-2 rounded-full bg-amber-500/15 px-1.5 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">

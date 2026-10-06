@@ -127,10 +127,10 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
 
-  // viewer (Manager) sees all tabs except Sources; basic users see non-adminOnly tabs only
+  // Managers and basic users see every master except Sources; admin keeps all masters.
   const roleTabs = isAdmin
     ? ALL_TABS
-    : isViewer
+    : isViewer || user?.role === "basic"
       ? ALL_TABS.filter((t) => t.id !== "contract")
       : ALL_TABS.filter((t) => !t.adminOnly);
   const TABS = ltmsMode

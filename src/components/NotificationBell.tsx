@@ -1,5 +1,5 @@
 /**
- * Admin-only notification bell.
+ * Role-aware notification bell.
  * Backed by Supabase — one admin dismissing a notification clears it for all.
  *
  * Error handling:
@@ -20,12 +20,9 @@ import { useSession } from "@/lib/session";
 // ── Icons per kind ────────────────────────────────────────────────────────────
 
 function KindIcon({ kind }: { kind: NotificationItem["kind"] }) {
-  if (kind === "monthly_mis")
-    return <FileWarning className="size-4 shrink-0 text-emerald-500" />;
-  if (kind === "insurance")
-    return <ShieldAlert className="size-4 shrink-0 text-amber-500" />;
-  if (kind === "road_tax")
-    return <AlertTriangle className="size-4 shrink-0 text-violet-500" />;
+  if (kind === "monthly_mis") return <FileWarning className="size-4 shrink-0 text-emerald-500" />;
+  if (kind === "insurance") return <ShieldAlert className="size-4 shrink-0 text-amber-500" />;
+  if (kind === "road_tax") return <AlertTriangle className="size-4 shrink-0 text-violet-500" />;
   if (kind === "manifest_date_future")
     return <FileWarning className="size-4 shrink-0 text-purple-500" />;
   if (kind === "manifest_date_old")
@@ -36,12 +33,12 @@ function KindIcon({ kind }: { kind: NotificationItem["kind"] }) {
 }
 
 function borderClass(item: NotificationItem) {
-  if (item.kind === "manifest_date_future")             return "border-l-2 border-purple-500";
-  if (item.kind === "manifest_date_old")                return "border-l-2 border-yellow-400";
-  if (item.kind === "manifest_date_missing")            return "border-l-2 border-red-500";
-  if (item.days_left != null && item.days_left <= 7)  return "border-l-2 border-destructive";
+  if (item.kind === "manifest_date_future") return "border-l-2 border-purple-500";
+  if (item.kind === "manifest_date_old") return "border-l-2 border-yellow-400";
+  if (item.kind === "manifest_date_missing") return "border-l-2 border-red-500";
+  if (item.days_left != null && item.days_left <= 7) return "border-l-2 border-destructive";
   if (item.days_left != null && item.days_left <= 15) return "border-l-2 border-amber-400";
-  if (item.kind === "manifest_zero_income")            return "border-l-2 border-rose-400";
+  if (item.kind === "manifest_zero_income") return "border-l-2 border-rose-400";
   return "border-l-2 border-border";
 }
 
@@ -49,12 +46,12 @@ function borderClass(item: NotificationItem) {
 
 export function NotificationBell() {
   const { user } = useSession();
-  const [open, setOpen]       = useState(false);
-  const [items, setItems]     = useState<NotificationItem[]>([]);
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<NotificationItem[]>([]);
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [dismissing, setDismissing] = useState<Set<string>>(new Set());
-  const panelRef  = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   async function load() {
@@ -78,25 +75,39 @@ export function NotificationBell() {
 
   const canDismiss = user?.role === "admin" || user?.role === "semi_admin";
 
-  // Load on mount and every 2 minutes for Admin and Viewer/Manager users.
+  // Load on mount and every 2 minutes for Admin, Viewer/Manager, and Basic users.
   useEffect(() => {
-    if (user?.role === "admin" || user?.role === "semi_admin" || user?.role === "viewer") {
+    if (
+      user?.role === "admin" ||
+      user?.role === "semi_admin" ||
+      user?.role === "viewer" ||
+      user?.role === "basic"
+    ) {
       load();
     }
     const t = setInterval(() => {
-      if (user?.role === "admin" || user?.role === "semi_admin" || user?.role === "viewer") load();
+      if (
+        user?.role === "admin" ||
+        user?.role === "semi_admin" ||
+        user?.role === "viewer" ||
+        user?.role === "basic"
+      )
+        load();
     }, 120_000);
     return () => clearInterval(t);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.id, user?.role]);
 
   // Close on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
       if (
-        panelRef.current  && !panelRef.current.contains(e.target as Node) &&
-        buttonRef.current && !buttonRef.current.contains(e.target as Node)
-      ) setOpen(false);
+        panelRef.current &&
+        !panelRef.current.contains(e.target as Node) &&
+        buttonRef.current &&
+        !buttonRef.current.contains(e.target as Node)
+      )
+        setOpen(false);
     }
     if (open) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -120,7 +131,11 @@ export function NotificationBell() {
       console.error("[NotificationBell] Dismiss failed:", msg);
       setError(`Dismiss failed: ${msg}`);
     } finally {
-      setDismissing((s) => { const n = new Set(s); n.delete(item.id); return n; });
+      setDismissing((s) => {
+        const n = new Set(s);
+        n.delete(item.id);
+        return n;
+      });
     }
   }
 
@@ -132,7 +147,10 @@ export function NotificationBell() {
       <button
         ref={buttonRef}
         type="button"
-        onClick={() => { setOpen((v) => !v); if (!open && !error) load(); }}
+        onClick={() => {
+          setOpen((v) => !v);
+          if (!open && !error) load();
+        }}
         aria-label={`Notifications${count > 0 ? ` (${count})` : ""}`}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -201,7 +219,9 @@ export function NotificationBell() {
               <div className="flex flex-col items-center gap-3 py-10">
                 <AlertTriangle className="size-8 text-amber-500" />
                 <p className="text-sm text-muted-foreground">Failed to load notifications</p>
-                <p className="text-xs text-muted-foreground/70 max-w-[280px] text-center">{error}</p>
+                <p className="text-xs text-muted-foreground/70 max-w-[280px] text-center">
+                  {error}
+                </p>
                 <button
                   type="button"
                   onClick={load}
@@ -219,7 +239,10 @@ export function NotificationBell() {
             ) : (
               <ul className="divide-y divide-border">
                 {items.map((item) => (
-                  <li key={item.id} className={`flex items-start gap-3 px-4 py-3 ${borderClass(item)}`}>
+                  <li
+                    key={item.id}
+                    className={`flex items-start gap-3 px-4 py-3 ${borderClass(item)}`}
+                  >
                     <div className="mt-0.5 shrink-0">
                       <KindIcon kind={item.kind} />
                     </div>

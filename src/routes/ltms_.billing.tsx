@@ -21,6 +21,7 @@ import { TransporterBilling } from "@/components/reports/TransporterBilling";
 import { WorkmenBilling } from "@/components/reports/WorkmenBilling";
 import { UnloadingReceived } from "@/components/reports/UnloadingReceived";
 import { ApprovalIncome } from "@/components/reports/ApprovalIncome";
+import { useSession } from "@/lib/session";
 
 const TABS = [
   {
@@ -83,9 +84,13 @@ export const Route = createFileRoute("/ltms_/billing")({
 export default Route;
 
 function BillingPage() {
+  const { user } = useSession();
+  const visibleTabs =
+    user?.role === "basic" ? TABS.filter((item) => item.id !== "source-billing") : TABS;
   const [tab, setTab] = useState<TabId>("trip-billing");
   const [navOpen, setNavOpen] = useState(true);
-  const active = TABS.find((item) => item.id === tab) ?? TABS[0];
+  const safeTab = visibleTabs.some((item) => item.id === tab) ? tab : visibleTabs[0].id;
+  const active = visibleTabs.find((item) => item.id === safeTab) ?? visibleTabs[0];
 
   return (
     <AppShell
@@ -129,9 +134,9 @@ function BillingPage() {
         {navOpen && (
           <SharedSidebar open={navOpen} width="220px" label="LTMS billing">
             <ul className="space-y-1">
-              {TABS.map((item) => {
+              {visibleTabs.map((item) => {
                 const Icon = item.icon;
-                const selected = item.id === tab;
+                const selected = item.id === safeTab;
                 return (
                   <li key={item.id}>
                     <button
@@ -151,18 +156,23 @@ function BillingPage() {
             </ul>
           </SharedSidebar>
         )}
-        <MobileTabDropdown tabs={TABS} activeId={tab} label="Billing" onChange={setTab} />
+        <MobileTabDropdown
+          tabs={visibleTabs}
+          activeId={safeTab}
+          label="Billing"
+          onChange={setTab}
+        />
         <div className="animate-fade-in min-w-0">
           <header className="mb-6">
             <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>
-          {tab === "trip-billing" && <TripBilling />}
-          {tab === "source-billing" && <SourceBilling />}
-          {tab === "unloading-received" && <UnloadingReceived />}
-          {tab === "approval-income" && <ApprovalIncome />}
-          {tab === "transporter-billing" && <TransporterBilling />}
-          {tab === "workmen-billing" && <WorkmenBilling />}
+          {safeTab === "trip-billing" && <TripBilling />}
+          {safeTab === "source-billing" && <SourceBilling />}
+          {safeTab === "unloading-received" && <UnloadingReceived />}
+          {safeTab === "approval-income" && <ApprovalIncome />}
+          {safeTab === "transporter-billing" && <TransporterBilling />}
+          {safeTab === "workmen-billing" && <WorkmenBilling />}
         </div>
       </div>
     </AppShell>

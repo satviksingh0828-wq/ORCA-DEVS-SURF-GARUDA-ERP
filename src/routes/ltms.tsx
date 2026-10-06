@@ -22,7 +22,7 @@ export const Route = createFileRoute("/ltms")({
           {
             key: "reports",
             label: "Reports",
-            desc: "ADMIN MIS and management reports",
+            desc: "Branch-wise LTMS reports",
             icon: FileText,
             to: "/ltms/reports",
           },

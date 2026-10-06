@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
+import { useSession } from "@/lib/session";
 
 export type BranchOption = {
   id: string;
@@ -16,6 +17,7 @@ export type BranchOption = {
 
 export function useBranches() {
   const [branches, setBranches] = useState<BranchOption[]>([]);
+  const { user } = useSession();
   useEffect(() => {
     (async () => {
       const rows = await fetchAll<BranchOption>(() =>
@@ -26,9 +28,11 @@ export function useBranches() {
           )
           .order("branch_name", { ascending: true }),
       );
-      setBranches(rows);
+      setBranches(
+        user?.role === "basic" ? rows.filter((branch) => user.branchIds.includes(branch.id)) : rows,
+      );
     })();
-  }, []);
+  }, [user?.role, user?.branchIds]);
   return branches;
 }
 

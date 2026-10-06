@@ -215,6 +215,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       t.id === "rental-advance";
     if (mode === "ltms" && !isLtmsTab) return false;
     if (mode === "tms" && isLtmsTab) return false;
+    if (user?.role === "basic" && t.id === "admin-mis") return false;
     if ("basicOnly" in t && t.basicOnly && user?.role !== "basic") return false;
     return isViewer ? t.id !== "import-trips" : isAdmin || !t.adminOnly;
   });

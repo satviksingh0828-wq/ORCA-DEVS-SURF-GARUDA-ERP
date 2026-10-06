@@ -25,6 +25,7 @@ import { ConsignmentNetReport } from "@/components/reports/ConsignmentNetReport"
 import { SourcesReport } from "@/components/reports/SourcesReport";
 import { MovementList } from "@/components/operations/MovementList";
 import { UnloadingIncomeReport } from "@/components/reports/UnloadingIncomeReport";
+import { useSession } from "@/lib/session";
 
 const TABS = [
   {
@@ -111,9 +112,15 @@ export const Route = createFileRoute("/ltms_/reports")({
 export default Route;
 
 function ReportsPage() {
+  const { user } = useSession();
+  const visibleTabs =
+    user?.role === "basic"
+      ? TABS.filter((item) => item.id !== "consignment-income" && item.id !== "consignment-net")
+      : TABS;
   const [tab, setTab] = useState<TabId>("eway-bill");
   const [navOpen, setNavOpen] = useState(true);
-  const active = TABS.find((item) => item.id === tab) ?? TABS[0];
+  const safeTab = visibleTabs.some((item) => item.id === tab) ? tab : visibleTabs[0].id;
+  const active = visibleTabs.find((item) => item.id === safeTab) ?? visibleTabs[0];
 
   return (
     <AppShell
@@ -157,9 +164,9 @@ function ReportsPage() {
         {navOpen && (
           <SharedSidebar open={navOpen} width="220px" label="LTMS reports">
             <ul className="space-y-1">
-              {TABS.map((item) => {
+              {visibleTabs.map((item) => {
                 const Icon = item.icon;
-                const selected = item.id === tab;
+                const selected = item.id === safeTab;
                 return (
                   <li key={item.id}>
                     <button
@@ -180,22 +187,27 @@ function ReportsPage() {
           </SharedSidebar>
         )}
 
-        <MobileTabDropdown tabs={TABS} activeId={tab} label="Reports" onChange={setTab} />
+        <MobileTabDropdown
+          tabs={visibleTabs}
+          activeId={safeTab}
+          label="Reports"
+          onChange={setTab}
+        />
         <div className="animate-fade-in min-w-0">
           <header className="mb-6">
             <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>
-          {tab === "eway-bill" && <EwayBillList />}
-          {tab === "movements" && <MovementList />}
-          {tab === "update-consignment" && <UpdateConsignmentReport />}
-          {tab === "consignment-income" && <ConsignmentIncomeReport />}
-          {tab === "transporter-expenditure" && <TransporterExpenditureReport />}
-          {tab === "unloading-income" && <UnloadingIncomeReport />}
-          {tab === "loading-charges" && <LoadingChargesReport />}
-          {tab === "trip-expenditure" && <TripExpenditureReport />}
-          {tab === "consignment-net" && <ConsignmentNetReport />}
-          {tab === "sources" && <SourcesReport />}
+          {safeTab === "eway-bill" && <EwayBillList />}
+          {safeTab === "movements" && <MovementList />}
+          {safeTab === "update-consignment" && <UpdateConsignmentReport />}
+          {safeTab === "consignment-income" && <ConsignmentIncomeReport />}
+          {safeTab === "transporter-expenditure" && <TransporterExpenditureReport />}
+          {safeTab === "unloading-income" && <UnloadingIncomeReport />}
+          {safeTab === "loading-charges" && <LoadingChargesReport />}
+          {safeTab === "trip-expenditure" && <TripExpenditureReport />}
+          {safeTab === "consignment-net" && <ConsignmentNetReport />}
+          {safeTab === "sources" && <SourcesReport />}
         </div>
       </div>
     </AppShell>
