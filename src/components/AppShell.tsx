@@ -152,6 +152,7 @@ export function AppShell({
   headerEnd,
   mainClassName,
   showSidebar = true,
+  showHeader = true,
 }: {
   children: ReactNode;
   breadcrumb?: ReactNode;
@@ -265,7 +266,6 @@ export function AppShell({
                 {breadcrumb}
               </div>
             )}
-            {headerEnd && <div className="ml-2 hidden lg:block">{headerEnd}</div>}
             <div className="ml-auto flex min-w-0 items-center gap-2">
               <button type="button" className="erp-help hidden sm:inline-flex" title="Help">
                 <CircleHelp className="size-4" />
