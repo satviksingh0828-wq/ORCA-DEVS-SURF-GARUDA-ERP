@@ -1,6 +1,15 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, CheckCircle2, Loader2, Lock, Mail, Unlock, User } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Loader2,
+  Lock,
+  Mail,
+  Truck,
+  Unlock,
+  User,
+} from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/session";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
@@ -574,6 +583,12 @@ function LoginPage() {
             <>
               {/* ── Normal login form — always visible ────────────────────────── */}
               <div className="erp-login-card w-full max-w-sm animate-fade-up">
+                <div className="erp-login-logo" aria-label="Garuda ERP">
+                  <span className="erp-login-logo-mark" aria-hidden="true">
+                    <Truck className="size-4" />
+                  </span>
+                  <span>Garuda ERP</span>
+                </div>
                 <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
                 <p className="mt-1.5 text-sm text-muted-foreground">
                   Enter your operator credentials to continue.

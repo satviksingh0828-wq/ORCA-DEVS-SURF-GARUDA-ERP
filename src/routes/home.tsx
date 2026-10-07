@@ -97,12 +97,7 @@ function HomePage() {
   return (
     <AppShell showSidebar={false} showHeader>
       <div className="erp-module-picker">
-        <div className="erp-picker-heading">
-          <p className="erp-kicker">Workspace</p>
-          <h1>Choose a module</h1>
-          <p>Select the Garuda ERP workspace you want to open.</p>
-        </div>
-        <div className="grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid w-full max-w-[1280px] grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
           {loading
             ? modules.map((item) => <Skeleton key={item.key} className="h-44 rounded-lg" />)
             : modules.map((item, index) => {

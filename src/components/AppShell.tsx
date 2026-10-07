@@ -144,7 +144,6 @@ function moduleNavigation(pathname: string): { label: string; groups: NavGroup[]
 export function AppShell({
   children,
   breadcrumb,
-  headerEnd,
   mainClassName,
   showSidebar = true,
   showHeader = true,
@@ -273,8 +272,11 @@ export function AppShell({
                 {breadcrumb}
               </div>
             )}
-            {headerEnd && <div className="ml-1 hidden lg:block">{headerEnd}</div>}
             <div className="ml-auto flex min-w-0 items-center gap-2">
+              <div
+                data-app-shell-header-actions
+                className="flex shrink-0 items-center gap-1.5 sm:gap-2"
+              />
               <button type="button" className="erp-help hidden sm:inline-flex" title="Help">
                 <CircleHelp className="size-4" />
               </button>
