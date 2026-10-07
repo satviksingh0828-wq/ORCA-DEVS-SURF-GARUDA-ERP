@@ -69,19 +69,8 @@ function HomePage() {
     return () => clearTimeout(timer);
   }, []);
   return (
-    <AppShell showSidebar={false}>
+    <AppShell showSidebar={false} showHeader={false}>
       <div className="erp-module-picker">
-        <div className="erp-picker-brand">
-          <span className="erp-brand-mark">
-            <Database className="size-4" />
-          </span>
-          <span>Garuda ERP</span>
-        </div>
-        <div className="erp-picker-heading">
-          <p className="erp-kicker">WORKSPACE</p>
-          <h1>Select a module</h1>
-          <p>Choose the workspace you want to open.</p>
-        </div>
         <div className="grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {loading
             ? MODULES.map((item) => <Skeleton key={item.key} className="h-36 rounded-lg" />)
@@ -99,7 +88,6 @@ function HomePage() {
                       <Icon className="size-5" />
                     </span>
                     <span className="erp-module-title">{item.label}</span>
-                    <span className="erp-module-desc">{item.desc}</span>
                     <ArrowRight className="erp-module-arrow size-4" />
                   </button>
                 );

@@ -158,6 +158,7 @@ export function AppShell({
   headerEnd?: ReactNode;
   mainClassName?: string;
   showSidebar?: boolean;
+  showHeader?: boolean;
 }) {
   const { signOut, user } = useSession();
   const navigate = useNavigate();
@@ -239,83 +240,83 @@ export function AppShell({
         user && open && !expanded ? "lg:mr-[360px]" : "",
       )}
     >
-      <header className="erp-topbar relative z-40 shrink-0">
-        <div className="flex h-14 w-full items-center gap-3 px-3 sm:px-5">
-          {showSidebar && (
-            <button
-              type="button"
-              className="erp-mobile-menu lg:hidden"
-              aria-label="Open navigation"
-              onClick={() => setMobileNavOpen(true)}
-            >
-              <Menu className="size-4" />
-            </button>
-          )}
-          <Link to="/home" className="erp-brand shrink-0">
-            <span className="erp-brand-mark">
-              <Truck className="size-4" />
-            </span>
-            <span className="hidden sm:inline">Garuda ERP</span>
-            <span className="erp-version hidden md:inline">v2.0</span>
-          </Link>
-          {breadcrumb && (
-            <div className="erp-breadcrumb ml-2 hidden min-w-0 items-center gap-2 md:flex">
-              {breadcrumb}
-            </div>
-          )}
-          {headerEnd && <div className="ml-2 hidden lg:block">{headerEnd}</div>}
-          <div className="ml-auto flex min-w-0 items-center gap-2">
-            <div
-              data-app-shell-header-actions
-              className="flex shrink-0 items-center gap-1.5 sm:gap-2"
-            />
-            <button type="button" className="erp-help hidden sm:inline-flex" title="Help">
-              <CircleHelp className="size-4" />
-            </button>
-            {isAdmin && (
-              <Link to="/system" title="System" className="erp-topbar-icon hidden sm:inline-flex">
-                <ShieldCheck className="size-4" />
-              </Link>
-            )}
-            {(isAdmin || user?.role === "viewer" || user?.role === "basic") && <NotificationBell />}
-            {user && <MeetTrigger />}
-            <div className="relative">
+      {showHeader && (
+        <header className="erp-topbar relative z-40 shrink-0">
+          <div className="flex h-14 w-full items-center gap-3 px-3 sm:px-5">
+            {showSidebar && (
               <button
                 type="button"
-                className="erp-profile"
-                onClick={() => setProfileOpen((value) => !value)}
-                aria-expanded={profileOpen}
+                className="erp-mobile-menu lg:hidden"
+                aria-label="Open navigation"
+                onClick={() => setMobileNavOpen(true)}
               >
-                <span className="erp-avatar">
-                  {(user?.fullName ?? user?.username ?? "G").slice(0, 1).toUpperCase()}
-                </span>
-                <span className="hidden max-w-[140px] truncate text-left sm:block">
-                  <strong>{user?.fullName ?? user?.username}</strong>
-                  <small>{isAdmin ? "Administrator" : "Operator"}</small>
-                </span>
-                <ChevronDown className="hidden size-3.5 sm:block" />
+                <Menu className="size-4" />
               </button>
-              {profileOpen && (
-                <div className="erp-profile-menu">
-                  <div className="erp-profile-heading">
-                    {user?.fullName ?? user?.username}
-                    <small>{user?.role}</small>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      signOut();
-                      navigate({ to: "/", replace: true });
-                    }}
-                  >
-                    <LogOut className="size-4" /> Sign out
-                  </button>
-                </div>
+            )}
+            <Link to="/home" className="erp-brand shrink-0">
+              <span className="erp-brand-mark">
+                <Truck className="size-4" />
+              </span>
+              <span className="hidden sm:inline">Garuda ERP</span>
+              <span className="erp-version hidden md:inline">v2.0</span>
+            </Link>
+            {breadcrumb && (
+              <div className="erp-breadcrumb ml-2 hidden min-w-0 items-center gap-2 md:flex">
+                {breadcrumb}
+              </div>
+            )}
+            {headerEnd && <div className="ml-2 hidden lg:block">{headerEnd}</div>}
+            <div className="ml-auto flex min-w-0 items-center gap-2">
+              <button type="button" className="erp-help hidden sm:inline-flex" title="Help">
+                <CircleHelp className="size-4" />
+              </button>
+              {isAdmin && (
+                <Link to="/system" title="System" className="erp-topbar-icon hidden sm:inline-flex">
+                  <ShieldCheck className="size-4" />
+                </Link>
               )}
+              {(isAdmin || user?.role === "viewer" || user?.role === "basic") && (
+                <NotificationBell />
+              )}
+              {user && <MeetTrigger />}
+              <div className="relative">
+                <button
+                  type="button"
+                  className="erp-profile"
+                  onClick={() => setProfileOpen((value) => !value)}
+                  aria-expanded={profileOpen}
+                >
+                  <span className="erp-avatar">
+                    {(user?.fullName ?? user?.username ?? "G").slice(0, 1).toUpperCase()}
+                  </span>
+                  <span className="hidden max-w-[140px] truncate text-left sm:block">
+                    <strong>{user?.fullName ?? user?.username}</strong>
+                    <small>{isAdmin ? "Administrator" : "Operator"}</small>
+                  </span>
+                  <ChevronDown className="hidden size-3.5 sm:block" />
+                </button>
+                {profileOpen && (
+                  <div className="erp-profile-menu">
+                    <div className="erp-profile-heading">
+                      {user?.fullName ?? user?.username}
+                      <small>{user?.role}</small>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        signOut();
+                        navigate({ to: "/", replace: true });
+                      }}
+                    >
+                      <LogOut className="size-4" /> Sign out
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      </header>
+        </header>
+      )}
       <div className="erp-shell-body relative z-10 min-h-0 flex-1">
         {showSidebar && (
           <aside className={cn("erp-sidebar", mobileNavOpen && "is-open")}>
@@ -353,6 +354,7 @@ export function AppShell({
                 })}
               </div>
             ))}
+            <div data-module-sidebar-slot className="erp-sidebar-subnav-slot" />
           </aside>
         )}
         {showSidebar && mobileNavOpen && (
