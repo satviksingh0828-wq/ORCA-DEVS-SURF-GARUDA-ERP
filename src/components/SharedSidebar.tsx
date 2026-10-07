@@ -40,5 +40,21 @@ export function SharedSidebar({
     );
   }
 
-  return <div className="app-sidebar-portal-placeholder" aria-hidden="true" />;
+  return (
+    <aside
+      ref={containerRef}
+      data-app-sidebar-container="true"
+      className={cn(
+        "app-sidebar-container hidden shrink-0",
+        breakpoint === "xl" ? "xl:block" : "lg:block",
+        className,
+      )}
+      style={{ width }}
+      aria-label={label}
+    >
+      <nav className="app-sidebar-scroll sticky top-0 h-[calc(100dvh-5rem)] max-h-[calc(100dvh-5rem)] overflow-y-auto overscroll-contain pr-1">
+        {children}
+      </nav>
+    </aside>
+  );
 }

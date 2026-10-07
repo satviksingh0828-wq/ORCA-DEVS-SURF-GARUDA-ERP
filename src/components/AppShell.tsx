@@ -16,6 +16,7 @@ import {
   Users,
   WalletCards,
   X,
+  type LucideIcon,
 } from "lucide-react";
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
@@ -60,7 +61,7 @@ function ensureSharedBackgroundVideo() {
   return { video, veil };
 }
 
-type NavItem = { label: string; to: string; icon: typeof Truck };
+type NavItem = { label: string; to: string; icon: LucideIcon };
 type NavGroup = { label: string; items: NavItem[] };
 const WORKSPACE_NAV: NavGroup[] = [
   {
@@ -119,12 +120,6 @@ const ADMIN_NAV: NavGroup[] = [
     ],
   },
 ];
-function Database(props: React.ComponentProps<typeof Truck>) {
-  return <WalletCards {...props} />;
-}
-function FileText(props: React.ComponentProps<typeof Truck>) {
-  return <ClipboardList {...props} />;
-}
 function moduleNavigation(pathname: string): { label: string; groups: NavGroup[] } {
   if (pathname.startsWith("/ltms") || pathname === "/finance")
     return { label: "LTMS", groups: LTMS_NAV };
@@ -170,6 +165,18 @@ export function AppShell({
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
 
+  useEffect(() => {
+    setMobileNavOpen(false);
+    setProfileOpen(false);
+  }, [pathname]);
+  useEffect(() => {
+    if (!profileOpen) return;
+    const closeProfile = (event: MouseEvent) => {
+      if (!(event.target as HTMLElement).closest(".erp-profile-wrap")) setProfileOpen(false);
+    };
+    document.addEventListener("mousedown", closeProfile);
+    return () => document.removeEventListener("mousedown", closeProfile);
+  }, [profileOpen]);
   useEffect(() => {
     const root = document.documentElement;
     const previousAttribute = root.getAttribute("data-video-background");
@@ -266,6 +273,7 @@ export function AppShell({
                 {breadcrumb}
               </div>
             )}
+            {headerEnd && <div className="ml-1 hidden lg:block">{headerEnd}</div>}
             <div className="ml-auto flex min-w-0 items-center gap-2">
               <button type="button" className="erp-help hidden sm:inline-flex" title="Help">
                 <CircleHelp className="size-4" />
@@ -279,7 +287,7 @@ export function AppShell({
                 <NotificationBell />
               )}
               {user && <MeetTrigger />}
-              <div className="relative">
+              <div className="erp-profile-wrap relative">
                 <button
                   type="button"
                   className="erp-profile"
@@ -341,16 +349,15 @@ export function AppShell({
                   const active = isActive(item.to);
                   return (
                     <div key={item.to} className="erp-nav-item-group">
-                      <a
-                        href={item.to}
-                        href={item.to}
+                      <Link
+                        to={item.to as never}
                         className={cn("erp-nav-item", active && "active")}
                         onClick={() => setMobileNavOpen(false)}
                       >
                         <Icon className="size-4" />
                         <span>{item.label}</span>
                         {active && <span className="erp-nav-active-dot" />}
-                      </a>
+                      </Link>
                       {active && (
                         <div data-module-sidebar-slot className="erp-sidebar-subnav-slot" />
                       )}
