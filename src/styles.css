@@ -1250,3 +1250,21 @@ table td {
 .erp-login-form button[type="submit"]:hover { background: #a83020; }
 .erp-login-panel > .absolute.bottom-6 { display: none; }
 @media (max-width: 640px) { .erp-login-panel { padding: 16px !important; }.erp-login-card { border: 1px solid #e8e2d8; padding: 26px 24px; background: #fff; box-shadow: none; } }
+/* Final Sentry shell pass: warehouse-style grouped rail and compact top bar. */
+.erp-topbar-search { width: min(320px, 28vw); height: 31px; border: 1px solid rgba(255,255,255,.1); border-radius: 6px; padding: 0 10px; outline: none; background: #352f2a; color: #fff; font: 13px var(--font-sans, ui-sans-serif); }
+.erp-topbar-search::placeholder { color: rgba(255,255,255,.55); }
+.erp-topbar-search:focus { border-color: #b87333; box-shadow: 0 0 0 2px rgba(184,115,51,.15); }
+.erp-sidebar { width: 192px; flex-basis: 192px; padding: 8px 6px; background: #2a2520; }
+.erp-sidebar-context { margin: 0 0 8px; padding: 6px 10px; border-radius: 8px; background: rgba(142,39,22,.4); color: #fdf4e3; font-size: 13px; letter-spacing: .06em; }
+.erp-context-dot { display: none; }
+.erp-nav-group { margin-bottom: 6px; padding-bottom: 6px; overflow: hidden; border-radius: 8px; background: #352f2a; }
+.erp-nav-group > p { margin: 0 0 0; padding: 6px 10px; background: rgba(142,39,22,.4); color: #fdf4e3; font-size: 13px; letter-spacing: .08em; }
+.erp-nav-item { min-height: 34px; border-left-width: 3px; border-radius: 0; padding: 6px 10px; color: #fff; font-size: 14px; font-weight: 600; }
+.erp-nav-item.active { background: rgba(183,115,51,.15); color: #fdf4e3; font-weight: 500; }
+.erp-nav-item:hover { background: rgba(255,255,255,.08); }
+.erp-module-picker { align-items: stretch; justify-content: flex-start; padding: 28px 24px 44px; }
+.erp-module-picker > .grid { max-width: none; }
+.erp-module-card { min-height: 176px; border-radius: 6px; padding: 16px; box-shadow: 0 1px 3px rgba(42,37,32,.06); }
+.erp-module-card:hover { transform: translateY(-1px); box-shadow: 0 6px 16px rgba(42,37,32,.1); }
+@media (min-width: 1024px) { .erp-nav-item > svg { display: none; } }
+@media (max-width: 1023px) { .erp-topbar-search { width: 220px; }.erp-sidebar { width: 238px; flex-basis: 238px; } }

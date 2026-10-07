@@ -21,7 +21,6 @@ import {
 import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
 import { useOrcaAI } from "@/lib/orca-context";
-import { MeetTrigger } from "@/components/MeetPanel";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
@@ -273,6 +272,12 @@ export function AppShell({
               </div>
             )}
             <div className="ml-auto flex min-w-0 items-center gap-2">
+              <input
+                type="search"
+                className="erp-topbar-search hidden md:block"
+                placeholder="Search items, bins, orders..."
+                aria-label="Search items, bins, orders"
+              />
               <div
                 data-app-shell-header-actions
                 className="flex shrink-0 items-center gap-1.5 sm:gap-2"
@@ -288,7 +293,6 @@ export function AppShell({
               {(isAdmin || user?.role === "viewer" || user?.role === "basic") && (
                 <NotificationBell />
               )}
-              {user && <MeetTrigger />}
               <div className="erp-profile-wrap relative">
                 <button
                   type="button"
