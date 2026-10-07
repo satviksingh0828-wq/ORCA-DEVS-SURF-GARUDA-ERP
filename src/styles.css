@@ -1230,3 +1230,6 @@ table td {
 .erp-topbar .erp-breadcrumb span, .erp-topbar .erp-breadcrumb a { color: rgba(253,244,227,.78) !important; }
 .erp-sidebar-subnav-slot { margin-left: 12px; }
 .erp-sidebar-subnav { margin: 0 0 8px; border-top: 0; border-left: 1px solid rgba(255,255,255,.13); padding: 4px 0 0 8px; }
+
+/* Keep sub-navigation compact: labels only, no secondary descriptions. */
+.erp-sidebar-subnav span[class*="text-[11px]"] { display: none !important; }

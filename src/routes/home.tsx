@@ -69,7 +69,7 @@ function HomePage() {
     return () => clearTimeout(timer);
   }, []);
   return (
-    <AppShell showSidebar={false} showHeader={false}>
+    <AppShell showSidebar={false} showHeader>
       <div className="erp-module-picker">
         <div className="grid w-full max-w-5xl grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {loading
