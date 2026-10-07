@@ -340,21 +340,25 @@ export function AppShell({
                   const Icon = item.icon;
                   const active = isActive(item.to);
                   return (
-                    <a
-                      key={item.to}
-                      href={item.to}
-                      className={cn("erp-nav-item", active && "active")}
-                      onClick={() => setMobileNavOpen(false)}
-                    >
-                      <Icon className="size-4" />
-                      <span>{item.label}</span>
-                      {active && <span className="erp-nav-active-dot" />}
-                    </a>
+                    <div key={item.to} className="erp-nav-item-group">
+                      <a
+                        href={item.to}
+                        href={item.to}
+                        className={cn("erp-nav-item", active && "active")}
+                        onClick={() => setMobileNavOpen(false)}
+                      >
+                        <Icon className="size-4" />
+                        <span>{item.label}</span>
+                        {active && <span className="erp-nav-active-dot" />}
+                      </a>
+                      {active && (
+                        <div data-module-sidebar-slot className="erp-sidebar-subnav-slot" />
+                      )}
+                    </div>
                   );
                 })}
               </div>
             ))}
-            <div data-module-sidebar-slot className="erp-sidebar-subnav-slot" />
           </aside>
         )}
         {showSidebar && mobileNavOpen && (

@@ -1224,3 +1224,9 @@ table td {
 .erp-sidebar-subnav .text-primary { color: #d99b5d; }
 .erp-shell-body main .grid:has(> .app-sidebar-portal-placeholder) { grid-template-columns: minmax(0, 1fr) !important; }
 .app-sidebar-portal-placeholder { display: none; }
+
+/* Module headers stay readable on the dark Sentry-style top bar. */
+.erp-topbar .text-foreground, .erp-topbar .text-muted-foreground, .erp-topbar .text-primary { color: #fdf4e3 !important; }
+.erp-topbar .erp-breadcrumb span, .erp-topbar .erp-breadcrumb a { color: rgba(253,244,227,.78) !important; }
+.erp-sidebar-subnav-slot { margin-left: 12px; }
+.erp-sidebar-subnav { margin: 0 0 8px; border-top: 0; border-left: 1px solid rgba(255,255,255,.13); padding: 4px 0 0 8px; }
