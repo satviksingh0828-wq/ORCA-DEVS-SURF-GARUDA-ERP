@@ -467,7 +467,7 @@ function LoginPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="grid min-h-[100dvh] overflow-x-hidden lg:grid-cols-[1.05fr_1fr]">
+      <div className="erp-login-page grid min-h-[100dvh] overflow-x-hidden lg:grid-cols-[1.05fr_1fr]">
         {/* Banner — switches between the configured sign-in styles */}
         {loginUi === "workspace" ? (
           <aside
@@ -569,17 +569,17 @@ function LoginPage() {
         )}
 
         {/* Login */}
-        <section className="relative flex min-h-[100dvh] min-w-0 flex-col items-center justify-center bg-background px-6 py-10">
+        <section className="erp-login-panel relative flex min-h-[100dvh] min-w-0 flex-col items-center justify-center bg-background px-6 py-10">
           {videoReady ? (
             <>
               {/* ── Normal login form — always visible ────────────────────────── */}
-              <div className="w-full max-w-sm animate-fade-up">
+              <div className="erp-login-card w-full max-w-sm animate-fade-up">
                 <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
                 <p className="mt-1.5 text-sm text-muted-foreground">
                   Enter your operator credentials to continue.
                 </p>
 
-                <form onSubmit={onSubmit} className="mt-6 space-y-4">
+                <form onSubmit={onSubmit} className="erp-login-form mt-6 space-y-4">
                   {/* Honeypot */}
                   <div
                     style={{

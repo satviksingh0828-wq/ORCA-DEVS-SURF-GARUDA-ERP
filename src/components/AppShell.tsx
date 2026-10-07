@@ -1,9 +1,23 @@
-import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Server, ShieldCheck, User } from "lucide-react";
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
+import {
+  BarChart3,
+  ChevronDown,
+  CircleHelp,
+  ClipboardList,
+  LayoutDashboard,
+  LogOut,
+  Menu,
+  Settings,
+  ShieldCheck,
+  Truck,
+  User,
+  Users,
+  WalletCards,
+  X,
+} from "lucide-react";
+import { useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
 import { useOrcaAI } from "@/lib/orca-context";
-import { Button } from "@/components/ui/button";
 import { MeetTrigger } from "@/components/MeetPanel";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
@@ -14,7 +28,6 @@ let sharedBackgroundVideo: HTMLVideoElement | null = null;
 let sharedBackgroundVeil: HTMLDivElement | null = null;
 let sharedBackgroundVideoUrl = "";
 let sharedBackgroundVideoReady = false;
-
 function ensureSharedBackgroundVideo() {
   if (sharedBackgroundVideo && sharedBackgroundVeil) {
     if (!document.body.contains(sharedBackgroundVideo))
@@ -23,7 +36,6 @@ function ensureSharedBackgroundVideo() {
       document.body.appendChild(sharedBackgroundVeil);
     return { video: sharedBackgroundVideo, veil: sharedBackgroundVeil };
   }
-
   const video = document.createElement("video");
   video.className = "background-video-layer";
   video.autoplay = true;
@@ -37,16 +49,43 @@ function ensureSharedBackgroundVideo() {
     sharedBackgroundVideoReady = true;
     video.classList.add("background-video-ready");
   });
-
   const veil = document.createElement("div");
   veil.className = "video-background-veil background-video-veil-layer";
   veil.setAttribute("aria-hidden", "true");
-
   document.body.append(video, veil);
   sharedBackgroundVideo = video;
   sharedBackgroundVeil = veil;
   return { video, veil };
 }
+
+type NavItem = { label: string; to: string; icon: typeof Truck };
+const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+  {
+    label: "Workspace",
+    items: [
+      { label: "Overview", to: "/home", icon: LayoutDashboard },
+      { label: "TMS", to: "/tms", icon: Truck },
+      { label: "HRMS", to: "/hrms", icon: Users },
+      { label: "Accounts", to: "/accounts", icon: WalletCards },
+    ],
+  },
+  {
+    label: "Operations",
+    items: [
+      { label: "TMS Operations", to: "/operations", icon: ClipboardList },
+      { label: "Dashboard", to: "/dashboard", icon: BarChart3 },
+      { label: "Reports", to: "/reports", icon: BarChart3 },
+    ],
+  },
+  {
+    label: "Administration",
+    items: [
+      { label: "Users & access", to: "/users", icon: User },
+      { label: "Settings", to: "/settings", icon: Settings },
+      { label: "System", to: "/system", icon: ShieldCheck },
+    ],
+  },
+];
 
 export function AppShell({
   children,
@@ -56,16 +95,17 @@ export function AppShell({
 }: {
   children: ReactNode;
   breadcrumb?: ReactNode;
-  /** Extra content rendered between the breadcrumb and the user area (e.g. sidebar toggle) */
   headerEnd?: ReactNode;
   mainClassName?: string;
 }) {
   const { signOut, user } = useSession();
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { open, expanded } = useOrcaAI();
-  const { theme, backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
+  const { backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
   const isAdmin = isAdminLike(user?.role);
-  const isViewer = user?.role === "viewer";
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -80,28 +120,25 @@ export function AppShell({
       value: root.style.getPropertyValue(property),
       priority: root.style.getPropertyPriority(property),
     }));
-
     if (backgroundVideoEnabled) root.setAttribute("data-video-background", "on");
     else root.removeAttribute("data-video-background");
     root.style.setProperty("--video-glass-opacity", `${videoGlassAppearance.surfaceOpacity}%`);
     root.style.setProperty("--video-background-veil", `${videoGlassAppearance.backgroundVeil}%`);
     root.style.setProperty("--video-glass-text-color", videoGlassAppearance.textColor);
-
     return () => {
       if (previousAttribute === null) root.removeAttribute("data-video-background");
       else root.setAttribute("data-video-background", previousAttribute);
-      previousStyles.forEach(({ property, value, priority }) => {
-        if (value) root.style.setProperty(property, value, priority);
-        else root.style.removeProperty(property);
-      });
+      previousStyles.forEach(({ property, value, priority }) =>
+        value
+          ? root.style.setProperty(property, value, priority)
+          : root.style.removeProperty(property),
+      );
     };
   }, [backgroundVideoEnabled, videoGlassAppearance]);
-
   useEffect(() => {
     const { video, veil } = ensureSharedBackgroundVideo();
     video.style.display = backgroundVideoEnabled ? "block" : "none";
     veil.style.display = backgroundVideoEnabled ? "block" : "none";
-
     if (!backgroundVideoEnabled) return;
     if (sharedBackgroundVideoUrl !== backgroundVideoUrl) {
       sharedBackgroundVideoUrl = backgroundVideoUrl;
@@ -114,13 +151,15 @@ export function AppShell({
     if (document.body.dataset.screenControlActive !== "true")
       void video.play().catch(() => undefined);
   }, [backgroundVideoEnabled, backgroundVideoUrl]);
-
-  useEffect(() => {
-    return () => {
+  useEffect(
+    () => () => {
       if (sharedBackgroundVideo) sharedBackgroundVideo.style.display = "none";
       if (sharedBackgroundVeil) sharedBackgroundVeil.style.display = "none";
-    };
-  }, []);
+    },
+    [],
+  );
+  const isActive = (to: string) =>
+    to === "/home" ? pathname === "/home" : pathname === to || pathname.startsWith(`${to}/`);
 
   return (
     <div
@@ -138,82 +177,138 @@ export function AppShell({
         user && open && !expanded ? "lg:mr-[360px]" : "",
       )}
     >
-      <header className="relative z-30 shrink-0 border-b border-border bg-card/85 backdrop-blur">
-        <div className="flex h-16 w-full items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
-          <Link to="/home" className="shrink-0">
-            <img
-              src={
-                theme === "neon" || theme === "midnight" || theme === "forest" || theme === "storm"
-                  ? "/garuda-logo.png"
-                  : "/garuda-logo-light.png"
-              }
-              alt="Garuda Logistics Solution"
-              className="h-8 w-auto sm:h-10"
-            />
+      <header className="erp-topbar relative z-40 shrink-0">
+        <div className="flex h-14 w-full items-center gap-3 px-3 sm:px-5">
+          <button
+            type="button"
+            className="erp-mobile-menu lg:hidden"
+            aria-label="Open navigation"
+            onClick={() => setMobileNavOpen(true)}
+          >
+            <Menu className="size-4" />
+          </button>
+          <Link to="/home" className="erp-brand shrink-0">
+            <span className="erp-brand-mark">
+              <Truck className="size-4" />
+            </span>
+            <span className="hidden sm:inline">Garuda ERP</span>
+            <span className="erp-version hidden md:inline">v2.0</span>
           </Link>
-          {breadcrumb && <div className="ml-2 hidden md:block shrink-0">{breadcrumb}</div>}
+          {breadcrumb && (
+            <div className="erp-breadcrumb ml-2 hidden min-w-0 items-center gap-2 md:flex">
+              {breadcrumb}
+            </div>
+          )}
           {headerEnd && <div className="ml-2 hidden lg:block">{headerEnd}</div>}
-          <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
+          <div className="ml-auto flex min-w-0 items-center gap-2">
             <div
               data-app-shell-header-actions
               className="flex shrink-0 items-center gap-1.5 sm:gap-2"
             />
+            <button type="button" className="erp-help hidden sm:inline-flex" title="Help">
+              <CircleHelp className="size-4" />
+            </button>
             {isAdmin && (
-              <Link
-                to="/system"
-                title="System"
-                className="relative flex size-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              >
-                <Server className="size-4" />
+              <Link to="/system" title="System" className="erp-topbar-icon hidden sm:inline-flex">
+                <ShieldCheck className="size-4" />
               </Link>
             )}
             {(isAdmin || user?.role === "viewer" || user?.role === "basic") && <NotificationBell />}
             {user && <MeetTrigger />}
-            <span className="hidden items-center gap-2 text-sm text-muted-foreground sm:flex min-w-0">
-              {isAdmin ? (
-                <ShieldCheck className="size-3.5 text-primary shrink-0" />
-              ) : (
-                <User className="size-3.5 shrink-0" />
+            <div className="relative">
+              <button
+                type="button"
+                className="erp-profile"
+                onClick={() => setProfileOpen((value) => !value)}
+                aria-expanded={profileOpen}
+              >
+                <span className="erp-avatar">
+                  {(user?.fullName ?? user?.username ?? "G").slice(0, 1).toUpperCase()}
+                </span>
+                <span className="hidden max-w-[140px] truncate text-left sm:block">
+                  <strong>{user?.fullName ?? user?.username}</strong>
+                  <small>{isAdmin ? "Administrator" : "Operator"}</small>
+                </span>
+                <ChevronDown className="hidden size-3.5 sm:block" />
+              </button>
+              {profileOpen && (
+                <div className="erp-profile-menu">
+                  <div className="erp-profile-heading">
+                    {user?.fullName ?? user?.username}
+                    <small>{user?.role}</small>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      signOut();
+                      navigate({ to: "/", replace: true });
+                    }}
+                  >
+                    <LogOut className="size-4" /> Sign out
+                  </button>
+                </div>
               )}
-              <span className="font-medium text-foreground truncate max-w-[120px]">
-                {user?.fullName ?? user?.username}
-              </span>
-              <span className="hidden md:inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide shrink-0">
-                {isAdmin
-                  ? user?.role === "semi_admin"
-                    ? "Semi-Admin"
-                    : "Admin"
-                  : isViewer
-                    ? "Viewer"
-                    : "User"}
-              </span>
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              data-no-remote-control
-              onClick={() => {
-                signOut();
-                navigate({ to: "/", replace: true });
-              }}
-              className="shrink-0"
-            >
-              <LogOut className="size-4" />
-              <span className="hidden sm:inline">Sign out</span>
-            </Button>
+            </div>
           </div>
         </div>
       </header>
-      <main
-        className={cn(
-          "relative z-10",
-          "min-h-0 flex-1 overflow-x-hidden overflow-y-auto [overflow-anchor:none]",
-          "w-full max-w-none px-2 py-4 sm:px-4 sm:py-6",
-          mainClassName,
+      <div className="erp-shell-body relative z-10 min-h-0 flex-1">
+        <aside className={cn("erp-sidebar", mobileNavOpen && "is-open")}>
+          <div className="erp-sidebar-mobile-close lg:hidden">
+            <span>Navigation</span>
+            <button
+              type="button"
+              onClick={() => setMobileNavOpen(false)}
+              aria-label="Close navigation"
+            >
+              <X className="size-4" />
+            </button>
+          </div>
+          <div className="erp-sidebar-context">
+            <span className="erp-context-dot" /> GARUDA WORKSPACE
+          </div>
+          {NAV_GROUPS.map((group) => (
+            <div key={group.label} className="erp-nav-group">
+              <p>{group.label}</p>
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const active = isActive(item.to);
+                return (
+                  <a
+                    key={item.to}
+                    href={item.to}
+                    className={cn("erp-nav-item", active && "active")}
+                    onClick={() => setMobileNavOpen(false)}
+                  >
+                    <Icon className="size-4" />
+                    <span>{item.label}</span>
+                    {active && <span className="erp-nav-active-dot" />}
+                  </a>
+                );
+              })}
+            </div>
+          ))}
+          <div className="erp-sidebar-footer">
+            <span className="erp-status-dot" /> All systems operational
+          </div>
+        </aside>
+        {mobileNavOpen && (
+          <button
+            type="button"
+            className="erp-sidebar-backdrop lg:hidden"
+            aria-label="Close navigation"
+            onClick={() => setMobileNavOpen(false)}
+          />
         )}
-      >
-        {children}
-      </main>
+        <main
+          className={cn(
+            "relative min-h-0 w-full max-w-none overflow-x-hidden overflow-y-auto [overflow-anchor:none] px-3 py-5 sm:px-6 sm:py-7 lg:px-8",
+            mainClassName,
+          )}
+        >
+          {children}
+        </main>
+      </div>
     </div>
   );
 }

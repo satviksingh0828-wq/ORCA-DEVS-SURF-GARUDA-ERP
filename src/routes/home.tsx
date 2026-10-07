@@ -3,17 +3,14 @@ import { useEffect, useState } from "react";
 import {
   ArrowRight,
   BarChart3,
-  Landmark,
-  CalendarCheck,
   Database,
   FileText,
+  Landmark,
   Settings2,
   Truck,
   Users,
-  Wallet,
   UserRound,
 } from "lucide-react";
-import { toast } from "sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -23,17 +20,8 @@ import { PoweredBy } from "@/components/PoweredBy";
 export const Route = createFileRoute("/home")({
   head: () => ({
     meta: [
-      { title: "Workspace — ORCA DEVS SURF" },
-      {
-        name: "description",
-        content:
-          "ORCA DEVS SURF workspace: operations, masters, dashboard, reports, users and settings modules.",
-      },
-      { property: "og:title", content: "Workspace — ORCA DEVS SURF" },
-      {
-        property: "og:description",
-        content: "Operations, masters, dashboard, reports, users and settings in one workspace.",
-      },
+      { title: "Workspace — Garuda ERP" },
+      { name: "description", content: "Choose a Garuda ERP workspace module." },
     ],
   }),
   component: () => (
@@ -43,178 +31,160 @@ export const Route = createFileRoute("/home")({
   ),
 });
 
-const BASIC_MODULES = [
+const CORE_MODULES = [
   {
-    key: "ltms",
-    label: "LTMS",
-    desc: "Branch operations, finance, reports, billing & masters",
+    key: "tms",
+    label: "TMS",
+    eyebrow: "Transport management",
+    desc: "Operations, trips, masters, reports and dispatch",
     icon: Truck,
-    active: true,
-    to: "/ltms" as const,
-    roles: ["basic"] as const,
-  },
-  {
-    key: "hr-data",
-    label: "HR Data",
-    desc: "Your profile, attendance & payroll",
-    icon: UserRound,
-    active: true,
-    to: "/hr-data" as const,
-    roles: ["basic"] as const,
-  },
-  {
-    key: "dashboard",
-    label: "Dashboard",
-    desc: "Profit & loss, revenue overview",
-    icon: BarChart3,
-    active: true,
-    to: "/dashboard" as const,
-    roles: ["admin", "semi_admin", "viewer"] as const,
-  },
-  {
-    key: "reports",
-    label: "Reports",
-    desc: "P&L comparison & period reports",
-    icon: FileText,
-    active: true,
-    to: "/reports" as const,
-    roles: ["admin", "semi_admin", "viewer"] as const,
-  },
-  {
-    key: "users",
-    label: "Users",
-    desc: "Roles, access & activity log",
-    icon: Users,
-    active: true,
-    to: "/users" as const,
-    roles: ["admin"] as const,
-  },
-  {
-    key: "settings",
-    label: "Settings",
-    desc: "Company, branches, departments & appearance",
-    icon: Settings2,
-    active: true,
-    to: "/settings" as const,
-    roles: ["admin"] as const,
-  },
-] as const;
-
-const ADMIN_VIEWER_MODULES = [
-  {
-    key: "ltms",
-    label: "LTMS",
-    desc: "Logistics finance, income & expenditure",
-    icon: Truck,
-    active: true,
-    to: "/ltms" as const,
-    roles: ["admin", "semi_admin", "viewer"] as const,
+    to: "/tms",
+    color: "red",
   },
   {
     key: "hrms",
     label: "HRMS",
-    desc: "Employees, attendance, payroll & HR dashboards",
+    eyebrow: "People operations",
+    desc: "Employees, attendance, payroll and HR dashboards",
     icon: Users,
-    active: true,
-    to: "/hrms" as const,
-    roles: ["admin", "semi_admin", "viewer"] as const,
+    to: "/hrms",
+    color: "blue",
   },
   {
     key: "accounts",
     label: "Accounts",
-    desc: "Branch bank & cash account masters",
+    eyebrow: "Finance workspace",
+    desc: "Ledgers, journals, bank, cash and final accounts",
     icon: Landmark,
-    active: true,
-    to: "/accounts" as const,
-    roles: ["admin", "semi_admin", "viewer"] as const,
+    to: "/accounts",
+    color: "amber",
+  },
+];
+const SUPPORT_MODULES = [
+  {
+    key: "ltms",
+    label: "LTMS",
+    desc: "Logistics operations, billing and masters",
+    icon: Database,
+    to: "/ltms",
+    roles: ["admin", "semi_admin", "basic", "viewer"],
+  },
+  {
+    key: "dashboard",
+    label: "Analytics",
+    desc: "Profit, loss and business dashboards",
+    icon: BarChart3,
+    to: "/dashboard",
+    roles: ["admin", "semi_admin", "viewer"],
+  },
+  {
+    key: "reports",
+    label: "Reports",
+    desc: "Period reports and comparisons",
+    icon: FileText,
+    to: "/reports",
+    roles: ["admin", "semi_admin", "viewer"],
   },
   {
     key: "settings",
     label: "Settings",
-    desc: "Universal theme & passkey security",
+    desc: "Company, branches and appearance",
     icon: Settings2,
-    active: true,
-    to: "/settings" as const,
-    roles: ["admin"] as const,
+    to: "/settings",
+    roles: ["admin"],
   },
   {
     key: "users",
     label: "Users",
-    desc: "Users, devices & activity logs",
-    icon: Users,
-    active: true,
-    to: "/users" as const,
-    roles: ["admin"] as const,
+    desc: "Roles, access and activity logs",
+    icon: UserRound,
+    to: "/users",
+    roles: ["admin"],
   },
-] as const;
+];
 
 function HomePage() {
   const navigate = useNavigate();
   const { user } = useSession();
   const [loading, setLoading] = useState(true);
-
   useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 700);
-    return () => clearTimeout(t);
+    const timer = setTimeout(() => setLoading(false), 450);
+    return () => clearTimeout(timer);
   }, []);
-
   const role = user?.role ?? "basic";
-  const moduleSource = role === "basic" ? BASIC_MODULES : ADMIN_VIEWER_MODULES;
-  const MODULES = moduleSource.filter((m) => (m.roles as readonly string[]).includes(role));
-
+  const modules = CORE_MODULES.filter((item) => role !== "basic" || item.key !== "accounts");
+  const supportModules = SUPPORT_MODULES.filter((item) => item.roles.includes(role));
   return (
     <AppShell>
-      <div className="animate-fade-up">
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">Workspace</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Garuda Logistics Solutions</h1>
-        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-          {role === "admin" ? "Select a module" : "Select a module"}
-        </p>
+      <div className="erp-page-intro animate-fade-up">
+        <div>
+          <p className="erp-kicker">GARUDA WORKSPACE</p>
+          <h1>Choose a module</h1>
+          <p>One admin experience for every part of your logistics business.</p>
+        </div>
+        <div className="erp-intro-meta">
+          <span className="erp-live-dot" /> {user?.fullName ?? user?.username}{" "}
+          <span className="erp-role-chip">{role.replace("_", " ")}</span>
+        </div>
       </div>
-
-      <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
-        {loading
-          ? Array.from({ length: MODULES.length }).map((_, i) => (
-              <Skeleton key={i} className="h-40 rounded-2xl" />
-            ))
-          : MODULES.map((m, i) => {
-              const Icon = m.icon;
-              const enabled = "active" in m && m.active;
-              return (
-                <button
-                  key={m.key}
-                  type="button"
-                  onClick={() =>
-                    enabled && "to" in m && m.to
-                      ? navigate({ to: m.to })
-                      : toast.info(`${m.label} module is coming soon`)
-                  }
-                  style={{ animationDelay: `${i * 55}ms` }}
-                  className="group surface-card animate-fade-up relative flex h-40 flex-col items-start p-6 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lift)]"
-                >
-                  <span
-                    className={`flex size-11 items-center justify-center rounded-xl transition-colors ${
-                      enabled
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-primary-soft text-primary group-hover:bg-primary group-hover:text-primary-foreground"
-                    }`}
+      <section className="mt-8">
+        <div className="erp-section-heading">
+          <h2>Core modules</h2>
+          <span>Choose where you want to work</span>
+        </div>
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+          {loading
+            ? modules.map((item) => <Skeleton key={item.key} className="h-48 rounded-xl" />)
+            : modules.map((item, index) => {
+                const Icon = item.icon;
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => navigate({ to: item.to as never })}
+                    style={{ animationDelay: `${index * 70}ms` }}
+                    className={`erp-module-card erp-module-${item.color} animate-fade-up`}
                   >
-                    <Icon className="size-5" />
-                  </span>
-                  <span className="mt-4 text-base font-semibold tracking-tight">{m.label}</span>
-                  <span className="mt-1 text-sm text-muted-foreground">{m.desc}</span>
-                  <span className="absolute right-5 top-6 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    {enabled ? (
-                      <ArrowRight className="size-4 text-primary transition-transform group-hover:translate-x-1" />
-                    ) : (
-                      "Soon"
-                    )}
-                  </span>
-                </button>
-              );
-            })}
-      </div>
-
+                    <span className="erp-module-icon">
+                      <Icon className="size-6" />
+                    </span>
+                    <span className="erp-module-eyebrow">{item.eyebrow}</span>
+                    <span className="erp-module-title">{item.label}</span>
+                    <span className="erp-module-desc">{item.desc}</span>
+                    <ArrowRight className="erp-module-arrow size-5" />
+                  </button>
+                );
+              })}
+        </div>
+      </section>
+      <section className="mt-10">
+        <div className="erp-section-heading">
+          <h2>All workspaces</h2>
+          <span>Existing Garuda tools stay available</span>
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {supportModules.map((item) => {
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => navigate({ to: item.to as never })}
+                className="erp-support-card"
+              >
+                <span className="erp-support-icon">
+                  <Icon className="size-4" />
+                </span>
+                <span>
+                  <strong>{item.label}</strong>
+                  <small>{item.desc}</small>
+                </span>
+                <ArrowRight className="ml-auto size-4" />
+              </button>
+            );
+          })}
+        </div>
+      </section>
       <PoweredBy className="mt-12 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/50" />
     </AppShell>
   );
