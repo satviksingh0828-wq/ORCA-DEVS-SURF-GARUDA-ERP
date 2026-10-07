@@ -1,9 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { FileText, Truck, Wallet } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { WorkspaceModulePage } from "@/components/WorkspaceModulePage";
 
 export const Route = createFileRoute("/tms")({
+  beforeLoad: () => {
+    throw redirect({ to: "/ltms/operations" });
+  },
   component: () => (
     <RequireAuth>
       <WorkspaceModulePage

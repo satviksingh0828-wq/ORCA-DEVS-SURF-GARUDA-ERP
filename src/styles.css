@@ -1204,3 +1204,12 @@ table td {
 .erp-login-form button[type="submit"]:disabled { background: #b8a79a; opacity: .7; }
 .erp-login-page .text-muted-foreground { color: #766a5b; }
 @media (max-width: 1023px) { .erp-login-card { border: 0; padding: 24px 0; background: transparent; box-shadow: none; } }
+/* ── Clean post-login module picker ──────────────────────────────────────── */
+.erp-module-picker { display: flex; min-height: calc(100dvh - 56px); flex-direction: column; align-items: center; justify-content: center; padding: 34px 16px 52px; }
+.erp-picker-brand { display: inline-flex; align-items: center; gap: 9px; margin-bottom: 42px; color: #2a2520; font-size: 16px; font-weight: 650; letter-spacing: .02em; }
+.erp-picker-heading { margin-bottom: 28px; text-align: center; }
+.erp-picker-heading h1 { margin: 0; color: #1a1714; font-size: clamp(28px, 4vw, 39px); font-weight: 650; letter-spacing: -.045em; }
+.erp-picker-heading p:not(.erp-kicker) { margin: 8px 0 0; color: #766a5b; font-size: 13px; }
+.erp-module-slate { border-top-color: #6b6259; }
+.erp-module-slate .erp-module-icon { background: #f1efeb; color: #514941; }
+@media (max-width: 640px) { .erp-module-picker { justify-content: flex-start; padding-top: 28px; }.erp-picker-brand { margin-bottom: 30px; }.erp-picker-heading { margin-bottom: 20px; } }

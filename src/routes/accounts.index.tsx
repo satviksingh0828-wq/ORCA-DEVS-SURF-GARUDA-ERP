@@ -1,9 +1,12 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 import { BarChart3, BookOpen, Database, FileText } from "lucide-react";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { WorkspaceModulePage } from "@/components/WorkspaceModulePage";
 
 export const Route = createFileRoute("/accounts/")({
+  beforeLoad: () => {
+    throw redirect({ to: "/accounts/masters" });
+  },
   component: () => (
     <AccountsAccessGuard>
       <WorkspaceModulePage

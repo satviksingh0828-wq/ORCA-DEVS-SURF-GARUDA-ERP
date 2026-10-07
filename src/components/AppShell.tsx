@@ -1,6 +1,8 @@
 import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import {
   BarChart3,
+  Database,
+  FileText,
   ChevronDown,
   CircleHelp,
   ClipboardList,
@@ -59,44 +61,103 @@ function ensureSharedBackgroundVideo() {
 }
 
 type NavItem = { label: string; to: string; icon: typeof Truck };
-const NAV_GROUPS: { label: string; items: NavItem[] }[] = [
+type NavGroup = { label: string; items: NavItem[] };
+const WORKSPACE_NAV: NavGroup[] = [
   {
     label: "Workspace",
     items: [
       { label: "Overview", to: "/home", icon: LayoutDashboard },
-      { label: "TMS", to: "/tms", icon: Truck },
+      { label: "LTMS", to: "/ltms", icon: Truck },
       { label: "HRMS", to: "/hrms", icon: Users },
       { label: "Accounts", to: "/accounts", icon: WalletCards },
+      { label: "Users", to: "/users", icon: User },
+      { label: "Settings", to: "/settings", icon: Settings },
     ],
   },
+];
+const LTMS_NAV: NavGroup[] = [
   {
-    label: "Operations",
+    label: "LTMS",
     items: [
-      { label: "TMS Operations", to: "/operations", icon: ClipboardList },
-      { label: "Dashboard", to: "/dashboard", icon: BarChart3 },
-      { label: "Reports", to: "/reports", icon: BarChart3 },
+      { label: "Operations", to: "/ltms/operations", icon: ClipboardList },
+      { label: "Finance", to: "/finance", icon: WalletCards },
+      { label: "Billing", to: "/ltms/billing", icon: WalletCards },
+      { label: "Masters", to: "/ltms/masters", icon: Database },
+      { label: "Reports", to: "/ltms/reports", icon: BarChart3 },
     ],
   },
+];
+const HRMS_NAV: NavGroup[] = [
+  {
+    label: "HRMS",
+    items: [
+      { label: "Employees", to: "/employees", icon: Users },
+      { label: "Attendance", to: "/attendance", icon: ClipboardList },
+      { label: "Payroll", to: "/payroll", icon: WalletCards },
+      { label: "Dashboards", to: "/dashboard/employee", icon: BarChart3 },
+    ],
+  },
+];
+const ACCOUNTS_NAV: NavGroup[] = [
+  {
+    label: "Accounts",
+    items: [
+      { label: "Masters", to: "/accounts/masters", icon: Database },
+      { label: "Journal", to: "/accounts/journal", icon: ClipboardList },
+      { label: "Ledger", to: "/accounts/ledger", icon: FileText },
+      { label: "Final Accounts", to: "/accounts/final", icon: BarChart3 },
+    ],
+  },
+];
+const ADMIN_NAV: NavGroup[] = [
   {
     label: "Administration",
     items: [
-      { label: "Users & access", to: "/users", icon: User },
+      { label: "Users", to: "/users", icon: User },
       { label: "Settings", to: "/settings", icon: Settings },
       { label: "System", to: "/system", icon: ShieldCheck },
     ],
   },
 ];
+function Database(props: React.ComponentProps<typeof Truck>) {
+  return <WalletCards {...props} />;
+}
+function FileText(props: React.ComponentProps<typeof Truck>) {
+  return <ClipboardList {...props} />;
+}
+function moduleNavigation(pathname: string): { label: string; groups: NavGroup[] } {
+  if (pathname.startsWith("/ltms") || pathname === "/finance")
+    return { label: "LTMS", groups: LTMS_NAV };
+  if (
+    pathname.startsWith("/hrms") ||
+    pathname.startsWith("/employees") ||
+    pathname.startsWith("/attendance") ||
+    pathname.startsWith("/payroll") ||
+    pathname.startsWith("/hr-dashboard")
+  )
+    return { label: "HRMS", groups: HRMS_NAV };
+  if (pathname.startsWith("/accounts")) return { label: "Accounts", groups: ACCOUNTS_NAV };
+  if (
+    pathname.startsWith("/users") ||
+    pathname.startsWith("/settings") ||
+    pathname.startsWith("/system")
+  )
+    return { label: "Administration", groups: ADMIN_NAV };
+  return { label: "Workspace", groups: WORKSPACE_NAV };
+}
 
 export function AppShell({
   children,
   breadcrumb,
   headerEnd,
   mainClassName,
+  showSidebar = true,
 }: {
   children: ReactNode;
   breadcrumb?: ReactNode;
   headerEnd?: ReactNode;
   mainClassName?: string;
+  showSidebar?: boolean;
 }) {
   const { signOut, user } = useSession();
   const navigate = useNavigate();
@@ -158,6 +219,7 @@ export function AppShell({
     },
     [],
   );
+  const module = moduleNavigation(pathname);
   const isActive = (to: string) =>
     to === "/home" ? pathname === "/home" : pathname === to || pathname.startsWith(`${to}/`);
 
@@ -253,46 +315,45 @@ export function AppShell({
         </div>
       </header>
       <div className="erp-shell-body relative z-10 min-h-0 flex-1">
-        <aside className={cn("erp-sidebar", mobileNavOpen && "is-open")}>
-          <div className="erp-sidebar-mobile-close lg:hidden">
-            <span>Navigation</span>
-            <button
-              type="button"
-              onClick={() => setMobileNavOpen(false)}
-              aria-label="Close navigation"
-            >
-              <X className="size-4" />
-            </button>
-          </div>
-          <div className="erp-sidebar-context">
-            <span className="erp-context-dot" /> GARUDA WORKSPACE
-          </div>
-          {NAV_GROUPS.map((group) => (
-            <div key={group.label} className="erp-nav-group">
-              <p>{group.label}</p>
-              {group.items.map((item) => {
-                const Icon = item.icon;
-                const active = isActive(item.to);
-                return (
-                  <a
-                    key={item.to}
-                    href={item.to}
-                    className={cn("erp-nav-item", active && "active")}
-                    onClick={() => setMobileNavOpen(false)}
-                  >
-                    <Icon className="size-4" />
-                    <span>{item.label}</span>
-                    {active && <span className="erp-nav-active-dot" />}
-                  </a>
-                );
-              })}
+        {showSidebar && (
+          <aside className={cn("erp-sidebar", mobileNavOpen && "is-open")}>
+            <div className="erp-sidebar-mobile-close lg:hidden">
+              <span>Navigation</span>
+              <button
+                type="button"
+                onClick={() => setMobileNavOpen(false)}
+                aria-label="Close navigation"
+              >
+                <X className="size-4" />
+              </button>
             </div>
-          ))}
-          <div className="erp-sidebar-footer">
-            <span className="erp-status-dot" /> All systems operational
-          </div>
-        </aside>
-        {mobileNavOpen && (
+            <div className="erp-sidebar-context">
+              <span className="erp-context-dot" /> {module.label}
+            </div>
+            {module.groups.map((group) => (
+              <div key={group.label} className="erp-nav-group">
+                <p>{group.label}</p>
+                {group.items.map((item) => {
+                  const Icon = item.icon;
+                  const active = isActive(item.to);
+                  return (
+                    <a
+                      key={item.to}
+                      href={item.to}
+                      className={cn("erp-nav-item", active && "active")}
+                      onClick={() => setMobileNavOpen(false)}
+                    >
+                      <Icon className="size-4" />
+                      <span>{item.label}</span>
+                      {active && <span className="erp-nav-active-dot" />}
+                    </a>
+                  );
+                })}
+              </div>
+            ))}
+          </aside>
+        )}
+        {showSidebar && mobileNavOpen && (
           <button
             type="button"
             className="erp-sidebar-backdrop lg:hidden"
