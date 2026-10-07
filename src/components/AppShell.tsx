@@ -241,14 +241,16 @@ export function AppShell({
     >
       <header className="erp-topbar relative z-40 shrink-0">
         <div className="flex h-14 w-full items-center gap-3 px-3 sm:px-5">
-          <button
-            type="button"
-            className="erp-mobile-menu lg:hidden"
-            aria-label="Open navigation"
-            onClick={() => setMobileNavOpen(true)}
-          >
-            <Menu className="size-4" />
-          </button>
+          {showSidebar && (
+            <button
+              type="button"
+              className="erp-mobile-menu lg:hidden"
+              aria-label="Open navigation"
+              onClick={() => setMobileNavOpen(true)}
+            >
+              <Menu className="size-4" />
+            </button>
+          )}
           <Link to="/home" className="erp-brand shrink-0">
             <span className="erp-brand-mark">
               <Truck className="size-4" />
