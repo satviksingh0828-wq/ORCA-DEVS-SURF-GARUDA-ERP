@@ -63,8 +63,7 @@ const SessionContext = createContext<SessionValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [ready, setReady] = useState(false);
-  const [wmsAccessReady, setWmsAccessReady] = useState(false);
-  const [wmsEnabled, setWmsEnabled] = useState(false);
+  const [wmsAccess, setWmsAccess] = useState({ ready: false, enabled: false });
 
   // Refs so timer callbacks always read the latest value without re-registering
   const userRef = useRef<SessionUser | null>(null);
@@ -97,21 +96,18 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     userRef.current = null;
     setUser(null);
-    setWmsEnabled(false);
-    setWmsAccessReady(false);
+    setWmsAccess({ ready: false, enabled: false });
     setLoggerUser(null);
   }, []);
 
   const prepareWmsSession = useCallback(async (token: string) => {
     try {
       const { enabled } = await serverHasWmsAccess({ data: { sessionToken: token } });
-      setWmsEnabled(enabled);
-      setWmsAccessReady(true);
+      setWmsAccess({ ready: true, enabled });
       if (enabled) void warmWmsSession(token);
     } catch {
       // WMS is optional. A WMS outage must never block the ERP session.
-      setWmsEnabled(false);
-      setWmsAccessReady(true);
+      setWmsAccess({ ready: true, enabled: false });
     }
   }, []);
 
@@ -180,7 +176,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
           void prepareWmsSession(parsed.sessionToken);
         }
       } else {
-        setWmsAccessReady(true);
+        setWmsAccess({ ready: true, enabled: false });
       }
     } catch {
       // ignore corrupt storage
@@ -254,8 +250,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ ready, user, signIn, signOut, wmsAccessReady, wmsEnabled }),
-    [ready, user, signIn, signOut, wmsAccessReady, wmsEnabled],
+    () => ({
+      ready,
+      user,
+      signIn,
+      signOut,
+      wmsAccessReady: wmsAccess.ready,
+      wmsEnabled: wmsAccess.enabled,
+    }),
+    [ready, user, signIn, signOut, wmsAccess],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;

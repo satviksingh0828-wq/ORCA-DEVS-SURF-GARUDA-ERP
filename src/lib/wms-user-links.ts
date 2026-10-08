@@ -39,19 +39,27 @@ async function requireActiveUser(sessionToken: string) {
   const signedSession = await verifyAppToken(sessionToken);
   if (!signedSession) throw new Error("Your ERP session is no longer active. Sign in again.");
   const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
-  const [{ data: user, error: userError }, { data: currentSession, error: sessionError }] =
-    await Promise.all([
-      supabaseAdmin
-        .from("app_users")
-        .select("id, is_active, is_paused")
-        .eq("id", signedSession.uid)
-        .maybeSingle(),
-      supabaseAdmin
-        .from("user_sessions")
-        .select("session_token")
-        .eq("user_id", signedSession.uid)
-        .maybeSingle(),
-    ]);
+  const [
+    { data: user, error: userError },
+    { data: currentSession, error: sessionError },
+    { data: wmsLink, error: wmsLinkError },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("app_users")
+      .select("id, is_active, is_paused")
+      .eq("id", signedSession.uid)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("user_sessions")
+      .select("session_token")
+      .eq("user_id", signedSession.uid)
+      .maybeSingle(),
+    supabaseAdmin
+      .from("wms_erp_user_links")
+      .select("wms_user_id")
+      .eq("erp_user_id", signedSession.uid)
+      .maybeSingle(),
+  ]);
   if (
     userError ||
     sessionError ||
@@ -62,19 +70,18 @@ async function requireActiveUser(sessionToken: string) {
   ) {
     throw new Error("Your ERP session is no longer active. Sign in again.");
   }
-  return { supabaseAdmin, erpUserId: signedSession.uid };
+  return {
+    supabaseAdmin,
+    erpUserId: signedSession.uid,
+    hasWmsAccess: !wmsLinkError && Boolean(wmsLink),
+  };
 }
 
 export const serverHasWmsAccess = createServerFn({ method: "POST" })
   .validator((input: SessionInput) => input)
   .handler(async ({ data }): Promise<{ enabled: boolean }> => {
-    const { supabaseAdmin, erpUserId } = await requireActiveUser(data.sessionToken);
-    const { data: link, error } = await supabaseAdmin
-      .from("wms_erp_user_links")
-      .select("wms_user_id")
-      .eq("erp_user_id", erpUserId)
-      .maybeSingle();
-    return { enabled: !error && Boolean(link) };
+    const { hasWmsAccess } = await requireActiveUser(data.sessionToken);
+    return { enabled: hasWmsAccess };
   });
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
