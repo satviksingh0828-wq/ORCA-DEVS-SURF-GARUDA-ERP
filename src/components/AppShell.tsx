@@ -54,6 +54,7 @@ export function AppShell({
   headerEnd,
   mainClassName,
   variant = "default",
+  shellTitle = "LTMS",
 }: {
   children: ReactNode;
   breadcrumb?: ReactNode;
@@ -61,6 +62,7 @@ export function AppShell({
   headerEnd?: ReactNode;
   mainClassName?: string;
   variant?: "default" | "ltms";
+  shellTitle?: string;
 }) {
   const { signOut, user } = useSession();
   const navigate = useNavigate();
@@ -203,7 +205,7 @@ export function AppShell({
               className={cn("h-8 w-auto sm:h-10", variant === "ltms" ? "ltms-app-shell-logo" : "")}
             />
           </Link>
-          {variant === "ltms" && <span className="ltms-app-shell-title">LTMS</span>}
+          {variant === "ltms" && <span className="ltms-app-shell-title">{shellTitle}</span>}
           {breadcrumb && variant !== "ltms" && (
             <div
               className={cn(

@@ -17,6 +17,8 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
 
   return (
     <AppShell
+      variant="ltms"
+      shellTitle="HRMS"
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">
@@ -52,9 +54,6 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
         {navOpen && <HrSectionNav area={area} desktop />}
         <div className="min-w-0">
           <HrSectionNav area={area} />
-          <header className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-tight">{label}</h1>
-          </header>
           {children}
         </div>
       </div>

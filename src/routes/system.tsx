@@ -84,6 +84,8 @@ function SystemPage() {
 
   return (
     <AppShell
+      variant="ltms"
+      shellTitle="System"
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">

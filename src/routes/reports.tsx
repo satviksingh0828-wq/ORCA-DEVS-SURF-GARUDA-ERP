@@ -116,6 +116,8 @@ function ReportsPage() {
 
   return (
     <AppShell
+      variant="ltms"
+      shellTitle="Reports"
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">

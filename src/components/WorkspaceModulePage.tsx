@@ -21,12 +21,14 @@ export function WorkspaceModulePage({
   tiles,
   eyebrow,
   allowedRoles = ["admin", "semi_admin", "viewer"],
+  shellVariant = "default",
 }: {
   title: string;
   description: string;
   tiles: WorkspaceTile[];
   eyebrow: string;
   allowedRoles?: readonly ("admin" | "semi_admin" | "basic" | "viewer")[];
+  shellVariant?: "default" | "ltms";
 }) {
   const navigate = useNavigate();
   const { user } = useSession();
@@ -43,6 +45,8 @@ export function WorkspaceModulePage({
 
   return (
     <AppShell
+      variant={shellVariant}
+      shellTitle={title}
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">

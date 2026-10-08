@@ -7,6 +7,7 @@ export const Route = createFileRoute("/accounts/")({
   component: () => (
     <AccountsAccessGuard>
       <WorkspaceModulePage
+        shellVariant="ltms"
         eyebrow="Workspace / Accounts"
         title="Accounts"
         description="Maintain the bank and cash account records for every branch."

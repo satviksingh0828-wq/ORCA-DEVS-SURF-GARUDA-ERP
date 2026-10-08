@@ -9,7 +9,6 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Loader2,
-  Palette,
   Search,
   ShieldCheck,
   Wifi,
@@ -42,13 +41,12 @@ export const Route = createFileRoute("/settings")({
       { title: "Settings — ORCA DEVS SURF" },
       {
         name: "description",
-        content:
-          "Manage company profile, branches, departments and application appearance for ORCA DEVS SURF.",
+        content: "Manage company profile, branches, integrations and security for ORCA DEVS SURF.",
       },
       { property: "og:title", content: "Settings — ORCA DEVS SURF" },
       {
         property: "og:description",
-        content: "Company profile, branches, departments and theme settings for ORCA DEVS SURF.",
+        content: "Company profile, branches, integrations and security for ORCA DEVS SURF.",
       },
     ],
   }),
@@ -67,7 +65,6 @@ function SettingsRouteContent() {
 const TABS = [
   { id: "company", label: "Company", desc: "Profile & registration", icon: Building },
   { id: "branch", label: "Branch", desc: "Locations & managers", icon: Building2 },
-  { id: "theme", label: "Theme Settings", desc: "Universal app appearance", icon: Palette },
   { id: "attendance", label: "Attendance Module", desc: "Device & service connection", icon: Wifi },
   { id: "whatsapp", label: "WhatsApp", desc: "HR PDF sending & connection", icon: MessageCircle },
   { id: "mail", label: "Mail", desc: "All email notifications", icon: Mail },
@@ -109,6 +106,8 @@ function SettingsPage() {
 
   return (
     <AppShell
+      variant="ltms"
+      shellTitle="Settings"
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">
@@ -183,7 +182,6 @@ function SettingsPage() {
           </header>
           {tab === "company" ? <CompanySettings /> : null}
           {tab === "branch" ? <BranchSettings /> : null}
-          {tab === "theme" ? <ThemePanel /> : null}
           {tab === "attendance" ? <AttendanceModuleSettings /> : null}
           {tab === "whatsapp" ? <WhatsAppSettings /> : null}
           {tab === "mail" ? <MailSettings /> : null}
