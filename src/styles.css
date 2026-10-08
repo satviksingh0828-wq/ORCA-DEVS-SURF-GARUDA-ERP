@@ -1588,3 +1588,68 @@ table td {
   background: rgba(255, 255, 255, 0.06);
   color: #fdf4e3;
 }
+
+/* Shared LTMS sidebar treatment for non-LTMS modules. The navigation data and
+   permissions remain module-specific; only the visual shell is shared. */
+.ltms-shared-sidebar {
+  width: 192px !important;
+  flex: 0 0 192px !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 0 !important;
+  background: #2a2520 !important;
+}
+.ltms-shared-sidebar .app-sidebar-scroll {
+  width: 100% !important;
+  height: calc(100dvh - 5rem) !important;
+  max-height: calc(100dvh - 5rem) !important;
+  padding: 8px 6px !important;
+  border-radius: 0 !important;
+  background: #2a2520 !important;
+}
+.ltms-shared-sidebar .app-sidebar-scroll > ul,
+.ltms-shared-sidebar .app-sidebar-scroll > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ltms-shared-sidebar .app-sidebar-scroll button,
+.ltms-shared-sidebar .app-sidebar-scroll a {
+  display: flex;
+  min-height: 31px;
+  width: 100%;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  border-left: 3px solid transparent;
+  border-radius: 0 6px 6px 0;
+  background: transparent;
+  color: #fff;
+  text-align: left;
+  transition:
+    background 0.1s,
+    color 0.1s;
+}
+.ltms-shared-sidebar .app-sidebar-scroll button:hover,
+.ltms-shared-sidebar .app-sidebar-scroll a:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.ltms-shared-sidebar .app-sidebar-scroll button[aria-current="page"],
+.ltms-shared-sidebar .app-sidebar-scroll a[aria-current="page"] {
+  border-left-color: #b87333;
+  background: rgba(183, 115, 51, 0.15);
+  color: #fdf4e3;
+}
+.ltms-shared-sidebar .app-sidebar-scroll button span,
+.ltms-shared-sidebar .app-sidebar-scroll a span {
+  color: inherit;
+}
+.ltms-shared-sidebar .app-sidebar-scroll p,
+.ltms-shared-sidebar .app-sidebar-scroll h2 {
+  color: #fdf4e3 !important;
+}
+@media (min-width: 1024px) {
+  .ltms-app-shell-main:has(.ltms-shared-sidebar) {
+    padding: 0 !important;
+  }
+}

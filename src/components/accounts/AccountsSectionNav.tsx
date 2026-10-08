@@ -149,7 +149,7 @@ export function AccountsSectionNav({
     return (
       <>
         {sidebarOpen ? (
-          <SharedSidebar open={sidebarOpen} label={title} containerRef={sidebarRef}>
+          <SharedSidebar open={sidebarOpen} label={title} variant="ltms" containerRef={sidebarRef}>
             <div className="space-y-1">
               {mode === "masters" &&
                 masterLinks.map(({ label, description, to, icon: Icon }) => {

@@ -155,7 +155,13 @@ export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?
 
   if (desktop) {
     return (
-      <SharedSidebar open width="220px" breakpoint="xl" label={`${areaLabels[area]} sections`}>
+      <SharedSidebar
+        open
+        width="220px"
+        breakpoint="xl"
+        variant="ltms"
+        label={`${areaLabels[area]} sections`}
+      >
         <ul className="space-y-1">
           {links.map(({ label, description, to, icon: Icon }) => {
             const active = linkIsActive(pathname, to);

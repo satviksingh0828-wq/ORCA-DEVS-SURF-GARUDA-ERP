@@ -143,7 +143,7 @@ function SettingsPage() {
       >
         {/* Desktop left nav */}
         {navOpen && (
-          <SharedSidebar open={navOpen} width="220px" label="Settings">
+          <SharedSidebar open={navOpen} width="220px" variant="ltms" label="Settings">
             <ul className="space-y-1">
               {TABS.map((t) => {
                 const Icon = t.icon;

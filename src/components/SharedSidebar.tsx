@@ -9,6 +9,7 @@ export function SharedSidebar({
   className,
   breakpoint = "lg",
   containerRef,
+  variant = "default",
 }: {
   children: ReactNode;
   open?: boolean;
@@ -17,13 +18,19 @@ export function SharedSidebar({
   className?: string;
   breakpoint?: "lg" | "xl";
   containerRef?: RefObject<HTMLElement | null>;
+  variant?: "default" | "ltms";
 }) {
   if (!open) return null;
   return (
     <aside
       ref={containerRef}
       data-app-sidebar-container="true"
-      className={cn("app-sidebar-container hidden shrink-0", breakpoint === "xl" ? "xl:block" : "lg:block", className)}
+      className={cn(
+        "app-sidebar-container hidden shrink-0",
+        breakpoint === "xl" ? "xl:block" : "lg:block",
+        variant === "ltms" ? "ltms-reference-sidebar ltms-shared-sidebar" : "",
+        className,
+      )}
       style={{ width }}
       aria-label={label}
     >

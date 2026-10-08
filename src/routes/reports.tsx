@@ -157,7 +157,7 @@ function ReportsPage() {
       >
         {/* ── Left nav (desktop) ── */}
         {navOpen && (
-          <SharedSidebar open={navOpen} width="220px" label="Reports">
+          <SharedSidebar open={navOpen} width="220px" variant="ltms" label="Reports">
             <ul className="space-y-1">
               {visibleTabs.map((t) => {
                 const Icon = t.icon;
