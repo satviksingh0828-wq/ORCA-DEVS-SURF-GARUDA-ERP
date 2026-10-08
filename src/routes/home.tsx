@@ -18,7 +18,6 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/lib/session";
-import { PoweredBy } from "@/components/PoweredBy";
 
 export const Route = createFileRoute("/home")({
   head: () => ({
@@ -163,16 +162,8 @@ function HomePage() {
   const MODULES = moduleSource.filter((m) => (m.roles as readonly string[]).includes(role));
 
   return (
-    <AppShell>
-      <div className="animate-fade-up">
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">Workspace</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">Garuda Logistics Solutions</h1>
-        <p className="mt-2 max-w-xl text-sm text-muted-foreground">
-          {role === "admin" ? "Select a module" : "Select a module"}
-        </p>
-      </div>
-
-      <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
+    <AppShell variant="ltms" shellTitle="Garuda ERP">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-5 pt-8 sm:grid-cols-2 lg:grid-cols-3">
         {loading
           ? Array.from({ length: MODULES.length }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-2xl" />
@@ -214,8 +205,6 @@ function HomePage() {
               );
             })}
       </div>
-
-      <PoweredBy className="mt-12 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/50" />
     </AppShell>
   );
 }

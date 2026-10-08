@@ -23,9 +23,7 @@ import {
   clearRateLimit,
 } from "@/lib/login-rate-limit";
 import { logAction } from "@/lib/log-actions";
-import { useTheme } from "@/lib/theme";
 import { serverRequestUnpauseOtp, serverSubmitUnpauseOtp } from "@/lib/user-auth";
-import { PoweredBy } from "@/components/PoweredBy";
 import { usePasskeyContext } from "@/components/PasskeyGate";
 import type { AppRole } from "@/lib/roles";
 
@@ -36,49 +34,9 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Secure operator sign-in for ORCA DEVS SURF." },
       { name: "robots", content: "noindex, nofollow, noarchive" },
     ],
-    links: [{ rel: "preload", href: "/garuda-banner.webp", as: "image", type: "image/webp" }],
   }),
   component: LoginPage,
 });
-
-// ── Live clock bar ─────────────────────────────────────────────────────────
-
-function LiveClock({ dark = false }: { dark?: boolean }) {
-  const [now, setNow] = useState(() => new Date());
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-  const date = now.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-  const time = now.toLocaleTimeString("en-IN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    second: "2-digit",
-    hour12: true,
-  });
-  return (
-    <div
-      className="absolute bottom-6 left-1/2 -translate-x-1/2 flex items-center gap-3 rounded-full px-6 py-2.5 text-sm font-medium tracking-wide shadow-lg backdrop-blur-md"
-      style={
-        dark
-          ? {
-              background: "rgba(0,0,0,0.45)",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,0.18)",
-            }
-          : {
-              background: "rgba(255,255,255,0.22)",
-              color: "#fff",
-              border: "1px solid rgba(255,255,255,0.30)",
-            }
-      }
-    >
-      <span>📅 {date}</span>
-      <span style={{ opacity: 0.45 }}>|</span>
-      <span>🕐 {time}</span>
-    </div>
-  );
-}
 
 // ── Login page ─────────────────────────────────────────────────────────────────
 
@@ -86,8 +44,6 @@ function LoginPage() {
   const { signIn, user, ready } = useSession();
   const { credentialId } = usePasskeyContext();
   const navigate = useNavigate();
-  const { loginUi, backgroundVideoUrl } = useTheme();
-  const [videoReady, setVideoReady] = useState(false);
 
   const [id, setId] = useState("");
   const [password, setPassword] = useState("");
@@ -186,10 +142,6 @@ function LoginPage() {
   }, [ready, user, navigate]);
 
   useEffect(() => {
-    setVideoReady(loginUi !== "video");
-  }, [loginUi, backgroundVideoUrl]);
-
-  useEffect(() => {
     function tick() {
       const remaining = id.trim() ? getLockoutRemaining(id.trim()) : 0;
       setLockedUntilMs(remaining);
@@ -267,29 +219,6 @@ function LoginPage() {
 
   const isLocked = lockedUntilMs > 0;
   const canSubmit = !!turnstileToken && !isLocked && !busy;
-
-  if (loginUi === "video" && !videoReady) {
-    return (
-      <div className="flex min-h-[100dvh] items-center justify-center bg-background">
-        <video
-          className="hidden"
-          autoPlay
-          muted
-          playsInline
-          preload="auto"
-          aria-hidden="true"
-          onCanPlayThrough={() => setVideoReady(true)}
-          onError={() => setVideoReady(true)}
-        >
-          <source src={backgroundVideoUrl} />
-        </video>
-        <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
-          <Loader2 className="size-6 animate-spin text-primary" />
-          <span>Loading sign-in…</span>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <>
@@ -467,214 +396,108 @@ function LoginPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="grid min-h-[100dvh] overflow-x-hidden lg:grid-cols-[1.05fr_1fr]">
-        {/* Banner — switches between the configured sign-in styles */}
-        {loginUi === "workspace" ? (
-          <aside
-            className="relative hidden min-h-[100dvh] items-center justify-center overflow-hidden px-12 lg:flex"
-            style={{
-              backgroundImage: "linear-gradient(145deg, #0878b9 0%, #159fe3 54%, #65c8ed 100%)",
-            }}
-          >
-            <div className="pointer-events-none absolute -left-24 -top-24 size-96 rounded-full bg-white/10 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-32 -right-16 size-[26rem] rounded-full bg-sky-100/20 blur-3xl" />
-            <div className="relative w-full max-w-lg animate-fade-up text-white">
-              <div className="inline-flex rounded-xl bg-white px-4 py-2.5 shadow-lg">
-                <img
-                  src="/garuda-logo.png"
-                  alt="Garuda Logistics Solution"
-                  className="h-10 w-auto"
-                />
-              </div>
-              <p className="mt-12 text-xs font-semibold uppercase tracking-[0.24em] text-white/75">
-                GARUDA · LOGISTICS WORKSPACE
-              </p>
-              <h1 className="mt-4 text-4xl font-semibold tracking-tight xl:text-5xl">
-                Everything moving, in one place.
-              </h1>
-              <p className="mt-5 max-w-md text-base leading-relaxed text-white/85">
-                Secure access to transport operations, shipments, and the tools your team uses every
-                day.
-              </p>
-            </div>
-            <LiveClock />
-          </aside>
-        ) : loginUi === "image" ? (
-          <aside className="relative hidden min-h-[100dvh] overflow-hidden lg:block">
-            <picture className="absolute inset-0 block">
-              <source srcSet="/garuda-banner.webp" type="image/webp" />
-              <img
-                src="/garuda-banner.jpeg"
-                alt="Garuda Logistics Solution"
-                className="block size-full object-cover"
-                fetchPriority="high"
-                decoding="async"
-              />
-            </picture>
-            {/* Logo overlaid top-left on the banner image */}
-            <div className="absolute left-6 top-6 flex flex-col items-center">
-              <div className="rounded-xl bg-white/85 px-4 py-2.5 backdrop-blur-sm shadow-md">
-                <img
-                  src="/garuda-logo.png"
-                  alt="Garuda Logistics Solution"
-                  className="h-10 w-auto"
-                />
-              </div>
-              <p className="mt-1.5 rounded-lg bg-white/85 px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-900 backdrop-blur-sm shadow-md">
-                ERP
-              </p>
-            </div>
-            <LiveClock dark />
-          </aside>
-        ) : loginUi === "video" ? (
-          <aside className="relative hidden min-h-[100dvh] overflow-hidden bg-slate-900 lg:block">
-            <video
-              className="absolute inset-0 block size-full object-cover"
-              autoPlay
-              loop
-              muted
-              playsInline
-              preload="auto"
-              aria-hidden="true"
-              onCanPlayThrough={() => setVideoReady(true)}
-              onError={() => setVideoReady(true)}
-            >
-              <source src={backgroundVideoUrl} />
-            </video>
-          </aside>
-        ) : (
-          <aside
-            className="relative hidden min-h-[100dvh] items-center justify-center overflow-hidden px-12 lg:flex"
-            style={{ backgroundImage: "var(--gradient-brand)" }}
-          >
-            <div className="pointer-events-none absolute -left-24 -top-24 size-96 rounded-full bg-white/10 blur-3xl" />
-            <div className="pointer-events-none absolute -bottom-32 -right-16 size-[26rem] rounded-full bg-white/10 blur-3xl" />
-            <div className="relative animate-fade-up text-center text-primary-foreground">
-              <div className="mx-auto w-52 rounded-2xl bg-white p-3 xl:w-60">
-                <img src="/garuda-logo.png" alt="Garuda Logistics Solution" className="w-full" />
-                <p className="mt-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-900">
-                  Garuda ERP
-                </p>
-              </div>
-              <div className="mx-auto my-6 h-px w-24 bg-white/40" />
-              <p className="text-lg font-medium uppercase tracking-[0.42em] opacity-90">
-                Garuda Logistics Solutions
-              </p>
-              <p className="mx-auto mt-8 max-w-sm text-sm leading-relaxed opacity-80">
-                Transport management, masters and operations — unified in one clean workspace.
-              </p>
-            </div>
-            <LiveClock />
-          </aside>
-        )}
-
+      <div className="flex min-h-[100dvh] w-full items-center justify-center overflow-x-hidden bg-background px-4 py-8">
         {/* Login */}
-        <section className="relative flex min-h-[100dvh] min-w-0 flex-col items-center justify-center bg-background px-6 py-10">
-          {videoReady ? (
-            <>
-              {/* ── Normal login form — always visible ────────────────────────── */}
-              <div className="w-full max-w-sm animate-fade-up">
-                <h2 className="text-2xl font-semibold tracking-tight">Sign in</h2>
-                <p className="mt-1.5 text-sm text-muted-foreground">
-                  Enter your operator credentials to continue.
-                </p>
-
-                <form onSubmit={onSubmit} className="mt-6 space-y-4">
-                  {/* Honeypot */}
-                  <div
-                    style={{
-                      position: "absolute",
-                      left: "-9999px",
-                      top: "-9999px",
-                      opacity: 0,
-                      height: 0,
-                      overflow: "hidden",
-                    }}
-                    aria-hidden="true"
-                    tabIndex={-1}
-                  >
-                    <label>Leave this field empty</label>
-                    <input
-                      type="text"
-                      name="website"
-                      value={honeypot}
-                      onChange={(e) => setHoneypot(e.target.value)}
-                      autoComplete="off"
-                      tabIndex={-1}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="loginId">Login ID</Label>
-                    <div className="relative">
-                      <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        id="loginId"
-                        value={id}
-                        onChange={(e) => setId(e.target.value)}
-                        placeholder="admin"
-                        autoComplete="username"
-                        className="h-11 pl-9"
-                        required
-                        disabled={isLocked || busy}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="password">Password</Label>
-                    <div className="relative">
-                      <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        id="password"
-                        type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        autoComplete="current-password"
-                        className="h-11 pl-9"
-                        required
-                        disabled={isLocked || busy}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Cloudflare Turnstile CAPTCHA */}
-                  <div className="space-y-1.5">
-                    <Label className="text-sm">Security check</Label>
-                    <TurnstileWidget
-                      onToken={setTurnstileToken}
-                      onExpire={() => setTurnstileToken(null)}
-                      onError={() => setTurnstileToken(null)}
-                      resetRef={turnstileResetRef}
-                    />
-                  </div>
-
-                  <Button type="submit" disabled={!canSubmit} className="h-11 w-full">
-                    {busy ? <Loader2 className="size-4 animate-spin" /> : null}
-                    {busy
-                      ? "Signing in…"
-                      : isLocked
-                        ? `Locked — ${lockoutLabel(lockedUntilMs)}`
-                        : "Sign in"}
-                  </Button>
-                </form>
-
-                <p className="mt-8 text-center text-xs text-muted-foreground">
-                  Access is limited to authorised operators. Contact your administrator for
-                  credentials.
-                </p>
+        <section className="relative flex min-h-0 w-full min-w-0 flex-col items-center justify-center bg-background px-2 py-6">
+          <>
+            {/* ── Normal login form — always visible ────────────────────────── */}
+            <div className="w-full max-w-sm animate-fade-up rounded-xl border border-border bg-card p-8 shadow-sm">
+              <div className="mb-7 flex items-center justify-center">
+                <img
+                  src="/garuda-logo.png"
+                  alt="Garuda Logistics Solution"
+                  className="h-12 w-auto"
+                />
               </div>
+              <h2 className="text-center text-2xl font-semibold tracking-tight">Sign in</h2>
+              <p className="mt-1.5 text-center text-sm text-muted-foreground">
+                Enter your operator credentials to continue.
+              </p>
 
-              {/* Powered by branding */}
-              <PoweredBy className="absolute bottom-6 left-1/2 w-full -translate-x-1/2 px-6 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/50" />
-            </>
-          ) : (
-            <div className="flex flex-col items-center gap-3 text-sm text-muted-foreground">
-              <Loader2 className="size-6 animate-spin text-primary" />
-              <span>Loading sign-in…</span>
+              <form onSubmit={onSubmit} className="mt-6 space-y-4">
+                {/* Honeypot */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "-9999px",
+                    top: "-9999px",
+                    opacity: 0,
+                    height: 0,
+                    overflow: "hidden",
+                  }}
+                  aria-hidden="true"
+                  tabIndex={-1}
+                >
+                  <label>Leave this field empty</label>
+                  <input
+                    type="text"
+                    name="website"
+                    value={honeypot}
+                    onChange={(e) => setHoneypot(e.target.value)}
+                    autoComplete="off"
+                    tabIndex={-1}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="loginId">Login ID</Label>
+                  <div className="relative">
+                    <User className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="loginId"
+                      value={id}
+                      onChange={(e) => setId(e.target.value)}
+                      placeholder="admin"
+                      autoComplete="username"
+                      className="h-11 pl-9"
+                      required
+                      disabled={isLocked || busy}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <div className="relative">
+                    <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      autoComplete="current-password"
+                      className="h-11 pl-9"
+                      required
+                      disabled={isLocked || busy}
+                    />
+                  </div>
+                </div>
+
+                {/* Invisible Turnstile runs silently unless a manual challenge is needed. */}
+                <TurnstileWidget
+                  onToken={setTurnstileToken}
+                  onExpire={() => setTurnstileToken(null)}
+                  onError={() => setTurnstileToken(null)}
+                  resetRef={turnstileResetRef}
+                />
+
+                <Button type="submit" disabled={!canSubmit} className="h-11 w-full">
+                  {busy ? <Loader2 className="size-4 animate-spin" /> : null}
+                  {busy
+                    ? "Signing in…"
+                    : isLocked
+                      ? `Locked — ${lockoutLabel(lockedUntilMs)}`
+                      : "Sign in"}
+                </Button>
+              </form>
+
+              <p className="mt-6 text-center text-xs text-muted-foreground">
+                Access is limited to authorised operators. Contact your administrator for
+                credentials.
+              </p>
             </div>
-          )}
+          </>
         </section>
       </div>
     </>

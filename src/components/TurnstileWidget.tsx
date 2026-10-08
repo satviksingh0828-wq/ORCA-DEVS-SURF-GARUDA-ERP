@@ -14,7 +14,8 @@ import { useEffect, useRef } from "react";
 
 // Public test site key — always passes, no Cloudflare account needed
 export const TURNSTILE_SITEKEY =
-  (typeof import.meta !== "undefined" && (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_TURNSTILE_SITEKEY) ||
+  (typeof import.meta !== "undefined" &&
+    (import.meta as unknown as { env?: Record<string, string> }).env?.VITE_TURNSTILE_SITEKEY) ||
   "1x00000000000000000000AA";
 
 declare global {
@@ -29,7 +30,8 @@ declare global {
           "error-callback"?: () => void;
           theme?: "light" | "dark" | "auto";
           size?: "normal" | "compact" | "invisible";
-        }
+          appearance?: "always" | "execute" | "interaction-only";
+        },
       ) => string;
       reset: (widgetId: string) => void;
       remove: (widgetId: string) => void;
@@ -43,16 +45,20 @@ let scriptLoading = false;
 const listeners: Array<() => void> = [];
 
 function loadTurnstileScript(onReady: () => void) {
-  if (scriptLoaded) { onReady(); return; }
+  if (scriptLoaded) {
+    onReady();
+    return;
+  }
   listeners.push(onReady);
   if (scriptLoading) return;
   scriptLoading = true;
   window.onTurnstileLoad = () => {
     scriptLoaded = true;
-    listeners.splice(0).forEach(fn => fn());
+    listeners.splice(0).forEach((fn) => fn());
   };
   const script = document.createElement("script");
-  script.src = "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit";
+  script.src =
+    "https://challenges.cloudflare.com/turnstile/v0/api.js?onload=onTurnstileLoad&render=explicit";
   script.async = true;
   script.defer = true;
   document.head.appendChild(script);
@@ -69,7 +75,7 @@ type Props = {
 
 export function TurnstileWidget({ onToken, onExpire, onError, theme = "auto", resetRef }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const widgetIdRef  = useRef<string | null>(null);
+  const widgetIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -78,7 +84,11 @@ export function TurnstileWidget({ onToken, onExpire, onError, theme = "auto", re
       if (cancelled || !containerRef.current || !window.turnstile) return;
       // Clean up previous instance
       if (widgetIdRef.current) {
-        try { window.turnstile!.remove(widgetIdRef.current); } catch { /* ignore */ }
+        try {
+          window.turnstile!.remove(widgetIdRef.current);
+        } catch {
+          /* ignore */
+        }
         widgetIdRef.current = null;
       }
       widgetIdRef.current = window.turnstile.render(containerRef.current, {
@@ -88,6 +98,7 @@ export function TurnstileWidget({ onToken, onExpire, onError, theme = "auto", re
         "error-callback": onError,
         theme,
         size: "normal",
+        appearance: "interaction-only",
       });
     }
 
@@ -105,7 +116,11 @@ export function TurnstileWidget({ onToken, onExpire, onError, theme = "auto", re
     return () => {
       cancelled = true;
       if (widgetIdRef.current && window.turnstile) {
-        try { window.turnstile.remove(widgetIdRef.current); } catch { /* ignore */ }
+        try {
+          window.turnstile.remove(widgetIdRef.current);
+        } catch {
+          /* ignore */
+        }
         widgetIdRef.current = null;
       }
       if (resetRef) resetRef.current = null;
