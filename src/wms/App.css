@@ -1,0 +1,1235 @@
+/* ── Fonts (V-110: self-hosted, OFL) ─────────────── */
+/* Instrument Sans covers the 400/500/600/700 weights the admin panel
+   renders. The single variable woff2 (wght + wdth axes) is smaller than
+   four static weights combined and cuts every third-party request at
+   page load. JetBrains Mono is only used at 400, still variable so a
+   future bold monospace spot doesn't need another download. Licenses
+   live alongside the fonts at admin/public/fonts/OFL-*.txt. */
+
+@font-face {
+  font-family: 'Instrument Sans';
+  src: url('/fonts/InstrumentSans-VariableFont_wdth_wght.woff2')
+       format('woff2-variations'),
+       url('/fonts/InstrumentSans-VariableFont_wdth_wght.woff2')
+       format('woff2');
+  font-weight: 400 700;
+  font-stretch: 75% 125%;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  src: url('/fonts/JetBrainsMono-VariableFont_wght.woff2')
+       format('woff2-variations'),
+       url('/fonts/JetBrainsMono-VariableFont_wght.woff2')
+       format('woff2');
+  font-weight: 400 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ── Reset & Variables ─────────────────────────── */
+
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --accent: #8e2715;
+  --accent-hover: #a83020;
+  --copper: #c4722a;
+  --cream: #FCF4E3;
+
+  --bg: #FAFAF7;
+  --white: #FFFFFF;
+  --surface: #F5F3EE;
+
+  --text: #1A1714;
+  --text-secondary: #6b5f50;
+  --text-tertiary: #a89a88;
+
+  --border: #e8e2d8;
+  --border-dark: #d4cdc0;
+
+  --success: #2d7a3a;
+  --success-bg: #e8f5ea;
+  --warning: #8a6d1b;
+  --warning-bg: #fef9e7;
+  --danger: #8e2715;
+  --danger-bg: #fce8e5;
+  --info: #1e5f8a;
+  --info-bg: #e5f0f8;
+  --purple: #534AB7;
+  --purple-bg: #EEEDFE;
+
+  --sans: 'Instrument Sans', 'Helvetica Neue', sans-serif;
+  --mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --radius: 6px;
+  --radius-lg: 8px;
+}
+
+body {
+  font-family: var(--sans);
+  font-size: 14px;
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+/* ── Layout ───────────────────────────────────── */
+
+.app-layout {
+  display: grid;
+  grid-template-rows: 56px 1fr;
+  grid-template-columns: 192px 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* v1.4.1 forced password change: no sidebar, main column fills the row. */
+.app-layout.forced-change {
+  grid-template-columns: 1fr;
+}
+
+.topbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+  background: #2a2520;
+  border-bottom: 2px solid #b87333;
+  z-index: 10;
+}
+
+.topbar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 17px;
+  color: #fdf4e3;
+  letter-spacing: 0.5px;
+  white-space: nowrap;
+}
+
+.topbar-breadcrumb {
+  font-size: 15px;
+  color: #ffffff;
+  margin-left: 4px;
+}
+
+.topbar-breadcrumb span {
+  color: rgba(255,255,255,0.85);
+}
+
+.topbar-wh-picker {
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 4px;
+  transition: background 0.15s;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  font-size: 15px;
+}
+
+.topbar-wh-picker:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+.topbar-wh-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  min-width: 220px;
+  background: #352f2a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+  z-index: 200;
+  overflow: hidden;
+}
+
+.topbar-wh-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+
+.topbar-wh-option:hover {
+  background: rgba(183,115,51,0.15);
+}
+
+.topbar-wh-option.active {
+  background: rgba(183,115,51,0.15);
+  border-left: 3px solid #b87333;
+}
+
+.topbar-wh-code {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: #fdf4e3;
+  letter-spacing: 0.3px;
+}
+
+.topbar-wh-name {
+  font-size: 12px;
+  color: rgba(255,255,255,0.7);
+}
+
+.topbar-search {
+  flex: 1;
+  max-width: 320px;
+  margin-left: auto;
+}
+
+.topbar-search input {
+  width: 100%;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-family: var(--sans);
+  border: 0.5px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  background: #352f2a;
+  color: #ffffff;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.topbar-search input::placeholder {
+  color: rgba(255,255,255,0.55);
+}
+
+.topbar-search input:focus {
+  border-color: #b87333;
+}
+
+.topbar-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: #8e2716;
+  color: #fdf4e3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.topbar-dropdown {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  background: #352f2a;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  min-width: 180px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 100;
+}
+
+.topbar-dropdown-header {
+  padding: 10px 14px;
+  color: #fdf4e3;
+}
+
+.topbar-dropdown-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.1);
+}
+
+.topbar-dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 13px;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+}
+
+.topbar-dropdown-item:hover {
+  background: rgba(255,255,255,0.05);
+  color: #fdf4e3;
+}
+
+/* ── Sidebar ──────────────────────────────────── */
+
+.sidebar {
+  background: #2a2520;
+  overflow-y: auto;
+  padding: 8px 6px;
+}
+
+.sidebar-card {
+  background: #352f2a;
+  border-radius: 8px;
+  padding: 6px 0;
+  margin-bottom: 6px;
+}
+
+.sidebar-group-label {
+  width: 100%;
+  background: rgba(142,39,22,0.4);
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #fdf4e3;
+  padding: 6px 10px;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  border-left: 3px solid transparent;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.sidebar-link:hover {
+  background: rgba(255,255,255,0.08);
+  color: #ffffff;
+}
+
+.sidebar-link.active {
+  border-left-color: #b87333;
+  background: rgba(183,115,51,0.15);
+  color: #fdf4e3;
+  font-weight: 500;
+}
+
+.sidebar-badge {
+  font-family: var(--mono);
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: #8e2716;
+  color: white;
+}
+
+.sidebar-link.active .sidebar-badge {
+  background: #8e2716;
+  color: white;
+}
+
+/* ── Content ──────────────────────────────────── */
+
+.content {
+  overflow-y: auto;
+  padding: 24px;
+}
+
+/* ── Page Header ──────────────────────────────── */
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.page-header h1 {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.page-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ── Put-Away bin tiles ───────────────── */
+
+.putaway-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+}
+
+.putaway-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 10px;
+  border-radius: 10px;
+  border: 2px solid var(--border-dark);
+  background: var(--white);
+  font-family: var(--sans);
+  cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.15s, border-color 0.15s;
+  min-height: 72px;
+}
+
+.putaway-tile:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.putaway-tile.has-items {
+  border-color: var(--accent);
+}
+
+.putaway-tile.empty {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.putaway-tile-label {
+  font-family: var(--mono, monospace);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  text-align: center;
+  word-break: break-word;
+}
+
+.putaway-tile-count {
+  font-size: 11px;
+  color: var(--text-secondary);
+}
+
+.putaway-tile.has-items .putaway-tile-count {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ── Tabs (Data page) ─────────────────────────── */
+
+.data-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--border-dark);
+}
+
+.data-tab {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  font-family: inherit;
+  color: var(--text-secondary);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  margin-bottom: -1px;
+}
+
+.data-tab:hover {
+  color: var(--text);
+}
+
+.data-tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ── Related records tree ─────────────────────────
+   The parent/child family of a sales order, rendered inside the SO
+   modal. Depth is expressed as left padding on the first cell so a
+   backorder's RMA reads as hanging off the backorder rather than off
+   the original order. */
+
+.related-row td {
+  vertical-align: middle;
+}
+
+.related-row.current {
+  background: var(--bg-subtle, rgba(0, 0, 0, 0.03));
+}
+
+/* A voided return (mig 076 soft-delete). Every other listing drops
+   these; here they stay, dimmed, so an operator can see that the RMA
+   existed and was voided rather than concluding it vanished. */
+.related-row.voided td {
+  opacity: 0.5;
+}
+
+.related-number {
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: var(--mono);
+  font-size: inherit;
+  color: var(--accent);
+  cursor: pointer;
+  text-align: left;
+}
+
+.related-number:hover {
+  text-decoration: underline;
+}
+
+.related-number[disabled] {
+  color: var(--text);
+  cursor: default;
+  font-weight: 700;
+}
+
+.related-number[disabled]:hover {
+  text-decoration: none;
+}
+
+/* Caret that expands a record's line items in place. Distinct from the
+   record number so one row does not mean two different things. */
+.related-caret {
+  background: none;
+  border: none;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 0 6px 0 0;
+  font-size: 11px;
+  width: 20px;
+}
+
+.related-caret:hover {
+  color: var(--text);
+}
+
+.related-lines {
+  padding: 4px 0 10px 0;
+}
+
+.related-here {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  letter-spacing: 0.4px;
+  margin-left: 8px;
+}
+
+.related-voided-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-tertiary);
+  letter-spacing: 0.4px;
+  margin-left: 8px;
+}
+
+/* ── Buttons ──────────────────────────────────── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-family: var(--sans);
+  font-weight: 500;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  border: 1px solid var(--border-dark);
+  background: var(--white);
+  color: var(--text);
+}
+
+.btn:hover {
+  background: var(--surface);
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: var(--cream);
+  border-color: var(--accent);
+}
+
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
+}
+
+.btn-danger {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.btn-danger:hover {
+  background: var(--danger-bg);
+}
+
+.btn-sm {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* ── Data Table ───────────────────────────────── */
+
+.data-table-wrapper {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.data-table thead {
+  background: var(--surface);
+}
+
+.data-table th {
+  padding: 8px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.data-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text);
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody tr:hover {
+  background: #FDFCF9;
+}
+
+.data-table tbody tr.clickable {
+  cursor: pointer;
+}
+
+/* On tables that name a clickColumn, only that cell opens the
+   record. Styled like a link so the target is discoverable, and the rest of
+   the row stays selectable for copying an SO number or a SKU. */
+.data-table td.cell-clickable {
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.data-table td.cell-clickable:hover {
+  text-decoration: underline;
+}
+
+.data-table .mono {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.table-empty {
+  padding: 32px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+/* ── Pagination ───────────────────────────────── */
+
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.pagination-buttons {
+  display: flex;
+  gap: 4px;
+}
+
+.pagination-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  font-family: var(--sans);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: var(--surface);
+  color: var(--text);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* ── Status Tags ──────────────────────────────── */
+
+.tag {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.tag-info { background: var(--info-bg); color: var(--info); }
+.tag-warning { background: var(--warning-bg); color: var(--warning); }
+.tag-purple { background: var(--purple-bg); color: var(--purple); }
+.tag-success { background: var(--success-bg); color: var(--success); }
+.tag-danger { background: var(--danger-bg); color: var(--danger); }
+.tag-gray { background: var(--surface); color: var(--text-tertiary); }
+
+/* ── Pipeline Bar ─────────────────────────────── */
+
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.pipeline-box {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 14px 16px;
+}
+
+.pipeline-box-label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.pipeline-box-count {
+  font-family: var(--mono);
+  font-size: 22px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.pipeline-box.green .pipeline-box-count { color: var(--success); }
+.pipeline-box.red .pipeline-box-count { color: var(--danger); }
+.pipeline-box.blue .pipeline-box-count { color: var(--info); }
+.pipeline-box.purple .pipeline-box-count { color: var(--purple); }
+
+/* ── Modal ────────────────────────────────────── */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(26, 23, 20, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.modal {
+  background: var(--white);
+  border-radius: var(--radius-lg);
+  width: 480px;
+  max-width: 90vw;
+  max-height: 85vh;
+  overflow-y: auto;
+}
+
+/* Wide variant for data-rich detail modals (SO, PO, etc.) so the
+   per-component address fields and line-item tables get the canvas
+   width they need without forcing a horizontal scroll. */
+.modal.modal-wide {
+  width: 1280px;
+  max-width: 95vw;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.modal-header h2 {
+  font-size: 17px;
+  font-weight: 700;
+  /* Takes the slack so the optional back arrow sits tight against the
+     title on the left while the close button stays pinned right. With
+     no back arrow this lays out identically to before. */
+  flex: 1;
+}
+
+/* Optional back arrow, top-left of the modal header. Rendered only when
+   a caller passes onBack (the SO modal, navigating between related
+   records). */
+.modal-back {
+  background: none;
+  border: none;
+  font-size: 18px;
+  line-height: 1;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px 8px 2px 0;
+}
+
+.modal-back:hover {
+  color: var(--text);
+}
+
+/* ── Modal text scale ─────────────────────────────
+   Modals are data-dense and read at arm's length, so the in-modal
+   type scale bumps one step above the page-level scale. Scoped to
+   .modal so non-modal usages of these shared classes (cards on the
+   dashboard, section titles inside settings pages, etc.) keep their
+   page-level sizes. Important values (detail-grid values, card +
+   section titles) carry extra weight so labels stay visibly muted
+   against the values they describe. */
+.modal .form-group label {
+  font-size: 13px;
+}
+.modal .form-input,
+.modal .form-select {
+  font-size: 14px;
+}
+.modal .section-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.modal .card-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+.modal .detail-grid {
+  font-size: 14px;
+}
+/* Bold the values in detail-grid (the span sibling of .detail-label)
+   so the data jumps off the page. Labels keep their muted weight via
+   the .detail-label rule below; the :not() selector skips them and
+   the wrapper-span pattern (display:contents) lets the value child
+   inherit the 600 weight while its sibling .detail-label keeps 500. */
+.modal .detail-grid > span:not(.detail-label) {
+  font-weight: 600;
+}
+.modal .lines-table {
+  font-size: 14px;
+}
+.modal .lines-table th {
+  font-size: 13px;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  font-size: 18px;
+  color: var(--text-tertiary);
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.modal-close:hover {
+  color: var(--text);
+}
+
+.modal-body {
+  padding: 20px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+/* ── Forms ────────────────────────────────────── */
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 4px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: var(--sans);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--text);
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.form-input:focus {
+  border-color: var(--accent);
+}
+
+.form-select {
+  width: 100%;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-family: var(--sans);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--white);
+  color: var(--text);
+  outline: none;
+}
+
+.form-select:focus {
+  border-color: var(--accent);
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.form-error {
+  color: var(--danger);
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+/* ── Filter Bar ───────────────────────────────── */
+
+.filter-bar {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.filter-bar .form-input,
+.filter-bar .form-select {
+  width: auto;
+  min-width: 160px;
+}
+
+/* ── Cards ────────────────────────────────────── */
+
+.card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+}
+
+.card-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+/* ── Grid Layouts ─────────────────────────────── */
+
+.grid-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.section {
+  margin-bottom: 24px;
+}
+
+.section-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: var(--text);
+}
+
+/* ── Login Page ───────────────────────────────── */
+
+.login-page {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+  background: var(--bg);
+}
+
+.login-card {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 32px;
+  width: 340px;
+}
+
+.login-logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 24px;
+  justify-content: center;
+}
+
+.login-card .form-group {
+  margin-bottom: 16px;
+}
+
+.login-card .btn-primary {
+  width: 100%;
+  justify-content: center;
+  padding: 9px 14px;
+}
+
+.login-error {
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 13px;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  margin-bottom: 16px;
+}
+
+/* ── Activity List ────────────────────────────── */
+
+.activity-list {
+  list-style: none;
+}
+
+.activity-item {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-time {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+}
+
+.activity-action {
+  color: var(--text-secondary);
+}
+
+/* ── Low Stock List ───────────────────────────── */
+
+.low-stock-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+
+.low-stock-item:last-child {
+  border-bottom: none;
+}
+
+.low-stock-sku {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.low-stock-qty {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--danger);
+  font-weight: 600;
+}
+
+/* ── Detail View ──────────────────────────────── */
+
+.detail-back {
+  font-size: 13px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  margin-bottom: 12px;
+  display: inline-block;
+}
+
+.detail-back:hover {
+  color: var(--text);
+}
+
+.detail-grid {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  gap: 6px 16px;
+  font-size: 13px;
+  margin-bottom: 20px;
+}
+
+/* Two label/value pairs per row. Used in wide modals where the
+   header summary can spread across the canvas instead of stacking
+   vertically. Each "cell" is still a label + value pair, so existing
+   markup that emits <span class="detail-label"> + <span> rows lines
+   up cleanly across both columns. */
+.detail-grid.detail-grid-2col {
+  grid-template-columns: 140px 1fr 140px 1fr;
+}
+
+.detail-label {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+/* Line-item table styling shared by SO + PO detail modals. Applies
+   the same surface-treated header + zebra rows that DataTable uses,
+   so the popup tables feel consistent with the rest of the admin
+   shell. The .modal scope above bumps the font size one step. */
+.lines-table {
+  width: 100%;
+  font-size: 13px;
+  border-collapse: collapse;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.lines-table thead {
+  background: var(--surface);
+}
+
+.lines-table th {
+  text-align: left;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.lines-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.lines-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.lines-table tbody tr:nth-child(even) {
+  background: #FDFCF9;
+}
+
+/* ── Settings ─────────────────────────────────── */
+
+.settings-section {
+  background: var(--white);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.settings-section h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.settings-note {
+  font-size: 12px;
+  color: var(--text-tertiary);
+  font-style: italic;
+  margin-bottom: 12px;
+}
+
+.file-upload {
+  border: 1px dashed var(--border-dark);
+  border-radius: var(--radius);
+  padding: 20px;
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.file-upload:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.import-results {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.import-results .success {
+  color: var(--success);
+}
+
+.import-results .errors {
+  color: var(--danger);
+}
+
+/* ── Placeholder ──────────────────────────────── */
+
+.placeholder-section {
+  border: 1px dashed var(--border-dark);
+  border-radius: var(--radius);
+  padding: 24px;
+  text-align: center;
+  color: var(--text-tertiary);
+  font-size: 13px;
+}
+
+/* ── Scrollbar ────────────────────────────────── */
+
+.sidebar::-webkit-scrollbar,
+.content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.15);
+  border-radius: 3px;
+}
+.content::-webkit-scrollbar-thumb {
+  background: var(--border-dark);
+  border-radius: 3px;
+}
