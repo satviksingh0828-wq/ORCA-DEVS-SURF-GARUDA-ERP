@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { HrSectionNav, type HrArea } from "@/components/hr/HrSectionNav";
@@ -58,7 +58,12 @@ export const HR_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
 /** Shared page shell for each independent HR workspace module. */
 export function HrShell({ area, children }: { area: HrArea; children: ReactNode }) {
   const label = areaLabels[area];
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [navOpen, setNavOpen] = useState(true);
+  const activeItemId =
+    HR_SIDEBAR_GROUPS.find((group) => group.section === `hr-${area}`)?.items.find((item) =>
+      item.to ? pathname === item.to || pathname.startsWith(`${item.to}/`) : false,
+    )?.id ?? (area === "master" ? "employees" : "");
 
   return (
     <AppShell
@@ -102,7 +107,7 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
             label="HRMS navigation"
             groups={HR_SIDEBAR_GROUPS}
             section={`hr-${area}`}
-            activeTabId=""
+            activeTabId={activeItemId}
             onSelectTab={() => undefined}
           />
         )}
