@@ -8,10 +8,10 @@ import {
   Banknote,
   CircleDollarSign,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
-import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
+import { consumeLtmsTabNavigation, LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { TripBilling } from "@/components/reports/TripBilling";
 import { SourceBilling } from "@/components/reports/SourceBilling";
@@ -86,32 +86,13 @@ function BillingPage() {
   const visibleTabs =
     user?.role === "basic" ? TABS.filter((item) => item.id !== "source-billing") : TABS;
   const [tab, setTab] = useState<TabId>("trip-billing");
+  const availableTabIds = visibleTabs.map((item) => item.id).join("|");
+  useEffect(() => {
+    const pendingTab = consumeLtmsTabNavigation("billing");
+    if (pendingTab && availableTabIds.split("|").includes(pendingTab)) setTab(pendingTab as TabId);
+  }, [availableTabIds]);
   const safeTab = visibleTabs.some((item) => item.id === tab) ? tab : visibleTabs[0].id;
   const active = visibleTabs.find((item) => item.id === safeTab) ?? visibleTabs[0];
-  const ltmsSidebarGroups = [
-    {
-      label: "Operations of LTMS",
-      items: [{ id: "operations", label: "Operations", to: "/ltms/operations" as const }],
-    },
-    {
-      label: "Billing",
-      items: visibleTabs.map((item) => ({
-        id: item.id,
-        label: item.label,
-        active: item.id === safeTab,
-        onSelect: () => setTab(item.id),
-      })),
-    },
-    {
-      label: "Reports",
-      items: [{ id: "reports", label: "Reports", to: "/ltms/reports" as const }],
-    },
-    {
-      label: "Masters",
-      items: [{ id: "masters", label: "Masters", to: "/ltms/masters" as const }],
-    },
-    { label: "Finance", items: [{ id: "finance", label: "Finance", to: "/finance" as const }] },
-  ];
 
   return (
     <AppShell
@@ -131,7 +112,12 @@ function BillingPage() {
       }
     >
       <div className="grid gap-6 lg:grid-cols-[192px_minmax(0,1fr)] ltms-reference-shell">
-        <LtmsSidebar groups={ltmsSidebarGroups} label="LTMS billing" />
+        <LtmsSidebar
+          section="billing"
+          activeTabId={safeTab}
+          onSelectTab={(id) => setTab(id as TabId)}
+          label="LTMS billing"
+        />
         <MobileTabDropdown
           tabs={visibleTabs}
           activeId={safeTab}

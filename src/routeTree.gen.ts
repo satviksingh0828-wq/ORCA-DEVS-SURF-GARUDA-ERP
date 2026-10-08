@@ -62,6 +62,7 @@ import { Route as EmployeesDepartmentsRouteImport } from './routes/employees.dep
 import { Route as EmployeesNewRouteImport } from './routes/employees.new'
 import { Route as GpsApiRouteImport } from './routes/gps/api'
 import { Route as LtmsBillingRouteImport } from './routes/ltms_.billing'
+import { Route as LtmsFinanceRouteImport } from './routes/ltms_.finance'
 import { Route as LtmsMastersRouteImport } from './routes/ltms_.masters'
 import { Route as LtmsOperationsRouteImport } from './routes/ltms_.operations'
 import { Route as LtmsReportsRouteImport } from './routes/ltms_.reports'
@@ -369,6 +370,11 @@ const LtmsBillingRoute = LtmsBillingRouteImport.update({
   path: '/ltms/billing',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LtmsFinanceRoute = LtmsFinanceRouteImport.update({
+  id: '/ltms_/finance',
+  path: '/ltms/finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LtmsMastersRoute = LtmsMastersRouteImport.update({
   id: '/ltms_/masters',
   path: '/ltms/masters',
@@ -635,6 +641,7 @@ export interface FileRoutesByFullPath {
   '/employees/new': typeof EmployeesNewRoute
   '/gps/api': typeof GpsApiRoute
   '/ltms/billing': typeof LtmsBillingRoute
+  '/ltms/finance': typeof LtmsFinanceRoute
   '/ltms/masters': typeof LtmsMastersRoute
   '/ltms/operations': typeof LtmsOperationsRoute
   '/ltms/reports': typeof LtmsReportsRoute
@@ -723,6 +730,7 @@ export interface FileRoutesByTo {
   '/employees/new': typeof EmployeesNewRoute
   '/gps/api': typeof GpsApiRoute
   '/ltms/billing': typeof LtmsBillingRoute
+  '/ltms/finance': typeof LtmsFinanceRoute
   '/ltms/masters': typeof LtmsMastersRoute
   '/ltms/operations': typeof LtmsOperationsRoute
   '/ltms/reports': typeof LtmsReportsRoute
@@ -820,6 +828,7 @@ export interface FileRoutesById {
   '/employees/new': typeof EmployeesNewRoute
   '/gps/api': typeof GpsApiRoute
   '/ltms_/billing': typeof LtmsBillingRoute
+  '/ltms_/finance': typeof LtmsFinanceRoute
   '/ltms_/masters': typeof LtmsMastersRoute
   '/ltms_/operations': typeof LtmsOperationsRoute
   '/ltms_/reports': typeof LtmsReportsRoute
@@ -918,6 +927,7 @@ export interface FileRouteTypes {
     | '/employees/new'
     | '/gps/api'
     | '/ltms/billing'
+    | '/ltms/finance'
     | '/ltms/masters'
     | '/ltms/operations'
     | '/ltms/reports'
@@ -1006,6 +1016,7 @@ export interface FileRouteTypes {
     | '/employees/new'
     | '/gps/api'
     | '/ltms/billing'
+    | '/ltms/finance'
     | '/ltms/masters'
     | '/ltms/operations'
     | '/ltms/reports'
@@ -1102,6 +1113,7 @@ export interface FileRouteTypes {
     | '/employees/new'
     | '/gps/api'
     | '/ltms_/billing'
+    | '/ltms_/finance'
     | '/ltms_/masters'
     | '/ltms_/operations'
     | '/ltms_/reports'
@@ -1182,6 +1194,7 @@ export interface RootRouteChildren {
   ApiPixabayVideosRoute: typeof ApiPixabayVideosRoute
   GpsApiRoute: typeof GpsApiRoute
   LtmsBillingRoute: typeof LtmsBillingRoute
+  LtmsFinanceRoute: typeof LtmsFinanceRoute
   LtmsMastersRoute: typeof LtmsMastersRoute
   LtmsOperationsRoute: typeof LtmsOperationsRoute
   LtmsReportsRoute: typeof LtmsReportsRoute
@@ -1574,6 +1587,13 @@ declare module '@tanstack/react-router' {
       path: '/ltms/billing'
       fullPath: '/ltms/billing'
       preLoaderRoute: typeof LtmsBillingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ltms_/finance': {
+      id: '/ltms_/finance'
+      path: '/ltms/finance'
+      fullPath: '/ltms/finance'
+      preLoaderRoute: typeof LtmsFinanceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/ltms_/masters': {
@@ -2072,6 +2092,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiPixabayVideosRoute: ApiPixabayVideosRoute,
   GpsApiRoute: GpsApiRoute,
   LtmsBillingRoute: LtmsBillingRoute,
+  LtmsFinanceRoute: LtmsFinanceRoute,
   LtmsMastersRoute: LtmsMastersRoute,
   LtmsOperationsRoute: LtmsOperationsRoute,
   LtmsReportsRoute: LtmsReportsRoute,

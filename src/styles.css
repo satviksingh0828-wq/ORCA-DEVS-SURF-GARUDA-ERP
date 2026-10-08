@@ -1158,6 +1158,25 @@ table td {
   font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
 }
 
+.ltms-reference-shell {
+  height: 100%;
+  min-height: 0;
+  align-items: stretch;
+  gap: 0 !important;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.ltms-reference-content {
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 24px;
+}
+
 .ltms-reference-content button,
 .ltms-reference-content input,
 .ltms-reference-content select,
@@ -1176,9 +1195,12 @@ table td {
 }
 
 .ltms-reference-sidebar {
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 8px;
+  border: 0;
+  border-right: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0;
   background: #2a2520;
 }
 
@@ -1231,6 +1253,12 @@ table td {
 .ltms-reference-sidebar-items {
   display: flex;
   flex-direction: column;
+}
+
+.ltms-reference-sidebar .ltms-reference-sidebar-items > * {
+  display: flex !important;
+  visibility: visible !important;
+  opacity: 1 !important;
 }
 
 .ltms-reference-sidebar-link {
@@ -1333,6 +1361,15 @@ table td {
   object-fit: contain;
 }
 
+.ltms-app-shell-title {
+  margin-left: -2px;
+  color: #fdf4e3;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+}
+
 .ltms-app-shell-breadcrumb,
 .ltms-app-shell-breadcrumb * {
   color: #fdf4e3 !important;
@@ -1383,8 +1420,10 @@ table td {
 }
 
 .ltms-app-shell-main {
+  min-height: 0 !important;
+  overflow: hidden !important;
   background: #fafaf7 !important;
-  padding: 24px !important;
+  padding: 0 !important;
   font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
 }
 
@@ -1395,9 +1434,10 @@ table td {
 
 .ltms-reference-sidebar .app-sidebar-scroll {
   width: 100% !important;
-  height: calc(100dvh - 56px) !important;
-  max-height: calc(100dvh - 56px) !important;
+  height: 100% !important;
+  max-height: 100% !important;
   overflow-x: hidden;
+  overflow-y: auto !important;
   padding: 8px 6px;
   background: #2a2520;
 }
@@ -1444,8 +1484,107 @@ table td {
   }
 }
 
+@media (max-width: 1023px) {
+  .ltms-reference-shell {
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto minmax(0, 1fr);
+  }
+
+  .ltms-reference-content {
+    padding: 12px;
+  }
+}
+
 @media (max-width: 767px) {
   .ltms-app-shell-main {
-    padding: 12px !important;
+    padding: 0 !important;
   }
+}
+
+.ltms-app-shell-account {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.ltms-app-shell-avatar {
+  display: flex;
+  width: 30px;
+  height: 30px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: #8e2716;
+  color: #fdf4e3;
+  cursor: pointer;
+  font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ltms-app-shell-avatar:hover,
+.ltms-app-shell-avatar[aria-expanded="true"] {
+  background: #a83020;
+}
+
+.ltms-app-shell-avatar:focus-visible {
+  outline: 2px solid #c4722a;
+  outline-offset: 2px;
+}
+
+.ltms-app-shell-account-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 100;
+  min-width: 190px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  background: #352f2a;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+
+.ltms-app-shell-account-header {
+  padding: 10px 14px;
+  color: #fdf4e3;
+}
+
+.ltms-app-shell-account-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ltms-app-shell-account-role {
+  margin-top: 2px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 11px;
+}
+
+.ltms-app-shell-account-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.ltms-app-shell-account-signout {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  font:
+    500 13px/1.4 "LTMS Instrument Sans",
+    "Helvetica Neue",
+    sans-serif;
+  text-align: left;
+}
+
+.ltms-app-shell-account-signout:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fdf4e3;
 }

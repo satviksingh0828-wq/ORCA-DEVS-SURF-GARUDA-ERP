@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Building2,
   ChevronRight,
@@ -14,7 +14,7 @@ import {
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { SharedSidebar } from "@/components/SharedSidebar";
-import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
+import { consumeLtmsTabNavigation, LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { MasterList } from "@/components/masters/MasterList";
 import { Contracts } from "@/components/masters/Contracts";
@@ -138,7 +138,14 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
     ? roleTabs.filter((t) => t.id !== "transporter" && t.id !== "delivery-partner")
     : roleTabs.filter((t) => t.id !== "ltms-transporter");
 
-  const [tab, setTab] = useState<TabId>(isAdmin || isViewer ? "vehicle" : "driver");
+  const defaultTab: TabId = isAdmin || isViewer ? "vehicle" : "driver";
+  const [tab, setTab] = useState<TabId>(defaultTab);
+  const availableTabIds = TABS.map((item) => item.id).join("|");
+  useEffect(() => {
+    if (!ltmsMode) return;
+    const pendingTab = consumeLtmsTabNavigation("masters");
+    if (pendingTab && availableTabIds.split("|").includes(pendingTab)) setTab(pendingTab as TabId);
+  }, [availableTabIds, ltmsMode]);
   const [navOpen, setNavOpen] = useState(true);
   const [openTransporter, setOpenTransporter] = useState<{
     id: string;
@@ -149,30 +156,6 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
   const safeTab = active?.id ?? "driver";
   const sidebarOpen = ltmsMode || navOpen;
-  const ltmsSidebarGroups = [
-    {
-      label: "Operations of LTMS",
-      items: [{ id: "operations", label: "Operations", to: "/ltms/operations" as const }],
-    },
-    {
-      label: "Billing",
-      items: [{ id: "billing", label: "Billing", to: "/ltms/billing" as const }],
-    },
-    {
-      label: "Reports",
-      items: [{ id: "reports", label: "Reports", to: "/ltms/reports" as const }],
-    },
-    {
-      label: "Masters",
-      items: TABS.map((item) => ({
-        id: item.id,
-        label: item.label,
-        active: item.id === safeTab,
-        onSelect: () => setTab(item.id),
-      })),
-    },
-    { label: "Finance", items: [{ id: "finance", label: "Finance", to: "/finance" as const }] },
-  ];
 
   return (
     <AppShell
@@ -219,7 +202,12 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
         {/* Desktop left nav */}
         {sidebarOpen &&
           (ltmsMode ? (
-            <LtmsSidebar groups={ltmsSidebarGroups} label="LTMS masters" />
+            <LtmsSidebar
+              section="masters"
+              activeTabId={safeTab}
+              onSelectTab={(id) => setTab(id as TabId)}
+              label="LTMS masters"
+            />
           ) : (
             <SharedSidebar open={navOpen} width="220px" label="Masters">
               <ul className="space-y-1">

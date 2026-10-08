@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   BarChart2,
   CalendarCheck,
@@ -23,7 +23,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
-import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
+import { consumeLtmsTabNavigation, LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { TabErrorBoundary } from "@/components/TabErrorBoundary";
 import { Trips } from "@/components/operations/Trips";
 import { TripAveragesPanel } from "@/components/operations/TripAveragesPanel";
@@ -221,6 +221,12 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
     return isViewer ? t.id !== "import-trips" : isAdmin || !t.adminOnly;
   });
   const [tab, setTab] = useState<TabId>(mode === "ltms" ? "trip" : "lr");
+  const availableTabIds = TABS.map((item) => item.id).join("|");
+  useEffect(() => {
+    if (mode !== "ltms") return;
+    const pendingTab = consumeLtmsTabNavigation("operations");
+    if (pendingTab && availableTabIds.split("|").includes(pendingTab)) setTab(pendingTab as TabId);
+  }, [availableTabIds, mode]);
   const [navOpen, setNavOpen] = useState(true);
   const [consignmentCreateOpen, setConsignmentCreateOpen] = useState(false);
   const [tripFormOpen, setTripFormOpen] = useState(false);
@@ -232,31 +238,6 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   // LTMS keeps its reference sidebar pinned even when embedded forms are open.
   const fullBleed = mode !== "ltms" && fullBleedConsignment;
   const sidebarOpen = mode === "ltms" || navOpen;
-  const ltmsSidebarGroups = [
-    {
-      label: "Operations of LTMS",
-      items: TABS.map((item) => ({
-        id: item.id,
-        label: item.label,
-        active: item.id === safeTab,
-        onSelect: () => setTab(item.id),
-      })),
-    },
-    {
-      label: "Billing",
-      items: [{ id: "billing", label: "Billing", to: "/ltms/billing" as const }],
-    },
-    {
-      label: "Reports",
-      items: [{ id: "reports", label: "Reports", to: "/ltms/reports" as const }],
-    },
-    {
-      label: "Masters",
-      items: [{ id: "masters", label: "Masters", to: "/ltms/masters" as const }],
-    },
-    { label: "Finance", items: [{ id: "finance", label: "Finance", to: "/finance" as const }] },
-  ];
-
   return (
     <AppShell
       variant={mode === "ltms" ? "ltms" : "default"}
@@ -303,7 +284,12 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
         {/* Desktop left nav */}
         {sidebarOpen &&
           (mode === "ltms" ? (
-            <LtmsSidebar groups={ltmsSidebarGroups} label="LTMS operations" />
+            <LtmsSidebar
+              section="operations"
+              activeTabId={safeTab}
+              onSelectTab={(id) => setTab(id as TabId)}
+              label="LTMS operations"
+            />
           ) : (
             <SharedSidebar open={navOpen} width="220px" label="Operations">
               <ul className="space-y-1">

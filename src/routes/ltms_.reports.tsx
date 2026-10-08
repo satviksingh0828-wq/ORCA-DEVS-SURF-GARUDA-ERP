@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   ChevronRight,
   FilePenLine,
@@ -11,7 +11,7 @@ import {
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
-import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
+import { consumeLtmsTabNavigation, LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { UpdateConsignmentReport } from "@/components/reports/UpdateConsignmentReport";
 import { ConsignmentIncomeReport } from "@/components/reports/ConsignmentIncomeReport";
@@ -116,32 +116,13 @@ function ReportsPage() {
       ? TABS.filter((item) => item.id !== "consignment-income" && item.id !== "consignment-net")
       : TABS;
   const [tab, setTab] = useState<TabId>("eway-bill");
+  const availableTabIds = visibleTabs.map((item) => item.id).join("|");
+  useEffect(() => {
+    const pendingTab = consumeLtmsTabNavigation("reports");
+    if (pendingTab && availableTabIds.split("|").includes(pendingTab)) setTab(pendingTab as TabId);
+  }, [availableTabIds]);
   const safeTab = visibleTabs.some((item) => item.id === tab) ? tab : visibleTabs[0].id;
   const active = visibleTabs.find((item) => item.id === safeTab) ?? visibleTabs[0];
-  const ltmsSidebarGroups = [
-    {
-      label: "Operations of LTMS",
-      items: [{ id: "operations", label: "Operations", to: "/ltms/operations" as const }],
-    },
-    {
-      label: "Billing",
-      items: [{ id: "billing", label: "Billing", to: "/ltms/billing" as const }],
-    },
-    {
-      label: "Reports",
-      items: visibleTabs.map((item) => ({
-        id: item.id,
-        label: item.label,
-        active: item.id === safeTab,
-        onSelect: () => setTab(item.id),
-      })),
-    },
-    {
-      label: "Masters",
-      items: [{ id: "masters", label: "Masters", to: "/ltms/masters" as const }],
-    },
-    { label: "Finance", items: [{ id: "finance", label: "Finance", to: "/finance" as const }] },
-  ];
 
   return (
     <AppShell
@@ -161,7 +142,12 @@ function ReportsPage() {
       }
     >
       <div className="grid gap-6 lg:grid-cols-[192px_minmax(0,1fr)] ltms-reference-shell">
-        <LtmsSidebar groups={ltmsSidebarGroups} label="LTMS reports" />
+        <LtmsSidebar
+          section="reports"
+          activeTabId={safeTab}
+          onSelectTab={(id) => setTab(id as TabId)}
+          label="LTMS reports"
+        />
 
         <MobileTabDropdown
           tabs={visibleTabs}

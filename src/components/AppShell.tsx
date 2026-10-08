@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { LogOut, Server, ShieldCheck, User } from "lucide-react";
-import { useEffect, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
 import { useOrcaAI } from "@/lib/orca-context";
 import { Button } from "@/components/ui/button";
@@ -68,6 +68,41 @@ export function AppShell({
   const { theme, backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
+  const displayName = user?.fullName ?? user?.username ?? "User";
+  const displayRole = isAdmin
+    ? user?.role === "semi_admin"
+      ? "Semi-Admin"
+      : "Admin"
+    : isViewer
+      ? "Viewer"
+      : "User";
+  const avatarInitials =
+    displayName
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((part) => part[0] ?? "")
+      .join("")
+      .toUpperCase() || "U";
+  const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!accountMenuOpen || variant !== "ltms") return;
+    const closeOnOutsideClick = (event: MouseEvent) => {
+      if (accountMenuRef.current && !accountMenuRef.current.contains(event.target as Node))
+        setAccountMenuOpen(false);
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setAccountMenuOpen(false);
+    };
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOnOutsideClick);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, [accountMenuOpen, variant]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -168,7 +203,8 @@ export function AppShell({
               className={cn("h-8 w-auto sm:h-10", variant === "ltms" ? "ltms-app-shell-logo" : "")}
             />
           </Link>
-          {breadcrumb && (
+          {variant === "ltms" && <span className="ltms-app-shell-title">LTMS</span>}
+          {breadcrumb && variant !== "ltms" && (
             <div
               className={cn(
                 "ml-2 hidden shrink-0 md:block",
@@ -203,43 +239,75 @@ export function AppShell({
               )}
             />
             {user && variant !== "ltms" && <MeetTrigger />}
-            <span
-              className={cn(
-                "hidden min-w-0 items-center gap-2 text-sm text-muted-foreground sm:flex",
-                variant === "ltms" ? "ltms-app-shell-user" : "",
-              )}
-            >
-              {isAdmin ? (
-                <ShieldCheck className="size-3.5 text-primary shrink-0" />
-              ) : (
-                <User className="size-3.5 shrink-0" />
-              )}
-              <span className="font-medium text-foreground truncate max-w-[120px]">
-                {user?.fullName ?? user?.username}
-              </span>
-              <span className="hidden md:inline-block rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide shrink-0">
-                {isAdmin
-                  ? user?.role === "semi_admin"
-                    ? "Semi-Admin"
-                    : "Admin"
-                  : isViewer
-                    ? "Viewer"
-                    : "User"}
-              </span>
-            </span>
-            <Button
-              variant="outline"
-              size="sm"
-              data-no-remote-control
-              onClick={() => {
-                signOut();
-                navigate({ to: "/", replace: true });
-              }}
-              className={cn("shrink-0", variant === "ltms" ? "ltms-app-shell-signout" : "")}
-            >
-              <LogOut className="size-4" />
-              <span className="hidden sm:inline">Sign out</span>
-            </Button>
+            {variant === "ltms" ? (
+              user && (
+                <div ref={accountMenuRef} className="ltms-app-shell-account">
+                  <button
+                    type="button"
+                    className="ltms-app-shell-avatar"
+                    title={displayName}
+                    aria-label="Open account menu"
+                    aria-expanded={accountMenuOpen}
+                    aria-haspopup="menu"
+                    onClick={() => setAccountMenuOpen((open) => !open)}
+                  >
+                    {avatarInitials}
+                  </button>
+                  {accountMenuOpen && (
+                    <div className="ltms-app-shell-account-menu" role="menu">
+                      <div className="ltms-app-shell-account-header">
+                        <div className="ltms-app-shell-account-name">{displayName}</div>
+                        <div className="ltms-app-shell-account-role">{displayRole}</div>
+                      </div>
+                      <div className="ltms-app-shell-account-divider" />
+                      <button
+                        type="button"
+                        data-no-remote-control
+                        className="ltms-app-shell-account-signout"
+                        role="menuitem"
+                        onClick={() => {
+                          setAccountMenuOpen(false);
+                          signOut();
+                          navigate({ to: "/", replace: true });
+                        }}
+                      >
+                        <LogOut className="size-4" />
+                        <span>Sign out</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )
+            ) : (
+              <>
+                <span className="hidden min-w-0 items-center gap-2 text-sm text-muted-foreground sm:flex">
+                  {isAdmin ? (
+                    <ShieldCheck className="size-3.5 shrink-0 text-primary" />
+                  ) : (
+                    <User className="size-3.5 shrink-0" />
+                  )}
+                  <span className="max-w-[120px] truncate font-medium text-foreground">
+                    {user?.fullName ?? user?.username}
+                  </span>
+                  <span className="hidden shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide md:inline-block">
+                    {displayRole}
+                  </span>
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  data-no-remote-control
+                  onClick={() => {
+                    signOut();
+                    navigate({ to: "/", replace: true });
+                  }}
+                  className="shrink-0"
+                >
+                  <LogOut className="size-4" />
+                  <span className="hidden sm:inline">Sign out</span>
+                </Button>
+              </>
+            )}
           </div>
         </div>
       </header>
