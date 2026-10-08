@@ -191,7 +191,7 @@ export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?
   }
 
   return (
-    <nav aria-label={`${areaLabels[area]} sections`} className="mb-6 xl:hidden">
+    <nav aria-label={`${areaLabels[area]} sections`} className="mb-4 lg:hidden">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -234,9 +234,6 @@ export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?
                   </span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate text-sm font-medium">{label}</span>
-                    <span className="block text-xs leading-snug text-muted-foreground">
-                      {description}
-                    </span>
                   </span>
                   {active && <Check className="size-4 shrink-0 text-primary" />}
                 </Link>

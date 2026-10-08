@@ -19,11 +19,13 @@ export function MobileTabDropdown<T extends MobileTab>({
   activeId,
   label,
   onChange,
+  compact = false,
 }: {
   tabs: readonly T[];
   activeId: T["id"];
   label: string;
   onChange: (id: T["id"]) => void;
+  compact?: boolean;
 }) {
   const active = tabs.find((tab) => tab.id === activeId) ?? tabs[0];
   if (!active) return null;
@@ -36,15 +38,17 @@ export function MobileTabDropdown<T extends MobileTab>({
         <DropdownMenuTrigger asChild>
           <button
             type="button"
-            className="flex min-h-14 w-full items-center gap-3 rounded-2xl border border-border bg-card px-3.5 py-2.5 text-left shadow-sm outline-none transition-all hover:border-primary/30 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring"
+            className={`flex w-full items-center gap-3 rounded-xl border border-border bg-card px-3.5 text-left shadow-sm outline-none transition-all hover:border-primary/30 hover:bg-muted/60 focus-visible:ring-2 focus-visible:ring-ring ${compact ? "min-h-11 py-2" : "min-h-14 py-2.5"}`}
           >
             <span className="flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <ActiveIcon className="size-4" />
             </span>
             <span className="min-w-0 flex-1">
-              <span className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
-                {label} section
-              </span>
+              {!compact && (
+                <span className="block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  {label} section
+                </span>
+              )}
               <span className="block truncate text-sm font-semibold">{active.label}</span>
             </span>
             <span className="flex size-8 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground">
@@ -72,7 +76,7 @@ export function MobileTabDropdown<T extends MobileTab>({
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium">{tab.label}</span>
-                  <span className="block text-xs leading-snug text-muted-foreground">{tab.desc}</span>
+                  {!compact && <span className="block text-xs leading-snug text-muted-foreground">{tab.desc}</span>}
                 </span>
                 {selected && <Check className="size-4 shrink-0 text-primary" />}
               </DropdownMenuItem>

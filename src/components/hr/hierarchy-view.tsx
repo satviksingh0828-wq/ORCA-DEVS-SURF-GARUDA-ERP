@@ -68,12 +68,6 @@ export function HierarchyView() {
 
   return (
     <div className="space-y-5">
-      <header>
-        <h1 className="text-2xl font-semibold tracking-tight">Hierarchy</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Department reporting structure and active employees.
-        </p>
-      </header>
       {roots.length ? (
         <ul>{roots.map((department) => renderDepartment(department.id))}</ul>
       ) : (

@@ -4,8 +4,6 @@ import {
   BarChart3,
   Car,
   ChevronRight,
-  PanelLeftClose,
-  PanelLeftOpen,
   Route as RouteIcon,
   TrendingUp,
   Users,
@@ -104,7 +102,6 @@ export function DashboardPage({
   const fallbackTab: DashboardTabId = scope === "hr" ? "employee" : "pnl";
   const requestedTab = initialTab ?? fallbackTab;
   const [tab, setTab] = useState<DashboardTabId>(requestedTab);
-  const [navOpen, setNavOpen] = useState(true);
 
   const canAccess =
     scope === "tms"
@@ -137,70 +134,55 @@ export function DashboardPage({
           <span className="text-foreground">Dashboard</span>
         </span>
       }
-      headerEnd={
-        <button
-          type="button"
-          onClick={() => setNavOpen((v) => !v)}
-          title={navOpen ? "Hide sidebar" : "Show sidebar"}
-          className="hidden lg:flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          {navOpen ? (
-            <>
-              <PanelLeftClose className="size-3.5" />
-              <span>Hide sidebar</span>
-            </>
-          ) : (
-            <>
-              <PanelLeftOpen className="size-3.5" />
-              <span>Show sidebar</span>
-            </>
-          )}
-        </button>
-      }
     >
       <div
-        className={`grid gap-5 ${navOpen ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "grid-cols-1"}`}
+        className={
+          scope === "hr"
+            ? "ltms-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]"
+            : "grid gap-6 lg:grid-cols-[220px_minmax(0,1fr)]"
+        }
       >
         {/* ── Left nav (desktop) ── */}
-        {navOpen && (
-          <LtmsSidebar
-            open={navOpen}
-            label="Dashboard"
-            section={scope === "hr" ? "hr-dashboard" : "dashboard"}
-            activeTabId={safeTab}
-            onSelectTab={(id) => setTab(id as typeof safeTab)}
-            groups={
-              scope === "hr"
-                ? HR_SIDEBAR_GROUPS.map((group) =>
-                    group.section === "hr-dashboard"
-                      ? {
-                          ...group,
-                          items: group.items.map((item) => ({
-                            ...item,
-                            id: item.id.replace("-dashboard", ""),
-                          })),
-                        }
-                      : group,
-                  )
-                : [
-                    {
-                      section: "dashboard",
-                      label: "Dashboard",
-                      items: visibleTabs.map(({ id, label }) => ({ id, label })),
-                    },
-                  ]
-            }
-          />
-        )}
+        <LtmsSidebar
+          label="Dashboard"
+          section={scope === "hr" ? "hr-dashboard" : "dashboard"}
+          activeTabId={safeTab}
+          onSelectTab={(id) => setTab(id as typeof safeTab)}
+          groups={
+            scope === "hr"
+              ? HR_SIDEBAR_GROUPS.map((group) =>
+                  group.section === "hr-dashboard"
+                    ? {
+                        ...group,
+                        items: group.items.map((item) => ({
+                          ...item,
+                          id: item.id.replace("-dashboard", ""),
+                        })),
+                      }
+                    : group,
+                )
+              : [
+                  {
+                    section: "dashboard",
+                    label: "Dashboard",
+                    items: visibleTabs.map(({ id, label }) => ({ id, label })),
+                  },
+                ]
+          }
+        />
         {/* Mobile dropdown navigation */}
         <MobileTabDropdown
           tabs={visibleTabs}
           activeId={safeTab}
           label="Dashboard"
           onChange={setTab}
+          compact={scope === "hr"}
         />
 
-        <div key={safeTab} className="animate-fade-in min-w-0">
+        <div
+          key={safeTab}
+          className={`${scope === "hr" ? "ltms-reference-content" : ""} animate-fade-in min-w-0`}
+        >
           {scope !== "hr" && (
             <header className="mb-6">
               <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>

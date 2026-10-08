@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link, useRouterState } from "@tanstack/react-router";
-import { ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { HrSectionNav, type HrArea } from "@/components/hr/HrSectionNav";
 import { LtmsSidebar, type LtmsSidebarGroup } from "@/components/ltms/LtmsSidebar";
@@ -59,7 +59,6 @@ export const HR_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
 export function HrShell({ area, children }: { area: HrArea; children: ReactNode }) {
   const label = areaLabels[area];
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const [navOpen, setNavOpen] = useState(true);
   const activeItemId =
     HR_SIDEBAR_GROUPS.find((group) => group.section === `hr-${area}`)?.items.find((item) =>
       item.to ? pathname === item.to || pathname.startsWith(`${item.to}/`) : false,
@@ -82,36 +81,16 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
           <span className="text-foreground">{label}</span>
         </span>
       }
-      headerEnd={
-        <button
-          type="button"
-          onClick={() => setNavOpen((open) => !open)}
-          title={navOpen ? "Hide sidebar" : "Show sidebar"}
-          className="hidden items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground xl:flex"
-        >
-          {navOpen ? (
-            <PanelLeftClose className="size-3.5" />
-          ) : (
-            <PanelLeftOpen className="size-3.5" />
-          )}
-          <span>{navOpen ? "Hide sidebar" : "Show sidebar"}</span>
-        </button>
-      }
     >
-      <div
-        className={`grid gap-5 ${navOpen ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "grid-cols-1"}`}
-      >
-        {navOpen && (
-          <LtmsSidebar
-            open={navOpen}
-            label="HRMS navigation"
-            groups={HR_SIDEBAR_GROUPS}
-            section={`hr-${area}`}
-            activeTabId={activeItemId}
-            onSelectTab={() => undefined}
-          />
-        )}
-        <div className="min-w-0">
+      <div className="ltms-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
+        <LtmsSidebar
+          label="HRMS navigation"
+          groups={HR_SIDEBAR_GROUPS}
+          section={`hr-${area}`}
+          activeTabId={activeItemId}
+          onSelectTab={() => undefined}
+        />
+        <div className="ltms-reference-content min-w-0">
           <HrSectionNav area={area} />
           {children}
         </div>

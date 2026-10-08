@@ -146,10 +146,9 @@ export function AttendanceDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold sm:text-2xl">Attendance dashboard</h1>
-        <div className="ml-auto flex flex-wrap gap-1.5">
+    <div className="space-y-5">
+      <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-wrap gap-1.5">
           <Select value={financialYear} onValueChange={setFinancialYear}>
             <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="Financial Year" /></SelectTrigger>
             <SelectContent>

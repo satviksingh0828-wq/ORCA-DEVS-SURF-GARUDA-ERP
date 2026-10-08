@@ -223,7 +223,25 @@ export function LtmsSidebar({
           </section>
         ))}
       </SharedSidebar>
-      {!isCustom && (
+      {isCustom ? (
+        <nav className="ltms-reference-mobile-nav lg:hidden" aria-label={label}>
+          {groups.map((group) => {
+            const firstRoute = group.items.find((item) => item.to)?.to;
+            if (!firstRoute) return null;
+            const isActive = group.section === section;
+            return (
+              <a
+                key={group.section}
+                href={firstRoute}
+                className={`ltms-reference-mobile-link${isActive ? " active" : ""}`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                {group.label}
+              </a>
+            );
+          })}
+        </nav>
+      ) : (
         <nav className="ltms-reference-mobile-nav lg:hidden" aria-label="LTMS sections">
           {(Object.keys(ROUTES) as LtmsSection[]).map((targetSection) => {
             const group = NAVIGATION.find((item) => item.section === targetSection);

@@ -90,10 +90,9 @@ export function PayrollDashboard() {
   const hasBreakdownData = stats.breakdown.some(b => b.value > 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl"><Wallet className="h-5 w-5" /> Payroll dashboard</h1>
-        <div className="ml-auto flex flex-wrap items-center gap-2">
+    <div className="space-y-5">
+      <div className="flex flex-wrap justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Select value={financialYear} onValueChange={setFinancialYear}>
             <SelectTrigger className="h-8 w-[180px] text-xs"><SelectValue placeholder="Financial Year" /></SelectTrigger>
             <SelectContent>
