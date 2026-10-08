@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
-import { Eye, FilePlus2, PackageSearch, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Banknote, Eye, FilePlus2, PackageSearch, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
@@ -40,6 +40,7 @@ type TransporterSource = {
 };
 type Bill = {
   id: string;
+  branch_id: string;
   system_number: string;
   system_date: string;
   transporter_bill_number: string;
@@ -51,6 +52,9 @@ type Bill = {
   transporter_source?: { source_name?: string | null } | null;
   total_freight: number | string;
   total_loading: number | string;
+  paid_amount: number | string;
+  paid_at?: string | null;
+  paid_account_id?: string | null;
   deleted_at: string | null;
   journal_entry_id: string | null;
 };
@@ -152,6 +156,7 @@ export function TransporterBilling() {
   const { user } = useSession();
   const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [bills, setBills] = useState<Bill[]>([]);
+  const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [transporters, setTransporters] = useState<Transporter[]>([]);
   const [sources, setSources] = useState<TransporterSource[]>([]);
   const [loading, setLoading] = useState(false);
@@ -215,7 +220,7 @@ export function TransporterBilling() {
       let query = (supabase as any)
         .from("ltms_transporter_bills")
         .select(
-          "id,system_number,system_date,transporter_bill_number,transporter_bill_date,period_from,period_to,total_freight,total_loading,journal_entry_id,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),transporter_source:ltms_transporter_sources(source_name)",
+          "id,branch_id,system_number,system_date,transporter_bill_number,transporter_bill_date,period_from,period_to,total_freight,total_loading,paid_amount,paid_at,paid_account_id,journal_entry_id,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),transporter_source:ltms_transporter_sources(source_name)",
         )
         .gte("system_date", listFilters.from)
         .lte("system_date", listFilters.to)
@@ -525,6 +530,19 @@ export function TransporterBilling() {
     toast.success("Transporter bill moved to deleted history");
     await loadBills();
   }
+  async function refreshAfterPayment() {
+    await loadBills();
+    if (!viewing) return;
+    const { data, error } = await (supabase as any)
+      .from("ltms_transporter_bills")
+      .select(
+        "id,branch_id,system_number,system_date,transporter_bill_number,transporter_bill_date,period_from,period_to,total_freight,total_loading,paid_amount,paid_at,paid_account_id,journal_entry_id,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),transporter_source:ltms_transporter_sources(source_name)",
+      )
+      .eq("id", viewing.id)
+      .maybeSingle();
+    if (error) toast.error(`Payment was recorded, but the bill could not be refreshed: ${error.message}`);
+    else if (data) setViewing(data as Bill);
+  }
   const selectedBillingSource = formSources.find((source) => source.id === form.source);
   const previewTotals = journalPreviewAmounts ?? totals;
   const previewLines = [
@@ -681,6 +699,7 @@ export function TransporterBilling() {
                   <th className="px-3 py-3">Transporter / Source</th>
                   <th className="px-3 py-3 text-right">Freight</th>
                   <th className="px-3 py-3 text-right">Loading</th>
+                  <th className="px-3 py-3 text-right">Payment Status / Balance</th>
                   <th className="px-3 py-3 text-center">Actions</th>
                 </tr>
               </thead>
@@ -704,8 +723,26 @@ export function TransporterBilling() {
                       </td>
                       <td className="px-3 py-3 text-right">{money(bill.total_freight)}</td>
                       <td className="px-3 py-3 text-right">{money(bill.total_loading)}</td>
+                      <td className="px-3 py-3 text-right">
+                        {num(bill.paid_amount) >= num(bill.total_freight) + num(bill.total_loading) ? (
+                          <span className="font-medium text-emerald-700">Paid</span>
+                        ) : num(bill.paid_amount) > 0 ? (
+                          <span className="font-medium text-amber-700">
+                            Part paid · Due {money(num(bill.total_freight) + num(bill.total_loading) - num(bill.paid_amount))}
+                          </span>
+                        ) : (
+                          <span className="font-medium text-muted-foreground">
+                            Unpaid · Due {money(num(bill.total_freight) + num(bill.total_loading))}
+                          </span>
+                        )}
+                      </td>
                       <td className="px-3 py-3">
                         <div className="flex justify-center gap-2">
+                          {!bill.deleted_at && bill.journal_entry_id && num(bill.paid_amount) < num(bill.total_freight) + num(bill.total_loading) && (
+                            <Button size="sm" onClick={() => setPayingBill(bill)}>
+                              <Banknote className="size-3.5" /> Pay
+                            </Button>
+                          )}
                           <Button
                             size="sm"
                             variant="outline"
@@ -731,7 +768,7 @@ export function TransporterBilling() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={9} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={10} className="py-10 text-center text-muted-foreground">
                       {loading ? "Loading bills…" : "No transporter bills found."}
                     </td>
                   </tr>
@@ -1089,17 +1126,24 @@ export function TransporterBilling() {
               </h2>
               <p className="text-xs text-muted-foreground">Bill details and billed consignments</p>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setViewing(null);
-                setConsignmentViewing(null);
-                setScreen("list");
-              }}
-            >
-              Back to bills
-            </Button>
+            <div className="flex gap-2">
+              {!viewing.deleted_at && viewing.journal_entry_id && num(viewing.paid_amount) < num(viewing.total_freight) + num(viewing.total_loading) && (
+                <Button size="sm" onClick={() => setPayingBill(viewing)}>
+                  <Banknote className="size-3.5" /> Pay balance
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setViewing(null);
+                  setConsignmentViewing(null);
+                  setScreen("list");
+                }}
+              >
+                Back to bills
+              </Button>
+            </div>
           </div>
           <div className="space-y-5">
               <div className="grid gap-3 rounded-xl border border-border bg-muted/20 p-4 text-sm sm:grid-cols-2 lg:grid-cols-3">
@@ -1139,6 +1183,12 @@ export function TransporterBilling() {
                   <span className="text-muted-foreground">Bill totals</span>
                   <p className="font-semibold">
                     {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading
+                  </p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Paid / Balance</span>
+                  <p className="font-semibold">
+                    {money(viewing.paid_amount)} paid · {money(num(viewing.total_freight) + num(viewing.total_loading) - num(viewing.paid_amount))} due
                   </p>
                 </div>
               </div>
@@ -1214,6 +1264,135 @@ export function TransporterBilling() {
         open={consignmentViewing !== null}
         onOpenChange={(open) => !open && setConsignmentViewing(null)}
       />
+      <TransporterBillPaymentDialog
+        bill={payingBill}
+        userId={user?.id ?? null}
+        onClose={() => setPayingBill(null)}
+        onPaid={refreshAfterPayment}
+      />
     </div>
+  );
+}
+
+
+function TransporterBillPaymentDialog({
+  bill,
+  userId,
+  onClose,
+  onPaid,
+}: {
+  bill: Bill | null;
+  userId: string | null;
+  onClose: () => void;
+  onPaid: () => Promise<unknown> | unknown;
+}) {
+  const db = supabase as any;
+  const [accounts, setAccounts] = useState<Array<{ id: string; account_name: string; ledger_type: string }>>([]);
+  const [accountId, setAccountId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const due = bill ? Math.max(0, num(bill.total_freight) + num(bill.total_loading) - num(bill.paid_amount)) : 0;
+
+  useEffect(() => {
+    if (!bill) return;
+    setAccountId("");
+    setAmount(due.toFixed(2));
+    setPaymentDate(new Date().toISOString().slice(0, 10));
+    setLoadingAccounts(true);
+    void db
+      .from("ledger_accounts")
+      .select("id,account_name,ledger_type")
+      .eq("branch_id", bill.branch_id)
+      .eq("is_active", true)
+      .in("ledger_type", ["bank", "cash"])
+      .order("account_name")
+      .then(({ data, error }: { data: Array<{ id: string; account_name: string; ledger_type: string }> | null; error: { message: string } | null }) => {
+        if (error) toast.error(`Could not load cash/bank accounts: ${error.message}`);
+        else setAccounts(data ?? []);
+      })
+      .finally(() => setLoadingAccounts(false));
+    // Keep the opening amount stable as the user edits it; only load when the bill changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bill?.id]);
+
+  async function submitPayment() {
+    const paidAmount = num(amount);
+    if (!bill || !accountId || !paymentDate || paidAmount <= 0 || paidAmount > due) {
+      toast.error("Choose a branch cash/bank account and enter an amount up to the outstanding balance.");
+      return;
+    }
+    setSaving(true);
+    const { error } = await db.rpc("record_ltms_transporter_bill_payment", {
+      p_bill_id: bill.id,
+      p_payment_ledger_id: accountId,
+      p_amount: paidAmount,
+      p_paid_date: paymentDate,
+      p_created_by: userId,
+    });
+    setSaving(false);
+    if (error) {
+      toast.error(`Could not record transporter bill payment: ${error.message}`);
+      return;
+    }
+    toast.success(`Payment of ${money(paidAmount)} recorded for ${bill.transporter_bill_number}.`);
+    onClose();
+    await onPaid();
+  }
+
+  return (
+    <Dialog open={bill !== null} onOpenChange={(open) => !saving && !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Pay Transporter Bill</DialogTitle>
+        </DialogHeader>
+        {bill && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
+              <p className="font-semibold">{bill.transporter_bill_number}</p>
+              <p className="text-muted-foreground">
+                {bill.transporter?.transporter_name ?? "Transporter"} · Outstanding balance {money(due)}
+              </p>
+            </div>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium">Paid from cash / bank account *</span>
+              <Select value={accountId} onValueChange={setAccountId} disabled={loadingAccounts}>
+                <SelectTrigger>
+                  <SelectValue placeholder={loadingAccounts ? "Loading accounts…" : "Select cash or bank account"} />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.account_name} · {account.ledger_type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!loadingAccounts && accounts.length === 0 && (
+                <span className="block text-xs text-amber-700">No active cash or bank accounts were found for this bill branch.</span>
+              )}
+            </label>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium">Payment amount *</span>
+              <Input type="number" min="0.01" max={due} step="0.01" value={amount} onChange={(event) => setAmount(event.target.value)} />
+            </label>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium">Payment date *</span>
+              <Input type="date" value={paymentDate} onChange={(event) => setPaymentDate(event.target.value)} />
+            </label>
+            <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+              This posts a balanced voucher: debit the transporter source payable ledger used on the bill and credit the selected cash/bank account. Partial payments are supported.
+            </p>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" disabled={saving} onClick={onClose}>Cancel</Button>
+          <Button disabled={saving || loadingAccounts || !accountId || !paymentDate || num(amount) <= 0 || num(amount) > due} onClick={() => void submitPayment()}>
+            <Banknote className="size-4" /> {saving ? "Posting…" : "Record payment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
