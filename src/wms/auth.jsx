@@ -32,10 +32,13 @@ export function AuthProvider({ children, erpSessionToken = "", embedded = false 
         if (erpSessionToken) await warmWmsSession(erpSessionToken);
         let res = await api.get("/auth/me");
         if ((!res || !res.ok) && erpSessionToken) {
-          const exchange = await api.post("/auth/erp-session", {
+          // Some WMS deployments complete/set the HttpOnly cookie even when
+          // the exchange response is not a conventional success response.
+          // The follow-up /auth/me probe is the source of truth; don't reject
+          // the ERP session solely from the exchange response status.
+          await api.post("/auth/erp-session", {
             erp_session_token: erpSessionToken,
           });
-          if (!exchange || !exchange.ok) throw new Error("ERP session exchange failed");
           res = await api.get("/auth/me");
         }
         if (cancelled) return;

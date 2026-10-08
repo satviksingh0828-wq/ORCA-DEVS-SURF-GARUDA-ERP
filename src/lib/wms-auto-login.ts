@@ -3,6 +3,7 @@ const configuredWmsApiUrl = (import.meta.env.VITE_WMS_API_URL || import.meta.env
   .replace(/\/$/, "");
 
 let warmedToken = "";
+let warmingToken = "";
 let warmPromise: Promise<boolean> | null = null;
 
 /**
@@ -12,8 +13,10 @@ let warmPromise: Promise<boolean> | null = null;
  */
 export async function warmWmsSession(erpSessionToken: string) {
   if (!configuredWmsApiUrl || !erpSessionToken) return false;
-  if (warmedToken === erpSessionToken) return warmPromise ?? true;
+  if (warmedToken === erpSessionToken) return true;
+  if (warmingToken === erpSessionToken && warmPromise) return warmPromise;
 
+  warmingToken = erpSessionToken;
   const request = (async () => {
     try {
       const response = await fetch(`${configuredWmsApiUrl}/api/auth/erp-session`, {
@@ -35,7 +38,10 @@ export async function warmWmsSession(erpSessionToken: string) {
   try {
     return await request;
   } finally {
-    if (warmPromise === request) warmPromise = null;
+    if (warmPromise === request) {
+      warmPromise = null;
+      warmingToken = "";
+    }
   }
 }
 
