@@ -129,25 +129,21 @@ export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
   {
     section: "masters",
     label: "Masters",
-    description: "Branch bank and cash account records",
     items: masterLinks.map(({ label, to }) => ({ id: to, label, to })),
   },
   {
     section: "journal",
     label: "Journal",
-    description: "Balanced journal entries and vouchers",
     items: journalLinks.map(({ key, label }) => ({ id: key, label, to: "/accounts/journal" })),
   },
   {
     section: "ledger",
     label: "Ledger",
-    description: "Create, list and view ledger statements",
     items: ledgerLinks.map(({ key, label }) => ({ id: key, label, to: "/accounts/ledger" })),
   },
   {
     section: "final",
     label: "Final Accounts",
-    description: "Balance Sheet and Profit & Loss reports",
     items: [
       { id: "trial-balance", label: "Trial Balance", to: "/accounts/final" },
       { id: "balance-sheet", label: "Balance Sheet", to: "/accounts/final" },

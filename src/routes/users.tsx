@@ -59,7 +59,6 @@ function UsersPage() {
             {
               section: "users",
               label: "Users",
-              description: "User accounts, devices and audit history",
               items: TABS.map(({ id, label }) => ({ id, label })),
             },
           ]}

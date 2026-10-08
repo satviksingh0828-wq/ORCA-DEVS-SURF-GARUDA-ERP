@@ -112,7 +112,6 @@ function SettingsPage() {
             {
               section: "settings",
               label: "Settings",
-              description: "Company profile, branches, integrations and security",
               items: TABS.map(({ id, label }) => ({ id, label })),
             },
           ]}

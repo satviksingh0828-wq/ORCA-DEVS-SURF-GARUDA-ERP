@@ -83,7 +83,6 @@ function SystemPage() {
             {
               section: "system",
               label: "System",
-              description: "System diagnostics and access controls",
               items: TABS.map(({ id, label }) => ({ id, label })),
             },
           ]}
