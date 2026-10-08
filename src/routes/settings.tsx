@@ -1,4 +1,4 @@
-import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Building,
@@ -6,8 +6,6 @@ import {
   Check,
   ChevronLeft,
   ChevronRight,
-  PanelLeftClose,
-  PanelLeftOpen,
   Loader2,
   Search,
   ShieldCheck,
@@ -94,7 +92,6 @@ function SettingsPage() {
   const { user } = useSession();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabId>("company");
-  const [navOpen, setNavOpen] = useState(true);
 
   useEffect(() => {
     if (user && user.role !== "admin") navigate({ to: "/home", replace: true });
@@ -102,78 +99,42 @@ function SettingsPage() {
 
   if (user?.role !== "admin") return null;
 
-  const active = TABS.find((t) => t.id === tab)!;
-
   return (
-    <AppShell
-      variant="ltms"
-      shellTitle="Settings"
-      breadcrumb={
-        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Link to="/home" className="hover:text-foreground">
-            Workspace
-          </Link>
-          <ChevronRight className="size-3.5" />
-          <span className="text-foreground">Settings</span>
-        </span>
-      }
-      headerEnd={
-        <button
-          type="button"
-          onClick={() => setNavOpen((v) => !v)}
-          title={navOpen ? "Hide sidebar" : "Show sidebar"}
-          className="hidden lg:flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          {navOpen ? (
-            <>
-              <PanelLeftClose className="size-3.5" />
-              <span>Hide sidebar</span>
-            </>
-          ) : (
-            <>
-              <PanelLeftOpen className="size-3.5" />
-              <span>Show sidebar</span>
-            </>
-          )}
-        </button>
-      }
-    >
-      <div
-        className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
-      >
-        {/* Desktop left nav */}
-        {navOpen && (
-          <LtmsSidebar
-            open={navOpen}
+    <AppShell variant="ltms" shellTitle="Settings">
+      <div className="ltms-reference-shell ltms-single-pane-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
+        <LtmsSidebar
+          label="Settings navigation"
+          section="settings"
+          activeTabId={tab}
+          onSelectTab={(id) => setTab(id as TabId)}
+          showCustomMobileNav={false}
+          groups={[
+            {
+              section: "settings",
+              label: "Settings",
+              description: "Company profile, branches, integrations and security",
+              items: TABS.map(({ id, label }) => ({ id, label })),
+            },
+          ]}
+        />
+        <div className="ltms-reference-content min-w-0">
+          <MobileTabDropdown
+            tabs={TABS}
+            activeId={tab}
             label="Settings"
-            section="settings"
-            activeTabId={tab}
-            onSelectTab={(id) => setTab(id as (typeof TABS)[number]["id"])}
-            groups={[
-              {
-                section: "settings",
-                label: "Settings",
-                items: TABS.map(({ id, label }) => ({ id, label })),
-              },
-            ]}
+            onChange={setTab}
+            compact
           />
-        )}
-        {/* Mobile dropdown navigation */}
-        <MobileTabDropdown tabs={TABS} activeId={tab} label="Settings" onChange={setTab} />
-
-        <div key={tab} className="animate-fade-in min-w-0">
-          <header className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
-          </header>
-          {tab === "company" ? <CompanySettings /> : null}
-          {tab === "branch" ? <BranchSettings /> : null}
-          {tab === "attendance" ? <AttendanceModuleSettings /> : null}
-          {tab === "whatsapp" ? <WhatsAppSettings /> : null}
-          {tab === "mail" ? <MailSettings /> : null}
-          {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
-          {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
-          {tab === "passkey" ? <PasskeySecurityPanel /> : null}
+          <div key={tab} className="animate-fade-in min-w-0">
+            {tab === "company" ? <CompanySettings /> : null}
+            {tab === "branch" ? <BranchSettings /> : null}
+            {tab === "attendance" ? <AttendanceModuleSettings /> : null}
+            {tab === "whatsapp" ? <WhatsAppSettings /> : null}
+            {tab === "mail" ? <MailSettings /> : null}
+            {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
+            {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
+            {tab === "passkey" ? <PasskeySecurityPanel /> : null}
+          </div>
         </div>
       </div>
     </AppShell>

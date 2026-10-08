@@ -1,13 +1,6 @@
-import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import {
-  ChevronRight,
-  Fingerprint,
-  PanelLeftClose,
-  PanelLeftOpen,
-  ScrollText,
-  Users,
-} from "lucide-react";
+import { Fingerprint, ScrollText, Users } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
@@ -46,7 +39,6 @@ function UsersPage() {
   const { user } = useSession();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabId>("users");
-  const [navOpen, setNavOpen] = useState(true);
 
   useEffect(() => {
     if (user && user.role !== "admin") navigate({ to: "/home", replace: true });
@@ -54,73 +46,31 @@ function UsersPage() {
 
   if (user?.role !== "admin") return null;
 
-  const active = TABS.find((t) => t.id === tab) ?? TABS[0];
-
   return (
-    <AppShell
-      variant="ltms"
-      shellTitle="Users"
-      breadcrumb={
-        <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-          <Link to="/home" className="hover:text-foreground">
-            Workspace
-          </Link>
-          <ChevronRight className="size-3.5" />
-          <span className="text-foreground">Users</span>
-        </span>
-      }
-      headerEnd={
-        <button
-          type="button"
-          onClick={() => setNavOpen((v) => !v)}
-          title={navOpen ? "Hide sidebar" : "Show sidebar"}
-          className="hidden lg:flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          {navOpen ? (
-            <>
-              <PanelLeftClose className="size-3.5" />
-              <span>Hide sidebar</span>
-            </>
-          ) : (
-            <>
-              <PanelLeftOpen className="size-3.5" />
-              <span>Show sidebar</span>
-            </>
-          )}
-        </button>
-      }
-    >
-      <div
-        className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
-      >
-        {/* Desktop left nav */}
-        {navOpen && (
-          <LtmsSidebar
-            open={navOpen}
-            label="Users"
-            section="users"
-            activeTabId={tab}
-            onSelectTab={(id) => setTab(id as TabId)}
-            groups={[
-              {
-                section: "users",
-                label: "Users",
-                items: TABS.map(({ id, label }) => ({ id, label })),
-              },
-            ]}
-          />
-        )}
-        {/* Mobile dropdown navigation */}
-        <MobileTabDropdown tabs={TABS} activeId={tab} label="Users" onChange={setTab} />
-
-        <div key={tab} className="animate-fade-in min-w-0">
-          <header className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
-          </header>
-          {tab === "users" && <UserList />}
-          {tab === "devices" && <DevicesPanel />}
-          {tab === "logs" && <LogsPanel />}
+    <AppShell variant="ltms" shellTitle="Users">
+      <div className="ltms-reference-shell ltms-single-pane-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
+        <LtmsSidebar
+          label="Users navigation"
+          section="users"
+          activeTabId={tab}
+          onSelectTab={(id) => setTab(id as TabId)}
+          showCustomMobileNav={false}
+          groups={[
+            {
+              section: "users",
+              label: "Users",
+              description: "User accounts, devices and audit history",
+              items: TABS.map(({ id, label }) => ({ id, label })),
+            },
+          ]}
+        />
+        <div className="ltms-reference-content min-w-0">
+          <MobileTabDropdown tabs={TABS} activeId={tab} label="Users" onChange={setTab} compact />
+          <div key={tab} className="animate-fade-in min-w-0">
+            {tab === "users" && <UserList />}
+            {tab === "devices" && <DevicesPanel />}
+            {tab === "logs" && <LogsPanel />}
+          </div>
         </div>
       </div>
     </AppShell>
