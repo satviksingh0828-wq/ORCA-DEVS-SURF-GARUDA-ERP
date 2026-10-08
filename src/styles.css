@@ -1687,6 +1687,20 @@ table td {
   min-height: 0;
 }
 
+@media (min-width: 1024px) {
+  html[data-app-sidebar-hidden="true"] .ltms-reference-shell:has(> .app-sidebar-container) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html[data-app-sidebar-hidden="true"] div:has(> .app-sidebar-container) {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  html[data-app-sidebar-hidden="true"] .app-sidebar-container {
+    display: none !important;
+  }
+}
+
 @media (max-width: 1023px) {
   .accounts-reference-shell,
   .ltms-single-pane-reference-shell {

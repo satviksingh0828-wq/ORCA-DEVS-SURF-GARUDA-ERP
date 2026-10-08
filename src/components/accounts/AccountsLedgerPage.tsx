@@ -25,6 +25,7 @@ import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
+import { fetchAll } from "@/lib/fetch-all";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
 import { openBrandedTablePdf } from "@/lib/branded-pdf";
 
@@ -301,6 +302,23 @@ export function AccountsLedgerPage() {
   );
   const selectedLedger = ledgers.find((ledger) => ledger.id === viewLedgerId) ?? null;
 
+  async function fetchLedgerLines(endDate: string) {
+    if (!selectedLedger) return [];
+    return fetchAll<JournalLine>(() =>
+      db
+        .from("journal_lines")
+        .select(
+          "id,debit,credit,line_description,journal_entry:journal_entries!inner(id,voucher_number,entry_date,description,reference,status)",
+        )
+        .eq("ledger_account_id", selectedLedger.id)
+        .eq("branch_id", selectedLedger.branch_id)
+        .eq("journal_entry.status", "approved")
+        .lte("journal_entry.entry_date", endDate)
+        .order("entry_date", { foreignTable: "journal_entries", ascending: true })
+        .order("line_no", { ascending: true }),
+    );
+  }
+
   async function createLedger(event: React.FormEvent) {
     event.preventDefault();
     if (!form.branch_id || !form.description.trim()) {
@@ -427,17 +445,7 @@ export function AccountsLedgerPage() {
     }
     setViewLoading(true);
     try {
-      const { data, error } = await db
-        .from("journal_lines")
-        .select(
-          "id,debit,credit,line_description,journal_entry:journal_entries!inner(id,voucher_number,entry_date,description,reference,status)",
-        )
-        .eq("ledger_account_id", viewLedgerId)
-        .lte("journal_entry.entry_date", viewEnd)
-        .order("entry_date", { foreignTable: "journal_entries", ascending: true })
-        .order("line_no", { ascending: true });
-      if (error) throw new Error(error.message);
-      const all = (data as JournalLine[]) ?? [];
+      const all = await fetchLedgerLines(viewEnd);
       const before = all.filter((line) => String(line.journal_entry?.entry_date ?? "") < viewStart);
       const period = all.filter((line) => {
         const date = String(line.journal_entry?.entry_date ?? "");
@@ -469,17 +477,7 @@ export function AccountsLedgerPage() {
 
   async function getPeriodReport() {
     if (!viewLedgerId || !viewStart || !viewEnd) return null;
-    const { data, error } = await db
-      .from("journal_lines")
-      .select(
-        "id,debit,credit,line_description,journal_entry:journal_entries!inner(id,voucher_number,entry_date,description,reference,status)",
-      )
-      .eq("ledger_account_id", viewLedgerId)
-      .lte("journal_entry.entry_date", viewEnd)
-      .order("entry_date", { foreignTable: "journal_entries", ascending: true })
-      .order("line_no", { ascending: true });
-    if (error) throw new Error(error.message);
-    const all = (data as JournalLine[]) ?? [];
+    const all = await fetchLedgerLines(viewEnd);
     const before = all.filter((line) => String(line.journal_entry?.entry_date ?? "") < viewStart);
     const period = all.filter((line) => {
       const date = String(line.journal_entry?.entry_date ?? "");

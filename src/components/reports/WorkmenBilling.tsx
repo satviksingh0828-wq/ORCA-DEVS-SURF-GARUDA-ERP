@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
-import { Eye, FilePlus2, Package, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Banknote, Eye, FilePlus2, Package, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
@@ -50,6 +50,10 @@ type Bill = {
   deduction_amount: number | string;
   deduction_note: string | null;
   grand_total: number | string;
+  branch_id: string;
+  paid_amount: number | string;
+  paid_at?: string | null;
+  paid_account_id?: string | null;
   journal_entry_id?: string | null;
   branch?: { branch_name?: string | null } | null;
 };
@@ -102,6 +106,7 @@ export function WorkmenBilling() {
   const [selected, setSelected] = useState<Entry[]>([]);
   const [candidateIds, setCandidateIds] = useState<string[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
+  const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [viewing, setViewing] = useState<Bill | null>(null);
   const [viewItems, setViewItems] = useState<BillItem[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -248,7 +253,7 @@ export function WorkmenBilling() {
     let query = db
       .from("workmen_bills")
       .select(
-        "id,bill_number,bill_date,period_from,period_to,total_loading,total_unloading,additional_pay_amount,additional_pay_note,deduction_amount,deduction_note,grand_total,journal_entry_id,branch:branches(branch_name)",
+        "id,bill_number,branch_id,bill_date,period_from,period_to,total_loading,total_unloading,additional_pay_amount,additional_pay_note,deduction_amount,deduction_note,grand_total,paid_amount,paid_at,paid_account_id,journal_entry_id,branch:branches(branch_name)",
       )
       .is("deleted_at", null)
       .order("bill_date", { ascending: false });
@@ -454,7 +459,7 @@ export function WorkmenBilling() {
             </div>
           </div>
           <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full min-w-[900px] text-sm">
+            <table className="w-full min-w-[1180px] text-sm">
               <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
                 <tr>
                   <th className="px-3 py-3">Bill Number</th>
@@ -465,6 +470,7 @@ export function WorkmenBilling() {
                   <th className="px-3 py-3 text-right">Additional Pay</th>
                   <th className="px-3 py-3 text-right">Deduction</th>
                   <th className="px-3 py-3 text-right">Net Total</th>
+                  <th className="px-3 py-3 text-right">Payment Status / Balance</th>
                   <th className="px-3 py-3 text-right">Action</th>
                 </tr>
               </thead>
@@ -487,7 +493,25 @@ export function WorkmenBilling() {
                       {money(bill.grand_total)}
                     </td>
                     <td className="px-3 py-3 text-right">
+                      {num(bill.paid_amount) >= num(bill.grand_total) ? (
+                        <span className="font-medium text-emerald-700">Paid</span>
+                      ) : num(bill.paid_amount) > 0 ? (
+                        <span className="font-medium text-amber-700">
+                          Part paid · Due {money(num(bill.grand_total) - num(bill.paid_amount))}
+                        </span>
+                      ) : (
+                        <span className="font-medium text-muted-foreground">
+                          Unpaid · Due {money(bill.grand_total)}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-3 py-3 text-right">
                       <div className="flex justify-end gap-2">
+                        {bill.journal_entry_id && num(bill.grand_total) > num(bill.paid_amount) && (
+                          <Button size="sm" onClick={() => setPayingBill(bill)}>
+                            <Banknote className="size-3.5" /> Pay
+                          </Button>
+                        )}
                         <Button size="sm" variant="outline" onClick={() => void viewBill(bill)}>
                           <Eye className="size-3.5" /> View
                         </Button>
@@ -507,7 +531,7 @@ export function WorkmenBilling() {
                 ))}
                 {!bills.length && (
                   <tr>
-                    <td colSpan={9} className="px-3 py-10 text-center text-muted-foreground">
+                    <td colSpan={10} className="px-3 py-10 text-center text-muted-foreground">
                       No Workmen Bills found.
                     </td>
                   </tr>
@@ -516,6 +540,12 @@ export function WorkmenBilling() {
             </table>
           </div>
         </section>
+        <WorkmenBillPaymentDialog
+          bill={payingBill}
+          userId={user?.id ?? null}
+          onClose={() => setPayingBill(null)}
+          onPaid={loadBills}
+        />
       </div>
     );
   }
@@ -531,6 +561,11 @@ export function WorkmenBilling() {
             </p>
           </div>
           <div className="flex gap-2">
+            {viewing.journal_entry_id && num(viewing.grand_total) > num(viewing.paid_amount) && (
+              <Button size="sm" onClick={() => setPayingBill(viewing)}>
+                <Banknote className="size-3.5" /> Pay balance
+              </Button>
+            )}
             <Button variant="outline" size="sm" onClick={() => setScreen("list")}>
               Back to bills
             </Button>
@@ -564,6 +599,13 @@ export function WorkmenBilling() {
           <div>
             <p className="text-muted-foreground">Net Total</p>
             <p className="font-semibold">{money(viewing.grand_total)}</p>
+          </div>
+          <div>
+            <p className="text-muted-foreground">Paid / Balance</p>
+            <p className="font-semibold">
+              {money(viewing.paid_amount)} paid ·{" "}
+              {money(num(viewing.grand_total) - num(viewing.paid_amount))} due
+            </p>
           </div>
           <div>
             <p className="text-muted-foreground">Journal Entry</p>
@@ -617,6 +659,24 @@ export function WorkmenBilling() {
             <p className="mt-1 text-muted-foreground">{viewing.deduction_note || "No note"}</p>
           </div>
         </div>
+        <WorkmenBillPaymentDialog
+          bill={payingBill}
+          userId={user?.id ?? null}
+          onClose={() => setPayingBill(null)}
+          onPaid={async () => {
+            await loadBills();
+            if (viewing) {
+              const refreshed = await db
+                .from("workmen_bills")
+                .select(
+                  "id,bill_number,branch_id,bill_date,period_from,period_to,total_loading,total_unloading,additional_pay_amount,additional_pay_note,deduction_amount,deduction_note,grand_total,paid_amount,paid_at,paid_account_id,journal_entry_id,branch:branches(branch_name)",
+                )
+                .eq("id", viewing.id)
+                .maybeSingle();
+              if (refreshed.data) setViewing(refreshed.data as Bill);
+            }
+          }}
+        />
       </section>
     );
   }
@@ -909,5 +969,169 @@ export function WorkmenBilling() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function WorkmenBillPaymentDialog({
+  bill,
+  userId,
+  onClose,
+  onPaid,
+}: {
+  bill: Bill | null;
+  userId: string | null;
+  onClose: () => void;
+  onPaid: () => Promise<unknown> | unknown;
+}) {
+  const db = supabase as any;
+  const [accounts, setAccounts] = useState<
+    Array<{ id: string; account_name: string; ledger_type: string }>
+  >([]);
+  const [accountId, setAccountId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [paymentDate, setPaymentDate] = useState(isoToday);
+  const [loadingAccounts, setLoadingAccounts] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const due = bill ? Math.max(0, num(bill.grand_total) - num(bill.paid_amount)) : 0;
+
+  useEffect(() => {
+    if (!bill) return;
+    setAccountId("");
+    setAmount(due.toFixed(2));
+    setPaymentDate(isoToday);
+    setLoadingAccounts(true);
+    void db
+      .from("ledger_accounts")
+      .select("id,account_name,ledger_type")
+      .eq("branch_id", bill.branch_id)
+      .eq("is_active", true)
+      .in("ledger_type", ["bank", "cash"])
+      .order("account_name")
+      .then(
+        ({
+          data,
+          error,
+        }: {
+          data: Array<{ id: string; account_name: string; ledger_type: string }> | null;
+          error: { message: string } | null;
+        }) => {
+          if (error) toast.error(`Could not load cash/bank accounts: ${error.message}`);
+          else setAccounts(data ?? []);
+        },
+      )
+      .finally(() => setLoadingAccounts(false));
+    // The selected bill is the trigger; keep its opening amount stable while the user edits it.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bill?.id]);
+
+  async function submitPayment() {
+    const paidAmount = num(amount);
+    if (!bill || !accountId || !paymentDate || paidAmount <= 0 || paidAmount > due) {
+      toast.error(
+        "Choose a branch cash/bank account and enter an amount up to the outstanding balance.",
+      );
+      return;
+    }
+    setSaving(true);
+    const { error } = await db.rpc("record_workmen_bill_payment", {
+      p_bill_id: bill.id,
+      p_payment_ledger_id: accountId,
+      p_amount: paidAmount,
+      p_paid_date: paymentDate,
+      p_created_by: userId,
+    });
+    setSaving(false);
+    if (error) {
+      toast.error(`Could not record Workmen Bill payment: ${error.message}`);
+      return;
+    }
+    toast.success(`Payment of ${money(paidAmount)} recorded for ${bill.bill_number}.`);
+    onClose();
+    await onPaid();
+  }
+
+  return (
+    <Dialog open={bill !== null} onOpenChange={(open) => !saving && !open && onClose()}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Pay Workmen Bill</DialogTitle>
+        </DialogHeader>
+        {bill && (
+          <div className="space-y-4">
+            <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
+              <p className="font-semibold">{bill.bill_number}</p>
+              <p className="text-muted-foreground">
+                {bill.branch?.branch_name ?? "Branch"} · Outstanding balance {money(due)}
+              </p>
+            </div>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium">Paid from cash / bank account *</span>
+              <Select value={accountId} onValueChange={setAccountId} disabled={loadingAccounts}>
+                <SelectTrigger>
+                  <SelectValue
+                    placeholder={
+                      loadingAccounts ? "Loading accounts…" : "Select cash or bank account"
+                    }
+                  />
+                </SelectTrigger>
+                <SelectContent>
+                  {accounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      {account.account_name} · {account.ledger_type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {!loadingAccounts && accounts.length === 0 && (
+                <span className="block text-xs text-amber-700">
+                  No active cash or bank accounts were found for this bill branch.
+                </span>
+              )}
+            </label>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium">Payment amount *</span>
+              <Input
+                type="number"
+                min="0.01"
+                max={due}
+                step="0.01"
+                value={amount}
+                onChange={(event) => setAmount(event.target.value)}
+              />
+            </label>
+            <label className="block space-y-1.5 text-sm">
+              <span className="font-medium">Payment date *</span>
+              <Input
+                type="date"
+                value={paymentDate}
+                onChange={(event) => setPaymentDate(event.target.value)}
+              />
+            </label>
+            <p className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-900">
+              This posts a balanced voucher: debit the Workmen Payable ledger used on the bill and
+              credit the selected cash/bank account. Partial payments are supported.
+            </p>
+          </div>
+        )}
+        <DialogFooter>
+          <Button variant="outline" disabled={saving} onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            disabled={
+              saving ||
+              loadingAccounts ||
+              !accountId ||
+              !paymentDate ||
+              num(amount) <= 0 ||
+              num(amount) > due
+            }
+            onClick={() => void submitPayment()}
+          >
+            <Banknote className="size-4" /> {saving ? "Posting…" : "Record payment"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

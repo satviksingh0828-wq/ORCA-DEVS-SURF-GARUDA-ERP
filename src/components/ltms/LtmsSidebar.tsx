@@ -194,19 +194,6 @@ export function LtmsSidebar({
                   group.section === section ? activeTabId : activeItems?.[group.section];
                 const isActive = item.id === groupActiveItem;
                 const rowClass = `ltms-reference-sidebar-link${isActive ? " active" : ""}`;
-                if (isCustom && item.to) {
-                  return (
-                    <a
-                      key={item.id}
-                      href={item.to}
-                      className={rowClass}
-                      aria-current={isActive ? "page" : undefined}
-                      onClick={() => onCrossGroupNavigate?.(group.section, item.id)}
-                    >
-                      <span>{item.label}</span>
-                    </a>
-                  );
-                }
                 if (group.section === section || (isCustom && !item.to)) {
                   return (
                     <button
@@ -218,6 +205,19 @@ export function LtmsSidebar({
                     >
                       <span>{item.label}</span>
                     </button>
+                  );
+                }
+                if (isCustom && item.to) {
+                  return (
+                    <a
+                      key={item.id}
+                      href={item.to}
+                      className={rowClass}
+                      aria-current={isActive ? "page" : undefined}
+                      onClick={() => onCrossGroupNavigate?.(group.section, item.id)}
+                    >
+                      <span>{item.label}</span>
+                    </a>
                   );
                 }
                 const targetSection = group.section as LtmsSection;

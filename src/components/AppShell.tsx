@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, Server, ShieldCheck, User } from "lucide-react";
+import { LogOut, PanelLeftClose, PanelLeftOpen, Server, ShieldCheck, User } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
 import { useOrcaAI } from "@/lib/orca-context";
@@ -92,7 +92,28 @@ export function AppShell({
       .join("")
       .toUpperCase() || "U";
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [sidebarHidden, setSidebarHidden] = useState(() => {
+    try {
+      return (
+        typeof window !== "undefined" &&
+        window.localStorage.getItem("app.sidebar.hidden") === "true"
+      );
+    } catch {
+      return false;
+    }
+  });
   const accountMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (sidebarHidden) root.setAttribute("data-app-sidebar-hidden", "true");
+    else root.removeAttribute("data-app-sidebar-hidden");
+    try {
+      window.localStorage.setItem("app.sidebar.hidden", String(sidebarHidden));
+    } catch {
+      // Keep the current-session toggle usable when storage is unavailable.
+    }
+  }, [sidebarHidden]);
 
   useEffect(() => {
     if (!accountMenuOpen || variant !== "ltms") return;
@@ -223,6 +244,26 @@ export function AppShell({
             </div>
           )}
           {headerEnd && <div className="ml-2 hidden sm:block">{headerEnd}</div>}
+          <button
+            type="button"
+            onClick={() => setSidebarHidden((hidden) => !hidden)}
+            title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+            aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+            aria-pressed={sidebarHidden}
+            className={cn(
+              "ml-1 hidden h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex",
+              variant === "ltms" ? "ltms-app-shell-icon-button" : "",
+            )}
+          >
+            {sidebarHidden ? (
+              <PanelLeftOpen className="size-4" />
+            ) : (
+              <PanelLeftClose className="size-4" />
+            )}
+            <span className="hidden xl:inline">
+              {sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+            </span>
+          </button>
           <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
             {isAdmin && (
               <Link
