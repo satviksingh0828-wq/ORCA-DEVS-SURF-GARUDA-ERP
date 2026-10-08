@@ -14,6 +14,7 @@ import {
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { SharedSidebar } from "@/components/SharedSidebar";
+import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { MasterList } from "@/components/masters/MasterList";
 import { Contracts } from "@/components/masters/Contracts";
@@ -147,6 +148,30 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
 
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
   const safeTab = active?.id ?? "driver";
+  const ltmsSidebarGroups = [
+    {
+      label: "Operations of LTMS",
+      items: [{ id: "operations", label: "Operations", to: "/ltms/operations" as const }],
+    },
+    {
+      label: "Billing",
+      items: [{ id: "billing", label: "Billing", to: "/ltms/billing" as const }],
+    },
+    {
+      label: "Reports",
+      items: [{ id: "reports", label: "Reports", to: "/ltms/reports" as const }],
+    },
+    {
+      label: "Masters",
+      items: TABS.map((item) => ({
+        id: item.id,
+        label: item.label,
+        active: item.id === safeTab,
+        onSelect: () => setTab(item.id),
+      })),
+    },
+    { label: "Finance", items: [{ id: "finance", label: "Finance", to: "/finance" as const }] },
+  ];
 
   return (
     <AppShell
@@ -185,44 +210,50 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
       }
     >
       <div
-        className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
+        className={`grid gap-6 ${navOpen ? (ltmsMode ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "lg:grid-cols-[220px_minmax(0,1fr)]") : "grid-cols-1"} ${ltmsMode ? "ltms-reference-shell" : ""}`}
       >
         {/* Desktop left nav */}
-        {navOpen && (
-          <SharedSidebar open={navOpen} width="220px" label="Masters">
-            <ul className="space-y-1">
-              {TABS.map((t) => {
-                const Icon = t.icon;
-                const isActive = t.id === safeTab;
-                return (
-                  <li key={t.id}>
-                    <button
-                      type="button"
-                      onClick={() => setTab(t.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 ${
-                        isActive
-                          ? "bg-primary-soft text-foreground"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      <Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : ""}`} />
-                      <span className="leading-tight min-w-0">
-                        <span className="block text-sm font-medium truncate">{t.label}</span>
-                        <span className="block text-[11px] opacity-70 truncate">{t.desc}</span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </SharedSidebar>
-        )}
+        {navOpen &&
+          (ltmsMode ? (
+            <LtmsSidebar groups={ltmsSidebarGroups} open={navOpen} label="LTMS masters" />
+          ) : (
+            <SharedSidebar open={navOpen} width="220px" label="Masters">
+              <ul className="space-y-1">
+                {TABS.map((t) => {
+                  const Icon = t.icon;
+                  const isActive = t.id === safeTab;
+                  return (
+                    <li key={t.id}>
+                      <button
+                        type="button"
+                        onClick={() => setTab(t.id)}
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 ${
+                          isActive
+                            ? "bg-primary-soft text-foreground"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                      >
+                        <Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : ""}`} />
+                        <span className="leading-tight min-w-0">
+                          <span className="block text-sm font-medium truncate">{t.label}</span>
+                          <span className="block text-[11px] opacity-70 truncate">{t.desc}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </SharedSidebar>
+          ))}
 
         {/* Mobile dropdown navigation */}
         <MobileTabDropdown tabs={TABS} activeId={safeTab} label="Masters" onChange={setTab} />
 
-        <div key={safeTab} className="animate-fade-in min-w-0">
-          <header className="mb-6">
+        <div
+          key={safeTab}
+          className={`animate-fade-in min-w-0 ${ltmsMode ? "ltms-reference-content" : ""}`}
+        >
+          <header className={`mb-6 ${ltmsMode ? "ltms-reference-page-header" : ""}`}>
             <h1 className="text-2xl font-semibold tracking-tight">{active?.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active?.desc}</p>
           </header>

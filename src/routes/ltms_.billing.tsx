@@ -13,7 +13,7 @@ import {
 import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
-import { SharedSidebar } from "@/components/SharedSidebar";
+import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { TripBilling } from "@/components/reports/TripBilling";
 import { SourceBilling } from "@/components/reports/SourceBilling";
@@ -91,6 +91,30 @@ function BillingPage() {
   const [navOpen, setNavOpen] = useState(true);
   const safeTab = visibleTabs.some((item) => item.id === tab) ? tab : visibleTabs[0].id;
   const active = visibleTabs.find((item) => item.id === safeTab) ?? visibleTabs[0];
+  const ltmsSidebarGroups = [
+    {
+      label: "Operations of LTMS",
+      items: [{ id: "operations", label: "Operations", to: "/ltms/operations" as const }],
+    },
+    {
+      label: "Billing",
+      items: visibleTabs.map((item) => ({
+        id: item.id,
+        label: item.label,
+        active: item.id === safeTab,
+        onSelect: () => setTab(item.id),
+      })),
+    },
+    {
+      label: "Reports",
+      items: [{ id: "reports", label: "Reports", to: "/ltms/reports" as const }],
+    },
+    {
+      label: "Masters",
+      items: [{ id: "masters", label: "Masters", to: "/ltms/masters" as const }],
+    },
+    { label: "Finance", items: [{ id: "finance", label: "Finance", to: "/finance" as const }] },
+  ];
 
   return (
     <AppShell
@@ -129,41 +153,17 @@ function BillingPage() {
       }
     >
       <div
-        className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
+        className={`grid gap-6 ${navOpen ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "grid-cols-1"} ltms-reference-shell`}
       >
-        {navOpen && (
-          <SharedSidebar open={navOpen} width="220px" label="LTMS billing">
-            <ul className="space-y-1">
-              {visibleTabs.map((item) => {
-                const Icon = item.icon;
-                const selected = item.id === safeTab;
-                return (
-                  <li key={item.id}>
-                    <button
-                      type="button"
-                      onClick={() => setTab(item.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 ${selected ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-                    >
-                      <Icon className={`size-4 shrink-0 ${selected ? "text-primary" : ""}`} />
-                      <span className="min-w-0 leading-tight">
-                        <span className="block truncate text-sm font-medium">{item.label}</span>
-                        <span className="block truncate text-[11px] opacity-70">{item.desc}</span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </SharedSidebar>
-        )}
+        {navOpen && <LtmsSidebar groups={ltmsSidebarGroups} open={navOpen} label="LTMS billing" />}
         <MobileTabDropdown
           tabs={visibleTabs}
           activeId={safeTab}
           label="Billing"
           onChange={setTab}
         />
-        <div className="animate-fade-in min-w-0">
-          <header className="mb-6">
+        <div className="animate-fade-in min-w-0 ltms-reference-content">
+          <header className="mb-6 ltms-reference-page-header">
             <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>

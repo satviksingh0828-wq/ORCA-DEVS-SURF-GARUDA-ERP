@@ -23,6 +23,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { SharedSidebar } from "@/components/SharedSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
+import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { TabErrorBoundary } from "@/components/TabErrorBoundary";
 import { Trips } from "@/components/operations/Trips";
 import { TripAveragesPanel } from "@/components/operations/TripAveragesPanel";
@@ -230,6 +231,30 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const fullBleedConsignment = safeTab === "consignment" && consignmentCreateOpen;
   // Trip forms hide the sidebar but keep the standard page width and margins.
   const fullBleed = fullBleedConsignment;
+  const ltmsSidebarGroups = [
+    {
+      label: "Operations of LTMS",
+      items: TABS.map((item) => ({
+        id: item.id,
+        label: item.label,
+        active: item.id === safeTab,
+        onSelect: () => setTab(item.id),
+      })),
+    },
+    {
+      label: "Billing",
+      items: [{ id: "billing", label: "Billing", to: "/ltms/billing" as const }],
+    },
+    {
+      label: "Reports",
+      items: [{ id: "reports", label: "Reports", to: "/ltms/reports" as const }],
+    },
+    {
+      label: "Masters",
+      items: [{ id: "masters", label: "Masters", to: "/ltms/masters" as const }],
+    },
+    { label: "Finance", items: [{ id: "finance", label: "Finance", to: "/finance" as const }] },
+  ];
 
   return (
     <AppShell
@@ -269,48 +294,53 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       }
     >
       <div
-        className={`grid items-start ${fullBleed ? "gap-0" : "gap-6"} ${navOpen ? "lg:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
+        className={`grid items-start ${fullBleed ? "gap-0" : "gap-6"} ${navOpen ? (mode === "ltms" ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "lg:grid-cols-[220px_minmax(0,1fr)]") : "grid-cols-1"} ${mode === "ltms" ? "ltms-reference-shell" : ""}`}
       >
         {/* Desktop left nav */}
-        {navOpen && (
-          <SharedSidebar open={navOpen} width="220px" label="Operations">
-            <ul className="space-y-1">
-              {TABS.map((t) => {
-                const Icon = t.icon;
-                const isActive = t.id === safeTab;
-                return (
-                  <li key={t.id}>
-                    {t.dividerBefore && <div className="my-2 border-t border-border" />}
-                    <button
-                      type="button"
-                      onClick={() => setTab(t.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 ${
-                        isActive
-                          ? "bg-primary-soft text-foreground"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      <Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : ""}`} />
-                      <span className="leading-tight min-w-0">
-                        <span className="block text-sm font-medium truncate">{t.label}</span>
-                        <span className="block text-[11px] opacity-70 truncate">{t.desc}</span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </SharedSidebar>
-        )}
+        {navOpen &&
+          (mode === "ltms" ? (
+            <LtmsSidebar groups={ltmsSidebarGroups} open={navOpen} label="LTMS operations" />
+          ) : (
+            <SharedSidebar open={navOpen} width="220px" label="Operations">
+              <ul className="space-y-1">
+                {TABS.map((t) => {
+                  const Icon = t.icon;
+                  const isActive = t.id === safeTab;
+                  return (
+                    <li key={t.id}>
+                      {t.dividerBefore && <div className="my-2 border-t border-border" />}
+                      <button
+                        type="button"
+                        onClick={() => setTab(t.id)}
+                        className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 ${
+                          isActive
+                            ? "bg-primary-soft text-foreground"
+                            : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                        }`}
+                      >
+                        <Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : ""}`} />
+                        <span className="leading-tight min-w-0">
+                          <span className="block text-sm font-medium truncate">{t.label}</span>
+                          <span className="block text-[11px] opacity-70 truncate">{t.desc}</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </SharedSidebar>
+          ))}
 
         {/* Mobile dropdown navigation */}
         {!fullBleed && (
           <MobileTabDropdown tabs={TABS} activeId={safeTab} label="Operations" onChange={setTab} />
         )}
 
-        <div className="animate-fade-in min-w-0">
+        <div
+          className={`animate-fade-in min-w-0 ${mode === "ltms" ? "ltms-reference-content" : ""}`}
+        >
           {!fullBleed && (
-            <header className="mb-6">
+            <header className={`mb-6 ${mode === "ltms" ? "ltms-reference-page-header" : ""}`}>
               <h1 className="text-2xl font-semibold tracking-tight">{active?.label}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{active?.desc}</p>
             </header>
