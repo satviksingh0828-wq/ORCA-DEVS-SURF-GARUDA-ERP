@@ -28,6 +28,7 @@ import { OrcaLogo } from "../components/OrcaLogo";
 import { PasskeyGate } from "../components/PasskeyGate";
 import { ScreenControlWidget } from "../components/ScreenControlWidget";
 import { useAppSettings } from "../lib/hooks";
+import { ModuleLoadingScreen } from "../components/ModuleLoadingScreen";
 
 function NotFoundComponent() {
   return (
@@ -194,13 +195,7 @@ function DynamicImportRecovery() {
 /** Renders the SPARROW AI panel — admin only, persists across route changes */
 function PasskeyProtectionGate({ children }: { children: ReactNode }) {
   const { data: settings, isLoading } = useAppSettings();
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <div className="size-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-      </div>
-    );
-  }
+  if (isLoading) return <ModuleLoadingScreen shellTitle="Garuda ERP" />;
   if (settings?.passkey_protection_enabled !== true) return <>{children}</>;
   return <PasskeyGate>{children}</PasskeyGate>;
 }

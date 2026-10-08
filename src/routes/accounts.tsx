@@ -1,5 +1,10 @@
 import { createFileRoute, Outlet } from "@tanstack/react-router";
+import { RequireAuth } from "@/components/RequireAuth";
 
 export const Route = createFileRoute("/accounts")({
-  component: Outlet,
+  component: () => (
+    <RequireAuth>
+      <Outlet />
+    </RequireAuth>
+  ),
 });

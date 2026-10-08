@@ -178,7 +178,13 @@ function HomePage() {
 
   return (
     <AppShell variant="ltms" shellTitle="Garuda ERP">
-      <div className="grid w-full grid-cols-3 gap-x-2 gap-y-3 px-1 pt-3 sm:grid-cols-4 sm:px-2 md:grid-cols-6 lg:grid-cols-8">
+      <div
+        className="grid w-full grid-cols-3 gap-x-2 gap-y-3 px-1 pt-3 sm:grid-cols-4 sm:px-2 md:grid-cols-6 lg:grid-cols-8"
+        role={loading ? "status" : undefined}
+        aria-label={loading ? "Checking module access" : undefined}
+        aria-busy={loading}
+      >
+        {loading && <span className="sr-only">Checking WMS access before showing modules…</span>}
         {loading
           ? Array.from({ length: roleModules.length }).map((_, i) => (
               <div key={i} className="flex min-h-[106px] flex-col items-center gap-2 p-2">
@@ -186,7 +192,7 @@ function HomePage() {
                 <Skeleton className="h-3 w-16 rounded-full" />
               </div>
             ))
-          : MODULES.map((m, i) => {
+          : MODULES.map((m) => {
               const Icon = m.icon;
               const enabled = "active" in m && m.active;
               return (
