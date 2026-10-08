@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
+import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { ProfitLossPanel } from "@/components/dashboard/ProfitLossPanel";
 import { EntityPnLPanel } from "@/components/dashboard/EntityPnLPanel";
@@ -161,38 +162,21 @@ export function DashboardPage({
       >
         {/* ── Left nav (desktop) ── */}
         {navOpen && (
-          <nav className="ltms-reference-sidebar ltms-shared-sidebar app-sidebar-scroll hidden lg:block lg:sticky lg:top-0 lg:h-[calc(100dvh-5rem)] lg:w-[220px] lg:max-h-[calc(100dvh-5rem)] lg:self-start lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-            <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              Dashboard
-            </p>
-            <ul className="space-y-1">
-              {visibleTabs.map((t) => {
-                const Icon = t.icon;
-                const isActive = t.id === safeTab;
-                return (
-                  <li key={t.id}>
-                    <button
-                      type="button"
-                      onClick={() => setTab(t.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 ${
-                        isActive
-                          ? "bg-primary-soft text-foreground"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      <Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : ""}`} />
-                      <span className="leading-tight min-w-0">
-                        <span className="block text-sm font-medium truncate">{t.label}</span>
-                        <span className="block text-[11px] opacity-70 truncate">{t.desc}</span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </nav>
+          <LtmsSidebar
+            open={navOpen}
+            label="Dashboard"
+            section="dashboard"
+            activeTabId={safeTab}
+            onSelectTab={(id) => setTab(id as typeof safeTab)}
+            groups={[
+              {
+                section: "dashboard",
+                label: "Dashboard",
+                items: visibleTabs.map(({ id, label }) => ({ id, label })),
+              },
+            ]}
+          />
         )}
-
         {/* Mobile dropdown navigation */}
         <MobileTabDropdown
           tabs={visibleTabs}

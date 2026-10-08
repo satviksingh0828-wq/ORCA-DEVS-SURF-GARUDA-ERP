@@ -11,12 +11,12 @@ export type LtmsSection = "operations" | "billing" | "reports" | "masters" | "fi
 type LtmsRoute =
   "/ltms/operations" | "/ltms/billing" | "/ltms/reports" | "/ltms/masters" | "/ltms/finance";
 
-type NavigationItem = { id: string; label: string };
+export type LtmsSidebarItem = { id: string; label: string; to?: string };
 
-type NavigationGroup = {
-  section: LtmsSection;
+export type LtmsSidebarGroup = {
+  section: LtmsSection | string;
   label: string;
-  items: NavigationItem[];
+  items: LtmsSidebarItem[];
 };
 
 const ROUTES: Record<LtmsSection, LtmsRoute> = {
@@ -52,7 +52,7 @@ export function consumeLtmsTabNavigation(section: LtmsSection): string | null {
   }
 }
 
-const NAVIGATION: NavigationGroup[] = [
+const NAVIGATION: LtmsSidebarGroup[] = [
   {
     section: "operations",
     label: "Operations",
@@ -127,7 +127,7 @@ const NAVIGATION: NavigationGroup[] = [
   },
 ];
 
-function visibleGroups(role: string | undefined): NavigationGroup[] {
+function visibleGroups(role: string | undefined): LtmsSidebarGroup[] {
   const isAdmin = isAdminLike(role);
   const isViewer = role === "viewer";
   const isBasic = role === "basic";
@@ -159,18 +159,22 @@ export function LtmsSidebar({
   activeTabId,
   onSelectTab,
   label = "LTMS navigation",
+  open = true,
+  groups: customGroups,
 }: {
-  section: LtmsSection;
+  section?: LtmsSection | string;
   activeTabId: string;
   onSelectTab: (tabId: string) => void;
   label?: string;
+  open?: boolean;
+  groups?: LtmsSidebarGroup[];
 }) {
   const { user } = useSession();
-  const groups = visibleGroups(user?.role);
-
+  const groups = customGroups ?? visibleGroups(user?.role);
+  const isCustom = Boolean(customGroups);
   return (
     <>
-      <SharedSidebar open width="192px" label={label} className="ltms-reference-sidebar">
+      <SharedSidebar open={open} width="192px" label={label} className="ltms-reference-sidebar">
         {groups.map((group) => (
           <section key={group.section} className="ltms-reference-sidebar-card">
             <h2 className="ltms-reference-group-label">{group.label}</h2>
@@ -178,6 +182,18 @@ export function LtmsSidebar({
               {group.items.map((item) => {
                 const isActive = group.section === section && item.id === activeTabId;
                 const rowClass = `ltms-reference-sidebar-link${isActive ? " active" : ""}`;
+                if (isCustom && item.to) {
+                  return (
+                    <a
+                      key={item.id}
+                      href={item.to}
+                      className={rowClass}
+                      aria-current={isActive ? "page" : undefined}
+                    >
+                      <span>{item.label}</span>
+                    </a>
+                  );
+                }
                 if (group.section === section) {
                   return (
                     <button
@@ -191,7 +207,7 @@ export function LtmsSidebar({
                     </button>
                   );
                 }
-                const targetSection = group.section;
+                const targetSection = group.section as LtmsSection;
                 return (
                   <Link
                     key={item.id}
@@ -207,23 +223,24 @@ export function LtmsSidebar({
           </section>
         ))}
       </SharedSidebar>
-
-      <nav className="ltms-reference-mobile-nav lg:hidden" aria-label="LTMS sections">
-        {(Object.keys(ROUTES) as LtmsSection[]).map((targetSection) => {
-          const group = NAVIGATION.find((item) => item.section === targetSection);
-          const isActive = targetSection === section;
-          return (
-            <Link
-              key={targetSection}
-              to={ROUTES[targetSection]}
-              className={`ltms-reference-mobile-link${isActive ? " active" : ""}`}
-              aria-current={isActive ? "page" : undefined}
-            >
-              {group?.label ?? targetSection}
-            </Link>
-          );
-        })}
-      </nav>
+      {!isCustom && (
+        <nav className="ltms-reference-mobile-nav lg:hidden" aria-label="LTMS sections">
+          {(Object.keys(ROUTES) as LtmsSection[]).map((targetSection) => {
+            const group = NAVIGATION.find((item) => item.section === targetSection);
+            const isActive = targetSection === section;
+            return (
+              <Link
+                key={targetSection}
+                to={ROUTES[targetSection]}
+                className={`ltms-reference-mobile-link${isActive ? " active" : ""}`}
+                aria-current={isActive ? "page" : undefined}
+              >
+                {group?.label ?? targetSection}
+              </Link>
+            );
+          })}
+        </nav>
+      )}
     </>
   );
 }

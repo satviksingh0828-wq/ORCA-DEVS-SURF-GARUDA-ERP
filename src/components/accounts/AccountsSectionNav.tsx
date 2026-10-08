@@ -15,7 +15,7 @@ import {
   Users,
 } from "lucide-react";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
-import { SharedSidebar } from "@/components/SharedSidebar";
+import { LtmsSidebar, type LtmsSidebarGroup } from "@/components/ltms/LtmsSidebar";
 
 export type LedgerTab = "capital" | "create" | "list" | "view";
 type SectionMode = "masters" | "ledger" | "journal" | "auto-rules";
@@ -149,82 +149,41 @@ export function AccountsSectionNav({
     return (
       <>
         {sidebarOpen ? (
-          <SharedSidebar open={sidebarOpen} label={title} variant="ltms" containerRef={sidebarRef}>
-            <div className="space-y-1">
-              {mode === "masters" &&
-                masterLinks.map(({ label, description, to, icon: Icon }) => {
-                  const active = activeFor(pathname, to);
-                  return (
-                    <Link
-                      key={to}
-                      to={to}
-                      aria-current={active ? "page" : undefined}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${active ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-                    >
-                      <Icon className={`size-4 shrink-0 ${active ? "text-primary" : ""}`} />
-                      <span className="min-w-0 leading-tight">
-                        <span className="block truncate text-sm font-semibold">{label}</span>
-                        <span className="block truncate text-[11px] opacity-70">{description}</span>
-                      </span>
-                    </Link>
-                  );
-                })}
-              {mode === "auto-rules" &&
-                autoRulesLinks.map(({ key, label, description, icon: Icon }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => onAutoRulesTabChange?.(key)}
-                    aria-current={autoRulesTab === key ? "page" : undefined}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${autoRulesTab === key ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-                  >
-                    <Icon
-                      className={`size-4 shrink-0 ${autoRulesTab === key ? "text-primary" : ""}`}
-                    />
-                    <span className="min-w-0 leading-tight">
-                      <span className="block truncate text-sm font-semibold">{label}</span>
-                      <span className="block truncate text-[11px] opacity-70">{description}</span>
-                    </span>
-                  </button>
-                ))}
-              {mode === "ledger" &&
-                ledgerLinks.map(({ key, label, description, icon: Icon }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => onLedgerTabChange?.(key)}
-                    aria-current={ledgerTab === key ? "page" : undefined}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${ledgerTab === key ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-                  >
-                    <Icon
-                      className={`size-4 shrink-0 ${ledgerTab === key ? "text-primary" : ""}`}
-                    />
-                    <span className="min-w-0 leading-tight">
-                      <span className="block truncate text-sm font-semibold">{label}</span>
-                      <span className="block truncate text-[11px] opacity-70">{description}</span>
-                    </span>
-                  </button>
-                ))}
-              {mode === "journal" &&
-                journalLinks.map(({ key, label, description, icon: Icon }) => (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => onJournalTabChange?.(key)}
-                    aria-current={journalTab === key ? "page" : undefined}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${journalTab === key ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-                  >
-                    <Icon
-                      className={`size-4 shrink-0 ${journalTab === key ? "text-primary" : ""}`}
-                    />
-                    <span className="min-w-0 leading-tight">
-                      <span className="block truncate text-sm font-semibold">{label}</span>
-                      <span className="block truncate text-[11px] opacity-70">{description}</span>
-                    </span>
-                  </button>
-                ))}
-            </div>
-          </SharedSidebar>
+          <LtmsSidebar
+            open={sidebarOpen}
+            label={title}
+            section={mode}
+            activeTabId={
+              mode === "masters"
+                ? pathname
+                : mode === "ledger"
+                  ? ledgerTab
+                  : mode === "journal"
+                    ? journalTab
+                    : autoRulesTab
+            }
+            onSelectTab={(id) => {
+              if (mode === "ledger") onLedgerTabChange?.(id as LedgerTab);
+              if (mode === "journal") onJournalTabChange?.(id as JournalTab);
+              if (mode === "auto-rules") onAutoRulesTabChange?.(id as AutoRulesTab);
+            }}
+            groups={
+              [
+                {
+                  section: mode,
+                  label: title,
+                  items:
+                    mode === "masters"
+                      ? masterLinks.map(({ label, to }) => ({ id: to, label, to }))
+                      : mode === "ledger"
+                        ? ledgerLinks.map(({ key, label }) => ({ id: key, label }))
+                        : mode === "journal"
+                          ? journalLinks.map(({ key, label }) => ({ id: key, label }))
+                          : autoRulesLinks.map(({ key, label }) => ({ id: key, label })),
+                },
+              ] as LtmsSidebarGroup[]
+            }
+          />
         ) : null}
         {headerTarget &&
           createPortal(

@@ -3,12 +3,47 @@ import { Link } from "@tanstack/react-router";
 import { ChevronRight, PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { HrSectionNav, type HrArea } from "@/components/hr/HrSectionNav";
+import { LtmsSidebar, type LtmsSidebarGroup } from "@/components/ltms/LtmsSidebar";
 
 const areaLabels: Record<HrArea, string> = {
   master: "HR Master",
   attendance: "HR Attendance",
   payroll: "HR Payroll",
 };
+
+const HR_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
+  {
+    section: "hr-master",
+    label: "HR Master",
+    items: [
+      { id: "employees", label: "Employees", to: "/employees" },
+      { id: "add-employee", label: "Add Employee", to: "/employees/new" },
+      { id: "departments", label: "Departments", to: "/employees/departments" },
+      { id: "add-department", label: "Add Department", to: "/employees/departments/new" },
+    ],
+  },
+  {
+    section: "hr-attendance",
+    label: "HR Attendance",
+    items: [
+      { id: "mark-attendance", label: "Mark Attendance", to: "/attendance/mark" },
+      { id: "attendance-history", label: "Attendance History", to: "/attendance/history" },
+      { id: "holidays", label: "Holidays", to: "/attendance/holidays" },
+    ],
+  },
+  {
+    section: "hr-payroll",
+    label: "HR Payroll",
+    items: [
+      { id: "generate-payroll", label: "Generate Payroll", to: "/payroll/generate" },
+      { id: "payroll-history", label: "Payroll History", to: "/payroll/history" },
+      { id: "payroll-ledger", label: "Payroll Ledger", to: "/payroll/ledger" },
+      { id: "advances", label: "Advances & Loans", to: "/payroll/advances" },
+      { id: "deductions", label: "Deductions", to: "/payroll/deductions" },
+      { id: "incentives", label: "Incentives", to: "/payroll/incentives" },
+    ],
+  },
+];
 
 /** Shared page shell for each independent HR workspace module. */
 export function HrShell({ area, children }: { area: HrArea; children: ReactNode }) {
@@ -49,9 +84,18 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
       }
     >
       <div
-        className={`grid gap-6 ${navOpen ? "xl:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
+        className={`grid gap-6 ${navOpen ? "xl:grid-cols-[192px_minmax(0,1fr)]" : "grid-cols-1"}`}
       >
-        {navOpen && <HrSectionNav area={area} desktop />}
+        {navOpen && (
+          <LtmsSidebar
+            open={navOpen}
+            label="HRMS navigation"
+            groups={HR_SIDEBAR_GROUPS}
+            section={`hr-${area}`}
+            activeTabId=""
+            onSelectTab={() => undefined}
+          />
+        )}
         <div className="min-w-0">
           <HrSectionNav area={area} />
           {children}

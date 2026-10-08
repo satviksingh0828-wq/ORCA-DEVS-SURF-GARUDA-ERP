@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
-import { SharedSidebar } from "@/components/SharedSidebar";
+import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { ProfitLossComparison } from "@/components/reports/ProfitLossComparison";
 import { VehicleExpenseReport } from "@/components/reports/VehicleExpenseReport";
@@ -157,35 +157,21 @@ function ReportsPage() {
       >
         {/* ── Left nav (desktop) ── */}
         {navOpen && (
-          <SharedSidebar open={navOpen} width="220px" variant="ltms" label="Reports">
-            <ul className="space-y-1">
-              {visibleTabs.map((t) => {
-                const Icon = t.icon;
-                const isActive = t.id === tab;
-                return (
-                  <li key={t.id}>
-                    <button
-                      type="button"
-                      onClick={() => setTab(t.id)}
-                      className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors duration-200 ${
-                        isActive
-                          ? "bg-primary-soft text-foreground"
-                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
-                      }`}
-                    >
-                      <Icon className={`size-4 shrink-0 ${isActive ? "text-primary" : ""}`} />
-                      <span className="leading-tight min-w-0">
-                        <span className="block text-sm font-medium truncate">{t.label}</span>
-                        <span className="block text-[11px] opacity-70 truncate">{t.desc}</span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-          </SharedSidebar>
+          <LtmsSidebar
+            open={navOpen}
+            label="Reports"
+            section="reports"
+            activeTabId={tab}
+            onSelectTab={(id) => setTab(id as TabId)}
+            groups={[
+              {
+                section: "reports",
+                label: "Reports",
+                items: visibleTabs.map(({ id, label }) => ({ id, label })),
+              },
+            ]}
+          />
         )}
-
         {/* Mobile dropdown navigation */}
         <MobileTabDropdown tabs={TABS} activeId={tab} label="Reports" onChange={setTab} />
 
