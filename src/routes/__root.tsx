@@ -19,7 +19,6 @@ import appCss from "../styles.css?url";
 import { SessionProvider } from "../lib/session";
 import { ThemeProvider } from "../lib/theme";
 import { Toaster } from "../components/ui/sonner";
-import { InactivityChallenge } from "../components/InactivityChallenge";
 import { OrcaAIProvider } from "../lib/orca-context";
 import { MeetPanel } from "../components/MeetPanel";
 import { useOrcaAI } from "../lib/orca-context";
@@ -278,7 +277,6 @@ function RootComponent() {
                   <DynamicImportRecovery />
                   <Outlet />
                   <ScreenControlWidget />
-                  <InactivityChallenge />
                   <Toaster position="top-right" />
                   <MeetPanelMount />
                 </PasskeyProtectionGate>
