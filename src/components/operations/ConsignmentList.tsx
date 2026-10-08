@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
 import { printConsignorCopyPdf } from "@/lib/consignment-pdf";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
+import { createWmsSalesOrder, deleteWmsSalesOrder, resolveWmsSku, type WmsItem } from "@/lib/wms-stock-inward";
 import { useSession } from "@/lib/session";
 import { manifestCharges, num, type ContractLite, type EntryLite } from "@/lib/trip-calc";
 import { Button } from "@/components/ui/button";
@@ -42,6 +43,9 @@ type PackageEntry = {
   basis: "quantity" | "weight";
   quantity: string;
   weight_kg: string;
+  sku: string;
+  item_id?: number;
+  item_name?: string;
   eway_bill_number: string;
   shipment?: { eway_bill_number?: string | null } | null;
 };
@@ -1025,14 +1029,27 @@ export function ConsignmentList({
     if (needsTransporter && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
       return toast.error("Transporter movement requires valid From and To Pincodes");
     if (!common) return toast.error("Add at least one E-Way Bill");
+    const wmsEnabled = Boolean(branch?.wms_enabled);
+    if (wmsEnabled && !branch?.wms_warehouse_id)
+      return toast.error("Select a WMS warehouse for this WMS-enabled branch before creating the Consignment");
+    if (wmsEnabled && !packageEntries.length)
+      return toast.error("Add at least one package entry for this WMS-enabled branch");
     if (
       packageEntries.some(
-        (entry) => !(Number(entry.quantity) > 0) || !(Number(entry.weight_kg) > 0),
+        (entry) => !(Number(entry.quantity) > 0) || !(Number(entry.weight_kg) > 0) || (wmsEnabled && !entry.sku.trim()),
       )
     )
       return toast.error(
-        "Every package entry must have both quantity and weight greater than zero",
+        wmsEnabled ? "Every package entry must have quantity, weight and a valid WMS SKU" : "Every package entry must have both quantity and weight greater than zero",
       );
+    const validatedItems: Array<WmsItem | null> = [];
+    if (wmsEnabled) {
+      for (const entry of packageEntries) {
+        const item = await resolveWmsSku(entry.sku);
+        if (!item) return toast.error(`SKU does not exist in WMS: ${entry.sku}`);
+        validatedItems.push(item);
+      }
+    }
     const payload = {
       branch_id: branchId,
       source_id: sourceId || null,
@@ -1116,7 +1133,7 @@ export function ConsignmentList({
           shipment.id,
         ]),
       );
-      const packageRows = packageEntries.map((entry) => ({
+      const packageRows = packageEntries.map((entry, index) => ({
         consignment_id: data.id,
         shipment_id: shipmentIds.get(entry.eway_bill_number) ?? null,
         package_rate_type_id: entry.package_rate_type_id,
@@ -1124,6 +1141,11 @@ export function ConsignmentList({
         basis: entry.basis,
         quantity: Number(entry.quantity),
         weight_kg: Number(entry.weight_kg),
+        ...(wmsEnabled && validatedItems[index] ? {
+          wms_item_id: validatedItems[index]!.item_id,
+          sku: validatedItems[index]!.sku,
+          item_name: validatedItems[index]!.item_name,
+        } : {}),
       }));
       if (packageRows.some((entry) => !entry.shipment_id))
         return toast.error("Select a valid E-Way Bill for every package entry");
@@ -1131,6 +1153,28 @@ export function ConsignmentList({
         .from("consignment_package_information")
         .insert(packageRows);
       if (packageError) return toast.error(packageError.message);
+    }
+    if (wmsEnabled) {
+      const quantities = new Map<number, number>();
+      validatedItems.forEach((item, index) => {
+        if (item) quantities.set(item.item_id, (quantities.get(item.item_id) ?? 0) + Number(packageEntries[index].quantity));
+      });
+      try {
+        const salesOrder = await createWmsSalesOrder({
+          orderNumber: String(data.consignment_number),
+          warehouseId: branch.wms_warehouse_id,
+          customerName: common.recipient_trade_name || common.recipient_legal_name || "Consignment Customer",
+          customerAddress: [common.recipient_address_line_1, common.recipient_address_line_2, common.recipient_place, common.recipient_state, common.recipient_pin_code].filter(Boolean).join(", "),
+          consignmentId: data.id,
+          lines: [...quantities.entries()].map(([item_id, quantity_ordered]) => ({ item_id, quantity_ordered })),
+        });
+        if (!Number.isFinite(salesOrder.id)) throw new Error("WMS did not return a Sales Order ID");
+        const { error: salesOrderLinkError } = await db.from("consignments").update({ wms_sales_order_id: salesOrder.id, wms_sales_order_number: salesOrder.number }).eq("id", data.id);
+        if (salesOrderLinkError) throw salesOrderLinkError;
+      } catch (error) {
+        await db.from("consignments").delete().eq("id", data.id);
+        return toast.error(error instanceof Error ? error.message : "Could not create the WMS Sales Order");
+      }
     }
     toast.success(
       `Consignment ${data.consignment_number} created with ${data.shipment_count} Shipment(s)`,
@@ -1184,10 +1228,17 @@ export function ConsignmentList({
     }
     if (
       !window.confirm(
-        `Delete Consignment ${row.consignment_number}? All generated Shipments will also be deleted.`,
+        `Delete Consignment ${row.consignment_number}? The linked WMS Sales Order will be deleted first, along with generated Shipments.`,
       )
     )
       return;
+    if (row.wms_sales_order_id) {
+      try {
+        await deleteWmsSalesOrder(Number(row.wms_sales_order_id));
+      } catch (error) {
+        return toast.error(error instanceof Error ? error.message : "The linked WMS Sales Order could not be deleted");
+      }
+    }
     const { error } = await db.from("consignments").delete().eq("id", row.id);
     if (error) return toast.error(error.message);
     toast.success("Consignment and generated Shipments deleted");
@@ -2140,6 +2191,7 @@ function ConsignmentForm(props: any) {
                     basis: "quantity",
                     quantity: "",
                     weight_kg: "",
+                    sku: "",
                     eway_bill_number: drafts[0]?.eway_bill_number ?? "",
                   },
                 ])
@@ -2187,6 +2239,7 @@ function ConsignmentForm(props: any) {
                                     basis: type?.basis ?? "quantity",
                                     quantity: "",
                                     weight_kg: "",
+                                    sku: "",
                                   }
                                 : current,
                             ),
@@ -2206,6 +2259,28 @@ function ConsignmentForm(props: any) {
                         </SelectContent>
                       </Select>
                     </div>
+                    {branch?.wms_enabled && (
+                      <>
+                        <div className="space-y-1.5">
+                          <Label>SKU *</Label>
+                          <Input
+                            value={entry.sku}
+                            onChange={(event) => setPackageEntries(packageEntries.map((current, i) => i === index ? { ...current, sku: event.target.value, item_id: undefined, item_name: "" } : current))}
+                            onBlur={async () => {
+                              if (!entry.sku.trim()) return;
+                              const item = await resolveWmsSku(entry.sku);
+                              if (!item) return toast.error(`SKU does not exist in WMS: ${entry.sku}`);
+                              setPackageEntries(packageEntries.map((current, i) => i === index ? { ...current, sku: item.sku, item_id: item.item_id, item_name: item.item_name } : current));
+                            }}
+                            placeholder="WMS SKU"
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>Item Name</Label>
+                          <Input value={entry.item_name ?? ""} readOnly placeholder="Auto from SKU" className="bg-muted/40" />
+                        </div>
+                      </>
+                    )}
                     <div className="space-y-1.5">
                       <Label>E-Way Bill *</Label>
                       <Select

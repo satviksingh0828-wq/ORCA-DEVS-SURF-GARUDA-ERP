@@ -79,3 +79,42 @@ export async function deleteWmsPurchaseOrder(id: number) {
     throw new Error(data?.error || "The WMS Purchase Order could not be deleted.");
   }
 }
+
+export async function createWmsSalesOrder(input: {
+  orderNumber: string;
+  warehouseId: number;
+  customerName: string;
+  customerAddress?: string;
+  lines: Array<{ item_id: number; quantity_ordered: number }>;
+  consignmentId: string;
+}) {
+  await ensureWmsCsrfToken();
+  const response = await api.post("/admin/sales-orders", {
+    so_number: input.orderNumber,
+    customer_name: input.customerName || "Consignment Customer",
+    customer_address: input.customerAddress || null,
+    ship_address: input.customerAddress || null,
+    warehouse_id: input.warehouseId,
+    notes: `ERP Consignment ${input.orderNumber} (${input.consignmentId})`,
+    lines: input.lines,
+  });
+  if (!response?.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data?.error || "Could not create the WMS Sales Order.");
+  }
+  const data = await response.json();
+  const salesOrder = data.sales_order ?? data;
+  return {
+    id: Number(salesOrder.so_id ?? salesOrder.id),
+    number: String(salesOrder.so_number ?? input.orderNumber),
+  };
+}
+
+export async function deleteWmsSalesOrder(id: number) {
+  await ensureWmsCsrfToken();
+  const response = await api.delete(`/admin/sales-orders/${id}`);
+  if (!response?.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data?.error || "The WMS Sales Order could not be deleted.");
+  }
+}
