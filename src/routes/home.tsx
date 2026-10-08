@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   BarChart3,
+  BriefcaseBusiness,
   Landmark,
   CalendarCheck,
   Database,
@@ -123,7 +124,7 @@ const ADMIN_VIEWER_MODULES = [
     key: "hrms",
     label: "HRMS",
     desc: "Employees, attendance, payroll & HR dashboards",
-    icon: Users,
+    icon: BriefcaseBusiness,
     active: true,
     to: "/hrms" as const,
     roles: ["admin", "semi_admin", "viewer"] as const,
