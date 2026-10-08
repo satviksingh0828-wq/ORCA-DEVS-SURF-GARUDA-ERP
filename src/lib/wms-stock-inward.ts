@@ -1,4 +1,4 @@
-import { api } from "@/wms/api.js";
+import { api, setCsrfTokenFromApi } from "@/wms/api.js";
 
 export type WmsWarehouse = {
   warehouse_id: number;
@@ -13,6 +13,14 @@ export type WmsItem = {
   item_name: string;
   is_active?: boolean;
 };
+
+async function ensureWmsCsrfToken() {
+  const response = await api.get("/auth/me", { silentPermissionDenied: true });
+  if (!response?.ok) throw new Error("WMS session expired. Reopen WMS and try again.");
+  const data = await response.json();
+  if (!data?.csrf_token) throw new Error("WMS did not provide a valid CSRF token. Reopen WMS and try again.");
+  setCsrfTokenFromApi(data.csrf_token);
+}
 
 export async function loadWmsWarehouses(): Promise<WmsWarehouse[]> {
   const response = await api.get("/admin/warehouses?active=true", { silentPermissionDenied: true });
@@ -43,6 +51,7 @@ export async function createWmsPurchaseOrder(input: {
   lines: Array<{ item_id: number; quantity_ordered: number }>;
   stockInwardId: string;
 }) {
+  await ensureWmsCsrfToken();
   const response = await api.post("/admin/purchase-orders", {
     po_number: input.poNumber,
     warehouse_id: input.warehouseId,
@@ -63,6 +72,7 @@ export async function createWmsPurchaseOrder(input: {
 }
 
 export async function deleteWmsPurchaseOrder(id: number) {
+  await ensureWmsCsrfToken();
   const response = await api.delete(`/admin/purchase-orders/${id}`);
   if (!response?.ok) {
     const data = await response.json().catch(() => ({}));
