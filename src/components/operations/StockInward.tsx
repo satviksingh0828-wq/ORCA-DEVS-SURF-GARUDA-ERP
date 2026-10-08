@@ -289,20 +289,23 @@ export function StockInward() {
       );
     if (!packageLines.length) return toast.error("Add at least one package type");
     const branch = branches.find((item) => item.id === form.branchId);
-    if (!branch?.wms_enabled || !branch.wms_warehouse_id)
-      return toast.error("Enable WMS and select a WMS warehouse for this branch before creating Stock Inward");
+    const wmsEnabled = Boolean(branch?.wms_enabled);
+    if (wmsEnabled && !branch?.wms_warehouse_id)
+      return toast.error("Select a WMS warehouse for this WMS-enabled branch before creating Stock Inward");
     if (
       packageLines.some(
         (line) =>
-          !line.packageTypeId || !line.sourceId || !Number(line.quantity) || !Number(line.weightKg) || !line.sku.trim(),
+          !line.packageTypeId || !line.sourceId || !Number(line.quantity) || !Number(line.weightKg) || (wmsEnabled && !line.sku.trim()),
       )
     )
-      return toast.error("Each package line needs a type, source, quantity, weight and valid SKU");
-    const validatedItems: Array<WmsItem> = [];
-    for (const line of packageLines) {
-      const item = await resolveWmsSku(line.sku);
-      if (!item) return toast.error(`SKU does not exist in WMS: ${line.sku}`);
-      validatedItems.push(item);
+      return toast.error(wmsEnabled ? "Each package line needs a type, source, quantity, weight and valid SKU" : "Each package line needs a type, source, quantity and weight");
+    const validatedItems: Array<WmsItem | null> = [];
+    if (wmsEnabled) {
+      for (const line of packageLines) {
+        const item = await resolveWmsSku(line.sku);
+        if (!item) return toast.error(`SKU does not exist in WMS: ${line.sku}`);
+        validatedItems.push(item);
+      }
     }
     if (["approval", "both"].includes(form.additionalIncomeMode) && !Number(form.approvalAmount))
       return toast.error("Approval amount is required for the selected additional income option");
@@ -351,9 +354,11 @@ export function StockInward() {
         source_id: line.sourceId,
         quantity: Number(line.quantity),
         weight_kg: Number(line.weightKg),
-        wms_item_id: validatedItems[index].item_id,
-        sku: validatedItems[index].sku,
-        item_name: validatedItems[index].item_name,
+        ...(wmsEnabled && validatedItems[index] ? {
+          wms_item_id: validatedItems[index]!.item_id,
+          sku: validatedItems[index]!.sku,
+          item_name: validatedItems[index]!.item_name,
+        } : {}),
       })),
     );
     if (sourceResult.error || packageResult.error) {
@@ -365,10 +370,11 @@ export function StockInward() {
           "Could not save package lines",
       );
     }
-    const quantities = new Map<number, number>();
-    validatedItems.forEach((item, index) => quantities.set(item.item_id, (quantities.get(item.item_id) ?? 0) + Number(packageLines[index].quantity)));
-    let purchaseOrder: { id: number; number: string } | null = null;
-    try {
+    if (wmsEnabled) {
+      const quantities = new Map<number, number>();
+      validatedItems.forEach((item, index) => { if (item) quantities.set(item.item_id, (quantities.get(item.item_id) ?? 0) + Number(packageLines[index].quantity)); });
+      let purchaseOrder: { id: number; number: string } | null = null;
+      try {
       purchaseOrder = await createWmsPurchaseOrder({
         poNumber: String(receiptNumber),
         warehouseId: branch.wms_warehouse_id,
@@ -377,12 +383,13 @@ export function StockInward() {
       });
       if (!Number.isFinite(purchaseOrder.id)) throw new Error("WMS did not return a Purchase Order ID");
       const { error: linkError } = await db.from("stock_inward_receipts").update({ wms_purchase_order_id: purchaseOrder.id, wms_purchase_order_number: purchaseOrder.number }).eq("id", receipt.id);
-      if (linkError) throw linkError;
-    } catch (error) {
-      try { if (purchaseOrder?.id) await deleteWmsPurchaseOrder(purchaseOrder.id); } catch { /* best effort compensation */ }
-      await db.from("stock_inward_receipts").delete().eq("id", receipt.id);
-      setSaving(false);
-      return toast.error(error instanceof Error ? error.message : "Could not create the WMS Purchase Order");
+        if (linkError) throw linkError;
+      } catch (error) {
+        try { if (purchaseOrder?.id) await deleteWmsPurchaseOrder(purchaseOrder.id); } catch { /* best effort compensation */ }
+        await db.from("stock_inward_receipts").delete().eq("id", receipt.id);
+        setSaving(false);
+        return toast.error(error instanceof Error ? error.message : "Could not create the WMS Purchase Order");
+      }
     }
     setSaving(false);
     toast.success("Stock Inward receipt created");
@@ -653,19 +660,23 @@ export function StockInward() {
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
-                    <Label>SKU *</Label>
-                    <Input
-                      value={line.sku}
-                      onChange={(e) => updateLine(index, { sku: e.target.value, itemId: undefined, itemName: "" })}
-                      onBlur={() => void validateSku(index)}
-                      placeholder="WMS SKU"
-                    />
-                  </div>
-                  <div>
-                    <Label>Item name</Label>
-                    <Input value={line.itemName ?? ""} readOnly placeholder="Auto from SKU" className="bg-muted/40" />
-                  </div>
+                  {branches.find((branch) => branch.id === form.branchId)?.wms_enabled && (
+                    <>
+                      <div>
+                        <Label>SKU *</Label>
+                        <Input
+                          value={line.sku}
+                          onChange={(e) => updateLine(index, { sku: e.target.value, itemId: undefined, itemName: "" })}
+                          onBlur={() => void validateSku(index)}
+                          placeholder="WMS SKU"
+                        />
+                      </div>
+                      <div>
+                        <Label>Item name</Label>
+                        <Input value={line.itemName ?? ""} readOnly placeholder="Auto from SKU" className="bg-muted/40" />
+                      </div>
+                    </>
+                  )}
                   <div>
                     <Label>Quantity</Label>
                     <Input
