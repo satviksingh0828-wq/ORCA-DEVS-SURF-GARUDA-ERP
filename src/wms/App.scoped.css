@@ -387,6 +387,18 @@
   font-size: 11px;
 }
 
+.wms-skeleton-line {
+  height: 10px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #e8e2d8 25%, #f5f3ee 50%, #e8e2d8 75%);
+  background-size: 220% 100%;
+  animation: wms-skeleton-shimmer 1.35s ease-in-out infinite;
+}
+
+@keyframes wms-skeleton-shimmer {
+  to { background-position: -220% 0; }
+}
+
 @media (max-width: 1023px) {
   .wms-embedded-scope .wms-embedded-layout {
     display: block;

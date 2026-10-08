@@ -199,7 +199,6 @@ function HomePage() {
                       ? navigate({ to: m.to })
                       : toast.info(`${m.label} module is coming soon`)
                   }
-                  style={{ animationDelay: `${i * 55}ms` }}
                   className="group animate-fade-up flex min-h-[106px] flex-col items-center justify-start rounded-xl p-2 text-center transition-colors duration-200 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span

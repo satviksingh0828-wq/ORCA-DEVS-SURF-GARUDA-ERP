@@ -175,7 +175,7 @@ function ProductivityTable({ payload }) {
 // local-only state (no URL persistence yet -- can be added once
 // stakeholders show they want shareable deep links).
 export default function Dashboard() {
-  const { warehouseId } = useWarehouse();
+  const { warehouseId, warehousesLoading } = useWarehouse();
   const [tab, setTab] = useState('productivity');
   return (
     <div>
@@ -210,7 +210,7 @@ export default function Dashboard() {
           Local Pickup
         </button>
       </div>
-      {tab === 'productivity' && <ProductivityView warehouseId={warehouseId} />}
+      {tab === 'productivity' && <ProductivityView warehouseId={warehouseId} warehousesLoading={warehousesLoading} />}
       {tab === 'received' && <ReceivedTodayView warehouseId={warehouseId} />}
       {tab === 'shipping' && <ShippingHealthView warehouseId={warehouseId} />}
       {tab === 'local-pickup' && <LocalPickupView warehouseId={warehouseId} />}
@@ -218,9 +218,9 @@ export default function Dashboard() {
   );
 }
 
-function ProductivityView({ warehouseId }) {
+function ProductivityView({ warehouseId, warehousesLoading }) {
   const [payload, setPayload] = useState(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [preferences, setPreferences] = useState({
     chart_order: ['picking', 'packing', 'shipped', 'received_skus', 'putaway_skus'],
@@ -248,10 +248,16 @@ function ProductivityView({ warehouseId }) {
   }
 
   useEffect(() => {
-    if (!warehouseId) return;
-    if (rangePreset === 'custom' && (!customStart || !customEnd)) return;
+    if (!warehouseId) {
+      if (!warehousesLoading) setLoading(false);
+      return;
+    }
+    if (rangePreset === 'custom' && (!customStart || !customEnd)) {
+      setLoading(false);
+      return;
+    }
     loadProductivity();
-  }, [warehouseId, rangePreset, customStart, customEnd]);  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [warehouseId, warehousesLoading, rangePreset, customStart, customEnd]);  // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadProductivity() {
     setLoading(true);
@@ -390,9 +396,28 @@ function ProductivityView({ warehouseId }) {
 
       {error && <div className="form-error" style={{ marginBottom: 12 }}>{error}</div>}
 
-      {loading ? (
+      {loading || warehousesLoading ? (
+        <div aria-label="Loading WMS dashboard" aria-busy="true" style={{ display: 'grid', gap: 14 }}>
+          <span className="sr-only">Loading dashboard data…</span>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
+            {Array.from({ length: 4 }).map((_, index) => (
+              <div key={index} style={{ ...styles.card(false), minHeight: 86, padding: 16 }}>
+                <div className="wms-skeleton-line" style={{ width: '42%' }} />
+                <div className="wms-skeleton-line" style={{ width: '24%', height: 24, marginTop: 14 }} />
+                <div className="wms-skeleton-line" style={{ width: '64%', marginTop: 12 }} />
+              </div>
+            ))}
+          </div>
+          <div style={{ ...styles.card(false), minHeight: 280, padding: 18 }}>
+            <div className="wms-skeleton-line" style={{ width: '28%', height: 18, marginBottom: 18 }} />
+            {Array.from({ length: 6 }).map((_, index) => (
+              <div key={index} className="wms-skeleton-line" style={{ width: `${92 - (index % 3) * 10}%`, height: 30, marginTop: 10 }} />
+            ))}
+          </div>
+        </div>
+      ) : !warehouseId ? (
         <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>
-          Loading...
+          No warehouse is available for this account.
         </div>
       ) : !payload ? (
         <div style={{ padding: 32, textAlign: 'center', color: 'var(--text-secondary)' }}>
