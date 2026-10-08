@@ -34,6 +34,8 @@ import { MailSettings } from "@/components/settings/MailSettings";
 import { HRMSAccountsSettings } from "@/components/settings/HRMSAccountsSettings";
 import { TMSAccountsSettings } from "@/components/settings/TMSAccountsSettings";
 import { WmsUsersSettings } from "@/components/settings/WmsUsersSettings";
+import { WmsSystemSettings } from "@/components/WmsSystemSettings";
+import { serverHasWmsAccess } from "@/lib/wms-user-links";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -87,6 +89,12 @@ const TABS = [
     icon: Link2,
   },
   {
+    id: "wms-system",
+    label: "WMS System",
+    desc: "WMS users, integrations, webhooks and settings",
+    icon: Link2,
+  },
+  {
     id: "passkey",
     label: "Passkey Security",
     desc: "Admin-controlled device protection",
@@ -100,12 +108,37 @@ function SettingsPage() {
   const { user } = useSession();
   const navigate = useNavigate();
   const [tab, setTab] = useState<TabId>("company");
+  const [wmsEnabled, setWmsEnabled] = useState(false);
 
   useEffect(() => {
-    if (user && user.role !== "admin") navigate({ to: "/home", replace: true });
-  }, [navigate, user]);
+    let cancelled = false;
+    if (!user?.sessionToken) return undefined;
+    serverHasWmsAccess({ data: { sessionToken: user.sessionToken } })
+      .then(({ enabled }) => {
+        if (!cancelled) setWmsEnabled(enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setWmsEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.sessionToken]);
 
-  if (user?.role !== "admin") return null;
+  useEffect(() => {
+    if (user && user.role !== "admin" && !wmsEnabled) navigate({ to: "/home", replace: true });
+  }, [navigate, user, wmsEnabled]);
+
+  useEffect(() => {
+    if (user?.role !== "admin" && wmsEnabled) setTab("wms-system");
+  }, [user?.role, wmsEnabled]);
+
+  if (user?.role !== "admin" && !wmsEnabled) return null;
+
+  const visibleTabs =
+    user?.role === "admin"
+      ? TABS.filter((item) => item.id !== "wms-system" || wmsEnabled)
+      : TABS.filter((item) => item.id === "wms-system" && wmsEnabled);
 
   return (
     <AppShell variant="ltms" shellTitle="Settings">
@@ -120,13 +153,13 @@ function SettingsPage() {
             {
               section: "settings",
               label: "Settings",
-              items: TABS.map(({ id, label }) => ({ id, label })),
+              items: visibleTabs.map(({ id, label }) => ({ id, label })),
             },
           ]}
         />
         <div className="ltms-reference-content min-w-0">
           <MobileTabDropdown
-            tabs={TABS}
+            tabs={visibleTabs}
             activeId={tab}
             label="Settings"
             onChange={setTab}
@@ -141,6 +174,9 @@ function SettingsPage() {
             {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
             {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
             {tab === "wms-users" ? <WmsUsersSettings /> : null}
+            {tab === "wms-system" && user?.sessionToken ? (
+              <WmsSystemSettings erpSessionToken={user.sessionToken} />
+            ) : null}
             {tab === "passkey" ? <PasskeySecurityPanel /> : null}
           </div>
         </div>

@@ -1,9 +1,18 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ReactNode } from "react";
 import { serverSignIn, serverSignOut, serverVerifySession } from "@/lib/user-auth";
 import type { SessionUser } from "@/lib/user-auth";
 import { secureSession } from "@/lib/storage";
 import { setLoggerUser } from "@/lib/log-actions";
+import { warmWmsSession } from "@/lib/wms-auto-login";
 import type { AppRole } from "@/lib/roles";
 
 export type { SessionUser };
@@ -20,7 +29,18 @@ const HEARTBEAT_MS = 30 * 1000; // 30 seconds
 
 export type SignInOutcome =
   | { ok: true }
-  | { ok: false; reason: "invalid_credentials" | "server_error" | "device_not_authorized" | "captcha_failed" | "session_expired" | "logged_in_elsewhere" | "already_logged_in"; message: string }
+  | {
+      ok: false;
+      reason:
+        | "invalid_credentials"
+        | "server_error"
+        | "device_not_authorized"
+        | "captcha_failed"
+        | "session_expired"
+        | "logged_in_elsewhere"
+        | "already_logged_in";
+      message: string;
+    }
   | { ok: false; reason: "account_paused"; message: string; role: AppRole };
 
 type SessionValue = {
@@ -65,7 +85,9 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     // Tell server to delete the session row (best-effort)
     if (token) {
-      serverSignOut({ data: token }).catch(() => {/* ignore */});
+      serverSignOut({ data: token }).catch(() => {
+        /* ignore */
+      });
     }
 
     userRef.current = null;
@@ -87,25 +109,32 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       const token = userRef.current?.sessionToken;
       clearSession(token);
       // Dispatch a custom event so UI can show an "inactivity" toast/modal
-      window.dispatchEvent(new CustomEvent("tms:session-expired", { detail: { reason: "inactivity" } }));
+      window.dispatchEvent(
+        new CustomEvent("tms:session-expired", { detail: { reason: "inactivity" } }),
+      );
     }, INACTIVITY_MS);
   }, [clearSession]);
 
   // ── Start heartbeat (single-session enforcement) ──────────────────────────
-  const startHeartbeat = useCallback((token: string) => {
-    if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
-    heartbeatTimer.current = setInterval(async () => {
-      try {
-        const { valid } = await serverVerifySession({ data: token });
-        if (!valid) {
-          clearSession(); // token already gone from DB — don't try to delete again
-          window.dispatchEvent(new CustomEvent("tms:session-expired", { detail: { reason: "elsewhere" } }));
+  const startHeartbeat = useCallback(
+    (token: string) => {
+      if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
+      heartbeatTimer.current = setInterval(async () => {
+        try {
+          const { valid } = await serverVerifySession({ data: token });
+          if (!valid) {
+            clearSession(); // token already gone from DB — don't try to delete again
+            window.dispatchEvent(
+              new CustomEvent("tms:session-expired", { detail: { reason: "elsewhere" } }),
+            );
+          }
+        } catch {
+          // Network hiccup — don't sign the user out; just wait for next tick
         }
-      } catch {
-        // Network hiccup — don't sign the user out; just wait for next tick
-      }
-    }, HEARTBEAT_MS);
-  }, [clearSession]);
+      }, HEARTBEAT_MS);
+    },
+    [clearSession],
+  );
 
   // ── Activity event listeners ──────────────────────────────────────────────
   useEffect(() => {
@@ -126,7 +155,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         setLoggerUser(parsed);
         // Restart inactivity timer and heartbeat for restored session
         resetInactivity();
-        if (parsed.sessionToken) startHeartbeat(parsed.sessionToken);
+        if (parsed.sessionToken) {
+          startHeartbeat(parsed.sessionToken);
+          void warmWmsSession(parsed.sessionToken);
+        }
       }
     } catch {
       // ignore corrupt storage
@@ -138,60 +170,68 @@ export function SessionProvider({ children }: { children: ReactNode }) {
       // ignore
     }
     setReady(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); // intentionally runs once on mount
 
   // ── Sign in ───────────────────────────────────────────────────────────────
-  const signIn = useCallback(async (
-    username: string,
-    password: string,
-    turnstileToken: string,
-    credentialId?: string,
-  ): Promise<SignInOutcome> => {
-    try {
-      const result = await serverSignIn({ data: { username, password, turnstileToken, credentialId } });
-      if (!result.ok) return result;
+  const signIn = useCallback(
+    async (
+      username: string,
+      password: string,
+      turnstileToken: string,
+      credentialId?: string,
+    ): Promise<SignInOutcome> => {
+      try {
+        const result = await serverSignIn({
+          data: { username, password, turnstileToken, credentialId },
+        });
+        if (!result.ok) return result;
 
-      secureSession.setItem(KEY, JSON.stringify(result.user));
-      userRef.current = result.user;
-      setUser(result.user);
-      setLoggerUser(result.user);
+        secureSession.setItem(KEY, JSON.stringify(result.user));
+        userRef.current = result.user;
+        setUser(result.user);
+        setLoggerUser(result.user);
 
-      // Start inactivity timer and heartbeat for the new session
-      resetInactivity();
-      if (result.user.sessionToken) startHeartbeat(result.user.sessionToken);
+        // Start inactivity timer and heartbeat for the new session
+        resetInactivity();
+        if (result.user.sessionToken) {
+          startHeartbeat(result.user.sessionToken);
+          void warmWmsSession(result.user.sessionToken);
+        }
 
-      return { ok: true };
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return { ok: false, reason: "server_error", message: `Unexpected error: ${msg}` };
-    }
-  }, [resetInactivity, startHeartbeat]);
+        return { ok: true };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return { ok: false, reason: "server_error", message: `Unexpected error: ${msg}` };
+      }
+    },
+    [resetInactivity, startHeartbeat],
+  );
 
   // ── Sign out (manual) ─────────────────────────────────────────────────────
-  const signOut = useCallback((_reason?: "inactivity" | "elsewhere" | "manual") => {
-    const token = userRef.current?.sessionToken;
-    if (token && _reason !== "elsewhere") {
-      // Manual sign-out must end any remote-control session. keepalive lets
-      // the request finish even though the app immediately navigates away.
-      const body = JSON.stringify({ sessionToken: token });
-      const blob = new Blob([body], { type: "application/json" });
-      if (!navigator.sendBeacon?.("/api/screen-control/disconnect", blob)) {
-        void fetch("/api/screen-control/disconnect", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body,
-          keepalive: true,
-        }).catch(() => undefined);
+  const signOut = useCallback(
+    (_reason?: "inactivity" | "elsewhere" | "manual") => {
+      const token = userRef.current?.sessionToken;
+      if (token && _reason !== "elsewhere") {
+        // Manual sign-out must end any remote-control session. keepalive lets
+        // the request finish even though the app immediately navigates away.
+        const body = JSON.stringify({ sessionToken: token });
+        const blob = new Blob([body], { type: "application/json" });
+        if (!navigator.sendBeacon?.("/api/screen-control/disconnect", blob)) {
+          void fetch("/api/screen-control/disconnect", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body,
+            keepalive: true,
+          }).catch(() => undefined);
+        }
       }
-    }
-    clearSession(token);
-  }, [clearSession]);
-
-  const value = useMemo(
-    () => ({ ready, user, signIn, signOut }),
-    [ready, user, signIn, signOut],
+      clearSession(token);
+    },
+    [clearSession],
   );
+
+  const value = useMemo(() => ({ ready, user, signIn, signOut }), [ready, user, signIn, signOut]);
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }
