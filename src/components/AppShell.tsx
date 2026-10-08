@@ -57,6 +57,7 @@ export function AppShell({
   mainClassName,
   variant = "default",
   shellTitle = "LTMS",
+  showSidebarToggle = true,
 }: {
   children: ReactNode;
   footer?: ReactNode;
@@ -68,6 +69,7 @@ export function AppShell({
   mainClassName?: string;
   variant?: "default" | "ltms";
   shellTitle?: string;
+  showSidebarToggle?: boolean;
 }) {
   const { signOut, user } = useSession();
   const navigate = useNavigate();
@@ -244,26 +246,28 @@ export function AppShell({
             </div>
           )}
           {headerEnd && <div className="ml-2 hidden sm:block">{headerEnd}</div>}
-          <button
-            type="button"
-            onClick={() => setSidebarHidden((hidden) => !hidden)}
-            title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
-            aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
-            aria-pressed={sidebarHidden}
-            className={cn(
-              "ml-1 hidden h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex",
-              variant === "ltms" ? "ltms-app-shell-icon-button" : "",
-            )}
-          >
-            {sidebarHidden ? (
-              <PanelLeftOpen className="size-4" />
-            ) : (
-              <PanelLeftClose className="size-4" />
-            )}
-            <span className="hidden xl:inline">
-              {sidebarHidden ? "Show sidebar" : "Hide sidebar"}
-            </span>
-          </button>
+          {showSidebarToggle && (
+            <button
+              type="button"
+              onClick={() => setSidebarHidden((hidden) => !hidden)}
+              title={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+              aria-label={sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+              aria-pressed={sidebarHidden}
+              className={cn(
+                "ml-1 hidden h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex",
+                variant === "ltms" ? "ltms-app-shell-icon-button" : "",
+              )}
+            >
+              {sidebarHidden ? (
+                <PanelLeftOpen className="size-4" />
+              ) : (
+                <PanelLeftClose className="size-4" />
+              )}
+              <span className="hidden xl:inline">
+                {sidebarHidden ? "Show sidebar" : "Hide sidebar"}
+              </span>
+            </button>
+          )}
           <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
             {isAdmin && (
               <Link

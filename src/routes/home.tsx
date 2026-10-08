@@ -181,7 +181,12 @@ function HomePage() {
   const MODULES = roleModules.filter((m) => !("linkedOnly" in m) || !m.linkedOnly || wmsEnabled);
 
   return (
-    <AppShell variant="ltms" shellTitle="Garuda Logistics Solutions" footer={<BrandFooter />}>
+    <AppShell
+      variant="ltms"
+      shellTitle="Garuda Logistics Solutions"
+      footer={<BrandFooter />}
+      showSidebarToggle={false}
+    >
       <div
         className="grid w-full grid-cols-3 gap-x-2 gap-y-3 px-1 pt-3 sm:grid-cols-4 sm:px-2 md:grid-cols-6 lg:grid-cols-8"
         role={loading ? "status" : undefined}
