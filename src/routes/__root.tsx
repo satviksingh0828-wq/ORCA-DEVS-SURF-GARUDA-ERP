@@ -16,7 +16,7 @@ import { initSecurity } from "../lib/security";
 import { preloadLogo } from "../lib/logo";
 
 import appCss from "../styles.css?url";
-import { SessionProvider } from "../lib/session";
+import { SessionProvider } from "@/lib/session";
 import { ThemeProvider } from "../lib/theme";
 import { Toaster } from "../components/ui/sonner";
 import { OrcaAIProvider } from "../lib/orca-context";
@@ -120,10 +120,10 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     ],
     scripts: [{ src: "https://js.puter.com/v2/", async: true }],
   }),
-  shellComponent: RootShell,
   component: RootComponent,
   notFoundComponent: NotFoundComponent,
   errorComponent: ErrorComponent,
+  shellComponent: RootShell,
 });
 
 function RootShell({ children }: { children: ReactNode }) {
@@ -133,7 +133,11 @@ function RootShell({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body>
-        {children}
+        <SessionProvider>
+          <ThemeProvider>
+            <OrcaAIProvider>{children}</OrcaAIProvider>
+          </ThemeProvider>
+        </SessionProvider>
         <Scripts />
       </body>
     </html>
@@ -257,28 +261,22 @@ function RootComponent() {
           maxAge: 24 * 60 * 60 * 1000,
         }}
       >
-        <SessionProvider>
-          <ThemeProvider>
-            {pathname === "/share" ? (
-              <>
-                <Outlet />
-                <Toaster position="top-right" />
-              </>
-            ) : (
-              <OrcaAIProvider>
-                <PasskeyProtectionGate>
-                  <SecurityInit />
-                  <SessionExpiredListener />
-                  <DynamicImportRecovery />
-                  <Outlet />
-                  <ScreenControlWidget />
-                  <Toaster position="top-right" />
-                  <MeetPanelMount />
-                </PasskeyProtectionGate>
-              </OrcaAIProvider>
-            )}
-          </ThemeProvider>
-        </SessionProvider>
+        {pathname === "/share" ? (
+          <>
+            <Outlet />
+            <Toaster position="top-right" />
+          </>
+        ) : (
+          <PasskeyProtectionGate>
+            <SecurityInit />
+            <SessionExpiredListener />
+            <DynamicImportRecovery />
+            <Outlet />
+            <ScreenControlWidget />
+            <Toaster position="top-right" />
+            <MeetPanelMount />
+          </PasskeyProtectionGate>
+        )}
       </PersistQueryClientProvider>
     </>
   );
