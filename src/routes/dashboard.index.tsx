@@ -13,6 +13,7 @@ import {
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
+import { HR_SIDEBAR_GROUPS } from "@/components/hr/HrShell";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { ProfitLossPanel } from "@/components/dashboard/ProfitLossPanel";
 import { EntityPnLPanel } from "@/components/dashboard/EntityPnLPanel";
@@ -165,16 +166,30 @@ export function DashboardPage({
           <LtmsSidebar
             open={navOpen}
             label="Dashboard"
-            section="dashboard"
+            section={scope === "hr" ? "hr-dashboard" : "dashboard"}
             activeTabId={safeTab}
             onSelectTab={(id) => setTab(id as typeof safeTab)}
-            groups={[
-              {
-                section: "dashboard",
-                label: "Dashboard",
-                items: visibleTabs.map(({ id, label }) => ({ id, label })),
-              },
-            ]}
+            groups={
+              scope === "hr"
+                ? HR_SIDEBAR_GROUPS.map((group) =>
+                    group.section === "hr-dashboard"
+                      ? {
+                          ...group,
+                          items: group.items.map((item) => ({
+                            ...item,
+                            id: item.id.replace("-dashboard", ""),
+                          })),
+                        }
+                      : group,
+                  )
+                : [
+                    {
+                      section: "dashboard",
+                      label: "Dashboard",
+                      items: visibleTabs.map(({ id, label }) => ({ id, label })),
+                    },
+                  ]
+            }
           />
         )}
         {/* Mobile dropdown navigation */}
