@@ -76,9 +76,9 @@ const ledgerMobileTabs = ledgerLinks.map((item) => ({
 }));
 
 const journalLinks = [
-  { key: "create", label: "Create", description: "Post journal entry", icon: Plus },
-  { key: "transfer", label: "Transfer", description: "Move bank / cash", icon: ArrowRightLeft },
-  { key: "list", label: "List", description: "Browse journal entries", icon: List },
+  { key: "create", label: "Create", description: "Post journal entry", icon: Plus, to: "/accounts/journal?tab=create" },
+  { key: "transfer", label: "Transfer", description: "Move bank / cash", icon: ArrowRightLeft, to: "/accounts/journal?tab=transfer" },
+  { key: "list", label: "List", description: "Browse journal entries", icon: List, to: "/accounts/journal?tab=list" },
 ] as const;
 const journalMobileTabs = journalLinks.map((item) => ({
   id: item.key,
@@ -134,7 +134,7 @@ export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
   {
     section: "journal",
     label: "Journal",
-    items: journalLinks.map(({ key, label }) => ({ id: key, label, to: "/accounts/journal" })),
+    items: journalLinks.map(({ key, label, to }) => ({ id: key, label, to })),
   },
   {
     section: "ledger",

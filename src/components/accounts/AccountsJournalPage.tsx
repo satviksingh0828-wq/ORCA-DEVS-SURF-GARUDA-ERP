@@ -69,9 +69,9 @@ function JournalPage() {
   const branches = useBranches();
   const [tab, setTab] = useState<JournalTab>(() => {
     const pending = consumeAccountsTabNavigation("journal");
-    return pending === "create" || pending === "transfer" || pending === "list"
-      ? pending
-      : "create";
+    const fromUrl = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
+    const requested = pending ?? fromUrl;
+    return requested === "create" || requested === "transfer" || requested === "list" ? requested : "create";
   });
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);

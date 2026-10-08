@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
-import { Eye, FilePlus2, PackageSearch, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import { Banknote, Eye, FileCheck2, FilePlus2, PackageSearch, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
@@ -56,6 +56,8 @@ type Bill = {
   total_loading: number | string;
   total_unloading_income: number | string;
   deleted_at: string | null;
+  received_at: string | null;
+  received_account_id: string | null;
   branch?: { branch_name?: string | null } | null;
   source?: { contract_name?: string | null } | null;
   source_company_name?: string | null;
@@ -149,6 +151,7 @@ type StockIncomeRateEntry = {
 };
 type LedgerAccount = {
   id: string;
+  branch_id?: string;
   account_name: string;
   ledger_type: string;
   account_kind: string;
@@ -221,6 +224,7 @@ export function SourceBilling() {
   const [bills, setBills] = useState<Bill[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [ledgerAccounts, setLedgerAccounts] = useState<Record<string, LedgerAccount>>({});
+  const [receiptAccounts, setReceiptAccounts] = useState<LedgerAccount[]>([]);
   const [branchSources, setBranchSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(false);
   const [listFilters, setListFilters] = useState({
@@ -260,6 +264,10 @@ export function SourceBilling() {
   const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{ freight: number; loading: number; unloading: number } | null>(null);
   const [postedJournalEntryId, setPostedJournalEntryId] = useState<string | null>(null);
   const [postedJournalLines, setPostedJournalLines] = useState<JournalPreviewLine[] | null>(null);
+  const [receivingBill, setReceivingBill] = useState<Bill | null>(null);
+  const [receivingAccountId, setReceivingAccountId] = useState("");
+  const [receivingDate, setReceivingDate] = useState(new Date().toISOString().slice(0, 10));
+  const [receiving, setReceiving] = useState(false);
 
   async function loadBillItems(billId: string) {
     setViewItemsLoading(true);
@@ -321,13 +329,21 @@ export function SourceBilling() {
     if (ledgerIds.length) {
       const { data: ledgerRows, error: ledgerError } = await (supabase as any)
         .from("ledger_accounts")
-        .select("id,account_name,ledger_type,account_kind")
+        .select("id,branch_id,account_name,ledger_type,account_kind")
         .in("id", ledgerIds);
       if (ledgerError) return toast.error(`Could not load mapped source accounts: ${ledgerError.message}`);
       setLedgerAccounts(Object.fromEntries(((ledgerRows ?? []) as LedgerAccount[]).map((ledger) => [ledger.id, ledger])));
     } else {
       setLedgerAccounts({});
     }
+    const { data: receiptRows, error: receiptError } = await (supabase as any)
+      .from("ledger_accounts")
+      .select("id,branch_id,account_name,ledger_type,account_kind")
+      .eq("is_active", true)
+      .in("ledger_type", ["bank", "cash"])
+      .order("account_name");
+    if (receiptError) return toast.error(`Could not load cash and bank accounts: ${receiptError.message}`);
+    setReceiptAccounts((receiptRows ?? []) as LedgerAccount[]);
   }
   async function loadBills() {
     setLoading(true);
@@ -335,7 +351,7 @@ export function SourceBilling() {
       let query = (supabase as any)
         .from("ltms_source_bills")
         .select(
-          "id,bill_number,branch_id,source_id,bill_date,due_date,period_from,period_to,total_freight,total_loading,total_unloading_income,deleted_at,source_company_name,source_legal_business_name,source_gstin,source_address,source_address_line1,source_address_line2,source_city,source_state,source_country,source_pin_code,branch:branches(branch_name),source:contracts(contract_name)",
+          "id,bill_number,branch_id,source_id,bill_date,due_date,period_from,period_to,total_freight,total_loading,total_unloading_income,deleted_at,received_at,received_account_id,source_company_name,source_legal_business_name,source_gstin,source_address,source_address_line1,source_address_line2,source_city,source_state,source_country,source_pin_code,branch:branches(branch_name),source:contracts(contract_name)",
         )
         .gte("bill_date", listFilters.from)
         .lte("bill_date", listFilters.to)
@@ -740,6 +756,30 @@ export function SourceBilling() {
     toast.success("Source bill moved to deleted history");
     await loadBills();
   }
+  async function receiveBill() {
+    if (!receivingBill || !receivingAccountId || !receivingDate) {
+      toast.error("Select a cash or bank account and receipt date");
+      return;
+    }
+    setReceiving(true);
+    try {
+      const { error } = await (supabase as any).rpc("receive_ltms_source_bill", {
+        p_bill_id: receivingBill.id,
+        p_received_account_id: receivingAccountId,
+        p_received_by: user?.id ?? null,
+        p_received_date: receivingDate,
+      });
+      if (error) throw new Error(error.message);
+      toast.success(`Source bill ${receivingBill.bill_number} marked received and journal posted.`);
+      setReceivingBill(null);
+      setReceivingAccountId("");
+      await loadBills();
+    } catch (error) {
+      toast.error(`Could not mark source bill received: ${error instanceof Error ? error.message : String(error)}`);
+    } finally {
+      setReceiving(false);
+    }
+  }
   const visibleBills = useMemo(() => {
     const q = search.trim().toLowerCase();
     return q
@@ -941,6 +981,9 @@ export function SourceBilling() {
                         {bill.deleted_at && (
                           <span className="ml-2 text-xs text-destructive">Deleted</span>
                         )}
+                        {bill.received_at && (
+                          <span className="ml-2 text-xs text-green-700">Received</span>
+                        )}
                       </td>
                       <td className="px-3 py-3">{bill.bill_date}</td>
                       <td className="px-3 py-3">{bill.branch?.branch_name ?? "—"}</td>
@@ -963,11 +1006,26 @@ export function SourceBilling() {
                           >
                             <Eye className="size-3.5" /> View
                           </Button>
+                          {!bill.deleted_at && !bill.received_at && (
+                            <Button
+                              size="sm"
+                              variant="secondary"
+                              onClick={() => {
+                                setReceivingBill(bill);
+                                setReceivingAccountId("");
+                                setReceivingDate(new Date().toISOString().slice(0, 10));
+                              }}
+                            >
+                              <FileCheck2 className="size-3.5" /> Received
+                            </Button>
+                          )}
                           {!bill.deleted_at && (
                             <Button
                               size="sm"
                               variant="destructive"
                               onClick={() => void deleteBill(bill)}
+                              disabled={Boolean(bill.received_at)}
+                              title={bill.received_at ? "Received bills cannot be deleted" : "Delete source bill"}
                             >
                               <Trash2 className="size-3.5" /> Delete
                             </Button>
@@ -1492,6 +1550,49 @@ export function SourceBilling() {
             </Button>
             <Button onClick={addSelectedStockInward} disabled={!selectedStockInwardIds.length}>
               <Plus className="size-3.5" /> Add selected ({selectedStockInwardIds.length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={receivingBill !== null} onOpenChange={(open) => !receiving && !open && setReceivingBill(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark Source Bill Received</DialogTitle>
+          </DialogHeader>
+          {receivingBill && (
+            <div className="space-y-4">
+              <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
+                <p className="font-semibold">{receivingBill.bill_number}</p>
+                <p className="text-muted-foreground">
+                  {receivingBill.source?.contract_name ?? "Source"} · Total {money(num(receivingBill.total_freight) + num(receivingBill.total_loading) + num(receivingBill.total_unloading_income))}
+                </p>
+              </div>
+              <label className="block space-y-1.5 text-sm">
+                <span className="font-medium">Received in cash / bank account *</span>
+                <Select value={receivingAccountId} onValueChange={setReceivingAccountId}>
+                  <SelectTrigger><SelectValue placeholder="Select cash or bank account" /></SelectTrigger>
+                  <SelectContent>
+                    {receiptAccounts.filter((account) => account.branch_id === receivingBill.branch_id).map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.account_name} · {account.ledger_type}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </label>
+              <label className="block space-y-1.5 text-sm">
+                <span className="font-medium">Receipt date *</span>
+                <Input type="date" value={receivingDate} onChange={(event) => setReceivingDate(event.target.value)} />
+              </label>
+              <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                This posts a journal entry debiting the selected cash/bank account and crediting the source receivable. Once received, the bill cannot be deleted.
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" disabled={receiving} onClick={() => setReceivingBill(null)}>Cancel</Button>
+            <Button disabled={receiving || !receivingAccountId} onClick={() => void receiveBill()}>
+              <Banknote className="size-4" /> {receiving ? "Posting…" : "Mark received"}
             </Button>
           </DialogFooter>
         </DialogContent>
