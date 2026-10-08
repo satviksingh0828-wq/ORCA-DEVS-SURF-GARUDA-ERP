@@ -1,5 +1,4 @@
 import { MemoryRouter } from "react-router-dom";
-import { useState } from "react";
 import { AuthProvider } from "@/wms/auth.jsx";
 import { WarehouseProvider } from "@/wms/warehouse.jsx";
 import Users from "@/wms/pages/Users.jsx";
@@ -16,7 +15,7 @@ import Settings from "@/wms/pages/Settings.jsx";
 import { WmsUsersSettings } from "@/components/settings/WmsUsersSettings";
 import "@/wms/App.scoped.css";
 
-type WmsSystemSettingsProps = { erpSessionToken: string };
+type WmsSystemSettingsProps = { erpSessionToken: string; activeTabId: string };
 
 type SystemTab = {
   id: string;
@@ -24,7 +23,7 @@ type SystemTab = {
   component: React.ComponentType;
 };
 
-const SYSTEM_TABS: SystemTab[] = [
+export const WMS_SYSTEM_TABS: SystemTab[] = [
   { id: "users", label: "Users", component: Users },
   { id: "api-tokens", label: "API tokens", component: Tokens },
   { id: "inbound", label: "Inbound activity", component: InboundActivity },
@@ -39,13 +38,13 @@ const SYSTEM_TABS: SystemTab[] = [
   { id: "settings", label: "Company & settings", component: Settings },
 ];
 
-export function WmsSystemSettings({ erpSessionToken }: WmsSystemSettingsProps) {
+export function WmsSystemSettings({ erpSessionToken, activeTabId }: WmsSystemSettingsProps) {
   return (
     <MemoryRouter initialEntries={["/settings"]}>
       <AuthProvider erpSessionToken={erpSessionToken}>
         <WarehouseProvider>
           <div className="wms-embedded-scope">
-            <WmsSystemSettingsInner />
+            <WmsSystemSettingsInner activeTabId={activeTabId} />
           </div>
         </WarehouseProvider>
       </AuthProvider>
@@ -53,29 +52,12 @@ export function WmsSystemSettings({ erpSessionToken }: WmsSystemSettingsProps) {
   );
 }
 
-function WmsSystemSettingsInner() {
-  const [activeId, setActiveId] = useState(SYSTEM_TABS[0].id);
-  const activeTab = SYSTEM_TABS.find((tab) => tab.id === activeId) ?? SYSTEM_TABS[0];
+function WmsSystemSettingsInner({ activeTabId }: { activeTabId: string }) {
+  const activeTab = WMS_SYSTEM_TABS.find((tab) => tab.id === activeTabId) ?? WMS_SYSTEM_TABS[0];
   const ActivePage = activeTab.component;
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap gap-2 rounded-xl border border-border bg-muted/20 p-2">
-        {SYSTEM_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            onClick={() => setActiveId(tab.id)}
-            className={`rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-              tab.id === activeId
-                ? "bg-primary text-primary-foreground"
-                : "text-muted-foreground hover:bg-muted hover:text-foreground"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+    <div className="min-w-0">
       <div className="wms-settings-embedded">
         <ActivePage />
       </div>

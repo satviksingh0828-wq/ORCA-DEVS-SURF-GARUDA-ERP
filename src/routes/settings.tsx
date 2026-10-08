@@ -33,7 +33,7 @@ import { WhatsAppSettings } from "@/components/settings/WhatsAppSettings";
 import { MailSettings } from "@/components/settings/MailSettings";
 import { HRMSAccountsSettings } from "@/components/settings/HRMSAccountsSettings";
 import { TMSAccountsSettings } from "@/components/settings/TMSAccountsSettings";
-import { WmsSystemSettings } from "@/components/WmsSystemSettings";
+import { WMS_SYSTEM_TABS, WmsSystemSettings } from "@/components/WmsSystemSettings";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -103,9 +103,20 @@ const MODULE_TABS = [
 function SettingsPage() {
   const { user, wmsAccessReady, wmsEnabled } = useSession();
   const [tab, setTab] = useState<TabId>("company");
-  const [moduleTab, setModuleTab] = useState<"settings" | "wms">("settings");
+  const [wmsTabId, setWmsTabId] = useState(WMS_SYSTEM_TABS[0].id);
+  const [activeSection, setActiveSection] = useState<"settings" | "wms">("settings");
   if (user?.role !== "admin") return null;
   const visibleTabs = TABS;
+  const wmsSidebarTabs = WMS_SYSTEM_TABS.map(({ id, label }) => ({
+    id: `wms:${id}`,
+    label,
+  }));
+  const mobileWmsTabs = WMS_SYSTEM_TABS.map(({ id, label }) => ({
+    id,
+    label,
+    desc: `Manage ${label.toLowerCase()} for WMS`,
+    icon: Warehouse,
+  }));
 
   if (!wmsAccessReady) {
     return (
@@ -122,33 +133,31 @@ function SettingsPage() {
       <div className="ltms-reference-shell ltms-single-pane-reference-shell grid min-w-0 grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
         <LtmsSidebar
           label="Settings navigation"
-          activeTabId={moduleTab}
+          activeTabId=""
           activeItems={{
-            modules: moduleTab,
-            ...(moduleTab === "settings" ? { categories: tab } : {}),
+            settings: activeSection === "settings" ? `settings:${tab}` : "",
+            wms: activeSection === "wms" ? `wms:${wmsTabId}` : "",
           }}
           onSelectTab={(id) => {
-            if (id === "settings" || id === "wms") {
-              setModuleTab(id);
+            if (id.startsWith("settings:")) {
+              setActiveSection("settings");
+              setTab(id.slice("settings:".length) as TabId);
               return;
             }
-            setTab(id as TabId);
+            if (id.startsWith("wms:")) {
+              setActiveSection("wms");
+              setWmsTabId(id.slice("wms:".length));
+            }
           }}
           showCustomMobileNav={false}
           groups={[
             {
-              section: "modules",
-              label: "Modules",
-              items: MODULE_TABS.filter(({ id }) => id !== "wms" || wmsEnabled),
+              section: "settings",
+              label: "Settings",
+              items: visibleTabs.map(({ id, label }) => ({ id: `settings:${id}`, label })),
             },
-            ...(moduleTab === "settings"
-              ? [
-                  {
-                    section: "categories",
-                    label: "Settings",
-                    items: visibleTabs.map(({ id, label }) => ({ id, label })),
-                  },
-                ]
+            ...(wmsEnabled
+              ? [{ section: "wms", label: "WMS Settings", items: wmsSidebarTabs }]
               : []),
           ]}
         />
@@ -156,14 +165,25 @@ function SettingsPage() {
           <div className="mb-4 lg:hidden">
             <MobileTabDropdown
               tabs={MODULE_TABS.filter(({ id }) => id !== "wms" || wmsEnabled)}
-              activeId={moduleTab}
+              activeId={activeSection}
               label="Settings modules"
-              onChange={(id) => setModuleTab(id as "settings" | "wms")}
+              onChange={(id) => setActiveSection(id as "settings" | "wms")}
               compact
             />
           </div>
-          {moduleTab === "wms" && wmsEnabled && user?.sessionToken ? (
-            <WmsSystemSettings erpSessionToken={user.sessionToken} />
+          {activeSection === "wms" && wmsEnabled && user?.sessionToken ? (
+            <>
+              <div className="mb-4 lg:hidden">
+                <MobileTabDropdown
+                  tabs={mobileWmsTabs}
+                  activeId={wmsTabId}
+                  label="WMS Settings"
+                  onChange={setWmsTabId}
+                  compact
+                />
+              </div>
+              <WmsSystemSettings erpSessionToken={user.sessionToken} activeTabId={wmsTabId} />
+            </>
           ) : (
             <>
               <div className="mb-4 lg:hidden">
