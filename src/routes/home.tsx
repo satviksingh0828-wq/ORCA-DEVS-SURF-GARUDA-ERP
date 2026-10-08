@@ -1,7 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
-  ArrowRight,
   BarChart3,
   Landmark,
   CalendarCheck,
@@ -163,10 +162,13 @@ function HomePage() {
 
   return (
     <AppShell variant="ltms" shellTitle="Garuda ERP">
-      <div className="grid w-full grid-cols-1 gap-3 px-1 pt-4 sm:grid-cols-2 sm:px-2 lg:grid-cols-4">
+      <div className="grid w-full grid-cols-3 gap-x-2 gap-y-3 px-1 pt-3 sm:grid-cols-4 sm:px-2 md:grid-cols-6 lg:grid-cols-8">
         {loading
           ? Array.from({ length: MODULES.length }).map((_, i) => (
-              <Skeleton key={i} className="h-36 rounded-xl" />
+              <div key={i} className="flex min-h-[106px] flex-col items-center gap-2 p-2">
+                <Skeleton className="size-12 rounded-2xl" />
+                <Skeleton className="h-3 w-16 rounded-full" />
+              </div>
             ))
           : MODULES.map((m, i) => {
               const Icon = m.icon;
@@ -175,32 +177,30 @@ function HomePage() {
                 <button
                   key={m.key}
                   type="button"
+                  aria-label={`${m.label}${enabled ? "" : " (coming soon)"}`}
                   onClick={() =>
                     enabled && "to" in m && m.to
                       ? navigate({ to: m.to })
                       : toast.info(`${m.label} module is coming soon`)
                   }
                   style={{ animationDelay: `${i * 55}ms` }}
-                  className="group surface-card animate-fade-up relative flex h-36 flex-col items-start p-4 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lift)]"
+                  className="group animate-fade-up flex min-h-[106px] flex-col items-center justify-start rounded-xl p-2 text-center transition-colors duration-200 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <span
-                    className={`flex size-11 items-center justify-center rounded-xl transition-colors ${
+                    className={`flex size-12 items-center justify-center rounded-2xl transition-colors ${
                       enabled
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-primary-soft text-primary group-hover:bg-primary group-hover:text-primary-foreground"
+                        ? "bg-primary-soft text-primary group-hover:bg-primary group-hover:text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
                     }`}
                   >
                     <Icon className="size-5" />
                   </span>
-                  <span className="mt-3 text-base font-semibold tracking-tight">{m.label}</span>
-                  <span className="mt-1 text-sm text-muted-foreground">{m.desc}</span>
-                  <span className="absolute right-4 top-4 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
-                    {enabled ? (
-                      <ArrowRight className="size-4 text-primary transition-transform group-hover:translate-x-1" />
-                    ) : (
-                      "Soon"
-                    )}
+                  <span className="mt-2 max-w-full text-xs font-medium leading-tight tracking-tight">
+                    {m.label}
                   </span>
+                  {!enabled && (
+                    <span className="mt-1 text-[10px] font-medium text-muted-foreground">Soon</span>
+                  )}
                 </button>
               );
             })}
