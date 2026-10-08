@@ -1370,12 +1370,17 @@ table td {
 }
 
 .ltms-app-shell-title {
+  display: block;
+  min-width: 0;
+  max-width: min(320px, calc(100vw - 220px));
+  flex: 0 1 auto;
   margin-left: -2px;
   color: #fdf4e3;
-  font-size: 16px;
+  font-size: clamp(11px, calc(0.55vw + 10px), 16px);
   font-weight: 600;
   letter-spacing: 0.1px;
-  white-space: nowrap;
+  line-height: 1.12;
+  white-space: normal;
 }
 
 .ltms-app-shell-breadcrumb,
@@ -1687,4 +1692,66 @@ table td {
   .ltms-single-pane-reference-shell {
     grid-template-rows: minmax(0, 1fr) !important;
   }
+}
+
+/* Static theme-aware plexus texture for sign-in and passkey screens. */
+.auth-abstract-background.ltms-app-shell {
+  isolation: isolate;
+  position: relative;
+  background-color: var(--background) !important;
+  color: var(--foreground) !important;
+}
+
+.auth-abstract-background::before,
+.auth-abstract-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.auth-abstract-background::before {
+  background-image:
+    radial-gradient(
+      circle at 1px 1px,
+      color-mix(in oklab, var(--primary) 48%, transparent) 1.4px,
+      transparent 2px
+    ),
+    linear-gradient(
+      30deg,
+      transparent 49.35%,
+      color-mix(in oklab, var(--primary) 11%, transparent) 50%,
+      transparent 50.65%
+    ),
+    linear-gradient(
+      150deg,
+      transparent 49.35%,
+      color-mix(in oklab, var(--primary) 11%, transparent) 50%,
+      transparent 50.65%
+    );
+  background-size: 96px 82px;
+  opacity: 0.66;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 8%, transparent 88%);
+  mask-image: radial-gradient(ellipse at center, #000 8%, transparent 88%);
+}
+
+.auth-abstract-background::after {
+  background:
+    radial-gradient(
+      ellipse at 14% 18%,
+      color-mix(in oklab, var(--primary) 12%, transparent),
+      transparent 38%
+    ),
+    radial-gradient(
+      ellipse at 86% 82%,
+      color-mix(in oklab, var(--primary-glow) 13%, transparent),
+      transparent 42%
+    );
+}
+
+.auth-abstract-background > header,
+.auth-abstract-background > main {
+  position: relative;
+  z-index: 1;
 }

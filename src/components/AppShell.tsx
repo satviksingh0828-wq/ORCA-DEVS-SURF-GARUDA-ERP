@@ -204,7 +204,7 @@ export function AppShell({
                   ? "/garuda-logo.png"
                   : "/garuda-logo-light.png"
               }
-              alt="Garuda Logistics Solution"
+              alt="Garuda Logistics Solutions"
               className={cn("h-8 w-auto sm:h-10", variant === "ltms" ? "ltms-app-shell-logo" : "")}
             />
           </Link>

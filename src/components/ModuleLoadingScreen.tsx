@@ -3,7 +3,7 @@ import { AppShell } from "@/components/AppShell";
 import { Skeleton } from "@/components/ui/skeleton";
 
 export function ModuleLoadingScreen({
-  shellTitle = "Garuda ERP",
+  shellTitle = "Garuda Logistics Solutions",
   headerEnd,
 }: {
   shellTitle?: string;

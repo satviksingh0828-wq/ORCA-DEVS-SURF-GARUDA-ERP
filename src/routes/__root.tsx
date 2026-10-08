@@ -195,7 +195,7 @@ function DynamicImportRecovery() {
 /** Renders the SPARROW AI panel — admin only, persists across route changes */
 function PasskeyProtectionGate({ children }: { children: ReactNode }) {
   const { data: settings, isLoading } = useAppSettings();
-  if (isLoading) return <ModuleLoadingScreen shellTitle="Garuda ERP" />;
+  if (isLoading) return <ModuleLoadingScreen shellTitle="Garuda Logistics Solutions" />;
   if (settings?.passkey_protection_enabled !== true) return <>{children}</>;
   return <PasskeyGate>{children}</PasskeyGate>;
 }

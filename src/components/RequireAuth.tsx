@@ -23,7 +23,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
                   (path) => pathname === path || pathname.startsWith(`${path}/`),
                 )
               ? "LTMS"
-              : "Garuda ERP";
+              : "Garuda Logistics Solutions";
 
   useEffect(() => {
     if (ready && !user) navigate({ to: "/", replace: true });

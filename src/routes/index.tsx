@@ -396,18 +396,18 @@ function LoginPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="ltms-app-shell flex min-h-[100dvh] flex-col bg-[#fafaf7] text-[#1a1714]">
+      <div className="auth-abstract-background ltms-app-shell relative isolate flex min-h-[100dvh] flex-col bg-background text-foreground">
         <header className="ltms-app-shell-header z-10 flex h-14 shrink-0 items-center border-b-2 border-[#b87333] bg-[#2a2520]">
           <div className="ltms-app-shell-header-inner flex h-full w-full items-center gap-3 px-4">
             <img
               src="/garuda-logo.png"
-              alt="Garuda Logistics Solution"
+              alt="Garuda Logistics Solutions"
               className="ltms-app-shell-logo h-10 w-auto object-contain"
             />
-            <span className="ltms-app-shell-title">Garuda ERP</span>
+            <span className="ltms-app-shell-title">Garuda Logistics Solutions</span>
           </div>
         </header>
-        <main className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-8">
+        <main className="relative z-10 flex flex-1 items-center justify-center overflow-y-auto px-4 py-8">
           <div className="w-full max-w-sm">
             {/* ── Normal login form — always visible ────────────────────────── */}
             <div className="w-full max-w-sm animate-fade-up rounded-xl border border-border bg-card p-8 shadow-sm">
