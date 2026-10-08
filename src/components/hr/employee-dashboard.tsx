@@ -69,16 +69,15 @@ export function EmployeeDashboard() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-xl font-bold sm:text-2xl">Employee dashboard</h1>
-        <div className="ml-auto flex gap-1.5">
+    <div className="space-y-5">
+      <div className="flex justify-end">
+        <div className="inline-flex gap-1 rounded-lg border bg-card p-1">
           {(['day', 'week', 'month', 'year'] as PeriodKind[]).map(p => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={cn('rounded-md border px-3 py-1.5 text-xs font-medium capitalize',
-                period === p ? 'bg-foreground text-background border-foreground' : 'hover:bg-muted')}
+              className={cn('rounded-md px-3 py-1.5 text-xs font-medium capitalize transition-colors',
+                period === p ? 'bg-foreground text-background' : 'text-muted-foreground hover:bg-muted hover:text-foreground')}
             >{p}</button>
           ))}
         </div>

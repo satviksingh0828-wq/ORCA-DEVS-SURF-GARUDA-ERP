@@ -159,7 +159,7 @@ export function DashboardPage({
       }
     >
       <div
-        className={`grid gap-6 ${navOpen ? "lg:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
+        className={`grid gap-5 ${navOpen ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "grid-cols-1"}`}
       >
         {/* ── Left nav (desktop) ── */}
         {navOpen && (
@@ -201,10 +201,12 @@ export function DashboardPage({
         />
 
         <div key={safeTab} className="animate-fade-in min-w-0">
-          <header className="mb-6">
-            <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
-            <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
-          </header>
+          {scope !== "hr" && (
+            <header className="mb-6">
+              <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
+              <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
+            </header>
+          )}
           {safeTab === "pnl" && <ProfitLossPanel />}
           {safeTab === "vehicles" && <EntityPnLPanel kind="vehicle" />}
           {safeTab === "drivers" && <EntityPnLPanel kind="driver" />}

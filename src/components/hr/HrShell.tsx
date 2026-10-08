@@ -99,7 +99,7 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
       }
     >
       <div
-        className={`grid gap-6 ${navOpen ? "xl:grid-cols-[192px_minmax(0,1fr)]" : "grid-cols-1"}`}
+        className={`grid gap-5 ${navOpen ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "grid-cols-1"}`}
       >
         {navOpen && (
           <LtmsSidebar
