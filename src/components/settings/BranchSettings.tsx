@@ -9,6 +9,7 @@ import { Field } from "./CompanySettings";
 import { CsvIO } from "@/components/CsvIO";
 import { useSession } from "@/lib/session";
 import { serverGetBranchEwbCredentials, serverSaveBranchEwbCredentials } from "@/lib/branch-ewb-credentials";
+import { loadWmsWarehouses, type WmsWarehouse } from "@/lib/wms-stock-inward";
 import {
   Select,
   SelectContent,
@@ -26,7 +27,7 @@ const BRANCH_TYPES = [
   "Yard",
 ];
 
-type Branch = Record<string, string> & { id?: string };
+type Branch = Record<string, any> & { id?: string };
 
 type EwbCredentialState = {
   api_username: string;
@@ -64,6 +65,8 @@ const EMPTY: Branch = {
   _eway_api_password: "",
   _eway_configured: "false",
   eway_auto_fetch_enabled: "false",
+  wms_enabled: false,
+  wms_warehouse_id: null,
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -80,6 +83,8 @@ export function BranchSettings() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Branch | null>(null);
   const [saving, setSaving] = useState(false);
+  const [wmsWarehouses, setWmsWarehouses] = useState<WmsWarehouse[]>([]);
+  const [wmsLoading, setWmsLoading] = useState(false);
   const { user } = useSession();
 
   async function load() {
@@ -95,12 +100,14 @@ export function BranchSettings() {
 
   useEffect(() => {
     load();
+    setWmsLoading(true);
+    loadWmsWarehouses().then(setWmsWarehouses).catch(() => setWmsWarehouses([])).finally(() => setWmsLoading(false));
   }, []);
 
   const set = (k: string) => (v: string) => setEditing((f) => (f ? { ...f, [k]: v } : f));
 
   async function beginEdit(branch: Branch) {
-    const next = { ...branch, _eway_api_username: "", _eway_api_password: "", _eway_configured: "false", eway_auto_fetch_enabled: String(branch.eway_auto_fetch_enabled === true || branch.eway_auto_fetch_enabled === "true") };
+    const next = { ...branch, _eway_api_username: "", _eway_api_password: "", _eway_configured: "false", eway_auto_fetch_enabled: String(branch.eway_auto_fetch_enabled === true || branch.eway_auto_fetch_enabled === "true"), wms_enabled: branch.wms_enabled === true || branch.wms_enabled === "true", wms_warehouse_id: branch.wms_warehouse_id ?? null };
     setEditing(next);
     if (!branch.id) return;
     if (!user?.sessionToken) {
@@ -144,9 +151,13 @@ export function BranchSettings() {
       toast.error("Prefixes must contain only letters or numbers (maximum 10 characters)");
       return;
     }
+    if (editing.wms_enabled && !editing.wms_warehouse_id) {
+      toast.error("Select a WMS warehouse when WMS is enabled");
+      return;
+    }
     setSaving(true);
-    const { id, created_at: _c, updated_at: _u, _eway_api_username, _eway_api_password, _eway_configured, eway_auto_fetch_enabled, ...rest } = editing;
-    const payload = { ...rest, eway_auto_fetch_enabled: eway_auto_fetch_enabled === "true", trip_series_prefix: tripPrefix, lr_series_prefix: lrPrefix, manifest_series_prefix: manifestPrefix } as never;
+    const { id, created_at: _c, updated_at: _u, _eway_api_username, _eway_api_password, _eway_configured, eway_auto_fetch_enabled, wms_enabled, wms_warehouse_id, ...rest } = editing;
+    const payload = { ...rest, eway_auto_fetch_enabled: eway_auto_fetch_enabled === "true", trip_series_prefix: tripPrefix, lr_series_prefix: lrPrefix, manifest_series_prefix: manifestPrefix, wms_enabled: Boolean(wms_enabled), wms_warehouse_id: wms_enabled ? Number(wms_warehouse_id) : null } as never;
     const res = id
       ? await supabase.from("branches").update(payload).eq("id", id).select("id").single()
       : await supabase.from("branches").insert(payload).select("id").single();
@@ -359,6 +370,39 @@ export function BranchSettings() {
               <span className="block text-[11px] text-muted-foreground">At 12:00 AM India time, save assigned EWBs for the previous date. The Operations E-Way Bill tab never calls the API.</span>
             </span>
           </label>
+        </Section>
+
+        <Section title="WMS Configuration">
+          <label className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3 sm:col-span-2">
+            <input
+              type="checkbox"
+              checked={Boolean(editing.wms_enabled)}
+              onChange={(event) => setEditing((f) => f ? { ...f, wms_enabled: event.target.checked, wms_warehouse_id: event.target.checked ? f.wms_warehouse_id : null } : f)}
+            />
+            <span>
+              <span className="block text-sm font-medium">Enable WMS for this branch</span>
+              <span className="block text-[11px] text-muted-foreground">Multiple branches may use the same WMS warehouse.</span>
+            </span>
+          </label>
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label className="text-xs font-medium text-muted-foreground">WMS Warehouse *</Label>
+            <Select
+              value={editing.wms_warehouse_id ? String(editing.wms_warehouse_id) : undefined}
+              onValueChange={(value) => setEditing((f) => f ? { ...f, wms_warehouse_id: Number(value) } : f)}
+              disabled={!editing.wms_enabled || wmsLoading}
+            >
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue placeholder={wmsLoading ? "Loading WMS warehouses…" : "Select warehouse"} />
+              </SelectTrigger>
+              <SelectContent>
+                {wmsWarehouses.map((warehouse) => (
+                  <SelectItem key={warehouse.warehouse_id} value={String(warehouse.warehouse_id)}>
+                    {warehouse.warehouse_code} · {warehouse.warehouse_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
         </Section>
 
         <div className="flex justify-end gap-2">

@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
+import { createWmsPurchaseOrder, deleteWmsPurchaseOrder, resolveWmsSku, type WmsItem } from "@/lib/wms-stock-inward";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,7 +31,7 @@ import {
 
 const db = supabase as any;
 type AdditionalIncomeMode = "approval" | "source" | "both" | "none";
-type PackageLine = { packageTypeId: string; sourceId: string; quantity: string; weightKg: string };
+type PackageLine = { packageTypeId: string; sourceId: string; quantity: string; weightKg: string; sku: string; itemId?: number; itemName?: string };
 type FormState = {
   branchId: string;
   sourceIds: string[];
@@ -80,6 +81,7 @@ function newPackageLine(sourceIds: string[]): PackageLine {
     sourceId: sourceIds.length === 1 ? sourceIds[0] : "",
     quantity: "",
     weightKg: "",
+    sku: "",
   };
 }
 
@@ -165,7 +167,7 @@ export function StockInward() {
     let query = db
       .from("stock_inward_receipts")
       .select(
-        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_received_journal_entry_id,additional_income_mode,approval_amount,approval_income_journal_entry_id,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,source:contracts(contract_name))",
+        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_received_journal_entry_id,additional_income_mode,approval_amount,approval_income_journal_entry_id,wms_purchase_order_id,wms_purchase_order_number,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,sku,item_name,source:contracts(contract_name))",
       )
       .gte("receipt_date", filters.from)
       .lte("receipt_date", filters.to)
@@ -264,6 +266,21 @@ export function StockInward() {
     );
   }
 
+  async function validateSku(index: number) {
+    const line = packageLines[index];
+    if (!line?.sku.trim()) {
+      updateLine(index, { itemId: undefined, itemName: "" });
+      return;
+    }
+    try {
+      const item = await resolveWmsSku(line.sku);
+      updateLine(index, item ? { sku: item.sku, itemId: item.item_id, itemName: item.item_name } : { itemId: undefined, itemName: "" });
+    } catch (error) {
+      updateLine(index, { itemId: undefined, itemName: "" });
+      toast.error(error instanceof Error ? error.message : "Could not validate SKU");
+    }
+  }
+
   async function createReceipt(event: React.FormEvent) {
     event.preventDefault();
     if (!form.branchId || !form.sourceIds.length || !form.receiptDate || !form.unloadingDate)
@@ -271,13 +288,22 @@ export function StockInward() {
         "Branch, at least one source, receipt date and unloading date are required",
       );
     if (!packageLines.length) return toast.error("Add at least one package type");
+    const branch = branches.find((item) => item.id === form.branchId);
+    if (!branch?.wms_enabled || !branch.wms_warehouse_id)
+      return toast.error("Enable WMS and select a WMS warehouse for this branch before creating Stock Inward");
     if (
       packageLines.some(
         (line) =>
-          !line.packageTypeId || !line.sourceId || !Number(line.quantity) || !Number(line.weightKg),
+          !line.packageTypeId || !line.sourceId || !Number(line.quantity) || !Number(line.weightKg) || !line.sku.trim(),
       )
     )
-      return toast.error("Each package line needs a type, source, quantity and weight");
+      return toast.error("Each package line needs a type, source, quantity, weight and valid SKU");
+    const validatedItems: Array<WmsItem> = [];
+    for (const line of packageLines) {
+      const item = await resolveWmsSku(line.sku);
+      if (!item) return toast.error(`SKU does not exist in WMS: ${line.sku}`);
+      validatedItems.push(item);
+    }
     if (["approval", "both"].includes(form.additionalIncomeMode) && !Number(form.approvalAmount))
       return toast.error("Approval amount is required for the selected additional income option");
     const receivedAmount = Number(form.unloadingAmountReceived || calculatedUnloadingAmount || 0);
@@ -319,12 +345,15 @@ export function StockInward() {
       .from("stock_inward_sources")
       .insert(form.sourceIds.map((sourceId) => ({ receipt_id: receipt.id, source_id: sourceId })));
     const packageResult = await db.from("stock_inward_packages").insert(
-      packageLines.map((line) => ({
+      packageLines.map((line, index) => ({
         receipt_id: receipt.id,
         package_rate_type_id: line.packageTypeId,
         source_id: line.sourceId,
         quantity: Number(line.quantity),
         weight_kg: Number(line.weightKg),
+        wms_item_id: validatedItems[index].item_id,
+        sku: validatedItems[index].sku,
+        item_name: validatedItems[index].item_name,
       })),
     );
     if (sourceResult.error || packageResult.error) {
@@ -335,6 +364,25 @@ export function StockInward() {
           packageResult.error?.message ??
           "Could not save package lines",
       );
+    }
+    const quantities = new Map<number, number>();
+    validatedItems.forEach((item, index) => quantities.set(item.item_id, (quantities.get(item.item_id) ?? 0) + Number(packageLines[index].quantity)));
+    let purchaseOrder: { id: number; number: string } | null = null;
+    try {
+      purchaseOrder = await createWmsPurchaseOrder({
+        poNumber: String(receiptNumber),
+        warehouseId: branch.wms_warehouse_id,
+        stockInwardId: receipt.id,
+        lines: [...quantities.entries()].map(([item_id, quantity_ordered]) => ({ item_id, quantity_ordered })),
+      });
+      if (!Number.isFinite(purchaseOrder.id)) throw new Error("WMS did not return a Purchase Order ID");
+      const { error: linkError } = await db.from("stock_inward_receipts").update({ wms_purchase_order_id: purchaseOrder.id, wms_purchase_order_number: purchaseOrder.number }).eq("id", receipt.id);
+      if (linkError) throw linkError;
+    } catch (error) {
+      try { if (purchaseOrder?.id) await deleteWmsPurchaseOrder(purchaseOrder.id); } catch { /* best effort compensation */ }
+      await db.from("stock_inward_receipts").delete().eq("id", receipt.id);
+      setSaving(false);
+      return toast.error(error instanceof Error ? error.message : "Could not create the WMS Purchase Order");
     }
     setSaving(false);
     toast.success("Stock Inward receipt created");
@@ -361,10 +409,17 @@ export function StockInward() {
     }
     if (
       !window.confirm(
-        `Delete Stock Inward receipt ${row.receipt_number ?? ""}? This will remove its sources and package lines.`,
+        `Delete Stock Inward receipt ${row.receipt_number ?? ""}? The linked WMS Purchase Order will be deleted first.`,
       )
     )
       return;
+    if (row.wms_purchase_order_id) {
+      try {
+        await deleteWmsPurchaseOrder(Number(row.wms_purchase_order_id));
+      } catch (error) {
+        return toast.error(error instanceof Error ? error.message : "The linked WMS Purchase Order could not be deleted");
+      }
+    }
     const { error } = await db.from("stock_inward_receipts").delete().eq("id", row.id);
     if (error) return toast.error(`Could not delete receipt: ${error.message}`);
     setViewId(null);
@@ -557,7 +612,7 @@ export function StockInward() {
               {packageLines.map((line, index) => (
                 <div
                   key={index}
-                  className="grid gap-2 border-t border-border pt-3 md:grid-cols-[1.3fr_1.3fr_1fr_1fr_auto]"
+                  className="grid gap-2 border-t border-border pt-3 md:grid-cols-[1.2fr_1.2fr_1fr_1.2fr_1fr_1fr_auto]"
                 >
                   <div>
                     <Label>Package type *</Label>
@@ -597,6 +652,19 @@ export function StockInward() {
                         })}
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div>
+                    <Label>SKU *</Label>
+                    <Input
+                      value={line.sku}
+                      onChange={(e) => updateLine(index, { sku: e.target.value, itemId: undefined, itemName: "" })}
+                      onBlur={() => void validateSku(index)}
+                      placeholder="WMS SKU"
+                    />
+                  </div>
+                  <div>
+                    <Label>Item name</Label>
+                    <Input value={line.itemName ?? ""} readOnly placeholder="Auto from SKU" className="bg-muted/40" />
                   </div>
                   <div>
                     <Label>Quantity</Label>
@@ -787,6 +855,10 @@ export function StockInward() {
               <p className="font-medium">{selectedRow.branch?.branch_name ?? "—"}</p>
             </div>
             <div>
+              <p className="text-muted-foreground">WMS Purchase Order</p>
+              <p className="font-medium">{selectedRow.wms_purchase_order_number ?? "—"}</p>
+            </div>
+            <div>
               <p className="text-muted-foreground">Unloading amount received</p>
               <p className="font-medium">₹ {money(selectedRow.unloading_amount_received)}</p>
             </div>
@@ -852,6 +924,7 @@ export function StockInward() {
                   <tr>
                     <th className="px-3 py-2">Package type</th>
                     <th className="px-3 py-2">Source</th>
+                    <th className="px-3 py-2">SKU / Item</th>
                     <th className="px-3 py-2">Quantity</th>
                     <th className="px-3 py-2">Weight (KG)</th>
                     <th className="px-3 py-2">Basis</th>
@@ -867,6 +940,7 @@ export function StockInward() {
                       <tr key={item.id} className="border-t border-border">
                         <td className="px-3 py-2 font-medium">{item.package_type}</td>
                         <td className="px-3 py-2">{item.source?.contract_name ?? "—"}</td>
+                        <td className="px-3 py-2"><span className="font-medium">{item.sku ?? "—"}</span><br /><span className="text-muted-foreground">{item.item_name ?? "—"}</span></td>
                         <td className="px-3 py-2">{item.quantity}</td>
                         <td className="px-3 py-2">{item.weight_kg}</td>
                         <td className="px-3 py-2">{type?.basis ?? "—"}</td>
