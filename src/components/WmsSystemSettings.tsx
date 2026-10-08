@@ -13,7 +13,8 @@ import AuditLog from "@/wms/pages/AuditLog.jsx";
 import Imports from "@/wms/pages/Imports.jsx";
 import Integrations from "@/wms/pages/Integrations.jsx";
 import Settings from "@/wms/pages/Settings.jsx";
-import "@/wms/App.css";
+import { WmsUsersSettings } from "@/components/settings/WmsUsersSettings";
+import "@/wms/App.scoped.css";
 
 type WmsSystemSettingsProps = { erpSessionToken: string };
 
@@ -34,7 +35,8 @@ const SYSTEM_TABS: SystemTab[] = [
   { id: "audit-log", label: "Audit log", component: AuditLog },
   { id: "imports", label: "Import", component: Imports },
   { id: "integrations", label: "Integrations", component: Integrations },
-  { id: "settings", label: "WMS settings", component: Settings },
+  { id: "user-access", label: "ERP user access", component: WmsUsersSettings },
+  { id: "settings", label: "Company & settings", component: Settings },
 ];
 
 export function WmsSystemSettings({ erpSessionToken }: WmsSystemSettingsProps) {
@@ -42,7 +44,9 @@ export function WmsSystemSettings({ erpSessionToken }: WmsSystemSettingsProps) {
     <MemoryRouter initialEntries={["/settings"]}>
       <AuthProvider erpSessionToken={erpSessionToken}>
         <WarehouseProvider>
-          <WmsSystemSettingsInner />
+          <div className="wms-embedded-scope">
+            <WmsSystemSettingsInner />
+          </div>
         </WarehouseProvider>
       </AuthProvider>
     </MemoryRouter>

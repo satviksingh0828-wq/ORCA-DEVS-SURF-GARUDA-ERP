@@ -33,7 +33,6 @@ import { WhatsAppSettings } from "@/components/settings/WhatsAppSettings";
 import { MailSettings } from "@/components/settings/MailSettings";
 import { HRMSAccountsSettings } from "@/components/settings/HRMSAccountsSettings";
 import { TMSAccountsSettings } from "@/components/settings/TMSAccountsSettings";
-import { WmsUsersSettings } from "@/components/settings/WmsUsersSettings";
 import { WmsSystemSettings } from "@/components/WmsSystemSettings";
 import { serverHasWmsAccess } from "@/lib/wms-user-links";
 
@@ -81,12 +80,6 @@ const TABS = [
     label: "LTMS Accounts Map",
     desc: "LTMS and Workmen ledger mappings",
     icon: Building2,
-  },
-  {
-    id: "wms-users",
-    label: "WMS Users",
-    desc: "Link existing WMS accounts to ERP users",
-    icon: Link2,
   },
   {
     id: "wms-system",
@@ -173,7 +166,6 @@ function SettingsPage() {
             {tab === "mail" ? <MailSettings /> : null}
             {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
             {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
-            {tab === "wms-users" ? <WmsUsersSettings /> : null}
             {tab === "wms-system" && user?.sessionToken ? (
               <WmsSystemSettings erpSessionToken={user.sessionToken} />
             ) : null}
