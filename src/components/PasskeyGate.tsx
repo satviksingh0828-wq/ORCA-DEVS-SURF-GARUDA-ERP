@@ -14,13 +14,11 @@
  *   unsupported   → browser doesn't support WebAuthn
  *   authenticated → passed → show app
  */
-import { createContext, useContext, useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
 import { Shield, ShieldAlert, ShieldCheck, Clock, XCircle, Fingerprint, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { PoweredBy } from "@/components/PoweredBy";
 import { secureStorage, secureSession } from "@/lib/storage";
-import { useTheme } from "@/lib/theme";
 import {
   serverStartRegistration,
   serverFinishRegistration,
@@ -61,63 +59,23 @@ type GateState =
 // ── Full-screen wrapper ───────────────────────────────────────────────────────
 
 function Screen({ children }: { children: ReactNode }) {
-  const { backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video || !backgroundVideoEnabled) return;
-
-    const handleCanPlay = () => video.classList.add("background-video-ready");
-    video.addEventListener("canplay", handleCanPlay);
-    video.src = backgroundVideoUrl;
-    video.load();
-    void video.play().catch(() => undefined);
-
-    return () => {
-      video.removeEventListener("canplay", handleCanPlay);
-      video.pause();
-      video.removeAttribute("src");
-      video.load();
-    };
-  }, [backgroundVideoEnabled, backgroundVideoUrl]);
-
   return (
-    <div
-      data-video-background={backgroundVideoEnabled ? "on" : "off"}
-      className="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10 text-foreground"
-      style={{
-        backgroundColor: backgroundVideoEnabled ? "transparent" : "var(--background)",
-        backgroundImage: backgroundVideoEnabled ? undefined : "var(--gradient-surface)",
-        "--video-glass-opacity": `${videoGlassAppearance.surfaceOpacity}%`,
-        "--video-background-veil": `${videoGlassAppearance.backgroundVeil}%`,
-        "--video-glass-text-color": videoGlassAppearance.textColor,
-      } as CSSProperties}
-    >
-      {backgroundVideoEnabled && (
-        <>
-          <video
-            ref={videoRef}
-            className="background-video-layer"
-            autoPlay
-            loop
-            muted
-            playsInline
-            preload="auto"
-            poster="/garuda-banner.webp"
-            aria-hidden="true"
+    <div className="ltms-app-shell flex min-h-screen flex-col bg-[#fafaf7] text-[#1a1714]">
+      <header className="ltms-app-shell-header z-10 flex h-14 shrink-0 items-center border-b-2 border-[#b87333] bg-[#2a2520]">
+        <div className="ltms-app-shell-header-inner flex h-full w-full items-center gap-3 px-4">
+          <img
+            src="/garuda-logo.png"
+            alt="Garuda Logistics Solution"
+            className="ltms-app-shell-logo h-10 w-auto object-contain"
           />
-          <div className="video-background-veil background-video-veil-layer" aria-hidden="true" />
-        </>
-      )}
-      <div className="pointer-events-none absolute -left-24 -top-24 size-80 rounded-full bg-primary/10 blur-3xl" />
-      <div className="pointer-events-none absolute -bottom-28 -right-20 size-96 rounded-full bg-primary/10 blur-3xl" />
-
-      <div className="surface-card relative z-10 w-full max-w-md animate-fade-up px-6 py-8 text-center sm:px-8">
-        {children}
-      </div>
-
-      <PoweredBy className="absolute bottom-6 left-1/2 z-10 w-full -translate-x-1/2 px-6 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/50" />
+          <span className="ltms-app-shell-title">Garuda ERP</span>
+        </div>
+      </header>
+      <main className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-8">
+        <div className="surface-card w-full max-w-md animate-fade-up px-6 py-8 text-center sm:px-8">
+          {children}
+        </div>
+      </main>
     </div>
   );
 }

@@ -163,10 +163,10 @@ function HomePage() {
 
   return (
     <AppShell variant="ltms" shellTitle="Garuda ERP">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-5 pt-8 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid w-full grid-cols-1 gap-3 px-1 pt-4 sm:grid-cols-2 sm:px-2 lg:grid-cols-4">
         {loading
           ? Array.from({ length: MODULES.length }).map((_, i) => (
-              <Skeleton key={i} className="h-40 rounded-2xl" />
+              <Skeleton key={i} className="h-36 rounded-xl" />
             ))
           : MODULES.map((m, i) => {
               const Icon = m.icon;
@@ -181,7 +181,7 @@ function HomePage() {
                       : toast.info(`${m.label} module is coming soon`)
                   }
                   style={{ animationDelay: `${i * 55}ms` }}
-                  className="group surface-card animate-fade-up relative flex h-40 flex-col items-start p-6 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lift)]"
+                  className="group surface-card animate-fade-up relative flex h-36 flex-col items-start p-4 text-left transition-all duration-300 hover:-translate-y-1 hover:shadow-[var(--shadow-lift)]"
                 >
                   <span
                     className={`flex size-11 items-center justify-center rounded-xl transition-colors ${
@@ -192,9 +192,9 @@ function HomePage() {
                   >
                     <Icon className="size-5" />
                   </span>
-                  <span className="mt-4 text-base font-semibold tracking-tight">{m.label}</span>
+                  <span className="mt-3 text-base font-semibold tracking-tight">{m.label}</span>
                   <span className="mt-1 text-sm text-muted-foreground">{m.desc}</span>
-                  <span className="absolute right-5 top-6 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
+                  <span className="absolute right-4 top-4 text-[10px] font-medium uppercase tracking-[0.14em] text-muted-foreground">
                     {enabled ? (
                       <ArrowRight className="size-4 text-primary transition-transform group-hover:translate-x-1" />
                     ) : (
