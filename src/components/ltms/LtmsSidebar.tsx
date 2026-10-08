@@ -207,7 +207,7 @@ export function LtmsSidebar({
                     </a>
                   );
                 }
-                if (group.section === section) {
+                if (group.section === section || (isCustom && !item.to)) {
                   return (
                     <button
                       key={item.id}
