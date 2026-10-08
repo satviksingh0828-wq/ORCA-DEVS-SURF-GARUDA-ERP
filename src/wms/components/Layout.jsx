@@ -4,10 +4,41 @@ import TopBar from './TopBar.jsx';
 import Sidebar from './Sidebar.jsx';
 import Modal from './Modal.jsx';
 import { useAuth } from '../auth.jsx';
+import { useWarehouse } from '../warehouse.jsx';
+import { AppShell } from '../../components/AppShell.tsx';
 
 const PERM_POPUP_COOLDOWN_MS = 5000;
 
-export default function Layout() {
+function WarehousePicker() {
+  const { warehouses, warehouseId, warehouse, setWarehouseId } = useWarehouse();
+  return (
+    <label className="wms-embedded-warehouse-picker">
+      <span>Warehouse</span>
+      <select
+        aria-label="Select warehouse"
+        value={warehouseId || ''}
+        onChange={(event) => setWarehouseId(Number(event.target.value))}
+        disabled={warehouses.length === 0}
+      >
+        {warehouses.length === 0 ? (
+          <option value="">Loading…</option>
+        ) : (
+          warehouses.map((item) => {
+            const id = item.warehouse_id || item.id;
+            return (
+              <option key={id} value={id}>
+                {item.warehouse_code || item.code} — {item.warehouse_name || item.name}
+              </option>
+            );
+          })
+        )}
+      </select>
+      {warehouse && <span className="wms-embedded-warehouse-code">{warehouse.warehouse_code || warehouse.code}</span>}
+    </label>
+  );
+}
+
+export default function Layout({ embedded = false }) {
   const { user } = useAuth();
   // Page permissions (mig 061): catch global permission-denied events from
   // api.js and surface a "Permissions Error" modal. Lives on Layout so
@@ -45,6 +76,31 @@ export default function Layout() {
   // actions are the change-password form and logout, so drop the sidebar
   // entirely and widen the main column.
   const forced = !!user?.must_change_password;
+  if (embedded) {
+    return (
+      <AppShell
+        variant="ltms"
+        shellTitle="WMS"
+        mainClassName="p-0 sm:p-0"
+        headerEnd={<WarehousePicker />}
+      >
+        <div className="wms-embedded-layout">
+          {!forced && <Sidebar />}
+          <main className="wms-embedded-content">
+            <Outlet />
+          </main>
+        </div>
+        {permError && (
+          <Modal title="Permissions Error" onClose={dismissPermError} footer={<button className="btn btn-primary" onClick={dismissPermError}>OK</button>}>
+            <p style={{ fontSize: 14, marginBottom: 12 }}>You do not have permission to access this resource.</p>
+            {permError.page_key && <p style={{ fontSize: 12, color: 'var(--text-secondary)', marginBottom: 12 }}>Page: <span className="mono">{permError.page_key}</span></p>}
+            <p style={{ fontSize: 13 }}>Contact an administrator if you need access.</p>
+          </Modal>
+        )}
+      </AppShell>
+    );
+  }
+
   return (
     <div className={`app-layout${forced ? ' forced-change' : ''}`}>
       <TopBar forced={forced} />

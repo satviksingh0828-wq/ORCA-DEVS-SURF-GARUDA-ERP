@@ -90,8 +90,8 @@ const TABS = [
   },
   {
     id: "wms-system",
-    label: "WMS System",
-    desc: "WMS users, integrations, webhooks and settings",
+    label: "WMS Settings",
+    desc: "WMS company, users, integrations, webhooks and settings",
     icon: Link2,
   },
   {

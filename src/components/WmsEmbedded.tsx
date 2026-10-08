@@ -9,7 +9,7 @@ export function WmsEmbedded({ erpSessionToken }: { erpSessionToken: string }) {
     <MemoryRouter initialEntries={["/"]}>
       <AuthProvider erpSessionToken={erpSessionToken}>
         <WarehouseProvider>
-          <WmsApp />
+          <WmsApp embedded />
         </WarehouseProvider>
       </AuthProvider>
     </MemoryRouter>

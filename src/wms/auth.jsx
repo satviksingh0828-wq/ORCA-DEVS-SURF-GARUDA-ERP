@@ -19,18 +19,15 @@ export function AuthProvider({ children, erpSessionToken = "" }) {
     // and force them back to the login screen.
     let cancelled = false;
     async function bootstrap() {
-      // The WMS API can exchange the signed ERP session for its normal
-      // HttpOnly WMS cookie. The API endpoint is intentionally server-side;
-      // this bundle never receives or stores a WMS password.
-      if (erpSessionToken) {
-        try {
-          await api.post("/auth/erp-session", { erp_session_token: erpSessionToken });
-        } catch {
-          // Fall through to the normal WMS cookie probe.
-        }
-      }
+      // The ERP session provider warms this HttpOnly cookie at sign-in. Probe
+      // it first so opening WMS is instant; only exchange the ERP session if
+      // this is a cold tab or the cookie has expired.
       try {
-        const res = await api.get("/auth/me");
+        let res = await api.get("/auth/me");
+        if ((!res || !res.ok) && erpSessionToken) {
+          await api.post("/auth/erp-session", { erp_session_token: erpSessionToken });
+          res = await api.get("/auth/me");
+        }
         if (cancelled) return;
         if (res && res.ok) {
           const data = await res.json();

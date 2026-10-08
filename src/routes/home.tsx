@@ -1,5 +1,4 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
 import {
   BarChart3,
   Landmark,
@@ -18,7 +17,6 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/lib/session";
-import { serverHasWmsAccess } from "@/lib/wms-user-links";
 
 export const Route = createFileRoute("/home")({
   head: () => ({
@@ -170,29 +168,8 @@ const ADMIN_VIEWER_MODULES = [
 
 function HomePage() {
   const navigate = useNavigate();
-  const { user } = useSession();
-  const [loading, setLoading] = useState(true);
-  const [wmsEnabled, setWmsEnabled] = useState(false);
-
-  useEffect(() => {
-    const t = setTimeout(() => setLoading(false), 700);
-    return () => clearTimeout(t);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!user?.sessionToken) return undefined;
-    serverHasWmsAccess({ data: { sessionToken: user.sessionToken } })
-      .then(({ enabled }) => {
-        if (!cancelled) setWmsEnabled(enabled);
-      })
-      .catch(() => {
-        if (!cancelled) setWmsEnabled(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.sessionToken]);
+  const { user, wmsAccessReady, wmsEnabled } = useSession();
+  const loading = !wmsAccessReady;
 
   const role = user?.role ?? "basic";
   const moduleSource = role === "basic" ? BASIC_MODULES : ADMIN_VIEWER_MODULES;

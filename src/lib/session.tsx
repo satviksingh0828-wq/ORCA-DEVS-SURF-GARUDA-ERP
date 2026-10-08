@@ -13,6 +13,7 @@ import type { SessionUser } from "@/lib/user-auth";
 import { secureSession } from "@/lib/storage";
 import { setLoggerUser } from "@/lib/log-actions";
 import { warmWmsSession } from "@/lib/wms-auto-login";
+import { serverHasWmsAccess } from "@/lib/wms-user-links";
 import type { AppRole } from "@/lib/roles";
 
 export type { SessionUser };
@@ -46,6 +47,8 @@ export type SignInOutcome =
 type SessionValue = {
   ready: boolean;
   user: SessionUser | null;
+  wmsAccessReady: boolean;
+  wmsEnabled: boolean;
   signIn: (
     username: string,
     password: string,
@@ -60,6 +63,8 @@ const SessionContext = createContext<SessionValue | null>(null);
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [ready, setReady] = useState(false);
+  const [wmsAccessReady, setWmsAccessReady] = useState(false);
+  const [wmsEnabled, setWmsEnabled] = useState(false);
 
   // Refs so timer callbacks always read the latest value without re-registering
   const userRef = useRef<SessionUser | null>(null);
@@ -92,7 +97,22 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
     userRef.current = null;
     setUser(null);
+    setWmsEnabled(false);
+    setWmsAccessReady(false);
     setLoggerUser(null);
+  }, []);
+
+  const prepareWmsSession = useCallback(async (token: string) => {
+    try {
+      const { enabled } = await serverHasWmsAccess({ data: { sessionToken: token } });
+      setWmsEnabled(enabled);
+      setWmsAccessReady(true);
+      if (enabled) void warmWmsSession(token);
+    } catch {
+      // WMS is optional. A WMS outage must never block the ERP session.
+      setWmsEnabled(false);
+      setWmsAccessReady(true);
+    }
   }, []);
 
   // ── Reset inactivity countdown ────────────────────────────────────────────
@@ -157,8 +177,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         resetInactivity();
         if (parsed.sessionToken) {
           startHeartbeat(parsed.sessionToken);
-          void warmWmsSession(parsed.sessionToken);
+          void prepareWmsSession(parsed.sessionToken);
         }
+      } else {
+        setWmsAccessReady(true);
       }
     } catch {
       // ignore corrupt storage
@@ -196,7 +218,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         resetInactivity();
         if (result.user.sessionToken) {
           startHeartbeat(result.user.sessionToken);
-          void warmWmsSession(result.user.sessionToken);
+          void prepareWmsSession(result.user.sessionToken);
         }
 
         return { ok: true };
@@ -205,7 +227,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         return { ok: false, reason: "server_error", message: `Unexpected error: ${msg}` };
       }
     },
-    [resetInactivity, startHeartbeat],
+    [prepareWmsSession, resetInactivity, startHeartbeat],
   );
 
   // ── Sign out (manual) ─────────────────────────────────────────────────────
@@ -231,7 +253,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     [clearSession],
   );
 
-  const value = useMemo(() => ({ ready, user, signIn, signOut }), [ready, user, signIn, signOut]);
+  const value = useMemo(
+    () => ({ ready, user, signIn, signOut, wmsAccessReady, wmsEnabled }),
+    [ready, user, signIn, signOut, wmsAccessReady, wmsEnabled],
+  );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
 }

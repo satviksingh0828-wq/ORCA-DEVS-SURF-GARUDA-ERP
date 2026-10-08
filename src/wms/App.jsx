@@ -59,7 +59,7 @@ function ProtectedRoute({ children }) {
   return children;
 }
 
-export default function App() {
+export default function App({ embedded = false }) {
   return (
     <Routes>
       <Route path="/login" element={<Login />} />
@@ -91,7 +91,7 @@ export default function App() {
           </ProtectedRoute>
         }
       />
-      <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
+      <Route element={<ProtectedRoute><Layout embedded={embedded} /></ProtectedRoute>}>
         <Route path="/change-password" element={<ErrorBoundary fallbackMessage="Could not load change-password form."><ChangePassword /></ErrorBoundary>} />
         <Route path="/" element={<ErrorBoundary fallbackMessage="Could not load dashboard."><Dashboard /></ErrorBoundary>} />
         <Route path="/inventory" element={<ErrorBoundary fallbackMessage="Could not load inventory."><Inventory /></ErrorBoundary>} />

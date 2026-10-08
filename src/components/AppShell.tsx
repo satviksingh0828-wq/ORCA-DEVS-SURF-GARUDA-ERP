@@ -216,9 +216,7 @@ export function AppShell({
               {breadcrumb}
             </div>
           )}
-          {headerEnd && variant !== "ltms" && (
-            <div className="ml-2 hidden lg:block">{headerEnd}</div>
-          )}
+          {headerEnd && <div className="ml-2 hidden sm:block">{headerEnd}</div>}
           <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
             {isAdmin && (
               <Link

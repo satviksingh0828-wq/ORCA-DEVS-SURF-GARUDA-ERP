@@ -345,6 +345,62 @@ a {
   padding: 24px;
 }
 
+/* Embedded mode keeps the WMS navigation/content surface but delegates all
+   global chrome to the ERP AppShell. This prevents a nested top bar from
+   making WMS feel like a second application. */
+.wms-embedded-layout {
+  display: grid;
+  grid-template-columns: 192px minmax(0, 1fr);
+  min-height: 100%;
+  background: var(--bg);
+}
+
+.wms-embedded-content {
+  min-width: 0;
+  min-height: 100%;
+  overflow: auto;
+  padding: 24px;
+}
+
+.wms-embedded-warehouse-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.wms-embedded-warehouse-picker select {
+  max-width: 260px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--white);
+  color: var(--text);
+  padding: 6px 28px 6px 9px;
+  font: inherit;
+}
+
+.wms-embedded-warehouse-code {
+  color: var(--text);
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+}
+
+@media (max-width: 1023px) {
+  .wms-embedded-layout {
+    display: block;
+  }
+
+  .wms-embedded-layout > .sidebar {
+    display: none;
+  }
+
+  .wms-embedded-content {
+    padding: 16px;
+  }
+}
+
 /* ── Page Header ──────────────────────────────── */
 
 .page-header {
