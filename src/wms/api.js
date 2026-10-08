@@ -2,8 +2,14 @@ const configuredApiUrl = (import.meta.env.VITE_WMS_API_URL || import.meta.env.VI
   .trim()
   .replace(/\/$/, "");
 const API_BASE = configuredApiUrl ? `${configuredApiUrl}/api` : "/api";
+let csrfTokenFromApi = null;
+
+export function setCsrfTokenFromApi(token) {
+  csrfTokenFromApi = typeof token === "string" && token ? token : null;
+}
 
 function getCsrfToken() {
+  if (csrfTokenFromApi) return csrfTokenFromApi;
   const match = document.cookie.match(/(?:^|;\s*)sentry_csrf=([^;]+)/);
   return match ? decodeURIComponent(match[1]) : null;
 }

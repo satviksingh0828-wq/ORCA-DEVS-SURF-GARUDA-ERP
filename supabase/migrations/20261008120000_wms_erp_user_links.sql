@@ -1,5 +1,5 @@
--- Link existing ERP users to existing Sentry WMS users.
--- This records an account association only; it does not copy credentials or enable SSO.
+-- Link existing ERP users to existing Sentry WMS users for signed ERP SSO.
+-- This records an account association only; it never copies WMS credentials.
 -- Run after public.app_users and public.wms_users exist in the shared Supabase database.
 
 BEGIN;
@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS public.wms_erp_user_links (
 );
 
 COMMENT ON TABLE public.wms_erp_user_links IS
-  'One-to-one mapping between an ERP app_users record and an existing WMS wms_users record. Does not share passwords or provide SSO.';
+  'One-to-one mapping between an ERP app_users record and an existing WMS wms_users record. Enables signed session exchange without sharing passwords.';
 
 ALTER TABLE public.wms_erp_user_links ENABLE ROW LEVEL SECURITY;
 

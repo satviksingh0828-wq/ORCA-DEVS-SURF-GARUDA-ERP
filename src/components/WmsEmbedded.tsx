@@ -2,7 +2,6 @@ import { MemoryRouter } from "react-router-dom";
 import { ModuleLoadingScreen } from "@/components/ModuleLoadingScreen";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuthProvider, useAuth } from "@/wms/auth.jsx";
-import { isWmsApiConfigured } from "@/lib/wms-auto-login";
 import { WarehouseProvider } from "@/wms/warehouse.jsx";
 import WmsApp from "@/wms/App.jsx";
 import "@/wms/App.scoped.css";
@@ -27,9 +26,9 @@ function WmsEmbeddedContent() {
       <main className="mx-auto flex min-h-[50vh] max-w-xl flex-col items-center justify-center gap-3 px-6 text-center">
         <h1 className="text-lg font-semibold">WMS sign-in through ERP failed</h1>
         <p className="text-sm text-muted-foreground">
-          {isWmsApiConfigured()
-            ? "Your ERP session could not be verified by WMS. Check that your ERP user is linked to an active WMS account and that the WMS API is reachable."
-            : "The WMS API URL is not configured for this deployment. Set VITE_WMS_API_URL to the WMS API address, then rebuild and deploy."}
+          {typeof embeddedAuthError === "string" && embeddedAuthError
+            ? embeddedAuthError
+            : "Your ERP session could not be verified by WMS. Check the WMS API deployment and ERP account link."}
         </p>
         <button
           type="button"
