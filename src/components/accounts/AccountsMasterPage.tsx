@@ -271,6 +271,8 @@ export function AccountsMasterPage({ kind }: { kind: AccountKind }) {
 
   return (
     <AppShell
+      variant="ltms"
+      shellTitle="Accounts"
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">
@@ -285,21 +287,11 @@ export function AccountsMasterPage({ kind }: { kind: AccountKind }) {
         </span>
       }
     >
-      <div className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
         <AccountsSectionNav desktop mode="masters" />
-        <div className="min-w-0 lg:col-start-2">
+        <div className="ltms-reference-content min-w-0">
           <AccountsSectionNav mode="masters" />
-          <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
-                Accounts / Masters
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">{title} accounts</h1>
-              <p className="mt-2 max-w-2xl text-sm text-muted-foreground">
-                Open and manage branch-linked {title.toLowerCase()} accounts with their opening
-                balance and recorded date.
-              </p>
-            </div>
+          <header className="mb-5 flex flex-wrap justify-end gap-3">
             {!editing && (
               <div className="flex flex-wrap justify-end gap-2">
                 <Button

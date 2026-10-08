@@ -63,7 +63,7 @@ const TABS = [
   },
   {
     id: "attendance",
-    label: "Attendance dashboard",
+    label: "Attendance Dashboard",
     desc: "Attendance trends and summaries",
     icon: Users,
     hr: true,

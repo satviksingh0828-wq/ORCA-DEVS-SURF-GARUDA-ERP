@@ -95,6 +95,34 @@ function activeFor(pathname: string, to: string) {
   return pathname === to || pathname.startsWith(`${to}/`);
 }
 
+export const accountModules = [
+  { id: "masters", label: "Masters", to: "/accounts/masters/bank", prefix: "/accounts/masters" },
+  { id: "journal", label: "Journal", to: "/accounts/journal", prefix: "/accounts/journal" },
+  { id: "ledger", label: "Ledger", to: "/accounts/ledger", prefix: "/accounts/ledger" },
+  { id: "final", label: "Final Accounts", to: "/accounts/final", prefix: "/accounts/final" },
+  { id: "auto-rules", label: "Auto Rules", to: "/accounts/auto-rules", prefix: "/accounts/auto-rules" },
+] as const;
+
+export function AccountsMobileNav({ pathname }: { pathname: string }) {
+  return (
+    <nav className="ltms-reference-mobile-nav lg:hidden" aria-label="Accounts modules">
+      {accountModules.map(({ label, to, prefix }) => {
+        const active = pathname.startsWith(prefix);
+        return (
+          <Link
+            key={to}
+            to={to}
+            className={`ltms-reference-mobile-link${active ? " active" : ""}`}
+            aria-current={active ? "page" : undefined}
+          >
+            {label}
+          </Link>
+        );
+      })}
+    </nav>
+  );
+}
+
 export function AccountsSectionNav({
   desktop = false,
   mode,
@@ -152,7 +180,8 @@ export function AccountsSectionNav({
           <LtmsSidebar
             open={sidebarOpen}
             label={title}
-            section={mode}
+            showCustomMobileNav={false}
+              section={mode}
             activeTabId={
               mode === "masters"
                 ? pathname
@@ -170,6 +199,11 @@ export function AccountsSectionNav({
             groups={
               [
                 {
+                  section: "accounts-modules",
+                  label: "Accounts",
+                  items: accountModules.map(({ id, label, to }) => ({ id, label, to })),
+                },
+                {
                   section: mode,
                   label: title,
                   items:
@@ -183,6 +217,7 @@ export function AccountsSectionNav({
                 },
               ] as LtmsSidebarGroup[]
             }
+            activeItems={{ "accounts-modules": mode }}
           />
         ) : null}
         {headerTarget &&
@@ -214,37 +249,53 @@ export function AccountsSectionNav({
   const selectedMaster = masterLinks.find((item) => activeFor(pathname, item.to));
   if (mode === "masters")
     return (
-      <MobileTabDropdown
-        tabs={masterMobileTabs}
-        activeId={selectedMaster?.to ?? masterMobileTabs[0].id}
-        label="Master tabs"
-        onChange={(to) => window.location.assign(to)}
-      />
+      <>
+        <AccountsMobileNav pathname={pathname} />
+        <MobileTabDropdown
+          tabs={masterMobileTabs}
+          activeId={selectedMaster?.to ?? masterMobileTabs[0].id}
+          label="Master tabs"
+          onChange={(to) => window.location.assign(to)}
+          compact
+        />
+      </>
     );
   if (mode === "auto-rules")
     return (
-      <MobileTabDropdown
-        tabs={autoRulesMobileTabs}
-        activeId={autoRulesTab}
-        label="Auto Rules tabs"
-        onChange={(tab) => onAutoRulesTabChange?.(tab as AutoRulesTab)}
-      />
+      <>
+        <AccountsMobileNav pathname={pathname} />
+        <MobileTabDropdown
+          tabs={autoRulesMobileTabs}
+          activeId={autoRulesTab}
+          label="Auto Rules tabs"
+          onChange={(tab) => onAutoRulesTabChange?.(tab as AutoRulesTab)}
+          compact
+        />
+      </>
     );
   if (mode === "journal")
     return (
-      <MobileTabDropdown
-        tabs={journalMobileTabs}
-        activeId={journalTab}
-        label="Journal tabs"
-        onChange={(tab) => onJournalTabChange?.(tab as JournalTab)}
-      />
+      <>
+        <AccountsMobileNav pathname={pathname} />
+        <MobileTabDropdown
+          tabs={journalMobileTabs}
+          activeId={journalTab}
+          label="Journal tabs"
+          onChange={(tab) => onJournalTabChange?.(tab as JournalTab)}
+          compact
+        />
+      </>
     );
   return (
-    <MobileTabDropdown
-      tabs={ledgerMobileTabs}
-      activeId={ledgerTab}
-      label="Ledger tabs"
-      onChange={(tab) => onLedgerTabChange?.(tab as LedgerTab)}
-    />
+    <>
+      <AccountsMobileNav pathname={pathname} />
+      <MobileTabDropdown
+        tabs={ledgerMobileTabs}
+        activeId={ledgerTab}
+        label="Ledger tabs"
+        onChange={(tab) => onLedgerTabChange?.(tab as LedgerTab)}
+        compact
+      />
+    </>
   );
 }

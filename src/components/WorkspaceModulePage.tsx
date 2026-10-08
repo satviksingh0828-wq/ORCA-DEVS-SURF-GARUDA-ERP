@@ -59,12 +59,14 @@ export function WorkspaceModulePage({
         </span>
       }
     >
-      <div className="animate-fade-up">
-        <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">{eyebrow}</p>
-        <h1 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h1>
-        <p className="mt-2 max-w-xl text-sm text-muted-foreground">{description}</p>
-      </div>
-
+      <div className={`${shellVariant === "ltms" ? "ltms-reference-content" : ""} animate-fade-up`}>
+        {shellVariant !== "ltms" && (
+          <>
+            <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">{eyebrow}</p>
+            <h1 className="mt-2 text-3xl font-semibold tracking-tight">{title}</h1>
+            <p className="mt-2 max-w-xl text-sm text-muted-foreground">{description}</p>
+          </>
+        )}
       <div className="mt-8 grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3">
         {visibleTiles.map((tile, index) => {
           const Icon = tile.icon;
@@ -89,6 +91,7 @@ export function WorkspaceModulePage({
       </div>
 
       <PoweredBy className="mt-12 text-[10px] uppercase tracking-[0.22em] text-muted-foreground/50" />
+      </div>
     </AppShell>
   );
 }

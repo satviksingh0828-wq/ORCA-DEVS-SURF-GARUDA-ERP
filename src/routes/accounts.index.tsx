@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { BarChart3, BookOpen, Database, FileText } from "lucide-react";
+import { BarChart3, BookOpen, Database, FileText, Settings2 } from "lucide-react";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { WorkspaceModulePage } from "@/components/WorkspaceModulePage";
 
@@ -39,6 +39,13 @@ export const Route = createFileRoute("/accounts/")({
             desc: "Balance Sheet and Profit & Loss reports",
             icon: BarChart3,
             to: "/accounts/final",
+          },
+          {
+            key: "auto-rules",
+            label: "Auto Rules",
+            desc: "HRMS accounting and entry verification",
+            icon: Settings2,
+            to: "/accounts/auto-rules",
           },
         ]}
       />

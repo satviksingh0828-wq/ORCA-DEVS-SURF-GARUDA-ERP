@@ -1665,3 +1665,13 @@ table td {
     overflow-x: hidden;
   }
 }
+
+.accounts-reference-shell {
+  min-height: 0;
+}
+
+@media (max-width: 1023px) {
+  .accounts-reference-shell {
+    grid-template-rows: minmax(0, 1fr) !important;
+  }
+}

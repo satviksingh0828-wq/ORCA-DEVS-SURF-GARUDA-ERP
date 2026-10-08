@@ -161,6 +161,8 @@ export function LtmsSidebar({
   label = "LTMS navigation",
   open = true,
   groups: customGroups,
+  showCustomMobileNav = true,
+  activeItems,
 }: {
   section?: LtmsSection | string;
   activeTabId: string;
@@ -168,6 +170,8 @@ export function LtmsSidebar({
   label?: string;
   open?: boolean;
   groups?: LtmsSidebarGroup[];
+  showCustomMobileNav?: boolean;
+  activeItems?: Record<string, string>;
 }) {
   const { user } = useSession();
   const groups = customGroups ?? visibleGroups(user?.role);
@@ -180,7 +184,9 @@ export function LtmsSidebar({
             <h2 className="ltms-reference-group-label">{group.label}</h2>
             <div className="ltms-reference-sidebar-items">
               {group.items.map((item) => {
-                const isActive = group.section === section && item.id === activeTabId;
+                const groupActiveItem =
+                  group.section === section ? activeTabId : activeItems?.[group.section];
+                const isActive = item.id === groupActiveItem;
                 const rowClass = `ltms-reference-sidebar-link${isActive ? " active" : ""}`;
                 if (isCustom && item.to) {
                   return (
@@ -223,7 +229,7 @@ export function LtmsSidebar({
           </section>
         ))}
       </SharedSidebar>
-      {isCustom ? (
+      {isCustom && showCustomMobileNav ? (
         <nav className="ltms-reference-mobile-nav lg:hidden" aria-label={label}>
           {groups.map((group) => {
             const firstRoute = group.items.find((item) => item.to)?.to;
@@ -241,7 +247,7 @@ export function LtmsSidebar({
             );
           })}
         </nav>
-      ) : (
+      ) : !isCustom ? (
         <nav className="ltms-reference-mobile-nav lg:hidden" aria-label="LTMS sections">
           {(Object.keys(ROUTES) as LtmsSection[]).map((targetSection) => {
             const group = NAVIGATION.find((item) => item.section === targetSection);
@@ -258,7 +264,7 @@ export function LtmsSidebar({
             );
           })}
         </nav>
-      )}
+      ) : null}
     </>
   );
 }

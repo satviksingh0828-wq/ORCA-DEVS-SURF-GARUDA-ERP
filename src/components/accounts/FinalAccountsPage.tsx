@@ -14,6 +14,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
+import { AccountsMobileNav, accountModules } from "@/components/accounts/AccountsSectionNav";
 import { TrialBalanceView } from "@/components/accounts/TrialBalanceView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -133,24 +134,30 @@ function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab
   ];
   return (
     <>
-      <nav ref={sidebarRef} aria-label="Final Accounts tabs" className="space-y-1">
-        <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-          Final Accounts
-        </p>
+      <nav ref={sidebarRef} aria-label="Final Accounts tabs" className="app-sidebar-scroll space-y-1">
+        <h2 className="ltms-reference-group-label">Accounts</h2>
+        {accountModules.map(({ id, label, to }) => (
+          <Link
+            key={id}
+            to={to}
+            aria-current={id === "final" ? "page" : undefined}
+            className={`ltms-reference-sidebar-link${id === "final" ? " active" : ""}`}
+          >
+            <span>{label}</span>
+          </Link>
+        ))}
+        <h2 className="ltms-reference-group-label">Final Accounts</h2>
         {sidebarOpen &&
-          items.map(({ key, label, desc, icon: Icon }) => (
+          items.map(({ key, label, icon: Icon }) => (
             <button
               key={key}
               type="button"
               onClick={() => onTab(key)}
               aria-current={tab === key ? "page" : undefined}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${tab === key ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+              className={`ltms-reference-sidebar-link${tab === key ? " active" : ""}`}
             >
-              <Icon className={`size-4 ${tab === key ? "text-primary" : ""}`} />
-              <span>
-                <span className="block text-sm font-semibold">{label}</span>
-                <span className="block text-[11px] opacity-70">{desc}</span>
-              </span>
+              <Icon className="size-4 shrink-0" />
+              <span>{label}</span>
             </button>
           ))}
       </nav>
@@ -751,6 +758,8 @@ export function FinalAccountsRoute() {
   return (
     <AccountsAccessGuard>
       <AppShell
+        variant="ltms"
+        shellTitle="Accounts"
         breadcrumb={
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Link to="/home">Workspace</Link>
@@ -761,22 +770,13 @@ export function FinalAccountsRoute() {
           </span>
         }
       >
-        <div className="grid items-start gap-6 lg:grid-cols-[250px_minmax(0,1fr)]">
-          <aside className="hidden lg:block lg:sticky lg:top-20">
+        <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
+          <aside className="ltms-reference-sidebar ltms-shared-sidebar hidden lg:block">
             <FinalAccountsNav tab={tab} onTab={setTab} />
           </aside>
-          <main className="min-w-0">
+          <main className="ltms-reference-content min-w-0">
+            <AccountsMobileNav pathname="/accounts/final" />
             <MobileFinalNav tab={tab} onTab={setTab} />
-            <header className="mb-6">
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
-                Accounts / Final Accounts
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">Final Accounts</h1>
-              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                Prepare live branch-wise Balance Sheet, Profit & Loss and Cash Flow reports from
-                approved journal postings.
-              </p>
-            </header>
             {loading ? (
               <div className="surface-card py-16 text-center">
                 <Loader2 className="mx-auto size-6 animate-spin" />

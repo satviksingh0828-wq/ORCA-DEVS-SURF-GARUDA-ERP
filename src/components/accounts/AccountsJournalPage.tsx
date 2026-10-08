@@ -486,6 +486,8 @@ function JournalPage() {
 
   return (
     <AppShell
+      variant="ltms"
+      shellTitle="Accounts"
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home">Workspace</Link>
@@ -496,19 +498,10 @@ function JournalPage() {
         </span>
       }
     >
-      <div className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
         <AccountsSectionNav desktop mode="journal" journalTab={tab} onJournalTabChange={setTab} />
-        <div className="min-w-0 lg:col-start-2">
+        <div className="ltms-reference-content min-w-0">
           <AccountsSectionNav mode="journal" journalTab={tab} onJournalTabChange={setTab} />
-          <header className="mb-6">
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
-              Accounts / Journal
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">Journal workspace</h1>
-            <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-              Post and review balanced double-entry vouchers for every branch.
-            </p>
-          </header>
           {tab === "create" && (
             <form onSubmit={createEntry} className="animate-fade-up space-y-5">
               <section className="surface-card p-6">

@@ -647,6 +647,8 @@ export function AccountsLedgerPage() {
 
   return (
     <AppShell
+      variant="ltms"
+      shellTitle="Accounts"
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">
@@ -661,25 +663,10 @@ export function AccountsLedgerPage() {
         </span>
       }
     >
-      <div className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+      <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
         <AccountsSectionNav desktop mode="ledger" ledgerTab={tab} onLedgerTabChange={setTab} />
-        <div className="min-w-0 lg:col-start-2">
+        <div className="ltms-reference-content min-w-0">
           <AccountsSectionNav mode="ledger" ledgerTab={tab} onLedgerTabChange={setTab} />
-          <header className="mb-6 flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
-                Accounts / Ledger
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-                Branch ledger workspace
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                Create categorized ledgers, review automatic bank and cash ledgers, and print a
-                balanced period statement.
-              </p>
-            </div>
-          </header>
-
           {tab === "capital" && (
             <form onSubmit={saveCapitalOpening} className="animate-fade-up space-y-5">
               <section className="surface-card p-6">

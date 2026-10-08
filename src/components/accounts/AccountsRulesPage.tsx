@@ -212,6 +212,8 @@ export function AccountsRulesPage() {
   return (
     <AccountsAccessGuard>
       <AppShell
+        variant="ltms"
+        shellTitle="Accounts"
         breadcrumb={
           <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
             <Link to="/home">Workspace</Link>
@@ -222,31 +224,19 @@ export function AccountsRulesPage() {
           </span>
         }
       >
-        <div className="grid items-start gap-6 lg:grid-cols-[220px_minmax(0,1fr)]">
+        <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
           <AccountsSectionNav
             desktop
             mode="auto-rules"
             autoRulesTab={tab}
             onAutoRulesTabChange={(nextTab: AutoRulesTab) => setTab(nextTab)}
           />
-          <div className="min-w-0 lg:col-start-2">
+          <div className="ltms-reference-content min-w-0">
             <AccountsSectionNav
               mode="auto-rules"
               autoRulesTab={tab}
               onAutoRulesTabChange={(nextTab: AutoRulesTab) => setTab(nextTab)}
             />
-            <header className="mb-6">
-              <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
-                Accounts / Auto Rules
-              </p>
-              <h1 className="mt-2 text-3xl font-semibold tracking-tight">
-                HRMS accounting automation
-              </h1>
-              <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                Assign HRMS employees to accounting branches, configure salary/loan/advance rules,
-                and verify entries before they reach the ledger.
-              </p>
-            </header>
             {tab === "base" && (
               <section className="surface-card p-5">
                 <div className="mb-5 flex items-start gap-3">
