@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { AlertTriangle, CheckCircle2, Loader2, Lock, Mail, Unlock, User } from "lucide-react";
 import { toast } from "sonner";
 import { useSession } from "@/lib/session";
+import { BrandFooter } from "@/components/BrandFooter";
 import { TurnstileWidget } from "@/components/TurnstileWidget";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -501,6 +502,7 @@ function LoginPage() {
             </div>
           </div>
         </main>
+        <BrandFooter />
       </div>
     </>
   );

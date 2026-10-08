@@ -50,6 +50,7 @@ function ensureSharedBackgroundVideo() {
 
 export function AppShell({
   children,
+  footer,
   breadcrumb,
   headerStart,
   headerEnd,
@@ -58,6 +59,7 @@ export function AppShell({
   shellTitle = "LTMS",
 }: {
   children: ReactNode;
+  footer?: ReactNode;
   breadcrumb?: ReactNode;
   /** Extra content rendered directly after the logo and before the module title */
   headerStart?: ReactNode;
@@ -326,6 +328,7 @@ export function AppShell({
       >
         {children}
       </main>
+      {footer}
     </div>
   );
 }
