@@ -89,6 +89,11 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+const MODULE_TABS = [
+  { id: "settings", label: "Settings" },
+  { id: "wms", label: "WMS Settings" },
+] as const;
+
 function SettingsPage() {
   const { user, wmsAccessReady, wmsEnabled } = useSession();
   const [tab, setTab] = useState<TabId>("company");
@@ -109,61 +114,61 @@ function SettingsPage() {
   return (
     <AppShell variant="ltms" shellTitle="Settings">
       <div className="ltms-reference-shell ltms-single-pane-reference-shell grid min-w-0 grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
-        <div
-          className="col-span-full mb-5 flex flex-wrap gap-2 border-b border-border pb-2"
-          role="tablist"
-          aria-label="Settings modules"
-        >
-          <button
-            type="button"
-            role="tab"
-            aria-selected={moduleTab === "settings"}
-            onClick={() => setModuleTab("settings")}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${moduleTab === "settings" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-          >
-            Settings
-          </button>
-          {wmsEnabled && (
-            <button
-              type="button"
-              role="tab"
-              aria-selected={moduleTab === "wms"}
-              onClick={() => setModuleTab("wms")}
-              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${moduleTab === "wms" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-            >
-              WMS Settings
-            </button>
-          )}
-        </div>
-
-        {moduleTab === "wms" && wmsEnabled && user?.sessionToken ? (
-          <div className="col-span-full min-w-0">
-            <WmsSystemSettings erpSessionToken={user.sessionToken} />
-          </div>
-        ) : (
-          <div className="contents">
-            <LtmsSidebar
-              label="Settings navigation"
-              section="settings"
-              activeTabId={tab}
-              onSelectTab={(id) => setTab(id as TabId)}
-              showCustomMobileNav={false}
-              groups={[
-                {
-                  section: "settings",
-                  label: "Settings",
-                  items: visibleTabs.map(({ id, label }) => ({ id, label })),
-                },
-              ]}
+        <LtmsSidebar
+          label="Settings navigation"
+          activeTabId={moduleTab}
+          activeItems={{
+            modules: moduleTab,
+            ...(moduleTab === "settings" ? { categories: tab } : {}),
+          }}
+          onSelectTab={(id) => {
+            if (id === "settings" || id === "wms") {
+              setModuleTab(id);
+              return;
+            }
+            setTab(id as TabId);
+          }}
+          showCustomMobileNav={false}
+          groups={[
+            {
+              section: "modules",
+              label: "Modules",
+              items: MODULE_TABS.filter(({ id }) => id !== "wms" || wmsEnabled),
+            },
+            ...(moduleTab === "settings"
+              ? [
+                  {
+                    section: "categories",
+                    label: "Settings",
+                    items: visibleTabs.map(({ id, label }) => ({ id, label })),
+                  },
+                ]
+              : []),
+          ]}
+        />
+        <div className="ltms-reference-content min-w-0">
+          <div className="mb-4 lg:hidden">
+            <MobileTabDropdown
+              tabs={MODULE_TABS.filter(({ id }) => id !== "wms" || wmsEnabled)}
+              activeId={moduleTab}
+              label="Settings modules"
+              onChange={(id) => setModuleTab(id as "settings" | "wms")}
+              compact
             />
-            <div className="ltms-reference-content min-w-0">
-              <MobileTabDropdown
-                tabs={visibleTabs}
-                activeId={tab}
-                label="Settings"
-                onChange={setTab}
-                compact
-              />
+          </div>
+          {moduleTab === "wms" && wmsEnabled && user?.sessionToken ? (
+            <WmsSystemSettings erpSessionToken={user.sessionToken} />
+          ) : (
+            <>
+              <div className="mb-4 lg:hidden">
+                <MobileTabDropdown
+                  tabs={visibleTabs}
+                  activeId={tab}
+                  label="Settings"
+                  onChange={setTab}
+                  compact
+                />
+              </div>
               <div key={tab} className="animate-fade-in min-w-0">
                 {tab === "company" ? <CompanySettings /> : null}
                 {tab === "branch" ? <BranchSettings /> : null}
@@ -174,9 +179,9 @@ function SettingsPage() {
                 {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
                 {tab === "passkey" ? <PasskeySecurityPanel /> : null}
               </div>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </AppShell>
   );
