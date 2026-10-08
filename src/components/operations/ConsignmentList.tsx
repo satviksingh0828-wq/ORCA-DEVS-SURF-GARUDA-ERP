@@ -1163,8 +1163,8 @@ export function ConsignmentList({
         const salesOrder = await createWmsSalesOrder({
           orderNumber: String(data.consignment_number),
           warehouseId: branch.wms_warehouse_id,
-          customerName: common.recipient_trade_name || common.recipient_legal_name || "Consignment Customer",
-          customerAddress: [common.recipient_address_line_1, common.recipient_address_line_2, common.recipient_place, common.recipient_state, common.recipient_pin_code].filter(Boolean).join(", "),
+          customerName: "OUTWARD",
+          customerAddress: "OUTWARD",
           consignmentId: data.id,
           lines: [...quantities.entries()].map(([item_id, quantity_ordered]) => ({ item_id, quantity_ordered })),
         });
