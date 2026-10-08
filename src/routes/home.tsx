@@ -146,16 +146,6 @@ const ADMIN_VIEWER_MODULES = [
     roles: ["admin"] as const,
   },
   {
-    key: "wms-settings",
-    label: "WMS Settings",
-    desc: "WMS company, users and integrations",
-    icon: Settings2,
-    active: true,
-    to: "/wms-settings" as const,
-    roles: ["admin"] as const,
-    linkedOnly: true,
-  },
-  {
     key: "users",
     label: "Users",
     desc: "Users, devices & activity logs",

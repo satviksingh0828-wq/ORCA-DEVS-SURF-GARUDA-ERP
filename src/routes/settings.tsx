@@ -32,6 +32,7 @@ import { WhatsAppSettings } from "@/components/settings/WhatsAppSettings";
 import { MailSettings } from "@/components/settings/MailSettings";
 import { HRMSAccountsSettings } from "@/components/settings/HRMSAccountsSettings";
 import { TMSAccountsSettings } from "@/components/settings/TMSAccountsSettings";
+import { WmsSystemSettings } from "@/components/WmsSystemSettings";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -89,47 +90,91 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 function SettingsPage() {
-  const { user } = useSession();
+  const { user, wmsAccessReady, wmsEnabled } = useSession();
   const [tab, setTab] = useState<TabId>("company");
+  const [moduleTab, setModuleTab] = useState<"settings" | "wms">("settings");
   if (user?.role !== "admin") return null;
   const visibleTabs = TABS;
 
+  if (!wmsAccessReady) {
+    return (
+      <AppShell variant="ltms" shellTitle="Settings">
+        <div className="flex min-h-[360px] items-center justify-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="size-4 animate-spin" /> Preparing Settings…
+        </div>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell variant="ltms" shellTitle="Settings">
-      <div className="ltms-reference-shell ltms-single-pane-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
-        <LtmsSidebar
-          label="Settings navigation"
-          section="settings"
-          activeTabId={tab}
-          onSelectTab={(id) => setTab(id as TabId)}
-          showCustomMobileNav={false}
-          groups={[
-            {
-              section: "settings",
-              label: "Settings",
-              items: visibleTabs.map(({ id, label }) => ({ id, label })),
-            },
-          ]}
-        />
-        <div className="ltms-reference-content min-w-0">
-          <MobileTabDropdown
-            tabs={visibleTabs}
-            activeId={tab}
-            label="Settings"
-            onChange={setTab}
-            compact
-          />
-          <div key={tab} className="animate-fade-in min-w-0">
-            {tab === "company" ? <CompanySettings /> : null}
-            {tab === "branch" ? <BranchSettings /> : null}
-            {tab === "attendance" ? <AttendanceModuleSettings /> : null}
-            {tab === "whatsapp" ? <WhatsAppSettings /> : null}
-            {tab === "mail" ? <MailSettings /> : null}
-            {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
-            {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
-            {tab === "passkey" ? <PasskeySecurityPanel /> : null}
-          </div>
+      <div className="ltms-reference-shell ltms-single-pane-reference-shell min-w-0">
+        <div
+          className="mb-5 flex flex-wrap gap-2 border-b border-border pb-2"
+          role="tablist"
+          aria-label="Settings modules"
+        >
+          <button
+            type="button"
+            role="tab"
+            aria-selected={moduleTab === "settings"}
+            onClick={() => setModuleTab("settings")}
+            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${moduleTab === "settings" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+          >
+            Settings
+          </button>
+          {wmsEnabled && (
+            <button
+              type="button"
+              role="tab"
+              aria-selected={moduleTab === "wms"}
+              onClick={() => setModuleTab("wms")}
+              className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${moduleTab === "wms" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
+            >
+              WMS Settings
+            </button>
+          )}
         </div>
+
+        {moduleTab === "wms" && wmsEnabled && user?.sessionToken ? (
+          <WmsSystemSettings erpSessionToken={user.sessionToken} />
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
+            <LtmsSidebar
+              label="Settings navigation"
+              section="settings"
+              activeTabId={tab}
+              onSelectTab={(id) => setTab(id as TabId)}
+              showCustomMobileNav={false}
+              groups={[
+                {
+                  section: "settings",
+                  label: "Settings",
+                  items: visibleTabs.map(({ id, label }) => ({ id, label })),
+                },
+              ]}
+            />
+            <div className="ltms-reference-content min-w-0">
+              <MobileTabDropdown
+                tabs={visibleTabs}
+                activeId={tab}
+                label="Settings"
+                onChange={setTab}
+                compact
+              />
+              <div key={tab} className="animate-fade-in min-w-0">
+                {tab === "company" ? <CompanySettings /> : null}
+                {tab === "branch" ? <BranchSettings /> : null}
+                {tab === "attendance" ? <AttendanceModuleSettings /> : null}
+                {tab === "whatsapp" ? <WhatsAppSettings /> : null}
+                {tab === "mail" ? <MailSettings /> : null}
+                {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
+                {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
+                {tab === "passkey" ? <PasskeySecurityPanel /> : null}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </AppShell>
   );
