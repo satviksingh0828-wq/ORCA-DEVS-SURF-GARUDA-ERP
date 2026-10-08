@@ -31,6 +31,52 @@ type SaveLinkInput = SessionInput & {
   wmsUserId: number | null;
 };
 
+async function requireActiveUser(sessionToken: string) {
+  if (typeof sessionToken !== "string" || sessionToken.length < 32 || sessionToken.length > 2048) {
+    throw new Error("Your ERP session is unavailable. Sign in again.");
+  }
+  const { verifyAppToken } = await import("@/lib/user-auth");
+  const signedSession = await verifyAppToken(sessionToken);
+  if (!signedSession) throw new Error("Your ERP session is no longer active. Sign in again.");
+  const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+  const [{ data: user, error: userError }, { data: currentSession, error: sessionError }] =
+    await Promise.all([
+      supabaseAdmin
+        .from("app_users")
+        .select("id, is_active, is_paused")
+        .eq("id", signedSession.uid)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("user_sessions")
+        .select("session_token")
+        .eq("user_id", signedSession.uid)
+        .maybeSingle(),
+    ]);
+  if (
+    userError ||
+    sessionError ||
+    !user ||
+    user.is_active !== true ||
+    user.is_paused === true ||
+    currentSession?.session_token !== sessionToken
+  ) {
+    throw new Error("Your ERP session is no longer active. Sign in again.");
+  }
+  return { supabaseAdmin, erpUserId: signedSession.uid };
+}
+
+export const serverHasWmsAccess = createServerFn({ method: "POST" })
+  .validator((input: SessionInput) => input)
+  .handler(async ({ data }): Promise<{ enabled: boolean }> => {
+    const { supabaseAdmin, erpUserId } = await requireActiveUser(data.sessionToken);
+    const { data: link, error } = await supabaseAdmin
+      .from("wms_erp_user_links")
+      .select("wms_user_id")
+      .eq("erp_user_id", erpUserId)
+      .maybeSingle();
+    return { enabled: !error && Boolean(link) };
+  });
+
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 async function requireActiveAdmin(sessionToken: string) {

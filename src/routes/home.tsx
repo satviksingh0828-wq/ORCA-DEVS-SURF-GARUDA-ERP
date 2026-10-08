@@ -6,6 +6,7 @@ import {
   CalendarCheck,
   Database,
   FileText,
+  PackageOpen,
   Settings2,
   Truck,
   Users,
@@ -17,6 +18,7 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/lib/session";
+import { serverHasWmsAccess } from "@/lib/wms-user-links";
 
 export const Route = createFileRoute("/home")({
   head: () => ({
@@ -96,6 +98,16 @@ const BASIC_MODULES = [
     to: "/settings" as const,
     roles: ["admin"] as const,
   },
+  {
+    key: "wms",
+    label: "WMS",
+    desc: "Warehouse management system",
+    icon: PackageOpen,
+    active: true,
+    to: "/wms" as const,
+    roles: ["basic"] as const,
+    linkedOnly: true,
+  },
 ] as const;
 
 const ADMIN_VIEWER_MODULES = [
@@ -144,21 +156,51 @@ const ADMIN_VIEWER_MODULES = [
     to: "/users" as const,
     roles: ["admin"] as const,
   },
+  {
+    key: "wms",
+    label: "WMS",
+    desc: "Warehouse management system",
+    icon: PackageOpen,
+    active: true,
+    to: "/wms" as const,
+    roles: ["admin", "semi_admin", "viewer"] as const,
+    linkedOnly: true,
+  },
 ] as const;
 
 function HomePage() {
   const navigate = useNavigate();
   const { user } = useSession();
   const [loading, setLoading] = useState(true);
+  const [wmsEnabled, setWmsEnabled] = useState(false);
 
   useEffect(() => {
     const t = setTimeout(() => setLoading(false), 700);
     return () => clearTimeout(t);
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.sessionToken) return undefined;
+    serverHasWmsAccess({ data: { sessionToken: user.sessionToken } })
+      .then(({ enabled }) => {
+        if (!cancelled) setWmsEnabled(enabled);
+      })
+      .catch(() => {
+        if (!cancelled) setWmsEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.sessionToken]);
+
   const role = user?.role ?? "basic";
   const moduleSource = role === "basic" ? BASIC_MODULES : ADMIN_VIEWER_MODULES;
-  const MODULES = moduleSource.filter((m) => (m.roles as readonly string[]).includes(role));
+  const MODULES = moduleSource.filter(
+    (m) =>
+      (m.roles as readonly string[]).includes(role) &&
+      (!("linkedOnly" in m) || !m.linkedOnly || wmsEnabled),
+  );
 
   return (
     <AppShell variant="ltms" shellTitle="Garuda ERP">
@@ -193,7 +235,7 @@ function HomePage() {
                         : "bg-muted text-muted-foreground"
                     }`}
                   >
-                    <Icon className="size-5" />
+                    <Icon className="size-6" />
                   </span>
                   <span className="mt-2 max-w-full text-xs font-medium leading-tight tracking-tight">
                     {m.label}
