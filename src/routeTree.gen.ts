@@ -35,6 +35,7 @@ import { Route as SystemRouteImport } from './routes/system'
 import { Route as TmsRouteImport } from './routes/tms'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as WmsRouteImport } from './routes/wms'
+import { Route as WmsSettingsRouteImport } from './routes/wms-settings'
 import { Route as AccountsIndexRouteImport } from './routes/accounts.index'
 import { Route as AccountsAutoRulesRouteImport } from './routes/accounts.auto-rules'
 import { Route as AccountsBankRouteImport } from './routes/accounts.bank'
@@ -234,6 +235,11 @@ const UsersRoute = UsersRouteImport.update({
 const WmsRoute = WmsRouteImport.update({
   id: '/wms',
   path: '/wms',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const WmsSettingsRoute = WmsSettingsRouteImport.update({
+  id: '/wms-settings',
+  path: '/wms-settings',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountsIndexRoute = AccountsIndexRouteImport.update({
@@ -624,6 +630,7 @@ export interface FileRoutesByFullPath {
   '/tms': typeof TmsRoute
   '/users': typeof UsersRoute
   '/wms': typeof WmsRoute
+  '/wms-settings': typeof WmsSettingsRoute
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
@@ -717,6 +724,7 @@ export interface FileRoutesByTo {
   '/tms': typeof TmsRoute
   '/users': typeof UsersRoute
   '/wms': typeof WmsRoute
+  '/wms-settings': typeof WmsSettingsRoute
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
@@ -813,6 +821,7 @@ export interface FileRoutesById {
   '/tms': typeof TmsRoute
   '/users': typeof UsersRoute
   '/wms': typeof WmsRoute
+  '/wms-settings': typeof WmsSettingsRoute
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
@@ -913,6 +922,7 @@ export interface FileRouteTypes {
     | '/tms'
     | '/users'
     | '/wms'
+    | '/wms-settings'
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
@@ -1006,6 +1016,7 @@ export interface FileRouteTypes {
     | '/tms'
     | '/users'
     | '/wms'
+    | '/wms-settings'
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
@@ -1101,6 +1112,7 @@ export interface FileRouteTypes {
     | '/tms'
     | '/users'
     | '/wms'
+    | '/wms-settings'
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
@@ -1200,6 +1212,7 @@ export interface RootRouteChildren {
   TmsRoute: typeof TmsRoute
   UsersRoute: typeof UsersRoute
   WmsRoute: typeof WmsRoute
+  WmsSettingsRoute: typeof WmsSettingsRoute
   ApiFetchEwayBillsRoute: typeof ApiFetchEwayBillsRoute
   ApiNotifyAdminRoute: typeof ApiNotifyAdminRoute
   ApiNotifyExpiryRoute: typeof ApiNotifyExpiryRoute
@@ -1411,6 +1424,13 @@ declare module '@tanstack/react-router' {
       path: '/wms'
       fullPath: '/wms'
       preLoaderRoute: typeof WmsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/wms-settings': {
+      id: '/wms-settings'
+      path: '/wms-settings'
+      fullPath: '/wms-settings'
+      preLoaderRoute: typeof WmsSettingsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/accounts/': {
@@ -2106,6 +2126,7 @@ const rootRouteChildren: RootRouteChildren = {
   TmsRoute: TmsRoute,
   UsersRoute: UsersRoute,
   WmsRoute: WmsRoute,
+  WmsSettingsRoute: WmsSettingsRoute,
   ApiFetchEwayBillsRoute: ApiFetchEwayBillsRoute,
   ApiNotifyAdminRoute: ApiNotifyAdminRoute,
   ApiNotifyExpiryRoute: ApiNotifyExpiryRoute,

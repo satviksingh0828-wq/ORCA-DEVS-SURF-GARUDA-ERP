@@ -1,4 +1,4 @@
-import { createFileRoute, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Outlet, useRouterState } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import {
   Building,
@@ -13,7 +13,6 @@ import {
   MessageCircle,
   Mail,
   Film,
-  Link2,
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -33,8 +32,6 @@ import { WhatsAppSettings } from "@/components/settings/WhatsAppSettings";
 import { MailSettings } from "@/components/settings/MailSettings";
 import { HRMSAccountsSettings } from "@/components/settings/HRMSAccountsSettings";
 import { TMSAccountsSettings } from "@/components/settings/TMSAccountsSettings";
-import { WmsSystemSettings } from "@/components/WmsSystemSettings";
-import { serverHasWmsAccess } from "@/lib/wms-user-links";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -82,12 +79,6 @@ const TABS = [
     icon: Building2,
   },
   {
-    id: "wms-system",
-    label: "WMS Settings",
-    desc: "WMS company, users, integrations, webhooks and settings",
-    icon: Link2,
-  },
-  {
     id: "passkey",
     label: "Passkey Security",
     desc: "Admin-controlled device protection",
@@ -99,39 +90,9 @@ type TabId = (typeof TABS)[number]["id"];
 
 function SettingsPage() {
   const { user } = useSession();
-  const navigate = useNavigate();
   const [tab, setTab] = useState<TabId>("company");
-  const [wmsEnabled, setWmsEnabled] = useState(false);
-
-  useEffect(() => {
-    let cancelled = false;
-    if (!user?.sessionToken) return undefined;
-    serverHasWmsAccess({ data: { sessionToken: user.sessionToken } })
-      .then(({ enabled }) => {
-        if (!cancelled) setWmsEnabled(enabled);
-      })
-      .catch(() => {
-        if (!cancelled) setWmsEnabled(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.sessionToken]);
-
-  useEffect(() => {
-    if (user && user.role !== "admin" && !wmsEnabled) navigate({ to: "/home", replace: true });
-  }, [navigate, user, wmsEnabled]);
-
-  useEffect(() => {
-    if (user?.role !== "admin" && wmsEnabled) setTab("wms-system");
-  }, [user?.role, wmsEnabled]);
-
-  if (user?.role !== "admin" && !wmsEnabled) return null;
-
-  const visibleTabs =
-    user?.role === "admin"
-      ? TABS.filter((item) => item.id !== "wms-system" || wmsEnabled)
-      : TABS.filter((item) => item.id === "wms-system" && wmsEnabled);
+  if (user?.role !== "admin") return null;
+  const visibleTabs = TABS;
 
   return (
     <AppShell variant="ltms" shellTitle="Settings">
@@ -166,9 +127,6 @@ function SettingsPage() {
             {tab === "mail" ? <MailSettings /> : null}
             {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
             {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
-            {tab === "wms-system" && user?.sessionToken ? (
-              <WmsSystemSettings erpSessionToken={user.sessionToken} />
-            ) : null}
             {tab === "passkey" ? <PasskeySecurityPanel /> : null}
           </div>
         </div>

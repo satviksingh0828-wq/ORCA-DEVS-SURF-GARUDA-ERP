@@ -51,6 +51,7 @@ function ensureSharedBackgroundVideo() {
 export function AppShell({
   children,
   breadcrumb,
+  headerStart,
   headerEnd,
   mainClassName,
   variant = "default",
@@ -58,6 +59,8 @@ export function AppShell({
 }: {
   children: ReactNode;
   breadcrumb?: ReactNode;
+  /** Extra content rendered directly after the logo and before the module title */
+  headerStart?: ReactNode;
   /** Extra content rendered between the breadcrumb and the user area (e.g. sidebar toggle) */
   headerEnd?: ReactNode;
   mainClassName?: string;
@@ -205,6 +208,7 @@ export function AppShell({
               className={cn("h-8 w-auto sm:h-10", variant === "ltms" ? "ltms-app-shell-logo" : "")}
             />
           </Link>
+          {headerStart && <div className="ml-1 shrink-0">{headerStart}</div>}
           {variant === "ltms" && <span className="ltms-app-shell-title">{shellTitle}</span>}
           {breadcrumb && variant !== "ltms" && (
             <div

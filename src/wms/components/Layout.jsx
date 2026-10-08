@@ -12,14 +12,14 @@ const PERM_POPUP_COOLDOWN_MS = 5000;
 function WarehousePicker() {
   const { warehouses, warehouseId, warehouse, setWarehouseId } = useWarehouse();
   return (
-    <label className="flex min-w-0 items-center gap-2 whitespace-nowrap text-xs text-muted-foreground">
-      <span className="hidden xl:inline">Warehouse</span>
+    <label className="flex min-w-0 items-center gap-2 whitespace-nowrap text-xs text-white">
+      <span>Warehouse</span>
       <select
         aria-label="Select warehouse"
         value={warehouseId || ''}
         onChange={(event) => setWarehouseId(Number(event.target.value))}
         disabled={warehouses.length === 0}
-        className="max-w-[190px] rounded-lg border border-border bg-background px-2 py-1.5 text-xs text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="max-w-[190px] rounded-lg border border-white/30 bg-transparent px-2 py-1.5 text-xs text-white outline-none focus-visible:ring-2 focus-visible:ring-white/50"
       >
         {warehouses.length === 0 ? (
           <option value="">Loading…</option>
@@ -34,7 +34,7 @@ function WarehousePicker() {
           })
         )}
       </select>
-      {warehouse && <span className="hidden font-mono text-[11px] text-foreground xl:inline">{warehouse.warehouse_code || warehouse.code}</span>}
+      {warehouse && <span className="hidden font-mono text-[11px] text-white/80 xl:inline">{warehouse.warehouse_code || warehouse.code}</span>}
     </label>
   );
 }
@@ -83,7 +83,7 @@ export default function Layout({ embedded = false }) {
         variant="ltms"
         shellTitle="WMS"
         mainClassName="overflow-hidden p-0 sm:p-0"
-        headerEnd={<WarehousePicker />}
+        headerStart={<WarehousePicker />}
       >
         <div className="wms-embedded-scope h-full min-h-0">
           <div className="wms-embedded-layout h-full min-h-0">
