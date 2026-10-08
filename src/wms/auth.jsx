@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { api } from "./api.js";
 import { friendlyError } from "./utils/friendlyError.js";
+import { warmWmsSession } from "../lib/wms-auto-login";
 
 const AuthContext = createContext(null);
 
@@ -23,6 +24,7 @@ export function AuthProvider({ children, erpSessionToken = "" }) {
       // it first so opening WMS is instant; only exchange the ERP session if
       // this is a cold tab or the cookie has expired.
       try {
+        if (erpSessionToken) await warmWmsSession(erpSessionToken);
         let res = await api.get("/auth/me");
         if ((!res || !res.ok) && erpSessionToken) {
           await api.post("/auth/erp-session", { erp_session_token: erpSessionToken });

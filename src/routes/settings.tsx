@@ -108,9 +108,9 @@ function SettingsPage() {
 
   return (
     <AppShell variant="ltms" shellTitle="Settings">
-      <div className="ltms-reference-shell ltms-single-pane-reference-shell min-w-0">
+      <div className="ltms-reference-shell ltms-single-pane-reference-shell grid min-w-0 grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
         <div
-          className="mb-5 flex flex-wrap gap-2 border-b border-border pb-2"
+          className="col-span-full mb-5 flex flex-wrap gap-2 border-b border-border pb-2"
           role="tablist"
           aria-label="Settings modules"
         >
@@ -137,9 +137,11 @@ function SettingsPage() {
         </div>
 
         {moduleTab === "wms" && wmsEnabled && user?.sessionToken ? (
-          <WmsSystemSettings erpSessionToken={user.sessionToken} />
+          <div className="col-span-full min-w-0">
+            <WmsSystemSettings erpSessionToken={user.sessionToken} />
+          </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
+          <div className="contents">
             <LtmsSidebar
               label="Settings navigation"
               section="settings"

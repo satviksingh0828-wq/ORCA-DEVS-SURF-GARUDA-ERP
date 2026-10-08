@@ -83,7 +83,7 @@ export default function Layout({ embedded = false }) {
         variant="ltms"
         shellTitle="WMS"
         mainClassName="overflow-hidden p-0 sm:p-0"
-        headerStart={<WarehousePicker />}
+        headerEnd={<WarehousePicker />}
       >
         <div className="wms-embedded-scope h-full min-h-0">
           <div className="wms-embedded-layout h-full min-h-0">
