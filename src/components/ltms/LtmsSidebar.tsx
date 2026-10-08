@@ -194,7 +194,7 @@ export function LtmsSidebar({
                   group.section === section ? activeTabId : activeItems?.[group.section];
                 const isActive = item.id === groupActiveItem;
                 const rowClass = `ltms-reference-sidebar-link${isActive ? " active" : ""}`;
-                if (isCustom && item.to && group.section !== section) {
+                if (isCustom && item.to) {
                   return (
                     <a
                       key={item.id}
@@ -218,13 +218,6 @@ export function LtmsSidebar({
                     >
                       <span>{item.label}</span>
                     </button>
-                  );
-                }
-                if (isCustom && item.to) {
-                  return (
-                    <a key={item.id} href={item.to} className={rowClass}>
-                      <span>{item.label}</span>
-                    </a>
                   );
                 }
                 const targetSection = group.section as LtmsSection;

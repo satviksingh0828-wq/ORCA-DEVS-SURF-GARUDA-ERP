@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Mail,
   Film,
+  Warehouse,
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -90,8 +91,13 @@ const TABS = [
 type TabId = (typeof TABS)[number]["id"];
 
 const MODULE_TABS = [
-  { id: "settings", label: "Settings" },
-  { id: "wms", label: "WMS Settings" },
+  {
+    id: "settings",
+    label: "Settings",
+    desc: "Company and workspace preferences",
+    icon: Building2,
+  },
+  { id: "wms", label: "WMS Settings", desc: "Warehouse management settings", icon: Warehouse },
 ] as const;
 
 function SettingsPage() {
