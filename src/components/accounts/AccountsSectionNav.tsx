@@ -96,12 +96,6 @@ export const accountModules = [
   { id: "journal", label: "Journal", to: "/accounts/journal", prefix: "/accounts/journal" },
   { id: "ledger", label: "Ledger", to: "/accounts/ledger", prefix: "/accounts/ledger" },
   { id: "final", label: "Final Accounts", to: "/accounts/final", prefix: "/accounts/final" },
-  {
-    id: "auto-rules",
-    label: "Auto Rules",
-    to: "/accounts/auto-rules",
-    prefix: "/accounts/auto-rules",
-  },
 ] as const;
 
 const ACCOUNTS_PENDING_TAB_KEY = "accounts.pending-sidebar-tab";
@@ -160,12 +154,6 @@ export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
       { id: "profit-loss", label: "Profit & Loss", to: "/accounts/final" },
       { id: "cash-flow", label: "Cash Flow", to: "/accounts/final" },
     ],
-  },
-  {
-    section: "auto-rules",
-    label: "Auto Rules",
-    description: "HRMS accounting automation and entry verification",
-    items: autoRulesLinks.map(({ key, label }) => ({ id: key, label, to: "/accounts/auto-rules" })),
   },
 ];
 
