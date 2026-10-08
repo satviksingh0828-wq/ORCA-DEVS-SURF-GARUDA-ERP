@@ -163,7 +163,7 @@ function HomePage() {
 
   return (
     <AppShell variant="ltms" shellTitle="Garuda ERP">
-      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-5 pt-8 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mx-auto grid w-full max-w-6xl grid-cols-1 gap-5 pt-8 sm:grid-cols-2 lg:grid-cols-4">
         {loading
           ? Array.from({ length: MODULES.length }).map((_, i) => (
               <Skeleton key={i} className="h-40 rounded-2xl" />

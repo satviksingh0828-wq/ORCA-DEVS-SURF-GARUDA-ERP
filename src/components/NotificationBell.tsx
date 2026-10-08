@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { AlertTriangle, Bell, FileWarning, RefreshCw, ShieldAlert, X } from "lucide-react";
 import {
   serverSyncNotifications,
@@ -53,6 +54,7 @@ export function NotificationBell() {
   const [dismissing, setDismissing] = useState<Set<string>>(new Set());
   const panelRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const [panelPosition, setPanelPosition] = useState({ top: 72, right: 12 });
 
   async function load() {
     if (!user?.id) return; // not logged in → skip
@@ -148,8 +150,19 @@ export function NotificationBell() {
         ref={buttonRef}
         type="button"
         onClick={() => {
-          setOpen((v) => !v);
-          if (!open && !error) load();
+          if (open) {
+            setOpen(false);
+            return;
+          }
+          const rect = buttonRef.current?.getBoundingClientRect();
+          if (rect) {
+            setPanelPosition({
+              top: rect.bottom + 8,
+              right: Math.max(12, window.innerWidth - rect.right),
+            });
+          }
+          setOpen(true);
+          if (!error) load();
         }}
         aria-label={`Notifications${count > 0 ? ` (${count})` : ""}`}
         aria-expanded={open}
@@ -170,12 +183,13 @@ export function NotificationBell() {
       </button>
 
       {/* Dropdown */}
-      {open && (
+      {open && typeof document !== "undefined" && createPortal(
         <div
           ref={panelRef}
           role="dialog"
           aria-label="Notifications"
-          className="fixed inset-x-3 top-[4.5rem] z-50 overflow-hidden rounded-xl border border-border bg-card shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-10 sm:w-[360px]"
+          style={{ top: panelPosition.top, right: panelPosition.right, width: "min(360px, calc(100vw - 1.5rem))" }}
+          className="fixed z-[100] overflow-hidden rounded-xl border border-border bg-card shadow-xl"
         >
           {/* Header */}
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -293,7 +307,8 @@ export function NotificationBell() {
               )}
             </div>
           )}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
