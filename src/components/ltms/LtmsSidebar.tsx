@@ -16,6 +16,7 @@ export type LtmsSidebarItem = { id: string; label: string; to?: string };
 export type LtmsSidebarGroup = {
   section: LtmsSection | string;
   label: string;
+  description?: string;
   items: LtmsSidebarItem[];
 };
 
@@ -163,6 +164,7 @@ export function LtmsSidebar({
   groups: customGroups,
   showCustomMobileNav = true,
   activeItems,
+  onCrossGroupNavigate,
 }: {
   section?: LtmsSection | string;
   activeTabId: string;
@@ -172,6 +174,7 @@ export function LtmsSidebar({
   groups?: LtmsSidebarGroup[];
   showCustomMobileNav?: boolean;
   activeItems?: Record<string, string>;
+  onCrossGroupNavigate?: (section: string, tabId: string) => void;
 }) {
   const { user } = useSession();
   const groups = customGroups ?? visibleGroups(user?.role);
@@ -182,19 +185,23 @@ export function LtmsSidebar({
         {groups.map((group) => (
           <section key={group.section} className="ltms-reference-sidebar-card">
             <h2 className="ltms-reference-group-label">{group.label}</h2>
+            {group.description && (
+              <p className="ltms-reference-group-description">{group.description}</p>
+            )}
             <div className="ltms-reference-sidebar-items">
               {group.items.map((item) => {
                 const groupActiveItem =
                   group.section === section ? activeTabId : activeItems?.[group.section];
                 const isActive = item.id === groupActiveItem;
                 const rowClass = `ltms-reference-sidebar-link${isActive ? " active" : ""}`;
-                if (isCustom && item.to) {
+                if (isCustom && item.to && group.section !== section) {
                   return (
                     <a
                       key={item.id}
                       href={item.to}
                       className={rowClass}
                       aria-current={isActive ? "page" : undefined}
+                      onClick={() => onCrossGroupNavigate?.(group.section, item.id)}
                     >
                       <span>{item.label}</span>
                     </a>
@@ -211,6 +218,13 @@ export function LtmsSidebar({
                     >
                       <span>{item.label}</span>
                     </button>
+                  );
+                }
+                if (isCustom && item.to) {
+                  return (
+                    <a key={item.id} href={item.to} className={rowClass}>
+                      <span>{item.label}</span>
+                    </a>
                   );
                 }
                 const targetSection = group.section as LtmsSection;

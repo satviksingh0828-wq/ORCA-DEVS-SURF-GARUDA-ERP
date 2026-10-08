@@ -1,5 +1,3 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import { Link, useRouterState } from "@tanstack/react-router";
 import {
   ArrowRightLeft,
@@ -7,8 +5,6 @@ import {
   BookOpen,
   Landmark,
   List,
-  PanelLeftOpen,
-  PanelLeftClose,
   Plus,
   Settings2,
   ShieldCheck,
@@ -38,16 +34,16 @@ const masterLinks = [
 ] as const;
 
 const autoRulesLinks = [
-  { key: "verify", label: "VERIFY", description: "Review pending HRMS entries", icon: ShieldCheck },
+  { key: "verify", label: "Verify", description: "Review pending HRMS entries", icon: ShieldCheck },
   {
     key: "base",
-    label: "HRMS BASE",
+    label: "HRMS Base",
     description: "Assign employee accounting branches",
     icon: Users,
   },
   {
     key: "rules",
-    label: "HRMS RULES",
+    label: "HRMS Rules",
     description: "Configure the three posting rules",
     icon: Settings2,
   },
@@ -100,8 +96,100 @@ export const accountModules = [
   { id: "journal", label: "Journal", to: "/accounts/journal", prefix: "/accounts/journal" },
   { id: "ledger", label: "Ledger", to: "/accounts/ledger", prefix: "/accounts/ledger" },
   { id: "final", label: "Final Accounts", to: "/accounts/final", prefix: "/accounts/final" },
-  { id: "auto-rules", label: "Auto Rules", to: "/accounts/auto-rules", prefix: "/accounts/auto-rules" },
+  {
+    id: "auto-rules",
+    label: "Auto Rules",
+    to: "/accounts/auto-rules",
+    prefix: "/accounts/auto-rules",
+  },
 ] as const;
+
+const ACCOUNTS_PENDING_TAB_KEY = "accounts.pending-sidebar-tab";
+
+export function queueAccountsTabNavigation(section: string, tabId: string) {
+  if (typeof window === "undefined" || section === "masters") return;
+  try {
+    window.sessionStorage.setItem(ACCOUNTS_PENDING_TAB_KEY, JSON.stringify({ section, tabId }));
+  } catch {
+    // Ignore storage restrictions; the destination will use its regular default tab.
+  }
+}
+
+export function consumeAccountsTabNavigation(section: string): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const saved = window.sessionStorage.getItem(ACCOUNTS_PENDING_TAB_KEY);
+    if (!saved) return null;
+    const pending = JSON.parse(saved) as { section?: string; tabId?: string };
+    if (pending.section !== section || typeof pending.tabId !== "string") return null;
+    window.sessionStorage.removeItem(ACCOUNTS_PENDING_TAB_KEY);
+    return pending.tabId;
+  } catch {
+    return null;
+  }
+}
+
+export type AccountsArea = "masters" | "journal" | "ledger" | "final" | "auto-rules";
+
+export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
+  {
+    section: "masters",
+    label: "Masters",
+    description: "Branch bank and cash account records",
+    items: masterLinks.map(({ label, to }) => ({ id: to, label, to })),
+  },
+  {
+    section: "journal",
+    label: "Journal",
+    description: "Balanced journal entries and vouchers",
+    items: journalLinks.map(({ key, label }) => ({ id: key, label, to: "/accounts/journal" })),
+  },
+  {
+    section: "ledger",
+    label: "Ledger",
+    description: "Create, list and view ledger statements",
+    items: ledgerLinks.map(({ key, label }) => ({ id: key, label, to: "/accounts/ledger" })),
+  },
+  {
+    section: "final",
+    label: "Final Accounts",
+    description: "Balance Sheet and Profit & Loss reports",
+    items: [
+      { id: "trial-balance", label: "Trial Balance", to: "/accounts/final" },
+      { id: "balance-sheet", label: "Balance Sheet", to: "/accounts/final" },
+      { id: "profit-loss", label: "Profit & Loss", to: "/accounts/final" },
+      { id: "cash-flow", label: "Cash Flow", to: "/accounts/final" },
+    ],
+  },
+  {
+    section: "auto-rules",
+    label: "Auto Rules",
+    description: "HRMS accounting automation and entry verification",
+    items: autoRulesLinks.map(({ key, label }) => ({ id: key, label, to: "/accounts/auto-rules" })),
+  },
+];
+
+export function AccountsSidebar({
+  mode,
+  activeTabId,
+  onSelectTab,
+}: {
+  mode: AccountsArea;
+  activeTabId: string;
+  onSelectTab: (tabId: string) => void;
+}) {
+  return (
+    <LtmsSidebar
+      label="Accounts navigation"
+      section={mode}
+      activeTabId={activeTabId}
+      onSelectTab={onSelectTab}
+      onCrossGroupNavigate={queueAccountsTabNavigation}
+      groups={ACCOUNTS_SIDEBAR_GROUPS}
+      showCustomMobileNav={false}
+    />
+  );
+}
 
 export function AccountsMobileNav({ pathname }: { pathname: string }) {
   return (
@@ -143,110 +231,28 @@ export function AccountsSectionNav({
   onAutoRulesTabChange?: (tab: AutoRulesTab) => void;
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const title =
-    mode === "masters"
-      ? "Master tabs"
-      : mode === "ledger"
-        ? "Ledger tabs"
-        : mode === "journal"
-          ? "Journal tabs"
-          : "Auto Rules tabs";
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
-  const sidebarRef = useRef<HTMLElement>(null);
-  const layoutRef = useRef<HTMLElement | null>(null);
-
-  useEffect(() => {
-    if (!desktop) return;
-    const layout = sidebarRef.current?.parentElement ?? layoutRef.current;
-    if (!layout) return;
-    layoutRef.current = layout;
-    layout.style.gridTemplateColumns = sidebarOpen ? "220px minmax(0, 1fr)" : "1fr";
-    const content = layout.children[1] as HTMLElement | undefined;
-    if (content) content.style.gridColumnStart = sidebarOpen ? "2" : "1";
-    return () => {
-      layout.style.removeProperty("grid-template-columns");
-      if (content) content.style.removeProperty("grid-column-start");
-    };
-  }, [desktop, sidebarOpen]);
-  useEffect(() => {
-    if (desktop) setHeaderTarget(document.querySelector("[data-app-shell-header-actions]"));
-  }, [desktop]);
-
-  if (desktop) {
-    return (
-      <>
-        {sidebarOpen ? (
-          <LtmsSidebar
-            open={sidebarOpen}
-            label={title}
-            showCustomMobileNav={false}
-              section={mode}
-            activeTabId={
-              mode === "masters"
-                ? pathname
-                : mode === "ledger"
-                  ? ledgerTab
-                  : mode === "journal"
-                    ? journalTab
-                    : autoRulesTab
-            }
-            onSelectTab={(id) => {
-              if (mode === "ledger") onLedgerTabChange?.(id as LedgerTab);
-              if (mode === "journal") onJournalTabChange?.(id as JournalTab);
-              if (mode === "auto-rules") onAutoRulesTabChange?.(id as AutoRulesTab);
-            }}
-            groups={
-              [
-                {
-                  section: "accounts-modules",
-                  label: "Accounts",
-                  items: accountModules.map(({ id, label, to }) => ({ id, label, to })),
-                },
-                {
-                  section: mode,
-                  label: title,
-                  items:
-                    mode === "masters"
-                      ? masterLinks.map(({ label, to }) => ({ id: to, label, to }))
-                      : mode === "ledger"
-                        ? ledgerLinks.map(({ key, label }) => ({ id: key, label }))
-                        : mode === "journal"
-                          ? journalLinks.map(({ key, label }) => ({ id: key, label }))
-                          : autoRulesLinks.map(({ key, label }) => ({ id: key, label })),
-                },
-              ] as LtmsSidebarGroup[]
-            }
-            activeItems={{ "accounts-modules": mode }}
-          />
-        ) : null}
-        {headerTarget &&
-          createPortal(
-            <button
-              type="button"
-              onClick={() => setSidebarOpen((open) => !open)}
-              title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-              className="hidden items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex"
-            >
-              {sidebarOpen ? (
-                <>
-                  <PanelLeftClose className="size-3.5" />
-                  <span>Hide sidebar</span>
-                </>
-              ) : (
-                <>
-                  <PanelLeftOpen className="size-3.5" />
-                  <span>Show sidebar</span>
-                </>
-              )}
-            </button>,
-            headerTarget,
-          )}
-      </>
-    );
-  }
-
   const selectedMaster = masterLinks.find((item) => activeFor(pathname, item.to));
+  if (desktop)
+    return (
+      <AccountsSidebar
+        mode={mode}
+        activeTabId={
+          mode === "masters"
+            ? (selectedMaster?.to ?? masterLinks[0].to)
+            : mode === "ledger"
+              ? ledgerTab
+              : mode === "journal"
+                ? journalTab
+                : autoRulesTab
+        }
+        onSelectTab={(id) => {
+          if (mode === "masters") window.location.assign(id);
+          if (mode === "ledger") onLedgerTabChange?.(id as LedgerTab);
+          if (mode === "journal") onJournalTabChange?.(id as JournalTab);
+          if (mode === "auto-rules") onAutoRulesTabChange?.(id as AutoRulesTab);
+        }}
+      />
+    );
   if (mode === "masters")
     return (
       <>

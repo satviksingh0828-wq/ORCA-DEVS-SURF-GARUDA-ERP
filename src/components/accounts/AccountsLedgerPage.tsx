@@ -17,7 +17,10 @@ import {
 import * as XLSX from "xlsx";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
-import { AccountsSectionNav } from "@/components/accounts/AccountsSectionNav";
+import {
+  AccountsSectionNav,
+  consumeAccountsTabNavigation,
+} from "@/components/accounts/AccountsSectionNav";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -211,7 +214,12 @@ export function AccountsLedgerPage() {
     () => new Map(branches.map((branch) => [branch.id, branch])),
     [branches],
   );
-  const [tab, setTab] = useState<LedgerTab>("create");
+  const [tab, setTab] = useState<LedgerTab>(() => {
+    const pending = consumeAccountsTabNavigation("ledger");
+    return pending === "capital" || pending === "create" || pending === "list" || pending === "view"
+      ? pending
+      : "create";
+  });
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [ledgers, setLedgers] = useState<LedgerRow[]>([]);
   const [loading, setLoading] = useState(false);

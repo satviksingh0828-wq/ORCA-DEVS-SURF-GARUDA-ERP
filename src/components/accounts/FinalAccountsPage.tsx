@@ -1,20 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import {
-  BarChart3,
-  FileDown,
-  FileSpreadsheet,
-  Loader2,
-  PanelLeftClose,
-  PanelLeftOpen,
-  Scale,
-} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { FileDown, FileSpreadsheet, Loader2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
-import { AccountsMobileNav, accountModules } from "@/components/accounts/AccountsSectionNav";
+import {
+  AccountsMobileNav,
+  AccountsSidebar,
+  consumeAccountsTabNavigation,
+} from "@/components/accounts/AccountsSectionNav";
 import { TrialBalanceView } from "@/components/accounts/TrialBalanceView";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -84,106 +79,8 @@ const labelType = (value: AccountType) =>
   value === "bank" ? "Bank" : value === "cash" ? "Cash" : value[0].toUpperCase() + value.slice(1);
 
 function FinalAccountsNav({ tab, onTab }: { tab: FinalTab; onTab: (tab: FinalTab) => void }) {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [headerTarget, setHeaderTarget] = useState<HTMLElement | null>(null);
-  const sidebarRef = useRef<HTMLElement>(null);
-  useEffect(() => {
-    const layout = sidebarRef.current?.parentElement;
-    if (!layout) return;
-    layout.style.gridTemplateColumns = sidebarOpen ? "250px minmax(0, 1fr)" : "1fr";
-    return () => {
-      layout.style.removeProperty("grid-template-columns");
-    };
-  }, [sidebarOpen]);
-  useEffect(() => {
-    setHeaderTarget(document.querySelector("[data-app-shell-header-actions]"));
-  }, []);
-  useEffect(() => {
-    const layout = sidebarRef.current?.parentElement?.parentElement;
-    if (!layout) return;
-    layout.style.gridTemplateColumns = sidebarOpen ? "250px minmax(0, 1fr)" : "1fr";
-    return () => {
-      layout.style.removeProperty("grid-template-columns");
-    };
-  }, [sidebarOpen]);
-  const items = [
-    {
-      key: "trial-balance" as const,
-      label: "Trial Balance",
-      desc: "Debit and credit totals",
-      icon: Scale,
-    },
-    {
-      key: "balance-sheet" as const,
-      label: "Balance Sheet",
-      desc: "Assets, liabilities and capital",
-      icon: Scale,
-    },
-    {
-      key: "profit-loss" as const,
-      label: "Profit & Loss",
-      desc: "Income and expenditure for a period",
-      icon: BarChart3,
-    },
-    {
-      key: "cash-flow" as const,
-      label: "Cash Flow",
-      desc: "Cash and bank movements",
-      icon: BarChart3,
-    },
-  ];
   return (
-    <>
-      <nav ref={sidebarRef} aria-label="Final Accounts tabs" className="app-sidebar-scroll space-y-1">
-        <h2 className="ltms-reference-group-label">Accounts</h2>
-        {accountModules.map(({ id, label, to }) => (
-          <Link
-            key={id}
-            to={to}
-            aria-current={id === "final" ? "page" : undefined}
-            className={`ltms-reference-sidebar-link${id === "final" ? " active" : ""}`}
-          >
-            <span>{label}</span>
-          </Link>
-        ))}
-        <h2 className="ltms-reference-group-label">Final Accounts</h2>
-        {sidebarOpen &&
-          items.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => onTab(key)}
-              aria-current={tab === key ? "page" : undefined}
-              className={`ltms-reference-sidebar-link${tab === key ? " active" : ""}`}
-            >
-              <Icon className="size-4 shrink-0" />
-              <span>{label}</span>
-            </button>
-          ))}
-      </nav>
-      {headerTarget &&
-        createPortal(
-          <button
-            type="button"
-            onClick={() => setSidebarOpen((open) => !open)}
-            title={sidebarOpen ? "Hide sidebar" : "Show sidebar"}
-            className="hidden items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex"
-          >
-            {sidebarOpen ? (
-              <>
-                <PanelLeftClose className="size-3.5" />
-                <span>Hide sidebar</span>
-              </>
-            ) : (
-              <>
-                <PanelLeftOpen className="size-3.5" />
-                <span>Show sidebar</span>
-              </>
-            )}
-          </button>,
-          headerTarget,
-        )}
-    </>
+    <AccountsSidebar mode="final" activeTabId={tab} onSelectTab={(id) => onTab(id as FinalTab)} />
   );
 }
 
@@ -228,7 +125,15 @@ export function FinalAccountsRoute() {
     () => new Map(branches.map((branch) => [branch.id, branch])),
     [branches],
   );
-  const [tab, setTab] = useState<FinalTab>("balance-sheet");
+  const [tab, setTab] = useState<FinalTab>(() => {
+    const pending = consumeAccountsTabNavigation("final");
+    return pending === "trial-balance" ||
+      pending === "balance-sheet" ||
+      pending === "profit-loss" ||
+      pending === "cash-flow"
+      ? pending
+      : "balance-sheet";
+  });
   const [branchId, setBranchId] = useState("all");
   const [asOf, setAsOf] = useState(today);
   const [start, setStart] = useState(firstDayOfYear);
@@ -771,9 +676,7 @@ export function FinalAccountsRoute() {
         }
       >
         <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
-          <aside className="ltms-reference-sidebar ltms-shared-sidebar hidden lg:block">
-            <FinalAccountsNav tab={tab} onTab={setTab} />
-          </aside>
+          <FinalAccountsNav tab={tab} onTab={setTab} />
           <main className="ltms-reference-content min-w-0">
             <AccountsMobileNav pathname="/accounts/final" />
             <MobileFinalNav tab={tab} onTab={setTab} />

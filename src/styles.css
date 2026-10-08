@@ -1245,6 +1245,14 @@ table td {
   background: rgba(142, 39, 22, 0.55);
 }
 
+.ltms-reference-group-description {
+  margin: 0;
+  padding: 6px 10px 2px;
+  color: rgba(253, 244, 227, 0.68);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
 .ltms-reference-caret {
   font-size: 10px;
   opacity: 0.7;

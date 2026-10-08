@@ -4,7 +4,11 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
-import { AccountsSectionNav, type AutoRulesTab } from "@/components/accounts/AccountsSectionNav";
+import {
+  AccountsSectionNav,
+  consumeAccountsTabNavigation,
+  type AutoRulesTab,
+} from "@/components/accounts/AccountsSectionNav";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
@@ -82,7 +86,10 @@ const employeeName = (employee: Employee) =>
 
 export function AccountsRulesPage() {
   const branches = useBranches();
-  const [tab, setTab] = useState<Subtab>("verify");
+  const [tab, setTab] = useState<Subtab>(() => {
+    const pending = consumeAccountsTabNavigation("auto-rules");
+    return tabItems.find((item) => item.id === pending)?.id ?? "verify";
+  });
   const [branchId, setBranchId] = useState("");
   const [rules, setRules] = useState<Rule[]>([]);
   const [ledgers, setLedgers] = useState<Ledger[]>([]);

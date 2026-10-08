@@ -16,6 +16,7 @@ import { Link } from "@tanstack/react-router";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
+import { consumeAccountsTabNavigation } from "@/components/accounts/AccountsSectionNav";
 import { AccountsSectionNav, type JournalTab } from "@/components/accounts/AccountsSectionNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -66,7 +67,12 @@ const pdfAmount = (value: string | number | null | undefined) =>
 
 function JournalPage() {
   const branches = useBranches();
-  const [tab, setTab] = useState<JournalTab>("create");
+  const [tab, setTab] = useState<JournalTab>(() => {
+    const pending = consumeAccountsTabNavigation("journal");
+    return pending === "create" || pending === "transfer" || pending === "list"
+      ? pending
+      : "create";
+  });
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]);
   const [branchId, setBranchId] = useState("");
