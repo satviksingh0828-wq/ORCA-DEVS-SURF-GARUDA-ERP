@@ -168,8 +168,10 @@ const ADMIN_VIEWER_MODULES = [
 
 function HomePage() {
   const navigate = useNavigate();
-  const { user, wmsAccessReady, wmsEnabled } = useSession();
-  const loading = !wmsAccessReady;
+  const { ready, user, wmsAccessReady, wmsEnabled } = useSession();
+  // Keep every module icon (including the linked-only WMS tile) in skeleton
+  // form until the ERP session and Supabase access check have both completed.
+  const loading = !ready || !user || !wmsAccessReady;
 
   const role = user?.role ?? "basic";
   const moduleSource = role === "basic" ? BASIC_MODULES : ADMIN_VIEWER_MODULES;

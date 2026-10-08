@@ -1,13 +1,15 @@
 import { createContext, useContext, useState, useEffect } from "react";
 import { api } from "./api.js";
 import { friendlyError } from "./utils/friendlyError.js";
-import { warmWmsSession } from "../lib/wms-auto-login";
+import { isWmsApiConfigured, warmWmsSession } from "../lib/wms-auto-login";
 
 const AuthContext = createContext(null);
 
-export function AuthProvider({ children, erpSessionToken = "" }) {
+export function AuthProvider({ children, erpSessionToken = "", embedded = false }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [embeddedAuthError, setEmbeddedAuthError] = useState(false);
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
 
   useEffect(() => {
     // V-045: session lives in an HttpOnly cookie; there is no token in
@@ -20,32 +22,49 @@ export function AuthProvider({ children, erpSessionToken = "" }) {
     // and force them back to the login screen.
     let cancelled = false;
     async function bootstrap() {
-      // The ERP session provider warms this HttpOnly cookie at sign-in. Probe
-      // it first so opening WMS is instant; only exchange the ERP session if
-      // this is a cold tab or the cookie has expired.
       try {
+        if (embedded && !erpSessionToken) throw new Error("ERP session missing");
+        if (erpSessionToken && !isWmsApiConfigured()) throw new Error("WMS API URL missing");
+
+        // The ERP session provider warms this HttpOnly cookie at sign-in. Probe
+        // it first so opening WMS is instant; only exchange the ERP session if
+        // this is a cold tab or the cookie has expired.
         if (erpSessionToken) await warmWmsSession(erpSessionToken);
         let res = await api.get("/auth/me");
         if ((!res || !res.ok) && erpSessionToken) {
-          await api.post("/auth/erp-session", { erp_session_token: erpSessionToken });
+          const exchange = await api.post("/auth/erp-session", {
+            erp_session_token: erpSessionToken,
+          });
+          if (!exchange || !exchange.ok) throw new Error("ERP session exchange failed");
           res = await api.get("/auth/me");
         }
         if (cancelled) return;
         if (res && res.ok) {
           const data = await res.json();
           setUser(data);
+          setEmbeddedAuthError(false);
+        } else if (embedded) {
+          setEmbeddedAuthError(true);
         }
+      } catch {
+        if (!cancelled && embedded) setEmbeddedAuthError(true);
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-    bootstrap().catch(() => {
-      if (!cancelled) setLoading(false);
-    });
+    setLoading(true);
+    setEmbeddedAuthError(false);
+    bootstrap();
     return () => {
       cancelled = true;
     };
-  }, [erpSessionToken]);
+  }, [erpSessionToken, embedded, bootstrapAttempt]);
+
+  function retryBootstrap() {
+    setEmbeddedAuthError(false);
+    setLoading(true);
+    setBootstrapAttempt((attempt) => attempt + 1);
+  }
 
   // Re-fetch /auth/me. Used after change-password to pick up the cleared
   // must_change_password flag so the router guard lets the user out of
@@ -90,7 +109,9 @@ export function AuthProvider({ children, erpSessionToken = "" }) {
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout, refreshUser }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, logout, refreshUser, embeddedAuthError, retryBootstrap }}
+    >
       {children}
     </AuthContext.Provider>
   );

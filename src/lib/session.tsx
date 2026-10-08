@@ -207,6 +207,10 @@ export function SessionProvider({ children }: { children: ReactNode }) {
 
         secureSession.setItem(KEY, JSON.stringify(result.user));
         userRef.current = result.user;
+        // The previous signed-out state may already be marked ready. Reset it
+        // before publishing the new user so the home page keeps its skeletons
+        // visible until Supabase checks this user's WMS link.
+        setWmsAccess({ ready: false, enabled: false });
         setUser(result.user);
         setLoggerUser(result.user);
 
@@ -215,6 +219,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         if (result.user.sessionToken) {
           startHeartbeat(result.user.sessionToken);
           void prepareWmsSession(result.user.sessionToken);
+        } else {
+          setWmsAccess({ ready: true, enabled: false });
         }
 
         return { ok: true };

@@ -28,7 +28,12 @@ async function apiFetch(path, options = {}) {
     headers,
     credentials: "include",
   });
-  if (res.status === 401 && !path.startsWith("/auth/login") && !path.startsWith("/auth/me")) {
+  if (
+    res.status === 401 &&
+    !path.startsWith("/auth/login") &&
+    !path.startsWith("/auth/me") &&
+    !path.startsWith("/auth/erp-session")
+  ) {
     window.location.href = "/login";
     return;
   }

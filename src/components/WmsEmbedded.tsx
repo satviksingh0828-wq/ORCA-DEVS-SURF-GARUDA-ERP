@@ -2,6 +2,7 @@ import { MemoryRouter } from "react-router-dom";
 import { ModuleLoadingScreen } from "@/components/ModuleLoadingScreen";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuthProvider, useAuth } from "@/wms/auth.jsx";
+import { isWmsApiConfigured } from "@/lib/wms-auto-login";
 import { WarehouseProvider } from "@/wms/warehouse.jsx";
 import WmsApp from "@/wms/App.jsx";
 import "@/wms/App.scoped.css";
@@ -9,7 +10,7 @@ import "@/wms/App.scoped.css";
 export function WmsEmbedded({ erpSessionToken }: { erpSessionToken: string }) {
   return (
     <MemoryRouter initialEntries={["/"]}>
-      <AuthProvider erpSessionToken={erpSessionToken}>
+      <AuthProvider erpSessionToken={erpSessionToken} embedded>
         <WarehouseProvider>
           <WmsEmbeddedContent />
         </WarehouseProvider>
@@ -19,8 +20,28 @@ export function WmsEmbedded({ erpSessionToken }: { erpSessionToken: string }) {
 }
 
 function WmsEmbeddedContent() {
-  const { loading } = useAuth();
-  return loading ? <WmsLoadingScreen /> : <WmsApp embedded />;
+  const { loading, embeddedAuthError, retryBootstrap } = useAuth();
+  if (loading) return <WmsLoadingScreen />;
+  if (embeddedAuthError) {
+    return (
+      <main className="mx-auto flex min-h-[50vh] max-w-xl flex-col items-center justify-center gap-3 px-6 text-center">
+        <h1 className="text-lg font-semibold">WMS sign-in through ERP failed</h1>
+        <p className="text-sm text-muted-foreground">
+          {isWmsApiConfigured()
+            ? "Your ERP session could not be verified by WMS. Check that your ERP user is linked to an active WMS account and that the WMS API is reachable."
+            : "The WMS API URL is not configured for this deployment. Set VITE_WMS_API_URL to the WMS API address, then rebuild and deploy."}
+        </p>
+        <button
+          type="button"
+          onClick={retryBootstrap}
+          className="mt-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+        >
+          Retry WMS connection
+        </button>
+      </main>
+    );
+  }
+  return <WmsApp embedded />;
 }
 
 export function WmsLoadingScreen() {

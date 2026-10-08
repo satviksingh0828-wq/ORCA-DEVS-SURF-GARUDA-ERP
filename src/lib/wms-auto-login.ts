@@ -1,7 +1,9 @@
-const configuredWmsApiUrl = (import.meta.env.VITE_WMS_API_URL || "").trim().replace(/\/$/, "");
+const configuredWmsApiUrl = (import.meta.env.VITE_WMS_API_URL || import.meta.env.VITE_API_URL || "")
+  .trim()
+  .replace(/\/$/, "");
 
 let warmedToken = "";
-let warmPromise: Promise<void> | null = null;
+let warmPromise: Promise<boolean> | null = null;
 
 /**
  * Warm the WMS API session immediately after ERP authentication. The WMS API
@@ -9,26 +11,34 @@ let warmPromise: Promise<void> | null = null;
  * HttpOnly WMS cookie. No WMS password is copied into the ERP bundle.
  */
 export async function warmWmsSession(erpSessionToken: string) {
-  if (!configuredWmsApiUrl || !erpSessionToken) return;
-  if (warmedToken === erpSessionToken) return warmPromise ?? Promise.resolve();
+  if (!configuredWmsApiUrl || !erpSessionToken) return false;
+  if (warmedToken === erpSessionToken) return warmPromise ?? true;
 
-  warmedToken = erpSessionToken;
-  warmPromise = (async () => {
+  const request = (async () => {
     try {
-      await fetch(`${configuredWmsApiUrl}/api/auth/erp-session`, {
+      const response = await fetch(`${configuredWmsApiUrl}/api/auth/erp-session`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ erp_session_token: erpSessionToken }),
       });
+      if (!response.ok) return false;
+      warmedToken = erpSessionToken;
+      return true;
     } catch {
       // WMS is optional. A transient API failure must not block ERP login.
+      return false;
     }
   })();
+  warmPromise = request;
 
   try {
-    await warmPromise;
+    return await request;
   } finally {
-    warmPromise = null;
+    if (warmPromise === request) warmPromise = null;
   }
+}
+
+export function isWmsApiConfigured() {
+  return Boolean(configuredWmsApiUrl);
 }
