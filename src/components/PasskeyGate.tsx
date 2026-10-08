@@ -32,6 +32,11 @@ import {
 const CRED_KEY    = "tms.passkey.cred_id.v1";
 const SESSION_KEY = "tms.passkey.verified.v1";
 
+function isMobileDevice() {
+  if (typeof navigator === "undefined") return false;
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
 // ── Context — exposes the current device credentialId to child components ─────
 type PasskeyContextValue = {
   credentialId: string | null;
@@ -390,6 +395,14 @@ export function PasskeyGate({ children }: { children: ReactNode }) {
     setMounted(true);
 
     async function init() {
+      // Passkey access is restricted to supported desktop operator devices.
+      // Show the existing access request screen on mobile instead of exposing
+      // a browser-support message or starting an unsupported registration flow.
+      if (isMobileDevice()) {
+        setState("no-credential");
+        return;
+      }
+
       // 1. Check WebAuthn support
       if (typeof window === "undefined" || !window.PublicKeyCredential) {
         setState("unsupported");

@@ -1694,7 +1694,7 @@ table td {
   }
 }
 
-/* Static theme-aware plexus texture for sign-in and passkey screens. */
+/* Theme-aware animated plexus texture for sign-in and passkey screens. */
 .auth-abstract-background.ltms-app-shell {
   isolation: isolate;
   position: relative;
@@ -1715,43 +1715,62 @@ table td {
   background-image:
     radial-gradient(
       circle at 1px 1px,
-      color-mix(in oklab, var(--primary) 48%, transparent) 1.4px,
-      transparent 2px
+      color-mix(in oklab, var(--primary) 72%, transparent) 1.7px,
+      transparent 2.4px
     ),
     linear-gradient(
       30deg,
-      transparent 49.35%,
-      color-mix(in oklab, var(--primary) 11%, transparent) 50%,
-      transparent 50.65%
+      transparent 48.9%,
+      color-mix(in oklab, var(--primary) 24%, transparent) 50%,
+      transparent 51.1%
     ),
     linear-gradient(
       150deg,
-      transparent 49.35%,
-      color-mix(in oklab, var(--primary) 11%, transparent) 50%,
-      transparent 50.65%
+      transparent 48.9%,
+      color-mix(in oklab, var(--primary) 24%, transparent) 50%,
+      transparent 51.1%
     );
-  background-size: 96px 82px;
-  opacity: 0.66;
+  background-size: 112px 96px;
+  opacity: 0.9;
   -webkit-mask-image: radial-gradient(ellipse at center, #000 8%, transparent 88%);
   mask-image: radial-gradient(ellipse at center, #000 8%, transparent 88%);
+  animation: auth-plexus-drift 22s linear infinite;
 }
 
 .auth-abstract-background::after {
   background:
     radial-gradient(
       ellipse at 14% 18%,
-      color-mix(in oklab, var(--primary) 12%, transparent),
-      transparent 38%
+      color-mix(in oklab, var(--primary) 25%, transparent),
+      transparent 46%
     ),
     radial-gradient(
       ellipse at 86% 82%,
-      color-mix(in oklab, var(--primary-glow) 13%, transparent),
-      transparent 42%
+      color-mix(in oklab, var(--primary-glow) 24%, transparent),
+      transparent 50%
     );
+  animation: auth-glow-breathe 9s ease-in-out infinite alternate;
 }
 
 .auth-abstract-background > header,
 .auth-abstract-background > main {
   position: relative;
   z-index: 1;
+}
+
+@keyframes auth-plexus-drift {
+  from { background-position: 0 0; }
+  to { background-position: 112px 96px; }
+}
+
+@keyframes auth-glow-breathe {
+  from { opacity: 0.72; transform: scale(1); }
+  to { opacity: 1; transform: scale(1.08); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-abstract-background::before,
+  .auth-abstract-background::after {
+    animation: none;
+  }
 }
