@@ -5,7 +5,14 @@ export function BrandFooter() {
         <div className="flex items-center gap-2">
           <span className="uppercase tracking-wider text-white/70">Powered by</span>
           <img src="/orca-logo-light.svg" alt="ORCA logo" className="size-5 object-contain" />
-          <span className="font-semibold tracking-wide text-white">ORCA DEVS SURF</span>
+          <a
+            href="https://orca.devs.surf"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold tracking-wide text-white underline-offset-4 hover:underline focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
+          >
+            ORCA DEVS SURF
+          </a>
         </div>
         <div className="text-left text-white/70 sm:text-right">
           <span className="font-medium text-white">ERP:</span> Enterprise Resource Planning
