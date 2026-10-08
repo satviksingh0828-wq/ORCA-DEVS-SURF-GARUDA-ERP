@@ -229,8 +229,9 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const safeTab: TabId = (TABS.find((t) => t.id === tab) ? tab : defaultTab) as TabId;
   const active = TABS.find((t) => t.id === safeTab) ?? TABS[0];
   const fullBleedConsignment = safeTab === "consignment" && consignmentCreateOpen;
-  // Trip forms hide the sidebar but keep the standard page width and margins.
-  const fullBleed = fullBleedConsignment;
+  // LTMS keeps its reference sidebar pinned even when embedded forms are open.
+  const fullBleed = mode !== "ltms" && fullBleedConsignment;
+  const sidebarOpen = mode === "ltms" || navOpen;
   const ltmsSidebarGroups = [
     {
       label: "Operations of LTMS",
@@ -258,6 +259,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
 
   return (
     <AppShell
+      variant={mode === "ltms" ? "ltms" : "default"}
       mainClassName={fullBleed ? "w-full max-w-none px-1 py-1 sm:px-1 sm:py-1" : undefined}
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
@@ -273,33 +275,35 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
         </span>
       }
       headerEnd={
-        <button
-          type="button"
-          onClick={() => setNavOpen((v) => !v)}
-          title={navOpen ? "Hide sidebar" : "Show sidebar"}
-          className="hidden lg:flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          {navOpen ? (
-            <>
-              <PanelLeftClose className="size-3.5" />
-              <span>Hide sidebar</span>
-            </>
-          ) : (
-            <>
-              <PanelLeftOpen className="size-3.5" />
-              <span>Show sidebar</span>
-            </>
-          )}
-        </button>
+        mode === "ltms" ? undefined : (
+          <button
+            type="button"
+            onClick={() => setNavOpen((v) => !v)}
+            title={navOpen ? "Hide sidebar" : "Show sidebar"}
+            className="hidden lg:flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {navOpen ? (
+              <>
+                <PanelLeftClose className="size-3.5" />
+                <span>Hide sidebar</span>
+              </>
+            ) : (
+              <>
+                <PanelLeftOpen className="size-3.5" />
+                <span>Show sidebar</span>
+              </>
+            )}
+          </button>
+        )
       }
     >
       <div
-        className={`grid items-start ${fullBleed ? "gap-0" : "gap-6"} ${navOpen ? (mode === "ltms" ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "lg:grid-cols-[220px_minmax(0,1fr)]") : "grid-cols-1"} ${mode === "ltms" ? "ltms-reference-shell" : ""}`}
+        className={`grid items-start ${fullBleed ? "gap-0" : "gap-6"} ${sidebarOpen ? (mode === "ltms" ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "lg:grid-cols-[220px_minmax(0,1fr)]") : "grid-cols-1"} ${mode === "ltms" ? "ltms-reference-shell" : ""}`}
       >
         {/* Desktop left nav */}
-        {navOpen &&
+        {sidebarOpen &&
           (mode === "ltms" ? (
-            <LtmsSidebar groups={ltmsSidebarGroups} open={navOpen} label="LTMS operations" />
+            <LtmsSidebar groups={ltmsSidebarGroups} label="LTMS operations" />
           ) : (
             <SharedSidebar open={navOpen} width="220px" label="Operations">
               <ul className="space-y-1">
@@ -349,7 +353,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
             <TabErrorBoundary label="Trip">
               <Trips
                 onSidebarVisibilityChange={(visible) => {
-                  setNavOpen(visible);
+                  if (mode !== "ltms") setNavOpen(visible);
                   setTripFormOpen(!visible);
                 }}
               />
@@ -363,7 +367,9 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           {safeTab === "consignment" && (
             <TabErrorBoundary label="Consignment">
               <ConsignmentList
-                onSidebarVisibilityChange={setNavOpen}
+                onSidebarVisibilityChange={(visible) => {
+                  if (mode !== "ltms") setNavOpen(visible);
+                }}
                 onCreateModeChange={setConsignmentCreateOpen}
               />
             </TabErrorBoundary>
@@ -380,7 +386,11 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           )}
           {safeTab === "ltms-manifest" && (
             <TabErrorBoundary label="Manifest">
-              <LtmsManifestList onSidebarVisibilityChange={setNavOpen} />
+              <LtmsManifestList
+                onSidebarVisibilityChange={(visible) => {
+                  if (mode !== "ltms") setNavOpen(visible);
+                }}
+              />
             </TabErrorBoundary>
           )}
           {safeTab === "outward-pod" && (

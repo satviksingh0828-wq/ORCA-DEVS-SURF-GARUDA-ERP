@@ -148,6 +148,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
 
   const active = TABS.find((t) => t.id === tab) ?? TABS[0];
   const safeTab = active?.id ?? "driver";
+  const sidebarOpen = ltmsMode || navOpen;
   const ltmsSidebarGroups = [
     {
       label: "Operations of LTMS",
@@ -175,6 +176,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
 
   return (
     <AppShell
+      variant={ltmsMode ? "ltms" : "default"}
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">
@@ -189,33 +191,35 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
         </span>
       }
       headerEnd={
-        <button
-          type="button"
-          onClick={() => setNavOpen((v) => !v)}
-          title={navOpen ? "Hide sidebar" : "Show sidebar"}
-          className="hidden lg:flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-        >
-          {navOpen ? (
-            <>
-              <PanelLeftClose className="size-3.5" />
-              <span>Hide sidebar</span>
-            </>
-          ) : (
-            <>
-              <PanelLeftOpen className="size-3.5" />
-              <span>Show sidebar</span>
-            </>
-          )}
-        </button>
+        ltmsMode ? undefined : (
+          <button
+            type="button"
+            onClick={() => setNavOpen((v) => !v)}
+            title={navOpen ? "Hide sidebar" : "Show sidebar"}
+            className="hidden lg:flex items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+          >
+            {navOpen ? (
+              <>
+                <PanelLeftClose className="size-3.5" />
+                <span>Hide sidebar</span>
+              </>
+            ) : (
+              <>
+                <PanelLeftOpen className="size-3.5" />
+                <span>Show sidebar</span>
+              </>
+            )}
+          </button>
+        )
       }
     >
       <div
-        className={`grid gap-6 ${navOpen ? (ltmsMode ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "lg:grid-cols-[220px_minmax(0,1fr)]") : "grid-cols-1"} ${ltmsMode ? "ltms-reference-shell" : ""}`}
+        className={`grid gap-6 ${sidebarOpen ? (ltmsMode ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "lg:grid-cols-[220px_minmax(0,1fr)]") : "grid-cols-1"} ${ltmsMode ? "ltms-reference-shell" : ""}`}
       >
         {/* Desktop left nav */}
-        {navOpen &&
+        {sidebarOpen &&
           (ltmsMode ? (
-            <LtmsSidebar groups={ltmsSidebarGroups} open={navOpen} label="LTMS masters" />
+            <LtmsSidebar groups={ltmsSidebarGroups} label="LTMS masters" />
           ) : (
             <SharedSidebar open={navOpen} width="220px" label="Masters">
               <ul className="space-y-1">

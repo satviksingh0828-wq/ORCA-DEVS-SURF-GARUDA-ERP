@@ -7,8 +7,6 @@ import {
   Package,
   Banknote,
   CircleDollarSign,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from "lucide-react";
 import { useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -88,7 +86,6 @@ function BillingPage() {
   const visibleTabs =
     user?.role === "basic" ? TABS.filter((item) => item.id !== "source-billing") : TABS;
   const [tab, setTab] = useState<TabId>("trip-billing");
-  const [navOpen, setNavOpen] = useState(true);
   const safeTab = visibleTabs.some((item) => item.id === tab) ? tab : visibleTabs[0].id;
   const active = visibleTabs.find((item) => item.id === safeTab) ?? visibleTabs[0];
   const ltmsSidebarGroups = [
@@ -118,6 +115,7 @@ function BillingPage() {
 
   return (
     <AppShell
+      variant="ltms"
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">
@@ -131,31 +129,9 @@ function BillingPage() {
           <span className="text-foreground">Billing</span>
         </span>
       }
-      headerEnd={
-        <button
-          type="button"
-          onClick={() => setNavOpen((value) => !value)}
-          title={navOpen ? "Hide sidebar" : "Show sidebar"}
-          className="hidden items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground lg:flex"
-        >
-          {navOpen ? (
-            <>
-              <PanelLeftClose className="size-3.5" />
-              <span>Hide sidebar</span>
-            </>
-          ) : (
-            <>
-              <PanelLeftOpen className="size-3.5" />
-              <span>Show sidebar</span>
-            </>
-          )}
-        </button>
-      }
     >
-      <div
-        className={`grid gap-6 ${navOpen ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "grid-cols-1"} ltms-reference-shell`}
-      >
-        {navOpen && <LtmsSidebar groups={ltmsSidebarGroups} open={navOpen} label="LTMS billing" />}
+      <div className="grid gap-6 lg:grid-cols-[192px_minmax(0,1fr)] ltms-reference-shell">
+        <LtmsSidebar groups={ltmsSidebarGroups} label="LTMS billing" />
         <MobileTabDropdown
           tabs={visibleTabs}
           activeId={safeTab}

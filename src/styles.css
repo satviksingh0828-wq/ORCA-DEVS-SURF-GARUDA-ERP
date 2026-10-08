@@ -1216,6 +1216,7 @@ table td {
   text-align: left;
   text-transform: uppercase;
   user-select: none;
+  cursor: default;
 }
 
 .ltms-reference-group-label:hover {
@@ -1301,5 +1302,150 @@ table td {
   .ltms-reference-mobile-link:focus-visible {
     background: rgba(183, 115, 51, 0.3);
     outline: none;
+  }
+}
+
+/* LTMS shell follows Sentry's compact warm-dark top bar and light workspace. */
+.ltms-app-shell {
+  background: #fafaf7;
+  color: #1a1714;
+  font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
+}
+
+.ltms-app-shell-header {
+  height: 56px;
+  border: 0;
+  border-bottom: 2px solid #b87333;
+  background: #2a2520;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.ltms-app-shell-header-inner {
+  height: 54px !important;
+  gap: 12px !important;
+  padding: 0 16px !important;
+}
+
+.ltms-app-shell-logo {
+  height: 40px !important;
+  max-width: 108px;
+  object-fit: contain;
+}
+
+.ltms-app-shell-breadcrumb,
+.ltms-app-shell-breadcrumb * {
+  color: #fdf4e3 !important;
+  font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
+  font-size: 14px;
+}
+
+.ltms-app-shell-breadcrumb a:hover {
+  color: #fff !important;
+}
+
+.ltms-app-shell-icon-button,
+.ltms-app-shell-header [aria-label^="Notifications"],
+.ltms-app-shell-header [aria-label^="Share screen"] {
+  height: 32px;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  border-radius: 6px !important;
+  background: #352f2a !important;
+  color: #fdf4e3 !important;
+}
+
+.ltms-app-shell-icon-button:hover,
+.ltms-app-shell-header [aria-label^="Notifications"]:hover,
+.ltms-app-shell-header [aria-label^="Share screen"]:hover {
+  background: rgba(183, 115, 51, 0.2) !important;
+  color: #fff !important;
+}
+
+.ltms-app-shell-user,
+.ltms-app-shell-user .text-foreground {
+  color: #fdf4e3 !important;
+}
+
+.ltms-app-shell-user .bg-muted {
+  background: #352f2a;
+  color: #fdf4e3;
+}
+
+.ltms-app-shell-signout {
+  border-color: rgba(255, 255, 255, 0.16) !important;
+  background: #352f2a !important;
+  color: #fdf4e3 !important;
+}
+
+.ltms-app-shell-signout:hover {
+  background: rgba(183, 115, 51, 0.2) !important;
+  color: #fff !important;
+}
+
+.ltms-app-shell-main {
+  background: #fafaf7 !important;
+  padding: 24px !important;
+  font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
+}
+
+.ltms-reference-sidebar {
+  width: 192px !important;
+  flex: 0 0 192px !important;
+}
+
+.ltms-reference-sidebar .app-sidebar-scroll {
+  width: 100% !important;
+  height: calc(100dvh - 56px) !important;
+  max-height: calc(100dvh - 56px) !important;
+  overflow-x: hidden;
+  padding: 8px 6px;
+  background: #2a2520;
+}
+
+.ltms-reference-sidebar .app-sidebar-scroll button.ltms-reference-sidebar-link {
+  justify-content: flex-start;
+  gap: 0;
+  padding-inline: 10px;
+  white-space: normal;
+}
+
+.ltms-reference-sidebar .app-sidebar-scroll button.ltms-reference-sidebar-link > span {
+  width: auto;
+  max-width: none;
+  overflow: visible;
+  opacity: 1;
+}
+
+@media (min-width: 1024px) {
+  .ltms-reference-shell:has(> .ltms-reference-sidebar),
+  .ltms-reference-shell:has(> .ltms-reference-sidebar:hover),
+  .ltms-reference-shell:has(> .ltms-reference-sidebar:focus-within) {
+    grid-template-columns: 192px minmax(0, 1fr) !important;
+  }
+
+  .ltms-reference-sidebar.app-sidebar-container,
+  .ltms-reference-sidebar.app-sidebar-container:hover,
+  .ltms-reference-sidebar.app-sidebar-container:focus-within {
+    width: 192px !important;
+  }
+
+  .ltms-reference-sidebar .app-sidebar-scroll,
+  .ltms-reference-sidebar .app-sidebar-scroll:hover,
+  .ltms-reference-sidebar .app-sidebar-scroll:focus-within {
+    width: 100% !important;
+    border-radius: 0;
+    background: #2a2520;
+    box-shadow: none;
+  }
+
+  .ltms-reference-sidebar .app-sidebar-scroll button.ltms-reference-sidebar-link {
+    justify-content: flex-start;
+    gap: 0;
+  }
+}
+
+@media (max-width: 767px) {
+  .ltms-app-shell-main {
+    padding: 12px !important;
   }
 }

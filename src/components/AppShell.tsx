@@ -53,12 +53,14 @@ export function AppShell({
   breadcrumb,
   headerEnd,
   mainClassName,
+  variant = "default",
 }: {
   children: ReactNode;
   breadcrumb?: ReactNode;
   /** Extra content rendered between the breadcrumb and the user area (e.g. sidebar toggle) */
   headerEnd?: ReactNode;
   mainClassName?: string;
+  variant?: "default" | "ltms";
 }) {
   const { signOut, user } = useSession();
   const navigate = useNavigate();
@@ -135,41 +137,78 @@ export function AppShell({
       className={cn(
         "relative flex h-screen flex-col overflow-hidden transition-all duration-300",
         backgroundVideoEnabled ? "bg-transparent" : "bg-background",
-        user && open && !expanded ? "lg:mr-[360px]" : "",
+        user && open && !expanded && variant !== "ltms" ? "lg:mr-[360px]" : "",
+        variant === "ltms" ? "ltms-app-shell" : "",
       )}
     >
-      <header className="relative z-30 shrink-0 border-b border-border bg-card/85 backdrop-blur">
-        <div className="flex h-16 w-full items-center gap-1.5 px-3 sm:gap-3 sm:px-6">
-          <Link to="/home" className="shrink-0">
+      <header
+        className={cn(
+          "relative z-30 shrink-0 border-b border-border bg-card/85 backdrop-blur",
+          variant === "ltms" ? "ltms-app-shell-header" : "",
+        )}
+      >
+        <div
+          className={cn(
+            "flex h-16 w-full items-center gap-1.5 px-3 sm:gap-3 sm:px-6",
+            variant === "ltms" ? "ltms-app-shell-header-inner" : "",
+          )}
+        >
+          <Link to="/home" className="shrink-0" aria-label="Garuda Logistics home">
             <img
               src={
-                theme === "neon" || theme === "midnight" || theme === "forest" || theme === "storm"
+                variant === "ltms" ||
+                theme === "neon" ||
+                theme === "midnight" ||
+                theme === "forest" ||
+                theme === "storm"
                   ? "/garuda-logo.png"
                   : "/garuda-logo-light.png"
               }
               alt="Garuda Logistics Solution"
-              className="h-8 w-auto sm:h-10"
+              className={cn("h-8 w-auto sm:h-10", variant === "ltms" ? "ltms-app-shell-logo" : "")}
             />
           </Link>
-          {breadcrumb && <div className="ml-2 hidden md:block shrink-0">{breadcrumb}</div>}
-          {headerEnd && <div className="ml-2 hidden lg:block">{headerEnd}</div>}
-          <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
+          {breadcrumb && (
             <div
-              data-app-shell-header-actions
-              className="flex shrink-0 items-center gap-1.5 sm:gap-2"
-            />
+              className={cn(
+                "ml-2 hidden shrink-0 md:block",
+                variant === "ltms" ? "ltms-app-shell-breadcrumb" : "",
+              )}
+            >
+              {breadcrumb}
+            </div>
+          )}
+          {headerEnd && variant !== "ltms" && (
+            <div className="ml-2 hidden lg:block">{headerEnd}</div>
+          )}
+          <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-3">
             {isAdmin && (
               <Link
                 to="/system"
                 title="System"
-                className="relative flex size-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                className={cn(
+                  "relative flex size-8 items-center justify-center rounded-lg border border-border bg-background text-muted-foreground transition-colors hover:bg-muted hover:text-foreground",
+                  variant === "ltms" ? "ltms-app-shell-icon-button" : "",
+                )}
               >
                 <Server className="size-4" />
               </Link>
             )}
             {(isAdmin || user?.role === "viewer" || user?.role === "basic") && <NotificationBell />}
-            {user && <MeetTrigger />}
-            <span className="hidden items-center gap-2 text-sm text-muted-foreground sm:flex min-w-0">
+            <div
+              data-app-shell-header-actions
+              className={cn(
+                "flex shrink-0 items-center gap-1.5 sm:gap-2",
+                variant === "ltms" ? "ltms-app-shell-header-actions" : "",
+              )}
+            />
+            {user && variant !== "ltms" && <MeetTrigger />}
+            <span
+              className={cn(
+                "hidden min-w-0 items-center gap-2 text-sm text-muted-foreground sm:flex",
+                variant === "ltms" ? "ltms-app-shell-user" : "",
+              )}
+            >
               {isAdmin ? (
                 <ShieldCheck className="size-3.5 text-primary shrink-0" />
               ) : (
@@ -196,7 +235,7 @@ export function AppShell({
                 signOut();
                 navigate({ to: "/", replace: true });
               }}
-              className="shrink-0"
+              className={cn("shrink-0", variant === "ltms" ? "ltms-app-shell-signout" : "")}
             >
               <LogOut className="size-4" />
               <span className="hidden sm:inline">Sign out</span>
@@ -209,6 +248,7 @@ export function AppShell({
           "relative z-10",
           "min-h-0 flex-1 overflow-x-hidden overflow-y-auto [overflow-anchor:none]",
           "w-full max-w-none px-2 py-4 sm:px-4 sm:py-6",
+          variant === "ltms" ? "ltms-app-shell-main" : "",
           mainClassName,
         )}
       >
