@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Mail,
   Film,
+  Link2,
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -32,6 +33,7 @@ import { WhatsAppSettings } from "@/components/settings/WhatsAppSettings";
 import { MailSettings } from "@/components/settings/MailSettings";
 import { HRMSAccountsSettings } from "@/components/settings/HRMSAccountsSettings";
 import { TMSAccountsSettings } from "@/components/settings/TMSAccountsSettings";
+import { WmsUsersSettings } from "@/components/settings/WmsUsersSettings";
 
 export const Route = createFileRoute("/settings")({
   head: () => ({
@@ -77,6 +79,12 @@ const TABS = [
     label: "LTMS Accounts Map",
     desc: "LTMS and Workmen ledger mappings",
     icon: Building2,
+  },
+  {
+    id: "wms-users",
+    label: "WMS Users",
+    desc: "Link existing WMS accounts to ERP users",
+    icon: Link2,
   },
   {
     id: "passkey",
@@ -132,6 +140,7 @@ function SettingsPage() {
             {tab === "mail" ? <MailSettings /> : null}
             {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
             {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
+            {tab === "wms-users" ? <WmsUsersSettings /> : null}
             {tab === "passkey" ? <PasskeySecurityPanel /> : null}
           </div>
         </div>

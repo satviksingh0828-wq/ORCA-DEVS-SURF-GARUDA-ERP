@@ -396,19 +396,21 @@ function LoginPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="flex min-h-[100dvh] w-full items-center justify-center overflow-x-hidden bg-background px-4 py-8">
-        {/* Login */}
-        <section className="relative flex min-h-0 w-full min-w-0 flex-col items-center justify-center bg-background px-2 py-6">
-          <>
+      <div className="ltms-app-shell flex min-h-[100dvh] flex-col bg-[#fafaf7] text-[#1a1714]">
+        <header className="ltms-app-shell-header z-10 flex h-14 shrink-0 items-center border-b-2 border-[#b87333] bg-[#2a2520]">
+          <div className="ltms-app-shell-header-inner flex h-full w-full items-center gap-3 px-4">
+            <img
+              src="/garuda-logo.png"
+              alt="Garuda Logistics Solution"
+              className="ltms-app-shell-logo h-10 w-auto object-contain"
+            />
+            <span className="ltms-app-shell-title">Garuda ERP</span>
+          </div>
+        </header>
+        <main className="flex flex-1 items-center justify-center overflow-y-auto px-4 py-8">
+          <div className="w-full max-w-sm">
             {/* ── Normal login form — always visible ────────────────────────── */}
             <div className="w-full max-w-sm animate-fade-up rounded-xl border border-border bg-card p-8 shadow-sm">
-              <div className="mb-7 flex items-center justify-center">
-                <img
-                  src="/garuda-logo.png"
-                  alt="Garuda Logistics Solution"
-                  className="h-12 w-auto"
-                />
-              </div>
               <h2 className="text-center text-2xl font-semibold tracking-tight">Sign in</h2>
               <p className="mt-1.5 text-center text-sm text-muted-foreground">
                 Enter your operator credentials to continue.
@@ -497,8 +499,8 @@ function LoginPage() {
                 credentials.
               </p>
             </div>
-          </>
-        </section>
+          </div>
+        </main>
       </div>
     </>
   );
