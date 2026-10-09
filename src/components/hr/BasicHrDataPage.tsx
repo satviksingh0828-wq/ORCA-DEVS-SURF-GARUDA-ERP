@@ -470,16 +470,6 @@ export function BasicHrDataPage() {
               onChange={(id) => setTab(id as Tab)}
             />
           </div>
-          <header className="mb-6">
-            <p className="text-xs font-medium uppercase tracking-[0.22em] text-primary">
-              HRMS / HR Data
-            </p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight">My HR Data</h1>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Read-only employee profile, attendance, payroll, loans, advances, deductions, and
-              incentives.
-            </p>
-          </header>
           {tab === "profile" ? (
             <ReadOnlyProfile employee={employee} />
           ) : tab === "attendance" ? (
