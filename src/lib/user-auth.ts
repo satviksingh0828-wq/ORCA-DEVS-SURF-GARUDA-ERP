@@ -53,6 +53,12 @@ export type SaveUserInput = {
   branchIds: string[];
 };
 
+export type ChangePasswordInput = {
+  sessionToken: string;
+  currentPassword: string;
+  newPassword: string;
+};
+
 // ── Sign in ──────────────────────────────────────────────────────────────────
 
 export type SignInResult =
@@ -407,6 +413,38 @@ export const serverVerifySession = createServerFn({ method: "POST" })
       .then(() => {/* ignore */});
 
     return { valid: true };
+  });
+
+// ── Change the signed-in user's password ─────────────────────────────────────
+
+export const serverChangePassword = createServerFn({ method: "POST" })
+  .validator((input: ChangePasswordInput) => input)
+  .handler(async ({ data }): Promise<{ ok: boolean; error?: string }> => {
+    const parsed = await verifyAppToken(data.sessionToken);
+    if (!parsed) return { ok: false, error: "Your session has expired. Please sign in again." };
+    if (data.newPassword.length < 6) {
+      return { ok: false, error: "The new password must be at least 6 characters." };
+    }
+
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    const { data: user, error: loadError } = await supabaseAdmin
+      .from("app_users")
+      .select("id, password, is_active, is_paused")
+      .eq("id", parsed.uid)
+      .maybeSingle();
+    if (loadError || !user || !user.is_active || user.is_paused) {
+      return { ok: false, error: "This account is not available for a password change." };
+    }
+    if (user.password !== data.currentPassword) {
+      return { ok: false, error: "The current password is incorrect." };
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from("app_users")
+      .update({ password: data.newPassword })
+      .eq("id", parsed.uid);
+    if (updateError) return { ok: false, error: "Could not change the password. Please try again." };
+    return { ok: true };
   });
 
 // ── Clear session on sign-out ─────────────────────────────────────────────────

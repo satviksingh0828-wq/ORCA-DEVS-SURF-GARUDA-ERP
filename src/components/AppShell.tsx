@@ -2,8 +2,19 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { LogOut, PanelLeftClose, PanelLeftOpen, Server, ShieldCheck, User } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
+import { serverChangePassword } from "@/lib/user-auth";
 import { useOrcaAI } from "@/lib/orca-context";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { MeetTrigger } from "@/components/MeetPanel";
 import { NotificationBell } from "@/components/NotificationBell";
 import { cn } from "@/lib/utils";
@@ -14,6 +25,127 @@ let sharedBackgroundVideo: HTMLVideoElement | null = null;
 let sharedBackgroundVeil: HTMLDivElement | null = null;
 let sharedBackgroundVideoUrl = "";
 let sharedBackgroundVideoReady = false;
+
+function ChangePasswordDialog({
+  open,
+  onOpenChange,
+  sessionToken,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  sessionToken?: string;
+}) {
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const reset = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setError("");
+    setSuccess(false);
+  };
+
+  const handleOpenChange = (nextOpen: boolean) => {
+    if (!nextOpen) reset();
+    onOpenChange(nextOpen);
+  };
+
+  const submit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    setError("");
+    if (!sessionToken) return setError("Your session has expired. Please sign in again.");
+    if (newPassword.length < 6) return setError("The new password must be at least 6 characters.");
+    if (newPassword !== confirmPassword) return setError("The new passwords do not match.");
+    setSaving(true);
+    try {
+      const result = await serverChangePassword({
+        data: { sessionToken, currentPassword, newPassword },
+      });
+      if (!result.ok) setError(result.error ?? "Could not change the password.");
+      else {
+        setSuccess(true);
+        setCurrentPassword("");
+        setNewPassword("");
+        setConfirmPassword("");
+      }
+    } catch {
+      setError("Could not change the password. Please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Change password</DialogTitle>
+          <DialogDescription>Update the password used to sign in to Garuda ERP.</DialogDescription>
+        </DialogHeader>
+        <form className="space-y-4" onSubmit={submit}>
+          <div className="space-y-2">
+            <Label htmlFor="current-password">Current password</Label>
+            <Input
+              id="current-password"
+              type="password"
+              autoComplete="current-password"
+              value={currentPassword}
+              onChange={(event) => setCurrentPassword(event.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="new-password">New password</Label>
+            <Input
+              id="new-password"
+              type="password"
+              autoComplete="new-password"
+              value={newPassword}
+              onChange={(event) => setNewPassword(event.target.value)}
+              minLength={6}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="confirm-password">Confirm new password</Label>
+            <Input
+              id="confirm-password"
+              type="password"
+              autoComplete="new-password"
+              value={confirmPassword}
+              onChange={(event) => setConfirmPassword(event.target.value)}
+              minLength={6}
+              required
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-destructive" role="alert">
+              {error}
+            </p>
+          )}
+          {success && (
+            <p className="text-sm text-emerald-600" role="status">
+              Password changed successfully.
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)}>
+              Cancel
+            </Button>
+            <Button type="submit" disabled={saving}>
+              {saving ? "Saving…" : "Change password"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function ensureSharedBackgroundVideo() {
   if (sharedBackgroundVideo && sharedBackgroundVeil) {
@@ -94,6 +226,7 @@ export function AppShell({
       .join("")
       .toUpperCase() || "U";
   const [accountMenuOpen, setAccountMenuOpen] = useState(false);
+  const [changePasswordOpen, setChangePasswordOpen] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(() => {
     try {
       return (
@@ -313,6 +446,18 @@ export function AppShell({
                       <div className="ltms-app-shell-account-divider" />
                       <button
                         type="button"
+                        className="ltms-app-shell-account-signout"
+                        role="menuitem"
+                        onClick={() => {
+                          setAccountMenuOpen(false);
+                          setChangePasswordOpen(true);
+                        }}
+                      >
+                        <ShieldCheck className="size-4" />
+                        <span>Change password</span>
+                      </button>
+                      <button
+                        type="button"
                         data-no-remote-control
                         className="ltms-app-shell-account-signout"
                         role="menuitem"
@@ -362,6 +507,11 @@ export function AppShell({
           </div>
         </div>
       </header>
+      <ChangePasswordDialog
+        open={changePasswordOpen}
+        onOpenChange={setChangePasswordOpen}
+        sessionToken={user?.sessionToken}
+      />
       <main
         className={cn(
           "relative z-10",

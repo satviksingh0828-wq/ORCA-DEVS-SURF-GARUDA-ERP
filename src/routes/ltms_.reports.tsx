@@ -113,7 +113,12 @@ function ReportsPage() {
   const { user } = useSession();
   const visibleTabs =
     user?.role === "basic"
-      ? TABS.filter((item) => item.id !== "consignment-income" && item.id !== "consignment-net")
+      ? TABS.filter(
+          (item) =>
+            item.id !== "consignment-income" &&
+            item.id !== "consignment-net" &&
+            item.id !== "sources",
+        )
       : TABS;
   const [tab, setTab] = useState<TabId>("eway-bill");
   const availableTabIds = visibleTabs.map((item) => item.id).join("|");

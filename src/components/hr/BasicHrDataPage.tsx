@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/AppShell";
+import { LtmsSidebar, type LtmsSidebarGroup } from "@/components/ltms/LtmsSidebar";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,13 +36,7 @@ import { EmployeeAttendanceDetail } from "@/components/hr/attendance-history";
 import { cn } from "@/lib/utils";
 
 type Tab =
-  | "profile"
-  | "attendance"
-  | "payroll"
-  | "loans"
-  | "advances"
-  | "deductions"
-  | "incentives";
+  "profile" | "attendance" | "payroll" | "loans" | "advances" | "deductions" | "incentives";
 const money = (n: number) =>
   `₹${Number(n || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 function Field({ label, value }: { label: string; value: React.ReactNode }) {
@@ -408,8 +403,17 @@ export function BasicHrDataPage() {
     desc: item.description,
     icon: item.icon,
   }));
+  const sidebarGroups: LtmsSidebarGroup[] = [
+    {
+      section: "hr-data",
+      label: "HR Data",
+      items: tabs.map((item) => ({ id: item.id, label: item.label })),
+    },
+  ];
   return (
     <AppShell
+      variant="ltms"
+      shellTitle="HRMS"
       breadcrumb={
         <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
           <Link to="/home" className="hover:text-foreground">
@@ -445,35 +449,18 @@ export function BasicHrDataPage() {
       }
     >
       <div
-        className={`grid items-start gap-6 ${navOpen ? "lg:grid-cols-[220px_minmax(0,1fr)]" : "grid-cols-1"}`}
+        className={`ltms-reference-shell grid items-start gap-6 ${navOpen ? "lg:grid-cols-[192px_minmax(0,1fr)]" : "grid-cols-1"}`}
       >
         {navOpen && (
-          <nav className="hidden lg:sticky lg:top-24 lg:block lg:h-[calc(100dvh-7rem)] lg:max-h-[calc(100dvh-7rem)] lg:overflow-y-auto lg:overscroll-contain lg:pr-1">
-            <p className="mb-3 px-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              HR Data
-            </p>
-            <div className="space-y-1">
-              {tabs.map((item) => {
-                const Icon = item.icon;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setTab(item.id)}
-                    className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${tab === item.id ? "bg-primary-soft text-foreground" : "text-muted-foreground hover:bg-muted hover:text-foreground"}`}
-                  >
-                    <Icon className={`size-4 ${tab === item.id ? "text-primary" : ""}`} />
-                    <span>
-                      <span className="block text-sm font-semibold">{item.label}</span>
-                      <span className="block text-[11px] opacity-70">{item.description}</span>
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
+          <LtmsSidebar
+            section="hr-data"
+            activeTabId={tab}
+            onSelectTab={(id) => setTab(id as Tab)}
+            label="HR data"
+            groups={sidebarGroups}
+          />
         )}
-        <main className="min-w-0">
+        <div className="ltms-reference-content min-w-0">
           {" "}
           <div className="mb-6 lg:hidden">
             <MobileTabDropdown
@@ -508,7 +495,7 @@ export function BasicHrDataPage() {
           ) : (
             <IncentivesTab employee={employee} />
           )}
-        </main>
+        </div>
       </div>
     </AppShell>
   );
