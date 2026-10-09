@@ -7,7 +7,6 @@ import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const db = supabase as any;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -87,25 +86,16 @@ function SelectField({
 export function LtmsAccountingBilling({ initialTab = "parties" }: { initialTab?: string }) {
   const { user } = useSession();
   const branches = allowedBranches(useBranches(), user);
-  const [tab, setTab] = useState(initialTab);
-  return (
-    <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-      <TabsList className="w-full justify-start overflow-x-auto">
-        <TabsTrigger value="parties">Parties</TabsTrigger>
-        <TabsTrigger value="debit-notes">Debit Notes</TabsTrigger>
-        <TabsTrigger value="credit-notes">Credit Notes</TabsTrigger>
-      </TabsList>
-      <TabsContent value="parties">
-        <PartiesTab branches={branches} user={user} />
-      </TabsContent>
-      <TabsContent value="debit-notes">
-        <NotesTab noteType="debit" branches={branches} user={user} />
-      </TabsContent>
-      <TabsContent value="credit-notes">
-        <NotesTab noteType="credit" branches={branches} user={user} />
-      </TabsContent>
-    </Tabs>
-  );
+  if (initialTab === "debit-notes" || initialTab === "credit-notes") {
+    return (
+      <NotesTab
+        noteType={initialTab === "debit-notes" ? "debit" : "credit"}
+        branches={branches}
+        user={user}
+      />
+    );
+  }
+  return <PartiesTab branches={branches} user={user} />;
 }
 
 function PartiesTab({ branches, user }: { branches: any[]; user: any }) {
@@ -205,13 +195,7 @@ function PartiesTab({ branches, user }: { branches: any[]; user: any }) {
   }
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">Parties</h2>
-          <p className="text-xs text-muted-foreground">
-            Debtors and Creditors with branch ledger balances.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-end justify-end gap-3">
         <Button
           onClick={() => {
             setForm((f) => ({ ...f, branch: branches[0]?.id ?? "" }));
@@ -402,7 +386,9 @@ function NotesTab({
   async function load() {
     let q = db
       .from("ltms_accounting_notes")
-      .select("*,branch:branches(branch_name),party:ltms_billing_parties(party_name,party_type)")
+      .select(
+        "*,branch:branches(branch_name),party:ltms_billing_parties!ltms_accounting_notes_party_id_fkey(party_name,party_type)",
+      )
       .eq("note_type", noteType)
       .gte("note_date", from)
       .lte("note_date", to)
@@ -521,16 +507,7 @@ function NotesTab({
   }
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-base font-semibold">
-            {noteType === "debit" ? "Debit Notes" : "Credit Notes"}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            Journal-linked {noteType === "debit" ? "debit" : "credit"} notes with branch filters and
-            settlement.
-          </p>
-        </div>
+      <div className="flex flex-wrap items-end justify-end gap-3">
         <Button
           onClick={() => {
             setForm((f) => ({ ...f, branch: branches[0]?.id ?? "" }));
