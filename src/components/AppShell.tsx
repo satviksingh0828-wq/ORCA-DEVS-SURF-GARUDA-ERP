@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { MeetTrigger } from "@/components/MeetPanel";
 import { NotificationBell } from "@/components/NotificationBell";
+import { MobileAppDownloads } from "@/components/MobileAppDownloads";
 import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
 import { useTheme } from "@/lib/theme";
@@ -414,6 +415,7 @@ export function AppShell({
                 <Server className="size-4" />
               </Link>
             )}
+            {user && <MobileAppDownloads />}
             {(isAdmin || user?.role === "viewer" || user?.role === "basic") && <NotificationBell />}
             <div
               data-app-shell-header-actions

@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { useWarehouse } from "../warehouse.jsx";
 import { api } from "../api.js";
-import QRCode from "qrcode";
 
 const SEARCH_DEBOUNCE_MS = 250;
 
@@ -15,38 +14,6 @@ const RESULT_TYPE_LABEL = {
   customer: "Customer",
 };
 
-const APK_APPS = [
-  {
-    id: "location-app",
-    name: "LOCATION APP",
-    version: "v1.0.0",
-    fileName: "app-gms-arm64-v8a-release.apk",
-    url: "https://releasehub.orca.devs.surf/?app=location-app&release=app-gms-arm64-v8a-release",
-  },
-  {
-    id: "document-app",
-    name: "DOCUMENT APP",
-    version: "v1.0.0",
-    fileName: "application-3a3d27b2-fb2d-4b2d-a752-12c48dd78345.apk",
-    url: "https://releasehub.orca.devs.surf/?app=document-app&release=document-release",
-  },
-  {
-    id: "orca-wms-mobile",
-    name: "ORCA WMS MOBILE",
-    version: "Production APK",
-    fileName: "ORCA-WMS-mobile.apk",
-    url: "https://releasehub.orca.devs.surf/?app=orca-wms-mobile&release=wms-mobile-release",
-  },
-];
-
-function ApkIcon() {
-  return (
-    <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="5" y="3" width="14" height="18" rx="2" />
-      <path d="M9 7h6M9 11h6M9 15h3M12 18h.01" />
-    </svg>
-  );
-}
 
 function resultRoute(r) {
   // Selection routes the operator to the list page filtered by the
@@ -82,14 +49,9 @@ export default function TopBar({ forced = false }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const [searchHighlight, setSearchHighlight] = useState(-1);
   const [serverVersion, setServerVersion] = useState(null);
-  const [showApkMenu, setShowApkMenu] = useState(false);
-  const [selectedApk, setSelectedApk] = useState(null);
-  const [apkQr, setApkQr] = useState("");
-  const [copyStatus, setCopyStatus] = useState("");
   const menuRef = useRef(null);
   const whRef = useRef(null);
   const searchRef = useRef(null);
-  const apkRef = useRef(null);
 
   useEffect(() => {
     // Fetch the running api version once after login so the operator can
@@ -133,38 +95,13 @@ export default function TopBar({ forced = false }) {
       if (searchRef.current && !searchRef.current.contains(e.target)) {
         setSearchOpen(false);
       }
-      if (apkRef.current && !apkRef.current.contains(e.target)) {
-        setShowApkMenu(false);
-      }
     }
-    if (showMenu || showWhPicker || searchOpen || showApkMenu) {
+    if (showMenu || showWhPicker || searchOpen) {
       document.addEventListener("mousedown", handleClickOutside);
     }
     return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [showMenu, showWhPicker, searchOpen, showApkMenu]);
+  }, [showMenu, showWhPicker, searchOpen]);
 
-  async function openApk(app) {
-    setSelectedApk(app);
-    setShowApkMenu(false);
-    setApkQr("");
-    setCopyStatus("");
-    try {
-      setApkQr(await QRCode.toDataURL(app.url, { width: 240, margin: 2, errorCorrectionLevel: "M" }));
-    } catch (_) {
-      setApkQr("");
-    }
-  }
-
-  async function copyApkLink() {
-    if (!selectedApk) return;
-    try {
-      await navigator.clipboard.writeText(selectedApk.url);
-      setCopyStatus("Copied");
-    } catch (_) {
-      setCopyStatus("Copy failed");
-    }
-    window.setTimeout(() => setCopyStatus(""), 1800);
-  }
 
   useEffect(() => {
     const q = searchQuery.trim();
@@ -338,30 +275,6 @@ export default function TopBar({ forced = false }) {
           )}
         </div>
       )}
-      {!forced && (
-        <div className="topbar-apk" ref={apkRef}>
-          <button
-            type="button"
-            className="topbar-apk-button"
-            onClick={() => setShowApkMenu((open) => !open)}
-            aria-label="Download mobile apps"
-            title="Download mobile apps"
-          >
-            <ApkIcon />
-          </button>
-          {showApkMenu && (
-            <div className="topbar-apk-menu">
-              <div className="topbar-apk-menu-title">Mobile Apps</div>
-              {APK_APPS.map((app) => (
-                <button type="button" className="topbar-apk-option" key={app.id} onClick={() => openApk(app)}>
-                  <span className="topbar-apk-option-name">{app.name}</span>
-                  <span className="topbar-apk-option-meta">{app.version}</span>
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
       <div className="topbar-user" ref={menuRef} style={{ position: "relative" }}>
         <div
           className="topbar-avatar"
@@ -385,29 +298,6 @@ export default function TopBar({ forced = false }) {
           </div>
         )}
       </div>
-      {selectedApk && (
-        <div className="apk-modal-overlay" role="presentation" onClick={() => setSelectedApk(null)}>
-          <div className="apk-modal" role="dialog" aria-modal="true" aria-labelledby="apk-modal-title" onClick={(e) => e.stopPropagation()}>
-            <div className="apk-modal-header">
-              <div>
-                <h2 id="apk-modal-title">{selectedApk.name}</h2>
-                <span>{selectedApk.version}</span>
-              </div>
-              <button type="button" className="apk-modal-close" onClick={() => setSelectedApk(null)} aria-label="Close">&times;</button>
-            </div>
-            <div className="apk-modal-content">
-              {apkQr ? <img className="apk-qr" src={apkQr} alt={`QR code for ${selectedApk.name}`} /> : <div className="apk-qr-loading">Generating QR code…</div>}
-              <div className="apk-file-name">{selectedApk.fileName}</div>
-              <p className="apk-modal-help">Scan this QR code on an Android device or copy the download link.</p>
-              <div className="apk-link-row">
-                <input type="text" readOnly value={selectedApk.url} aria-label="APK download link" onFocus={(e) => e.target.select()} />
-                <button type="button" className="btn btn-primary" onClick={copyApkLink}>{copyStatus || "Copy link"}</button>
-              </div>
-              <a className="apk-open-link" href={selectedApk.url} target="_blank" rel="noreferrer">Open download page</a>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
