@@ -68,7 +68,7 @@ BEGIN
   IF p_branch_id IS NULL OR p_party_type NOT IN ('debtor','creditor') THEN RAISE EXCEPTION 'Branch and valid party type are required'; END IF;
   IF NULLIF(trim(coalesce(p_party_name,'')), '') IS NULL THEN RAISE EXCEPTION 'Party name is required'; END IF;
   SELECT ledger_type, branch_id INTO v_type, v_branch FROM public.ledger_accounts WHERE id = p_ledger_account_id AND is_active;
-  IF v_branch IS DISTINCT FROM p_branch_id OR v_type IS DISTINCT FROM CASE WHEN p_party_type = 'debtor' THEN 'asset' ELSE 'liability' END THEN
+  IF v_branch IS DISTINCT FROM p_branch_id OR v_type IS DISTINCT FROM (CASE WHEN p_party_type = 'debtor' THEN 'asset' ELSE 'liability' END) THEN
     RAISE EXCEPTION 'Party account must be an active branch % account', CASE WHEN p_party_type = 'debtor' THEN 'asset' ELSE 'liability' END;
   END IF;
   IF EXISTS (SELECT 1 FROM public.ltms_billing_parties WHERE branch_id = p_branch_id AND lower(coalesce(party_name,'')) = lower(trim(p_party_name)) AND is_active) THEN RAISE EXCEPTION 'A party with this name already exists in the branch'; END IF;
@@ -95,7 +95,7 @@ BEGIN
   INSERT INTO public.ltms_accounting_notes(note_number,note_type,branch_id,party_id,note_date,amount,description,offset_party_id,offset_ledger_id,created_by)
   VALUES(v_number,p_note_type,p_branch_id,p_party_id,coalesce(p_note_date,current_date),v_amount,NULLIF(trim(coalesce(p_description,'')),''),p_offset_party_id,CASE WHEN p_offset_party_id IS NULL THEN v_offset_account END,p_created_by) RETURNING id INTO v_note_id;
   INSERT INTO public.journal_entries(entry_date,branch_id,description,reference,source_module,status,approved_at)
-  VALUES(coalesce(p_note_date,current_date),p_branch_id,initcap(p_note_type)||' Note '||v_number,'ltms_accounting_note:'||v_note_id::TEXT,'ltms','approved',now()) RETURNING id INTO v_journal_id;
+  VALUES(coalesce(p_note_date,current_date),p_branch_id,initcap(p_note_type)||' Note '||v_number,'ltms_accounting_note:'||v_note_id::TEXT,'tms','approved',now()) RETURNING id INTO v_journal_id;
   IF p_note_type = 'debit' THEN
     INSERT INTO public.journal_lines(journal_entry_id,line_no,branch_id,ledger_account_id,account_kind,line_description,debit,credit) VALUES(v_journal_id,1,p_branch_id,v_party_account,'ledger',initcap(p_note_type)||' Note - party',v_amount,0),(v_journal_id,2,p_branch_id,v_offset_account,'ledger',initcap(p_note_type)||' Note - offset',0,v_amount);
   ELSE
@@ -118,7 +118,7 @@ BEGIN
   SELECT * INTO v_account FROM public.ledger_accounts WHERE id=p_settlement_ledger_id AND branch_id=n.branch_id AND is_active AND ledger_type IN ('income','expenditure'); IF NOT FOUND THEN RAISE EXCEPTION 'Settlement account must be an active income or expenditure account from the branch'; END IF;
   SELECT ledger_account_id INTO v_party FROM public.ltms_billing_parties WHERE id=n.party_id;
   v_payment := gen_random_uuid();
-  INSERT INTO public.journal_entries(entry_date,branch_id,description,reference,source_module,status,approved_at) VALUES(coalesce(p_settlement_date,current_date),n.branch_id,initcap(n.note_type)||' Note settlement '||n.note_number,'ltms_accounting_note_settlement:'||v_payment::TEXT,'ltms','approved',now()) RETURNING id INTO v_journal;
+  INSERT INTO public.journal_entries(entry_date,branch_id,description,reference,source_module,status,approved_at) VALUES(coalesce(p_settlement_date,current_date),n.branch_id,initcap(n.note_type)||' Note settlement '||n.note_number,'ltms_accounting_note_settlement:'||v_payment::TEXT,'tms','approved',now()) RETURNING id INTO v_journal;
   IF n.note_type='debit' THEN
     INSERT INTO public.journal_lines(journal_entry_id,line_no,branch_id,ledger_account_id,account_kind,line_description,debit,credit)
     VALUES(v_journal,1,n.branch_id,v_account.id,v_account.account_kind,'Debit Note paid',v_amount,0),(v_journal,2,n.branch_id,v_party,'ledger','Debit Note party settlement',0,v_amount);
