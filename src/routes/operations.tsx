@@ -235,9 +235,8 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   const safeTab: TabId = (TABS.find((t) => t.id === tab) ? tab : defaultTab) as TabId;
   const active = TABS.find((t) => t.id === safeTab) ?? TABS[0];
   const fullBleedConsignment = safeTab === "consignment" && consignmentCreateOpen;
-  // LTMS keeps its reference sidebar pinned even when embedded forms are open.
   const fullBleed = mode !== "ltms" && fullBleedConsignment;
-  const sidebarOpen = mode === "ltms" || navOpen;
+  const sidebarOpen = navOpen;
   return (
     <AppShell
       variant={mode === "ltms" ? "ltms" : "default"}
@@ -339,7 +338,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
             <TabErrorBoundary label="Trip">
               <Trips
                 onSidebarVisibilityChange={(visible) => {
-                  if (mode !== "ltms") setNavOpen(visible);
+                  setNavOpen(visible);
                   setTripFormOpen(!visible);
                 }}
               />
@@ -354,7 +353,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
             <TabErrorBoundary label="Consignment">
               <ConsignmentList
                 onSidebarVisibilityChange={(visible) => {
-                  if (mode !== "ltms") setNavOpen(visible);
+                  setNavOpen(visible);
                 }}
                 onCreateModeChange={setConsignmentCreateOpen}
               />
@@ -374,7 +373,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
             <TabErrorBoundary label="Manifest">
               <LtmsManifestList
                 onSidebarVisibilityChange={(visible) => {
-                  if (mode !== "ltms") setNavOpen(visible);
+                  setNavOpen(visible);
                 }}
               />
             </TabErrorBoundary>

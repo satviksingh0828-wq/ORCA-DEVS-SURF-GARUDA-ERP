@@ -2211,7 +2211,7 @@ function ConsignmentForm(props: any) {
               No package information added yet.
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-2 overflow-x-auto">
               {packageEntries.map((entry: PackageEntry, index: number) => {
                 const selected = packageTypes.find(
                   (item: PackageTypeOption) => item.id === entry.package_rate_type_id,
@@ -2219,7 +2219,7 @@ function ConsignmentForm(props: any) {
                 return (
                   <div
                     key={`${entry.package_rate_type_id}-${index}`}
-                    className="grid gap-3 rounded-lg border border-border bg-muted/20 p-3 md:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_auto]"
+                    className={`grid min-w-max gap-3 rounded-lg border border-border bg-muted/20 p-3 ${branch?.wms_enabled ? "grid-cols-[220px_180px_180px_180px_140px_auto]" : "grid-cols-[220px_180px_180px_180px_auto]"}`}
                   >
                     <div className="space-y-1.5">
                       <Label>Package Type *</Label>
