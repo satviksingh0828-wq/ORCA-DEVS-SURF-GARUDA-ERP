@@ -28,7 +28,7 @@ function WmsEmbeddedContent() {
         <p className="text-sm text-muted-foreground">
           {typeof embeddedAuthError === "string" && embeddedAuthError
             ? embeddedAuthError
-            : "Your ERP session could not be verified by WMS. Check the WMS API deployment and ERP account link."}
+            : "Your ERP session could not be verified by WMS. Check the Supabase connection and ERP account link."}
         </p>
         <button
           type="button"

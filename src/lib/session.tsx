@@ -12,7 +12,6 @@ import { serverSignIn, serverSignOut, serverVerifySession } from "@/lib/user-aut
 import type { SessionUser } from "@/lib/user-auth";
 import { secureSession } from "@/lib/storage";
 import { setLoggerUser } from "@/lib/log-actions";
-import { warmWmsSession } from "@/lib/wms-auto-login";
 import { serverHasWmsAccess } from "@/lib/wms-user-links";
 import type { AppRole } from "@/lib/roles";
 
@@ -104,7 +103,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     try {
       const { enabled } = await serverHasWmsAccess({ data: { sessionToken: token } });
       setWmsAccess({ ready: true, enabled });
-      if (enabled) void warmWmsSession(token);
     } catch {
       // WMS is optional. A WMS outage must never block the ERP session.
       setWmsAccess({ ready: true, enabled: false });
