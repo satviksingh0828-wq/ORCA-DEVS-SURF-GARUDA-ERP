@@ -1283,6 +1283,7 @@ export function ConsignmentList({
         row={view}
         shipments={viewShipments}
         packages={viewPackages}
+        showLiveCalculationPreview={user?.role !== "basic"}
         onBack={() => {
           setScreen("list");
           onSidebarVisibilityChange?.(true);
@@ -1348,6 +1349,7 @@ export function ConsignmentList({
             packageTypes,
             packageEntries,
             setPackageEntries,
+            showLiveCalculationPreview: user?.role !== "basic",
             transportMode,
             fromPin,
             toPin,
@@ -2359,25 +2361,27 @@ function ConsignmentForm(props: any) {
             </div>
           )}
         </section>
-        <ConsignmentCalculationPreview
-          branchId={branchId}
-          sourceId={sourceId}
-          contracts={contracts}
-          drafts={drafts}
-          packageTypes={packageTypes}
-          packageEntries={packageEntries}
-          type={type}
-          movement={movement}
-          transporterId={transporterId}
-          selectedTransporterSourceId={selectedTransporterSourceId}
-          transportMode={transportMode}
-          fromPin={fromPin}
-          toPin={toPin}
-          freightDeduction={0}
-          additionalFreight={0}
-          loadingDeduction={0}
-          additionalLoading={0}
-        />
+        {props.showLiveCalculationPreview && (
+          <ConsignmentCalculationPreview
+            branchId={branchId}
+            sourceId={sourceId}
+            contracts={contracts}
+            drafts={drafts}
+            packageTypes={packageTypes}
+            packageEntries={packageEntries}
+            type={type}
+            movement={movement}
+            transporterId={transporterId}
+            selectedTransporterSourceId={selectedTransporterSourceId}
+            transportMode={transportMode}
+            fromPin={fromPin}
+            toPin={toPin}
+            freightDeduction={0}
+            additionalFreight={0}
+            loadingDeduction={0}
+            additionalLoading={0}
+          />
+        )}
         <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
           <Button variant="outline" onClick={onBack}>
             Cancel
@@ -3550,11 +3554,13 @@ function ConsignmentView({
   row,
   shipments,
   packages,
+  showLiveCalculationPreview,
   onBack,
 }: {
   row: Record<string, any>;
   shipments: Record<string, any>[];
   packages: PackageEntry[];
+  showLiveCalculationPreview: boolean;
   onBack: () => void;
 }) {
   const drafts = shipments.map((shipment) => ({
@@ -3781,34 +3787,36 @@ function ConsignmentView({
           />
         </div>
       </section>
-      <ConsignmentCalculationPreview
-        branchId={String(row.branch_id ?? "")}
-        sourceId={String(row.source_id ?? "")}
-        contracts={
-          row.source_id
-            ? [
-                {
-                  id: String(row.source_id),
-                  label: row.source?.contract_name ?? String(row.source_id),
-                },
-              ]
-            : []
-        }
-        drafts={drafts}
-        packageTypes={[]}
-        packageEntries={packages}
-        type={String(row.consignment_type ?? "own")}
-        movement={String(row.movement_mode ?? "pickup")}
-        transporterId={String(row.transporter_id ?? "")}
-        selectedTransporterSourceId={String(row.transporter_source_id ?? "")}
-        transportMode={String(row.transport_mode ?? "")}
-        fromPin={String(row.from_pin_code ?? "")}
-        toPin={String(row.to_pin_code ?? "")}
-        freightDeduction={num(row.freight_deduction)}
-        additionalFreight={num(row.additional_freight)}
-        loadingDeduction={num(row.loading_deduction)}
-        additionalLoading={num(row.additional_loading)}
-      />
+      {showLiveCalculationPreview && (
+        <ConsignmentCalculationPreview
+          branchId={String(row.branch_id ?? "")}
+          sourceId={String(row.source_id ?? "")}
+          contracts={
+            row.source_id
+              ? [
+                  {
+                    id: String(row.source_id),
+                    label: row.source?.contract_name ?? String(row.source_id),
+                  },
+                ]
+              : []
+          }
+          drafts={drafts}
+          packageTypes={[]}
+          packageEntries={packages}
+          type={String(row.consignment_type ?? "own")}
+          movement={String(row.movement_mode ?? "pickup")}
+          transporterId={String(row.transporter_id ?? "")}
+          selectedTransporterSourceId={String(row.transporter_source_id ?? "")}
+          transportMode={String(row.transport_mode ?? "")}
+          fromPin={String(row.from_pin_code ?? "")}
+          toPin={String(row.to_pin_code ?? "")}
+          freightDeduction={num(row.freight_deduction)}
+          additionalFreight={num(row.additional_freight)}
+          loadingDeduction={num(row.loading_deduction)}
+          additionalLoading={num(row.additional_loading)}
+        />
+      )}
     </div>
   );
 }
