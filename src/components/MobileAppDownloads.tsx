@@ -78,11 +78,9 @@ export function MobileAppDownloads() {
         <PopoverTrigger asChild>
           <Button
             type="button"
-            variant="outline"
-            size="icon"
             title="Download mobile apps"
             aria-label="Download mobile apps"
-            className="h-8 w-8 shrink-0"
+            className="relative flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-background p-0 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             data-no-remote-control
           >
             <Smartphone className="size-4" />
