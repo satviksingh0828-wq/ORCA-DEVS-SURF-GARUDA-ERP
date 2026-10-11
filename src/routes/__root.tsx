@@ -132,6 +132,21 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en" data-theme="sky">
       <head>
         <HeadContent />
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(() => {
+  try {
+    const cachedTheme = window.localStorage.getItem("garuda.theme");
+    const validThemes = new Set(["sky", "workspace", "glass", "emerald", "violet", "amber", "rose", "graphite", "garuda", "ocean", "blaze", "tangerine", "copper", "sakura", "arctic", "terra", "vintage", "paper", "kraft", "blueprint", "linen", "chalkboard", "vellum", "cork", "neon", "midnight", "forest", "storm"]);
+    if (cachedTheme && validThemes.has(cachedTheme)) {
+      document.documentElement.setAttribute("data-theme", cachedTheme);
+    }
+  } catch {
+    // Local storage may be unavailable; the default theme remains active.
+  }
+})();`,
+          }}
+        />
       </head>
       <body>
         <SessionProvider>
