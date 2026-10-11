@@ -29,6 +29,7 @@ import { PasskeyGate } from "../components/PasskeyGate";
 import { ScreenControlWidget } from "../components/ScreenControlWidget";
 import { useAppSettings } from "../lib/hooks";
 import { ModuleLoadingScreen } from "../components/ModuleLoadingScreen";
+import { SupabaseStatusGate } from "../components/SupabaseStatusGate";
 
 function NotFoundComponent() {
   return (
@@ -261,22 +262,24 @@ function RootComponent() {
           maxAge: 24 * 60 * 60 * 1000,
         }}
       >
-        {pathname === "/share" ? (
-          <>
-            <Outlet />
-            <Toaster position="top-right" />
-          </>
-        ) : (
-          <PasskeyProtectionGate>
-            <SecurityInit />
-            <SessionExpiredListener />
-            <DynamicImportRecovery />
-            <Outlet />
-            <ScreenControlWidget />
-            <Toaster position="top-right" />
-            <MeetPanelMount />
-          </PasskeyProtectionGate>
-        )}
+        <SupabaseStatusGate>
+          {pathname === "/share" ? (
+            <>
+              <Outlet />
+              <Toaster position="top-right" />
+            </>
+          ) : (
+            <PasskeyProtectionGate>
+              <SecurityInit />
+              <SessionExpiredListener />
+              <DynamicImportRecovery />
+              <Outlet />
+              <ScreenControlWidget />
+              <Toaster position="top-right" />
+              <MeetPanelMount />
+            </PasskeyProtectionGate>
+          )}
+        </SupabaseStatusGate>
       </PersistQueryClientProvider>
     </>
   );
