@@ -8,7 +8,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Field } from "./CompanySettings";
 import { CsvIO } from "@/components/CsvIO";
 import { useSession } from "@/lib/session";
-import { serverGetBranchEwbCredentials, serverSaveBranchEwbCredentials } from "@/lib/branch-ewb-credentials";
+import {
+  serverGetBranchEwbCredentials,
+  serverSaveBranchEwbCredentials,
+} from "@/lib/branch-ewb-credentials";
 import { loadWmsWarehouses, type WmsWarehouse } from "@/lib/wms-stock-inward";
 import {
   Select,
@@ -27,6 +30,8 @@ const BRANCH_TYPES = [
   "Yard",
 ];
 
+// Branch fields are extended by later Supabase migrations and are not fully represented in generated types.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Branch = Record<string, any> & { id?: string };
 
 type EwbCredentialState = {
@@ -67,6 +72,8 @@ const EMPTY: Branch = {
   eway_auto_fetch_enabled: "false",
   wms_enabled: false,
   wms_warehouse_id: null,
+  _create_ltms_accounts: false,
+  _create_hrms_accounts: false,
 };
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
@@ -101,13 +108,26 @@ export function BranchSettings() {
   useEffect(() => {
     load();
     setWmsLoading(true);
-    loadWmsWarehouses().then(setWmsWarehouses).catch(() => setWmsWarehouses([])).finally(() => setWmsLoading(false));
+    loadWmsWarehouses()
+      .then(setWmsWarehouses)
+      .catch(() => setWmsWarehouses([]))
+      .finally(() => setWmsLoading(false));
   }, []);
 
   const set = (k: string) => (v: string) => setEditing((f) => (f ? { ...f, [k]: v } : f));
 
   async function beginEdit(branch: Branch) {
-    const next = { ...branch, _eway_api_username: "", _eway_api_password: "", _eway_configured: "false", eway_auto_fetch_enabled: String(branch.eway_auto_fetch_enabled === true || branch.eway_auto_fetch_enabled === "true"), wms_enabled: branch.wms_enabled === true || branch.wms_enabled === "true", wms_warehouse_id: branch.wms_warehouse_id ?? null };
+    const next = {
+      ...branch,
+      _eway_api_username: "",
+      _eway_api_password: "",
+      _eway_configured: "false",
+      eway_auto_fetch_enabled: String(
+        branch.eway_auto_fetch_enabled === true || branch.eway_auto_fetch_enabled === "true",
+      ),
+      wms_enabled: branch.wms_enabled === true || branch.wms_enabled === "true",
+      wms_warehouse_id: branch.wms_warehouse_id ?? null,
+    };
     setEditing(next);
     if (!branch.id) return;
     if (!user?.sessionToken) {
@@ -116,13 +136,21 @@ export function BranchSettings() {
     }
     let credentials: EwbCredentialState;
     try {
-      credentials = await serverGetBranchEwbCredentials({ data: { token: user.sessionToken, branchId: branch.id } });
+      credentials = await serverGetBranchEwbCredentials({
+        data: { token: user.sessionToken, branchId: branch.id },
+      });
     } catch {
       toast.error("Could not load E-Way Bill credentials");
       return;
     }
     setEditing((current) =>
-      current ? { ...current, _eway_api_username: credentials.api_username ?? "", _eway_configured: credentials.configured ? "true" : "false" } : current,
+      current
+        ? {
+            ...current,
+            _eway_api_username: credentials.api_username ?? "",
+            _eway_configured: credentials.configured ? "true" : "false",
+          }
+        : current,
     );
   }
 
@@ -133,7 +161,13 @@ export function BranchSettings() {
     }
     if (!user?.sessionToken) throw new Error("Your session has expired. Please sign in again.");
     await serverSaveBranchEwbCredentials({
-      data: { token: user.sessionToken, action: "save", branchId, apiUsername: username.trim(), apiPassword: password },
+      data: {
+        token: user.sessionToken,
+        action: "save",
+        branchId,
+        apiUsername: username.trim(),
+        apiPassword: password,
+      },
     });
   }
 
@@ -147,7 +181,9 @@ export function BranchSettings() {
       toast.error("Trip, LR, and Manifest Series Prefixes are mandatory");
       return;
     }
-    if (![tripPrefix, lrPrefix, manifestPrefix].every((prefix) => /^[A-Z0-9]{1,10}$/.test(prefix))) {
+    if (
+      ![tripPrefix, lrPrefix, manifestPrefix].every((prefix) => /^[A-Z0-9]{1,10}$/.test(prefix))
+    ) {
       toast.error("Prefixes must contain only letters or numbers (maximum 10 characters)");
       return;
     }
@@ -156,22 +192,51 @@ export function BranchSettings() {
       return;
     }
     setSaving(true);
-    const { id, created_at: _c, updated_at: _u, _eway_api_username, _eway_api_password, _eway_configured, eway_auto_fetch_enabled, wms_enabled, wms_warehouse_id, ...rest } = editing;
-    const payload = { ...rest, eway_auto_fetch_enabled: eway_auto_fetch_enabled === "true", trip_series_prefix: tripPrefix, lr_series_prefix: lrPrefix, manifest_series_prefix: manifestPrefix, wms_enabled: Boolean(wms_enabled), wms_warehouse_id: wms_enabled ? Number(wms_warehouse_id) : null } as never;
+    const {
+      id,
+      created_at: _c,
+      updated_at: _u,
+      _eway_api_username,
+      _eway_api_password,
+      _eway_configured,
+      _create_ltms_accounts,
+      _create_hrms_accounts,
+      eway_auto_fetch_enabled,
+      wms_enabled,
+      wms_warehouse_id,
+      ...rest
+    } = editing;
+    const payload = {
+      ...rest,
+      eway_auto_fetch_enabled: eway_auto_fetch_enabled === "true",
+      trip_series_prefix: tripPrefix,
+      lr_series_prefix: lrPrefix,
+      manifest_series_prefix: manifestPrefix,
+      wms_enabled: Boolean(wms_enabled),
+      wms_warehouse_id: wms_enabled ? Number(wms_warehouse_id) : null,
+    } as never;
     const res = id
       ? await supabase.from("branches").update(payload).eq("id", id).select("id").single()
-      : await supabase.from("branches").insert(payload).select("id").single();
+      : // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await (supabase as any).rpc("create_branch_with_account_options", {
+          p_branch: payload,
+          p_create_ltms: Boolean(_create_ltms_accounts),
+          p_create_hrms: Boolean(_create_hrms_accounts),
+        });
     if (res.error) {
       setSaving(false);
       return toast.error(res.error.message);
     }
-    const branchId = id ?? (res.data as { id: string } | null)?.id;
+    const branchId =
+      id ?? (typeof res.data === "string" ? res.data : (res.data as { id: string } | null)?.id);
     try {
       if (!branchId) throw new Error("Branch ID was not returned after save");
       await saveEwbCredentials(branchId, _eway_api_username ?? "", _eway_api_password ?? "");
     } catch (error) {
       setSaving(false);
-      return toast.error(error instanceof Error ? error.message : "Could not save E-Way Bill credentials");
+      return toast.error(
+        error instanceof Error ? error.message : "Could not save E-Way Bill credentials",
+      );
     }
     setSaving(false);
     toast.success(id ? "Branch updated" : "Branch created");
@@ -225,9 +290,7 @@ export function BranchSettings() {
             </Select>
           </div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs font-medium text-muted-foreground">
-              Trip Series Prefix
-            </Label>
+            <Label className="text-xs font-medium text-muted-foreground">Trip Series Prefix</Label>
             <input
               className="flex h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 uppercase"
               maxLength={10}
@@ -250,7 +313,16 @@ export function BranchSettings() {
               maxLength={10}
               placeholder="e.g. LR, MUM"
               value={editing.lr_series_prefix ?? ""}
-              onChange={(e) => setEditing((f) => f ? { ...f, lr_series_prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") } : f)}
+              onChange={(e) =>
+                setEditing((f) =>
+                  f
+                    ? {
+                        ...f,
+                        lr_series_prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ""),
+                      }
+                    : f,
+                )
+              }
               required
             />
             <p className="text-[11px] text-muted-foreground">
@@ -258,17 +330,31 @@ export function BranchSettings() {
             </p>
           </div>
           <div className="space-y-1.5 sm:col-span-2">
-            <Label className="text-xs font-medium text-muted-foreground">Manifest Series Prefix *</Label>
+            <Label className="text-xs font-medium text-muted-foreground">
+              Manifest Series Prefix *
+            </Label>
             <input
               className="flex h-10 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm uppercase"
               maxLength={10}
               placeholder="e.g. MF, MUM"
               value={editing.manifest_series_prefix ?? ""}
-              onChange={(e) => setEditing((f) => f ? { ...f, manifest_series_prefix: e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, "") } : f)}
+              onChange={(e) =>
+                setEditing((f) =>
+                  f
+                    ? {
+                        ...f,
+                        manifest_series_prefix: e.target.value
+                          .toUpperCase()
+                          .replace(/[^A-Z0-9]/g, ""),
+                      }
+                    : f,
+                )
+              }
               required
             />
             <p className="text-[11px] text-muted-foreground">
-              Mandatory prefix for branch Manifest numbers, followed by year and a six-digit sequence.
+              Mandatory prefix for branch Manifest numbers, followed by year and a six-digit
+              sequence.
             </p>
           </div>
         </Section>
@@ -342,6 +428,48 @@ export function BranchSettings() {
           <Field label="State Code" value={editing.state_code} onChange={set("state_code")} />
         </Section>
 
+        {!editing.id ? (
+          <Section title="Automatic account setup">
+            <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3 sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={Boolean(editing._create_ltms_accounts)}
+                onChange={(event) =>
+                  setEditing((current) =>
+                    current ? { ...current, _create_ltms_accounts: event.target.checked } : current,
+                  )
+                }
+              />
+              <span>
+                <span className="block text-sm font-medium">Create and link LTMS accounts</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  Creates one ledger for every LTMS Accounts Map field and links them automatically.
+                </span>
+              </span>
+            </label>
+            <label className="flex items-start gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3 sm:col-span-2">
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={Boolean(editing._create_hrms_accounts)}
+                onChange={(event) =>
+                  setEditing((current) =>
+                    current ? { ...current, _create_hrms_accounts: event.target.checked } : current,
+                  )
+                }
+              />
+              <span>
+                <span className="block text-sm font-medium">Create and link HRMS accounts</span>
+                <span className="block text-[11px] text-muted-foreground">
+                  Optional: creates one ledger for every HRMS Accounts field and links them
+                  automatically.
+                </span>
+              </span>
+            </label>
+          </Section>
+        ) : null}
+
         <Section title="E-Way Bill API">
           <Field
             label="API Username"
@@ -353,21 +481,37 @@ export function BranchSettings() {
             type="password"
             value={editing._eway_api_password ?? ""}
             onChange={set("_eway_api_password")}
-            placeholder={editing._eway_configured === "true" ? "Leave blank to keep saved password" : "Enter API password"}
+            placeholder={
+              editing._eway_configured === "true"
+                ? "Leave blank to keep saved password"
+                : "Enter API password"
+            }
           />
           <p className="text-[11px] text-muted-foreground sm:col-span-2">
-            The password is encrypted by the secure Supabase function and is never displayed or stored in the branch record.
-            {editing._eway_configured === "true" ? " Credentials are currently configured." : " Credentials are not configured yet."}
+            The password is encrypted by the secure Supabase function and is never displayed or
+            stored in the branch record.
+            {editing._eway_configured === "true"
+              ? " Credentials are currently configured."
+              : " Credentials are not configured yet."}
           </p>
           <label className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3 sm:col-span-2">
             <input
               type="checkbox"
               checked={editing.eway_auto_fetch_enabled === "true"}
-              onChange={(event) => setEditing((f) => f ? { ...f, eway_auto_fetch_enabled: event.target.checked ? "true" : "false" } : f)}
+              onChange={(event) =>
+                setEditing((f) =>
+                  f
+                    ? { ...f, eway_auto_fetch_enabled: event.target.checked ? "true" : "false" }
+                    : f,
+                )
+              }
             />
             <span>
               <span className="block text-sm font-medium">Enable automatic daily fetch</span>
-              <span className="block text-[11px] text-muted-foreground">At 12:00 AM India time, save assigned EWBs for the previous date. The Operations E-Way Bill tab never calls the API.</span>
+              <span className="block text-[11px] text-muted-foreground">
+                At 12:00 AM India time, save assigned EWBs for the previous date. The Operations
+                E-Way Bill tab never calls the API.
+              </span>
             </span>
           </label>
         </Section>
@@ -377,22 +521,38 @@ export function BranchSettings() {
             <input
               type="checkbox"
               checked={Boolean(editing.wms_enabled)}
-              onChange={(event) => setEditing((f) => f ? { ...f, wms_enabled: event.target.checked, wms_warehouse_id: event.target.checked ? f.wms_warehouse_id : null } : f)}
+              onChange={(event) =>
+                setEditing((f) =>
+                  f
+                    ? {
+                        ...f,
+                        wms_enabled: event.target.checked,
+                        wms_warehouse_id: event.target.checked ? f.wms_warehouse_id : null,
+                      }
+                    : f,
+                )
+              }
             />
             <span>
               <span className="block text-sm font-medium">Enable WMS for this branch</span>
-              <span className="block text-[11px] text-muted-foreground">Multiple branches may use the same WMS warehouse.</span>
+              <span className="block text-[11px] text-muted-foreground">
+                Multiple branches may use the same WMS warehouse.
+              </span>
             </span>
           </label>
           <div className="space-y-1.5 sm:col-span-2">
             <Label className="text-xs font-medium text-muted-foreground">WMS Warehouse *</Label>
             <Select
               value={editing.wms_warehouse_id ? String(editing.wms_warehouse_id) : undefined}
-              onValueChange={(value) => setEditing((f) => f ? { ...f, wms_warehouse_id: Number(value) } : f)}
+              onValueChange={(value) =>
+                setEditing((f) => (f ? { ...f, wms_warehouse_id: Number(value) } : f))
+              }
               disabled={!editing.wms_enabled || wmsLoading}
             >
               <SelectTrigger className="h-10 w-full">
-                <SelectValue placeholder={wmsLoading ? "Loading WMS warehouses…" : "Select warehouse"} />
+                <SelectValue
+                  placeholder={wmsLoading ? "Loading WMS warehouses…" : "Select warehouse"}
+                />
               </SelectTrigger>
               <SelectContent>
                 {wmsWarehouses.map((warehouse) => (
