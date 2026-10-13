@@ -219,8 +219,45 @@ AS $$
 DECLARE
   v_branch_id uuid;
 BEGIN
-  INSERT INTO public.branches
-  SELECT (jsonb_populate_record(NULL::public.branches, p_branch - 'id' - 'created_at' - 'updated_at')).* 
+  -- Do not insert a NULL composite record: that bypasses the table defaults for
+  -- id, created_at, and updated_at. Explicitly omit those columns instead.
+  INSERT INTO public.branches (
+    branch_name, branch_type, address_line1, address_line2, area_locality,
+    landmark, city, district, state, country, pin_code, branch_phone,
+    mobile_number, email_address, manager_name, manager_designation,
+    manager_mobile, manager_email, gstin, pan, state_code,
+    trip_series_prefix, lr_series_prefix, manifest_series_prefix,
+    eway_auto_fetch_enabled, wms_enabled, wms_warehouse_id
+  )
+  VALUES (
+    COALESCE(p_branch->>'branch_name', ''),
+    COALESCE(p_branch->>'branch_type', ''),
+    COALESCE(p_branch->>'address_line1', ''),
+    COALESCE(p_branch->>'address_line2', ''),
+    COALESCE(p_branch->>'area_locality', ''),
+    COALESCE(p_branch->>'landmark', ''),
+    COALESCE(p_branch->>'city', ''),
+    COALESCE(p_branch->>'district', ''),
+    COALESCE(p_branch->>'state', ''),
+    COALESCE(p_branch->>'country', ''),
+    COALESCE(p_branch->>'pin_code', ''),
+    COALESCE(p_branch->>'branch_phone', ''),
+    COALESCE(p_branch->>'mobile_number', ''),
+    COALESCE(p_branch->>'email_address', ''),
+    COALESCE(p_branch->>'manager_name', ''),
+    COALESCE(p_branch->>'manager_designation', ''),
+    COALESCE(p_branch->>'manager_mobile', ''),
+    COALESCE(p_branch->>'manager_email', ''),
+    COALESCE(p_branch->>'gstin', ''),
+    COALESCE(p_branch->>'pan', ''),
+    COALESCE(p_branch->>'state_code', ''),
+    COALESCE(p_branch->>'trip_series_prefix', 'TR'),
+    COALESCE(p_branch->>'lr_series_prefix', 'LR'),
+    COALESCE(p_branch->>'manifest_series_prefix', 'MF'),
+    COALESCE((p_branch->>'eway_auto_fetch_enabled')::boolean, false),
+    COALESCE((p_branch->>'wms_enabled')::boolean, false),
+    NULLIF(p_branch->>'wms_warehouse_id', '')::integer
+  )
   RETURNING id INTO v_branch_id;
 
   PERFORM public.provision_branch_mapping_accounts(v_branch_id, p_create_ltms, p_create_hrms);
