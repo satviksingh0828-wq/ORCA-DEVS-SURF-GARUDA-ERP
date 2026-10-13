@@ -154,8 +154,14 @@ export function BranchSettings() {
     );
   }
 
-  async function saveEwbCredentials(branchId: string, username: string, password: string) {
+  async function saveEwbCredentials(
+    branchId: string,
+    username: string,
+    password: string,
+    credentialsConfigured: boolean,
+  ) {
     if (!username.trim() && !password.trim()) return;
+    if (credentialsConfigured && username.trim() && !password.trim()) return;
     if (!username.trim() || !password.trim()) {
       throw new Error("Enter both E-Way Bill API Username and Password");
     }
@@ -231,7 +237,12 @@ export function BranchSettings() {
       id ?? (typeof res.data === "string" ? res.data : (res.data as { id: string } | null)?.id);
     try {
       if (!branchId) throw new Error("Branch ID was not returned after save");
-      await saveEwbCredentials(branchId, _eway_api_username ?? "", _eway_api_password ?? "");
+      await saveEwbCredentials(
+        branchId,
+        _eway_api_username ?? "",
+        _eway_api_password ?? "",
+        _eway_configured === "true",
+      );
     } catch (error) {
       setSaving(false);
       return toast.error(
@@ -491,7 +502,7 @@ export function BranchSettings() {
             The password is encrypted by the secure Supabase function and is never displayed or
             stored in the branch record.
             {editing._eway_configured === "true"
-              ? " Credentials are currently configured."
+              ? " Credentials are currently configured. Leave the password blank to keep using the saved password."
               : " Credentials are not configured yet."}
           </p>
           <label className="flex items-center gap-3 rounded-lg border border-border bg-muted/20 px-3 py-3 sm:col-span-2">
