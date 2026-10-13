@@ -114,7 +114,7 @@ const ThemeContext = createContext<ThemeValue | null>(null);
 const THEME_CACHE_KEY = "garuda.theme";
 const VIDEO_CACHE_KEY = "garuda.background-video";
 const VIDEO_GLASS_CACHE_KEY = "garuda.video-glass";
-const DEFAULT_THEME: ThemeId = "sky";
+const DEFAULT_THEME: ThemeId = "garuda";
 const DEFAULT_VIDEO_SETTINGS = { enabled: true, url: DEFAULT_BACKGROUND_VIDEO_URL };
 const THEME_IDS = new Set<string>(THEMES.map(({ id }) => id));
 

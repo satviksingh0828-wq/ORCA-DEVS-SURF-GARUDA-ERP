@@ -77,11 +77,11 @@ export function ScreenControlConnectionHost({
   useEffect(() => {
     if (inlineOwnerId) return;
     const applySavedTheme = () => {
-      let theme = "sky";
+      let theme = "garuda";
       try {
-        theme = window.localStorage.getItem(ERP_THEME_CACHE_KEY) || "sky";
+        theme = window.localStorage.getItem(ERP_THEME_CACHE_KEY) || "garuda";
       } catch {
-        // Keep the default light theme if storage is unavailable.
+        // Keep the default Garuda theme if storage is unavailable.
       }
       document.documentElement.setAttribute("data-theme", theme);
     };

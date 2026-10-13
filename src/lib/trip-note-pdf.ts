@@ -609,8 +609,8 @@ async function printTripDocument(
     graphite: "#4a4f57",
     garuda: "#8b1a2c",
   };
-  const themeId = document.documentElement.getAttribute("data-theme") ?? "sky";
-  const themePrimary = THEME_HEX[themeId] ?? "#2f7ed8";
+  const themeId = document.documentElement.getAttribute("data-theme") ?? "garuda";
+  const themePrimary = THEME_HEX[themeId] ?? "#8b1a2c";
   const filePrefix = documentTitle.replace(/\\s+/g, "");
 
   // ── OPEN WINDOW — must be synchronous inside the click handler ──────────────
