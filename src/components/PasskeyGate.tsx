@@ -16,7 +16,15 @@
  */
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { startRegistration, startAuthentication } from "@simplewebauthn/browser";
-import { Shield, ShieldAlert, ShieldCheck, Clock, XCircle, Fingerprint, Loader2 } from "lucide-react";
+import {
+  Shield,
+  ShieldAlert,
+  ShieldCheck,
+  Clock,
+  XCircle,
+  Fingerprint,
+  Loader2,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandFooter } from "@/components/BrandFooter";
 import { secureStorage, secureSession } from "@/lib/storage";
@@ -29,7 +37,7 @@ import {
 } from "@/lib/passkey";
 
 // ── Storage keys ──────────────────────────────────────────────────────────────
-const CRED_KEY    = "tms.passkey.cred_id.v1";
+const CRED_KEY = "tms.passkey.cred_id.v1";
 const SESSION_KEY = "tms.passkey.verified.v1";
 
 function isMobileDevice() {
@@ -44,7 +52,10 @@ type PasskeyContextValue = {
   allowedUserIds: string[];
 };
 
-const PasskeyContext = createContext<PasskeyContextValue>({ credentialId: null, allowedUserIds: [] });
+const PasskeyContext = createContext<PasskeyContextValue>({
+  credentialId: null,
+  allowedUserIds: [],
+});
 
 export function usePasskeyContext() {
   return useContext(PasskeyContext);
@@ -52,6 +63,7 @@ export function usePasskeyContext() {
 
 type GateState =
   | "loading"
+  | "mobile-restricted"
   | "no-credential"
   | "registering"
   | "reg-success"
@@ -110,9 +122,9 @@ function RegisterForm({
   onRegistered: (credId: string) => void;
   onBack: () => void;
 }) {
-  const [name, setName]       = useState("");
-  const [step, setStep]       = useState<"form" | "waiting" | "error">("form");
-  const [errMsg, setErrMsg]   = useState("");
+  const [name, setName] = useState("");
+  const [step, setStep] = useState<"form" | "waiting" | "error">("form");
+  const [errMsg, setErrMsg] = useState("");
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -170,8 +182,8 @@ function RegisterForm({
       <Fingerprint className="mx-auto size-12 text-primary" />
       <h2 className="mt-5 text-xl font-semibold">Request Access</h2>
       <p className="mt-2 text-sm text-muted-foreground">
-        Enter your name. Your Windows Hello fingerprint or PIN will be registered and
-        sent to the admin for approval.
+        Enter your name. Your Windows Hello fingerprint or PIN will be registered and sent to the
+        admin for approval.
       </p>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-3 text-left">
@@ -180,7 +192,7 @@ function RegisterForm({
           <input
             type="text"
             value={name}
-            onChange={e => setName(e.target.value)}
+            onChange={(e) => setName(e.target.value)}
             placeholder="e.g. Rahul Sharma"
             autoFocus
             required
@@ -222,9 +234,7 @@ function AccessRestrictedPage({ onRequest }: { onRequest: () => void }) {
       </div>
 
       {/* Heading */}
-      <h1 className="mt-6 text-2xl font-bold tracking-tight text-foreground">
-        Access Restricted
-      </h1>
+      <h1 className="mt-6 text-2xl font-bold tracking-tight text-foreground">Access Restricted</h1>
       <p className="mt-3 text-sm text-muted-foreground">
         This device is not registered to access this application.
       </p>
@@ -244,6 +254,26 @@ function AccessRestrictedPage({ onRequest }: { onRequest: () => void }) {
   );
 }
 
+function MobileAccessRestrictedPage() {
+  return (
+    <Screen>
+      <div className="mx-auto flex size-20 items-center justify-center rounded-full bg-red-50 dark:bg-red-950">
+        <ShieldAlert className="size-10 text-red-500" />
+      </div>
+      <h1 className="mt-6 text-2xl font-bold tracking-tight text-foreground">
+        Mobile Access Restricted
+      </h1>
+      <p className="mt-3 text-sm text-muted-foreground">
+        This application is available only on an approved desktop device.
+      </p>
+      <div className="mt-6 rounded-xl border border-border bg-muted/40 px-4 py-3 text-left text-sm text-muted-foreground">
+        <span className="font-medium text-foreground">Please use the desktop app. </span>
+        Mobile access is restricted. If you think this is an error, contact the administrator.
+      </div>
+    </Screen>
+  );
+}
+
 // ── Pending approval page ─────────────────────────────────────────────────────
 
 function PendingPage() {
@@ -254,8 +284,8 @@ function PendingPage() {
       </div>
       <h1 className="mt-6 text-2xl font-bold tracking-tight">Awaiting Approval</h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        Your access request has been submitted. Please wait for the admin to approve
-        this device before you can sign in.
+        Your access request has been submitted. Please wait for the admin to approve this device
+        before you can sign in.
       </p>
       <div className="mt-6 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
         <span className="font-medium text-foreground">Note: </span>
@@ -275,8 +305,8 @@ function RejectedPage({ onClear }: { onClear: () => void }) {
       </div>
       <h1 className="mt-6 text-2xl font-bold tracking-tight">Access Denied</h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        Your access request was rejected by the admin. Contact the admin if you
-        believe this is a mistake.
+        Your access request was rejected by the admin. Contact the admin if you believe this is a
+        mistake.
       </p>
       <button
         type="button"
@@ -326,8 +356,8 @@ function UnsupportedScreen() {
       <Shield className="mx-auto size-14 text-muted-foreground" />
       <h2 className="mt-5 text-xl font-semibold">Browser Not Supported</h2>
       <p className="mt-3 text-sm text-muted-foreground">
-        This app requires a browser that supports Windows Hello / Passkeys
-        (Chrome, Edge, or Firefox on Windows 10+).
+        This app requires a browser that supports Windows Hello / Passkeys (Chrome, Edge, or Firefox
+        on Windows 10+).
       </p>
     </Screen>
   );
@@ -343,8 +373,8 @@ function RegSuccessScreen() {
       </div>
       <h1 className="mt-6 text-2xl font-bold tracking-tight">Request Submitted!</h1>
       <p className="mt-3 text-sm text-muted-foreground">
-        Your device has been registered. Once the admin approves it, you can access
-        this application.
+        Your device has been registered. Once the admin approves it, you can access this
+        application.
       </p>
       <div className="mt-6 rounded-xl border border-border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
         <span className="font-medium text-foreground">Note: </span>
@@ -357,9 +387,9 @@ function RegSuccessScreen() {
 // ── Main gate ─────────────────────────────────────────────────────────────────
 
 export function PasskeyGate({ children }: { children: ReactNode }) {
-  const [state, setState]             = useState<GateState>("loading");
-  const [mounted, setMounted]         = useState(false);
-  const [allowedUserIds, setAllowed]  = useState<string[]>([]);
+  const [state, setState] = useState<GateState>("loading");
+  const [mounted, setMounted] = useState(false);
+  const [allowedUserIds, setAllowed] = useState<string[]>([]);
 
   // Credential ID that passed Windows Hello this session (exposed via context)
   const credentialId = secureStorage.getItem(CRED_KEY);
@@ -395,11 +425,10 @@ export function PasskeyGate({ children }: { children: ReactNode }) {
     setMounted(true);
 
     async function init() {
-      // Passkey access is restricted to supported desktop operator devices.
-      // Show the existing access request screen on mobile instead of exposing
-      // a browser-support message or starting an unsupported registration flow.
+      // Mobile access is intentionally blocked; registration is only for approved
+      // desktop operator devices.
       if (isMobileDevice()) {
-        setState("no-credential");
+        setState("mobile-restricted");
         return;
       }
 
@@ -416,9 +445,13 @@ export function PasskeyGate({ children }: { children: ReactNode }) {
         const credId = secureStorage.getItem(CRED_KEY);
         if (credId) {
           try {
-            const { allowedUserIds: ids } = await serverCheckCredential({ data: { credentialId: credId } });
+            const { allowedUserIds: ids } = await serverCheckCredential({
+              data: { credentialId: credId },
+            });
             setAllowed(ids);
-          } catch { /* ignore, already authenticated */ }
+          } catch {
+            /* ignore, already authenticated */
+          }
         }
         setState("authenticated");
         return;
@@ -436,15 +469,23 @@ export function PasskeyGate({ children }: { children: ReactNode }) {
 
       // 4. Check server-side status
       try {
-        const { status, allowedUserIds: ids } = await serverCheckCredential({ data: { credentialId: credId } });
+        const { status, allowedUserIds: ids } = await serverCheckCredential({
+          data: { credentialId: credId },
+        });
         if (status === "not_found") {
           // Orphaned local key — clear it
           secureStorage.removeItem(CRED_KEY);
           setState("no-credential");
           return;
         }
-        if (status === "pending")  { setState("pending");  return; }
-        if (status === "rejected") { setState("rejected"); return; }
+        if (status === "pending") {
+          setState("pending");
+          return;
+        }
+        if (status === "rejected") {
+          setState("rejected");
+          return;
+        }
         // approved → run auth
         if (status === "approved") {
           setAllowed(ids);
@@ -473,12 +514,11 @@ export function PasskeyGate({ children }: { children: ReactNode }) {
   }
 
   // Gate screens
+  if (state === "mobile-restricted") return <MobileAccessRestrictedPage />;
   if (state === "unsupported") return <UnsupportedScreen />;
 
   if (state === "no-credential") {
-    return (
-      <AccessRestrictedPage onRequest={() => setState("registering")} />
-    );
+    return <AccessRestrictedPage onRequest={() => setState("registering")} />;
   }
 
   if (state === "registering") {
@@ -491,7 +531,7 @@ export function PasskeyGate({ children }: { children: ReactNode }) {
   }
 
   if (state === "reg-success") return <RegSuccessScreen />;
-  if (state === "pending")     return <PendingPage />;
+  if (state === "pending") return <PendingPage />;
 
   if (state === "rejected") {
     return (
@@ -507,10 +547,7 @@ export function PasskeyGate({ children }: { children: ReactNode }) {
   if (state === "authenticating" || state === "auth-failed") {
     const credId = secureStorage.getItem(CRED_KEY) ?? "";
     return (
-      <AuthenticatingScreen
-        failed={state === "auth-failed"}
-        onRetry={() => runAuth(credId)}
-      />
+      <AuthenticatingScreen failed={state === "auth-failed"} onRetry={() => runAuth(credId)} />
     );
   }
 
