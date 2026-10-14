@@ -1635,8 +1635,6 @@ function ConsignmentForm(props: any) {
     setSourceId,
     consignmentDate,
     setConsignmentDate,
-    billingStatus,
-    setBillingStatus,
     type,
     setType,
     ownTransportMode,
@@ -1887,19 +1885,7 @@ function ConsignmentForm(props: any) {
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
             </div>
-            <div className="min-w-0 space-y-1">
-              <Label className="text-xs font-semibold">Billing *</Label>
-              <Select value={billingStatus} onValueChange={setBillingStatus}>
-                <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="to_be_billed">To be billed</SelectItem>
-                  <SelectItem value="billed">Billed</SelectItem>
-                  <SelectItem value="billed_and_paid">Billed and Paid</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+            <ReadonlyField dense label="Billing" value="To be billed" />
             <div className="min-w-0 space-y-1">
               <Label className="text-xs font-semibold">Delivery Date (Optional)</Label>
               <Input
