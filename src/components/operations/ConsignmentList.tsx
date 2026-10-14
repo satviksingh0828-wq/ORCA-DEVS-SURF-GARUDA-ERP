@@ -1805,8 +1805,14 @@ function ConsignmentForm(props: any) {
   }
 
   function removeEway(index: number) {
+    const removed = (drafts as ShipmentDraft[])[index];
     const remaining = (drafts as ShipmentDraft[]).filter((_, itemIndex) => itemIndex !== index);
     setDrafts(remaining);
+    if (removed?.eway_bill_number) {
+      setPackageEntries((current: PackageEntry[]) =>
+        current.filter((entry) => entry.eway_bill_number !== removed.eway_bill_number),
+      );
+    }
     setEwayNo(remaining[0]?.eway_bill_number ?? "");
   }
 
@@ -3231,6 +3237,15 @@ function EwayTable({
   remove?: (index: number) => void;
   readOnly?: boolean;
 }) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const toggleDetails = (ewayBillNumber: string) => {
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(ewayBillNumber)) next.delete(ewayBillNumber);
+      else next.add(ewayBillNumber);
+      return next;
+    });
+  };
   return (
     <div className="overflow-x-auto rounded-lg border border-border">
       <table className="w-full text-sm">
@@ -3244,6 +3259,7 @@ function EwayTable({
               "Destination",
               "Valid Until",
               "Status",
+              "Actions",
             ].map((heading) => (
               <th key={heading} className="px-3 py-2">
                 {heading}
@@ -3254,24 +3270,77 @@ function EwayTable({
         <tbody>
           {drafts.length === 0 ? (
             <tr>
-              <td colSpan={7} className="px-3 py-8 text-center text-muted-foreground">
+              <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
                 Add an E-Way Bill to begin.
               </td>
             </tr>
           ) : (
-            drafts.map((draft, index) => (
-              <tr key={draft.eway_bill_number} className="border-t border-border">
-                <td className="px-3 py-2 font-medium">{draft.eway_bill_number}</td>
-                <td className="px-3 py-2">{draft.document_number || "—"}</td>
-                <td className="px-3 py-2">
-                  {draft.total_invoice_value ? money(numberValue(draft.total_invoice_value)) : "—"}
-                </td>
-                <td className="px-3 py-2">{draft.generation_mode}</td>
-                <td className="px-3 py-2">{draft.recipient_place || "—"}</td>
-                <td className="px-3 py-2">{draft.valid_until || "—"}</td>
-                <td className="px-3 py-2">{draft.eway_bill_status || "—"}</td>
-              </tr>
-            ))
+            drafts.map((draft, index) => {
+              const isExpanded = expanded.has(draft.eway_bill_number);
+              return (
+                <Fragment key={draft.eway_bill_number}>
+                  <tr className="border-t border-border">
+                    <td className="px-3 py-2 font-medium">{draft.eway_bill_number}</td>
+                    <td className="px-3 py-2">{draft.document_number || "—"}</td>
+                    <td className="px-3 py-2">
+                      {draft.total_invoice_value
+                        ? money(numberValue(draft.total_invoice_value))
+                        : "—"}
+                    </td>
+                    <td className="px-3 py-2">{draft.generation_mode}</td>
+                    <td className="px-3 py-2">{draft.recipient_place || "—"}</td>
+                    <td className="px-3 py-2">{draft.valid_until || "—"}</td>
+                    <td className="px-3 py-2">{draft.eway_bill_status || "—"}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-1">
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-xs"
+                          onClick={() => toggleDetails(draft.eway_bill_number)}
+                        >
+                          {isExpanded ? "Hide" : "View"}
+                        </Button>
+                        {!readOnly && remove && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-xs text-destructive hover:text-destructive"
+                            onClick={() => remove(index)}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                  {isExpanded && (
+                    <tr className="border-t border-border bg-muted/20">
+                      <td colSpan={8} className="p-3">
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                          <ReadonlyField dense label="E-Way Bill Date" value={draft.eway_bill_date} />
+                          <ReadonlyField dense label="Valid From" value={draft.valid_from} />
+                          <ReadonlyField dense label="Document Type" value={draft.document_type} />
+                          <ReadonlyField dense label="Document Date" value={draft.document_date} />
+                          <ReadonlyField dense label="Total Value" value={draft.total_value} />
+                          <ReadonlyField dense label="Taxable Value" value={draft.total_taxable_value} />
+                          <ReadonlyField dense label="Consignor GSTIN" value={draft.supplier_gstin} />
+                          <ReadonlyField dense label="Consignee GSTIN" value={draft.recipient_gstin} />
+                          <ReadonlyField dense label="Consignor" value={draft.supplier_trade_name} />
+                          <ReadonlyField dense label="Consignee" value={draft.recipient_trade_name} />
+                          <ReadonlyField dense label="From Pincode" value={draft.supplier_pin_code} />
+                          <ReadonlyField dense label="To Pincode" value={draft.recipient_pin_code} />
+                          <ReadonlyField dense label="From Address" value={draft.supplier_address} />
+                          <ReadonlyField dense label="To Address" value={draft.recipient_address} />
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })
           )}
         </tbody>
       </table>
