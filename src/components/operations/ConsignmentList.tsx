@@ -1030,12 +1030,20 @@ export function ConsignmentList({
       return toast.error("Transporter movement requires valid From and To Pincodes");
     if (!common) return toast.error("Add at least one E-Way Bill");
     const wmsEnabled = Boolean(branch?.wms_enabled);
+    const entriesToSave = packageEntries.filter(
+      (entry: PackageEntry) =>
+        Boolean(entry.package_rate_type_id) ||
+        Boolean(entry.eway_bill_number) ||
+        Boolean(entry.quantity) ||
+        Boolean(entry.weight_kg) ||
+        Boolean(entry.sku.trim()),
+    );
     if (wmsEnabled && !branch?.wms_warehouse_id)
       return toast.error("Select a WMS warehouse for this WMS-enabled branch before creating the Consignment");
-    if (wmsEnabled && !packageEntries.length)
+    if (wmsEnabled && !entriesToSave.length)
       return toast.error("Add at least one package entry for this WMS-enabled branch");
     if (
-      packageEntries.some(
+      entriesToSave.some(
         (entry) =>
           !entry.package_rate_type_id ||
           !entry.eway_bill_number ||
@@ -1051,7 +1059,7 @@ export function ConsignmentList({
       );
     const validatedItems: Array<WmsItem | null> = [];
     if (wmsEnabled) {
-      for (const entry of packageEntries) {
+      for (const entry of entriesToSave) {
         const item = await resolveWmsSku(entry.sku);
         if (!item) return toast.error(`SKU does not exist in WMS: ${entry.sku}`);
         validatedItems.push(item);
@@ -1128,7 +1136,7 @@ export function ConsignmentList({
       .eq("id", data.id);
     setLoading(false);
     if (updateError) return toast.error(updateError.message);
-    if (packageEntries.length) {
+    if (entriesToSave.length) {
       const { data: linkedShipments, error: shipmentLookupError } = await db
         .from("shipments")
         .select("id,eway_bill_number")
@@ -1140,7 +1148,7 @@ export function ConsignmentList({
           shipment.id,
         ]),
       );
-      const packageRows = packageEntries.map((entry, index) => ({
+      const packageRows = entriesToSave.map((entry, index) => ({
         consignment_id: data.id,
         shipment_id: shipmentIds.get(entry.eway_bill_number) ?? null,
         package_rate_type_id: entry.package_rate_type_id,
@@ -1164,7 +1172,11 @@ export function ConsignmentList({
     if (wmsEnabled) {
       const quantities = new Map<number, number>();
       validatedItems.forEach((item, index) => {
-        if (item) quantities.set(item.item_id, (quantities.get(item.item_id) ?? 0) + Number(packageEntries[index].quantity));
+        if (item)
+          quantities.set(
+            item.item_id,
+            (quantities.get(item.item_id) ?? 0) + Number(entriesToSave[index].quantity),
+          );
       });
       try {
         const salesOrder = await createWmsSalesOrder({
