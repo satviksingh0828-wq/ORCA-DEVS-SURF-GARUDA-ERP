@@ -95,7 +95,7 @@ export async function createWmsSalesOrder(input: {
     customer_address: input.customerAddress || null,
     ship_address: input.customerAddress || null,
     warehouse_id: input.warehouseId,
-    notes: `ERP Consignment ${input.orderNumber} (${input.consignmentId})`,
+    memo: `ERP Consignment ${input.orderNumber} (${input.consignmentId})`,
     lines: input.lines,
   });
   if (!response?.ok) {
