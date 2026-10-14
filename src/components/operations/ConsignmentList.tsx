@@ -1036,11 +1036,18 @@ export function ConsignmentList({
       return toast.error("Add at least one package entry for this WMS-enabled branch");
     if (
       packageEntries.some(
-        (entry) => !(Number(entry.quantity) > 0) || !(Number(entry.weight_kg) > 0) || (wmsEnabled && !entry.sku.trim()),
+        (entry) =>
+          !entry.package_rate_type_id ||
+          !entry.eway_bill_number ||
+          !(Number(entry.quantity) > 0) ||
+          !(Number(entry.weight_kg) > 0) ||
+          (wmsEnabled && !entry.sku.trim()),
       )
     )
       return toast.error(
-        wmsEnabled ? "Every package entry must have quantity, weight and a valid WMS SKU" : "Every package entry must have both quantity and weight greater than zero",
+        wmsEnabled
+          ? "Every package entry must have a package type, E-Way Bill, quantity, weight and a valid WMS SKU"
+          : "Every package entry must have a package type, E-Way Bill, quantity and weight greater than zero",
       );
     const validatedItems: Array<WmsItem | null> = [];
     if (wmsEnabled) {
