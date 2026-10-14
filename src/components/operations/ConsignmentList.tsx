@@ -1057,6 +1057,15 @@ export function ConsignmentList({
           ? "Every package entry must have a package type, E-Way Bill, quantity, weight and a valid WMS SKU"
           : "Every package entry must have a package type, E-Way Bill, quantity and weight greater than zero",
       );
+    // WMS sales-order lines use an integer quantity (the API rejects decimal
+    // quantities with a generic validation_error). Validate this before the
+    // ERP consignment is inserted so a failed WMS request cannot leave the
+    // operator with a misleading rollback/error flow.
+    if (
+      wmsEnabled &&
+      entriesToSave.some((entry) => !Number.isSafeInteger(Number(entry.quantity)))
+    )
+      return toast.error("WMS quantities must be whole numbers (for example, 1 or 2), not decimals");
     const validatedItems: Array<WmsItem | null> = [];
     if (wmsEnabled) {
       for (const entry of entriesToSave) {
@@ -1064,6 +1073,15 @@ export function ConsignmentList({
         if (!item) return toast.error(`SKU does not exist in WMS: ${entry.sku}`);
         validatedItems.push(item);
       }
+      const wmsQuantities = new Map<number, number>();
+      validatedItems.forEach((item, index) => {
+        if (item) {
+          const quantity = Number(entriesToSave[index].quantity);
+          wmsQuantities.set(item.item_id, (wmsQuantities.get(item.item_id) ?? 0) + quantity);
+        }
+      });
+      if ([...wmsQuantities.values()].some((quantity) => quantity > 1_000_000))
+        return toast.error("Each WMS item quantity must be 1,000,000 or less");
     }
     const payload = {
       branch_id: branchId,
@@ -1172,11 +1190,10 @@ export function ConsignmentList({
     if (wmsEnabled) {
       const quantities = new Map<number, number>();
       validatedItems.forEach((item, index) => {
-        if (item)
-          quantities.set(
-            item.item_id,
-            (quantities.get(item.item_id) ?? 0) + Number(entriesToSave[index].quantity),
-          );
+        if (item) {
+          const quantity = Number(entriesToSave[index].quantity);
+          quantities.set(item.item_id, (quantities.get(item.item_id) ?? 0) + quantity);
+        }
       });
       try {
         const salesOrder = await createWmsSalesOrder({

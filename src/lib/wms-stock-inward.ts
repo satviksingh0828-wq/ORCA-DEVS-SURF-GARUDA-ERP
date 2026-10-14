@@ -100,7 +100,15 @@ export async function createWmsSalesOrder(input: {
   });
   if (!response?.ok) {
     const data = await response.json().catch(() => ({}));
-    throw new Error(data?.error || "Could not create the WMS Sales Order.");
+    const details = Array.isArray(data?.details)
+      ? data.details
+          .map((detail: { loc?: unknown[]; msg?: string }) => {
+            const location = Array.isArray(detail.loc) && detail.loc.length ? detail.loc.join(".") : "request";
+            return `${location}: ${detail.msg || "invalid value"}`;
+          })
+          .join("; ")
+      : "";
+    throw new Error(details || data?.error || "Could not create the WMS Sales Order.");
   }
   const data = await response.json();
   const salesOrder = data.sales_order ?? data;
