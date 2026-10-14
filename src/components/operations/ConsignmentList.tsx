@@ -1202,7 +1202,11 @@ export function ConsignmentList({
           customerName: "OUTWARD",
           customerAddress: "OUTWARD",
           consignmentId: data.id,
-          lines: [...quantities.entries()].map(([item_id, quantity_ordered]) => ({ item_id, quantity_ordered })),
+          lines: [...quantities.entries()].map(([item_id, quantity_ordered], index) => ({
+            item_id,
+            quantity_ordered,
+            line_number: index + 1,
+          })),
         });
         if (!Number.isFinite(salesOrder.id)) throw new Error("WMS did not return a Sales Order ID");
         const { error: salesOrderLinkError } = await db.from("consignments").update({ wms_sales_order_id: salesOrder.id, wms_sales_order_number: salesOrder.number }).eq("id", data.id);

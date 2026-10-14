@@ -85,7 +85,7 @@ export async function createWmsSalesOrder(input: {
   warehouseId: number;
   customerName: string;
   customerAddress?: string;
-  lines: Array<{ item_id: number; quantity_ordered: number }>;
+  lines: Array<{ item_id: number; quantity_ordered: number; line_number?: number }>;
   consignmentId: string;
 }) {
   await ensureWmsCsrfToken();
