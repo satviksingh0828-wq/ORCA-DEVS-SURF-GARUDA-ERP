@@ -1200,7 +1200,6 @@ export function ConsignmentList({
           orderNumber: String(data.consignment_number),
           warehouseId: branch.wms_warehouse_id,
           customerName: "OUTWARD",
-          customerAddress: "OUTWARD",
           consignmentId: data.id,
           lines: [...quantities.entries()].map(([item_id, quantity_ordered], index) => ({
             item_id,

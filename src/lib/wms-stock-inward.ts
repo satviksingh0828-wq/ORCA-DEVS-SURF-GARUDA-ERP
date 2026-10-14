@@ -84,7 +84,6 @@ export async function createWmsSalesOrder(input: {
   orderNumber: string;
   warehouseId: number;
   customerName: string;
-  customerAddress?: string;
   lines: Array<{ item_id: number; quantity_ordered: number; line_number?: number }>;
   consignmentId: string;
 }) {
@@ -92,10 +91,7 @@ export async function createWmsSalesOrder(input: {
   const response = await api.post("/admin/sales-orders", {
     so_number: input.orderNumber,
     customer_name: input.customerName || "Consignment Customer",
-    customer_address: input.customerAddress || null,
-    ship_address: input.customerAddress || null,
     warehouse_id: input.warehouseId,
-    memo: `ERP Consignment ${input.orderNumber} (${input.consignmentId})`,
     lines: input.lines,
   });
   if (!response?.ok) {
