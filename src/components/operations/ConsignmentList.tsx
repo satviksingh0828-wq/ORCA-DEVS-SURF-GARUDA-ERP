@@ -589,6 +589,8 @@ export function ConsignmentList({
   const allowedBranchIds = user?.role === "basic" ? (user.branchIds ?? []) : null;
   const [rows, setRows] = useState<Record<string, any>[]>([]);
   const [screen, setScreen] = useState<"list" | "create" | "view">("list");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingRow, setEditingRow] = useState<Record<string, any> | null>(null);
   const [view, setView] = useState<Record<string, any> | null>(null);
   const [viewShipments, setViewShipments] = useState<Record<string, any>[]>([]);
   const [viewPackages, setViewPackages] = useState<PackageEntry[]>([]);
@@ -811,6 +813,8 @@ export function ConsignmentList({
   }, [type, branchId, transporterId]);
 
   function openCreate() {
+    setEditingId(null);
+    setEditingRow(null);
     setScreen("create");
     onSidebarVisibilityChange?.(false);
     onCreateModeChange?.(true);
@@ -839,6 +843,62 @@ export function ConsignmentList({
     setPackageTypes([]);
     setPackageEntries([]);
     void loadMasters();
+  }
+
+  async function openEdit(row: Record<string, any>) {
+    setLoading(true);
+    const [{ data: shipments, error: shipmentError }, { data: packages, error: packageError }] =
+      await Promise.all([
+        db
+          .from("shipments")
+          .select("*, shipment_items(*)")
+          .eq("consignment_id", row.id)
+          .order("eway_bill_date", { ascending: false }),
+        db
+          .from("consignment_package_information")
+          .select("id,package_rate_type_id,package_type,basis,quantity,weight_kg,sku,item_id,item_name,shipment:shipments(eway_bill_number)")
+          .eq("consignment_id", row.id)
+          .order("created_at"),
+      ]);
+    setLoading(false);
+    if (shipmentError) return toast.error(shipmentError.message);
+    if (packageError) return toast.error(packageError.message);
+    const loadedShipments = (shipments ?? []) as ShipmentDraft[];
+    setEditingId(row.id);
+    setEditingRow(row);
+    setBranchId(row.branch_id ?? "");
+    setSourceId(row.source_id ?? "");
+    setConsignmentDate(row.consignment_date ?? "");
+    setBillingStatus(row.billing_status ?? "to_be_billed");
+    setType(row.consignment_type ?? "own");
+    setOwnTransportMode(row.own_transport_mode ?? "own_vehicle");
+    setMovement(row.movement_mode ?? "pickup");
+    setTransportMode(row.transport_mode ?? "Road");
+    setVehicleId(row.vehicle_id ?? "");
+    setDriverId(row.driver_id ?? "");
+    setRentalId(row.rental_id ?? "");
+    setTransporterId(row.transporter_id ?? "");
+    setSelectedTransporterSourceId(row.transporter_source_id ?? "");
+    setTransporterLrNumber(row.transporter_lr_number ?? "");
+    setTransporterLrDate(row.transporter_lr_date ?? "");
+    setDeliveryDate(row.delivery_date ?? "");
+    setFromPin(row.from_pin_code ?? "");
+    setToPin(row.to_pin_code ?? "");
+    setPreviewNumber(row.consignment_number ?? "");
+    setEwayNo(loadedShipments[0]?.eway_bill_number ?? "");
+    setDrafts(loadedShipments);
+    setPackageEntries(
+      (packages ?? []).map((item: any) => ({
+        ...item,
+        quantity: item.quantity == null ? "" : String(item.quantity),
+        weight_kg: item.weight_kg == null ? "" : String(item.weight_kg),
+        eway_bill_number: item.shipment?.eway_bill_number ?? "",
+      })) as PackageEntry[],
+    );
+    await loadMasters();
+    setScreen("create");
+    onSidebarVisibilityChange?.(false);
+    onCreateModeChange?.(true);
   }
 
   async function addEway(ewayBillNumber = ewayNo): Promise<boolean> {
@@ -1011,6 +1071,45 @@ export function ConsignmentList({
     toast.success(
       `${partnerDialog === "rental" ? "Rental" : "Transporter"} ${updateLater ? "saved for later update and selected" : "created and selected"}`,
     );
+  }
+
+  async function saveEdit() {
+    if (!editingId || !editingRow) return;
+    const needsOwnVehicle = type === "third_party" ? movement === "drop" : ownTransportMode === "own_vehicle";
+    const needsRental = type === "own" && ownTransportMode === "rental";
+    const needsTransporter = type === "third_party";
+    if (needsRental && !rentalId) return toast.error("Select a Rental provider");
+    if (needsTransporter && !transporterId) return toast.error("Select a Transporter");
+    if (needsTransporter && !selectedTransporterSourceId)
+      return toast.error("Select a Transporter Source");
+    if (needsTransporter && (!/^\d{6}$/.test(fromPin) || !/^\d{6}$/.test(toPin)))
+      return toast.error("Transporter movement requires valid From and To Pincodes");
+    setLoading(true);
+    const { error } = await db
+      .from("consignments")
+      .update({
+        // Edit mode intentionally sends only Type and Transport Assignment fields.
+        consignment_type: type,
+        movement_mode: movement,
+        own_transport_mode: type === "own" ? ownTransportMode : "own_vehicle",
+        vehicle_id: needsOwnVehicle ? vehicleId || null : null,
+        driver_id: type === "own" || movement === "drop" ? driverId || null : null,
+        rental_id: needsRental ? rentalId || null : null,
+        transporter_id: needsTransporter ? transporterId || null : null,
+        transporter_source_id: needsTransporter ? selectedTransporterSourceId || null : null,
+        from_pin_code: needsTransporter ? fromPin : editingRow.from_pin_code ?? "",
+        to_pin_code: needsTransporter ? toPin : editingRow.to_pin_code ?? "",
+      })
+      .eq("id", editingId);
+    setLoading(false);
+    if (error) return toast.error(error.message);
+    toast.success("Consignment type and transport assignment updated");
+    setEditingId(null);
+    setEditingRow(null);
+    setScreen("list");
+    onSidebarVisibilityChange?.(true);
+    onCreateModeChange?.(false);
+    await loadRows();
   }
 
   async function save() {
@@ -1392,13 +1491,16 @@ export function ConsignmentList({
             transportMode,
             fromPin,
             toPin,
-            save,
+            save: editingId ? saveEdit : save,
             loading,
+            isEdit: editingId !== null,
             openPartner: (kind: "rental" | "transporter") => {
               setPartnerForm(emptyPartner());
               setPartnerDialog(kind);
             },
             onBack: () => {
+              setEditingId(null);
+              setEditingRow(null);
               setScreen("list");
               onSidebarVisibilityChange?.(true);
               onCreateModeChange?.(false);
@@ -1558,6 +1660,14 @@ export function ConsignmentList({
                     <div className="flex justify-end gap-1">
                       <Button variant="ghost" size="sm" onClick={() => void openView(row)}>
                         <Eye className="mr-1 size-4" /> View
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => void openEdit(row)}
+                        title="Edit only Type and Transport Assignment"
+                      >
+                        <Pencil className="mr-1 size-4" /> Edit
                       </Button>
                       {row.consignment_type === "third_party" && (
                         <Button
@@ -1719,6 +1829,7 @@ function ConsignmentForm(props: any) {
     setPackageEntries,
     save,
     loading,
+    isEdit = false,
     openPartner,
     onBack,
   } = props;
@@ -1860,14 +1971,16 @@ function ConsignmentForm(props: any) {
       <div className="consignment-entry w-full min-w-0 space-y-0 bg-background p-3 text-foreground">
         <div className="-mx-3 -mt-3 mb-3 flex min-h-12 flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/70 px-4 py-2">
           <div className="flex min-w-0 items-baseline gap-2">
-            <h2 className="shrink-0 text-base font-semibold">Consignment / Create</h2>
+            <h2 className="shrink-0 text-base font-semibold">Consignment / {isEdit ? "Edit" : "Create"}</h2>
             <p className="truncate text-xs text-muted-foreground">
-              Create consignment from E-Way Bills
+              {isEdit
+                ? "Edit only Type and Transport Assignment; all other fields are locked"
+                : "Create consignment from E-Way Bills"}
             </p>
           </div>
           <div className="flex items-center gap-2">
             <Button onClick={() => void save()} disabled={loading || drafts.length === 0}>
-              {loading ? "Saving…" : "Create Consignment"}
+              {loading ? "Saving…" : isEdit ? "Save Changes" : "Create Consignment"}
             </Button>
             <Button variant="outline" onClick={onBack}>
               <X className="mr-1 size-4" /> Discard
@@ -1912,6 +2025,7 @@ function ConsignmentForm(props: any) {
                 label: item.branch_name,
               }))}
               placeholder="Select branch"
+              disabled={isEdit}
             />
             <SelectField
               label="Source / Contract *"
@@ -1920,6 +2034,7 @@ function ConsignmentForm(props: any) {
               options={contracts}
               placeholder="Select source"
               allowClear
+              disabled={isEdit}
             />
             <div className="min-w-0 space-y-1">
               <Label className="text-xs font-semibold">Consignment Date *</Label>
@@ -1927,6 +2042,7 @@ function ConsignmentForm(props: any) {
                 type="date"
                 value={consignmentDate}
                 onChange={(event) => setConsignmentDate(event.target.value)}
+                disabled={isEdit}
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
               />
             </div>
@@ -1945,7 +2061,7 @@ function ConsignmentForm(props: any) {
             <ReadonlyField dense label="Consignment To PIN" value={common?.recipient_pin_code} />
             <div className="min-w-0 space-y-1">
               <Label className="text-xs font-semibold">Mode *</Label>
-              <Select value={transportMode} onValueChange={setTransportMode}>
+              <Select value={transportMode} onValueChange={setTransportMode} disabled={isEdit}>
                 <SelectTrigger className="h-8 rounded-none border-l-2 border-l-sky-600 px-2 text-xs">
                   <SelectValue />
                 </SelectTrigger>
@@ -1968,12 +2084,12 @@ function ConsignmentForm(props: any) {
                   }
                   placeholder="12-digit E-Way Bill Number"
                   className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
-                  readOnly={drafts.length > 0}
+                  readOnly={isEdit || drafts.length > 0}
                 />
                 <Button
                   type="button"
                   onClick={() => void addEway(ewayNo)}
-                  disabled={fetching || drafts.length > 0}
+                  disabled={isEdit || fetching || drafts.length > 0}
                 >
                   {fetching ? "Fetching…" : "Verify / Add"}
                 </Button>
@@ -1981,7 +2097,7 @@ function ConsignmentForm(props: any) {
                   type="button"
                   variant="outline"
                   onClick={() => openManualShipment()}
-                  disabled={drafts.length > 0}
+                  disabled={isEdit || drafts.length > 0}
                 >
                   Add Manually
                 </Button>
@@ -2192,7 +2308,7 @@ function ConsignmentForm(props: any) {
               type="button"
               variant="outline"
               onClick={() => void addAdditionalEway()}
-              disabled={fetching || !additionalEwayNo}
+              disabled={isEdit || fetching || !additionalEwayNo}
             >
               {fetching ? "Fetching…" : "Verify / Add"}
             </Button>
@@ -2229,7 +2345,7 @@ function ConsignmentForm(props: any) {
                   },
                 ])
               }
-              disabled={!packageTypes.length}
+              disabled={isEdit || !packageTypes.length}
             >
               <Plus className="mr-1 size-4" /> Add Package Entry
             </Button>
@@ -2258,6 +2374,7 @@ function ConsignmentForm(props: any) {
                       <Label>Package Type *</Label>
                       <Select
                         value={entry.package_rate_type_id}
+                        disabled={isEdit}
                         onValueChange={(value) => {
                           const type = packageTypes.find(
                             (item: PackageTypeOption) => item.id === value,
@@ -2297,6 +2414,7 @@ function ConsignmentForm(props: any) {
                         <div className="space-y-1.5">
                           <Label>SKU *</Label>
                           <Input
+                            disabled={isEdit}
                             value={entry.sku}
                             onChange={(event) => setPackageEntries(packageEntries.map((current, i) => i === index ? { ...current, sku: event.target.value, item_id: undefined, item_name: "" } : current))}
                             onBlur={async () => {
@@ -2318,6 +2436,7 @@ function ConsignmentForm(props: any) {
                       <Label>E-Way Bill *</Label>
                       <Select
                         value={entry.eway_bill_number}
+                        disabled={isEdit}
                         onValueChange={(value) =>
                           setPackageEntries(
                             packageEntries.map((current: PackageEntry, i: number) =>
@@ -2345,7 +2464,7 @@ function ConsignmentForm(props: any) {
                         min="0.001"
                         step="0.001"
                         value={entry.quantity}
-                        disabled={!selected}
+                        disabled={isEdit || !selected}
                         onChange={(event) =>
                           setPackageEntries(
                             packageEntries.map((current: PackageEntry, i: number) =>
@@ -2362,7 +2481,7 @@ function ConsignmentForm(props: any) {
                         min="0.001"
                         step="0.001"
                         value={entry.weight_kg}
-                        disabled={!selected}
+                        disabled={isEdit || !selected}
                         onChange={(event) =>
                           setPackageEntries(
                             packageEntries.map((current: PackageEntry, i: number) =>
@@ -2377,6 +2496,7 @@ function ConsignmentForm(props: any) {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        disabled={isEdit}
                         onClick={() =>
                           setPackageEntries(
                             packageEntries.filter((_: PackageEntry, i: number) => i !== index),
@@ -2418,7 +2538,7 @@ function ConsignmentForm(props: any) {
             Cancel
           </Button>
           <Button onClick={() => void save()} disabled={loading || drafts.length === 0}>
-            {loading ? "Saving…" : "Create Consignment"}
+            {loading ? "Saving…" : isEdit ? "Save Changes" : "Create Consignment"}
           </Button>
         </div>
       </div>
