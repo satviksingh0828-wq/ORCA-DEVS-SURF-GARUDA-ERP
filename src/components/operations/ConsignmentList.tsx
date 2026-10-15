@@ -863,7 +863,10 @@ export function ConsignmentList({
     setLoading(false);
     if (shipmentError) return toast.error(shipmentError.message);
     if (packageError) return toast.error(packageError.message);
-    const loadedShipments = (shipments ?? []) as ShipmentDraft[];
+    const loadedShipments = (shipments ?? []).map((shipment: any) => ({
+      ...shipment,
+      items: Array.isArray(shipment.shipment_items) ? shipment.shipment_items : [],
+    })) as ShipmentDraft[];
     setEditingId(row.id);
     setEditingRow(row);
     setBranchId(row.branch_id ?? "");
