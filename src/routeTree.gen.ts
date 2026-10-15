@@ -25,6 +25,7 @@ import { Route as LtmsRouteImport } from './routes/ltms'
 import { Route as MastersRouteImport } from './routes/masters'
 import { Route as OperationsRouteImport } from './routes/operations'
 import { Route as PayrollRouteImport } from './routes/payroll'
+import { Route as PickingTicketsRouteImport } from './routes/picking-tickets'
 import { Route as ReportMasterRouteImport } from './routes/report-master'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ScreenControlHostRouteImport } from './routes/screen-control-host'
@@ -76,6 +77,7 @@ import { Route as PayrollIncentivesRouteImport } from './routes/payroll.incentiv
 import { Route as PayrollLedgerRouteImport } from './routes/payroll.ledger'
 import { Route as PayrollLoansRouteImport } from './routes/payroll.loans'
 import { Route as PayrollPendingRouteImport } from './routes/payroll.pending'
+import { Route as PickingTicketsPrintAllRouteImport } from './routes/picking-tickets.print-all'
 import { Route as SettingsAttendanceModuleRouteImport } from './routes/settings.attendance-module'
 import { Route as AccountsMastersIndexRouteImport } from './routes/accounts.masters.index'
 import { Route as AccountsMastersBankRouteImport } from './routes/accounts.masters.bank'
@@ -92,6 +94,7 @@ import { Route as EmployeesIdIndexRouteImport } from './routes/employees.$id.ind
 import { Route as EmployeesIdEditRouteImport } from './routes/employees.$id.edit'
 import { Route as EmployeesDepartmentsIndexRouteImport } from './routes/employees.departments.index'
 import { Route as EmployeesDepartmentsNewRouteImport } from './routes/employees.departments.new'
+import { Route as PickingTicketsSoIdPrintRouteImport } from './routes/picking-tickets.$soId.print'
 import { Route as ApiDriverTripsClaimRouteImport } from './routes/api/driver/trips/claim'
 import { Route as ApiDriverTripsCurrentRouteImport } from './routes/api/driver/trips/current'
 import { Route as ApiDriverTripsEndRouteImport } from './routes/api/driver/trips/end'
@@ -184,6 +187,11 @@ const OperationsRoute = OperationsRouteImport.update({
 const PayrollRoute = PayrollRouteImport.update({
   id: '/payroll',
   path: '/payroll',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PickingTicketsRoute = PickingTicketsRouteImport.update({
+  id: '/picking-tickets',
+  path: '/picking-tickets',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportMasterRoute = ReportMasterRouteImport.update({
@@ -441,6 +449,11 @@ const PayrollPendingRoute = PayrollPendingRouteImport.update({
   path: '/pending',
   getParentRoute: () => PayrollRoute,
 } as any)
+const PickingTicketsPrintAllRoute = PickingTicketsPrintAllRouteImport.update({
+  id: '/print-all',
+  path: '/print-all',
+  getParentRoute: () => PickingTicketsRoute,
+} as any)
 const SettingsAttendanceModuleRoute =
   SettingsAttendanceModuleRouteImport.update({
     id: '/attendance-module',
@@ -523,6 +536,11 @@ const EmployeesDepartmentsNewRoute = EmployeesDepartmentsNewRouteImport.update({
   id: '/new',
   path: '/new',
   getParentRoute: () => EmployeesDepartmentsRoute,
+} as any)
+const PickingTicketsSoIdPrintRoute = PickingTicketsSoIdPrintRouteImport.update({
+  id: '/$soId/print',
+  path: '/$soId/print',
+  getParentRoute: () => PickingTicketsRoute,
 } as any)
 const ApiDriverTripsClaimRoute = ApiDriverTripsClaimRouteImport.update({
   id: '/api/driver/trips/claim',
@@ -614,6 +632,7 @@ export interface FileRoutesByFullPath {
   '/masters': typeof MastersRoute
   '/operations': typeof OperationsRoute
   '/payroll': typeof PayrollRouteWithChildren
+  '/picking-tickets': typeof PickingTicketsRouteWithChildren
   '/report-master': typeof ReportMasterRoute
   '/reports': typeof ReportsRoute
   '/screen-control-host': typeof ScreenControlHostRoute
@@ -660,6 +679,7 @@ export interface FileRoutesByFullPath {
   '/payroll/ledger': typeof PayrollLedgerRoute
   '/payroll/loans': typeof PayrollLoansRoute
   '/payroll/pending': typeof PayrollPendingRoute
+  '/picking-tickets/print-all': typeof PickingTicketsPrintAllRoute
   '/settings/attendance-module': typeof SettingsAttendanceModuleRoute
   '/accounts/': typeof AccountsIndexRoute
   '/attendance/': typeof AttendanceIndexRoute
@@ -677,6 +697,7 @@ export interface FileRoutesByFullPath {
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
   '/employees/departments/new': typeof EmployeesDepartmentsNewRoute
+  '/picking-tickets/$soId/print': typeof PickingTicketsSoIdPrintRoute
   '/accounts/masters/': typeof AccountsMastersIndexRoute
   '/attendance/history/': typeof AttendanceHistoryIndexRoute
   '/employees/$id/': typeof EmployeesIdIndexRoute
@@ -707,6 +728,7 @@ export interface FileRoutesByTo {
   '/ltms': typeof LtmsRoute
   '/masters': typeof MastersRoute
   '/operations': typeof OperationsRoute
+  '/picking-tickets': typeof PickingTicketsRouteWithChildren
   '/report-master': typeof ReportMasterRoute
   '/reports': typeof ReportsRoute
   '/screen-control-host': typeof ScreenControlHostRoute
@@ -750,6 +772,7 @@ export interface FileRoutesByTo {
   '/payroll/ledger': typeof PayrollLedgerRoute
   '/payroll/loans': typeof PayrollLoansRoute
   '/payroll/pending': typeof PayrollPendingRoute
+  '/picking-tickets/print-all': typeof PickingTicketsPrintAllRoute
   '/settings/attendance-module': typeof SettingsAttendanceModuleRoute
   '/accounts': typeof AccountsIndexRoute
   '/attendance': typeof AttendanceIndexRoute
@@ -767,6 +790,7 @@ export interface FileRoutesByTo {
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
   '/employees/departments/new': typeof EmployeesDepartmentsNewRoute
+  '/picking-tickets/$soId/print': typeof PickingTicketsSoIdPrintRoute
   '/accounts/masters': typeof AccountsMastersIndexRoute
   '/attendance/history': typeof AttendanceHistoryIndexRoute
   '/employees/$id': typeof EmployeesIdIndexRoute
@@ -803,6 +827,7 @@ export interface FileRoutesById {
   '/masters': typeof MastersRoute
   '/operations': typeof OperationsRoute
   '/payroll': typeof PayrollRouteWithChildren
+  '/picking-tickets': typeof PickingTicketsRouteWithChildren
   '/report-master': typeof ReportMasterRoute
   '/reports': typeof ReportsRoute
   '/screen-control-host': typeof ScreenControlHostRoute
@@ -849,6 +874,7 @@ export interface FileRoutesById {
   '/payroll/ledger': typeof PayrollLedgerRoute
   '/payroll/loans': typeof PayrollLoansRoute
   '/payroll/pending': typeof PayrollPendingRoute
+  '/picking-tickets/print-all': typeof PickingTicketsPrintAllRoute
   '/settings/attendance-module': typeof SettingsAttendanceModuleRoute
   '/accounts/': typeof AccountsIndexRoute
   '/attendance/': typeof AttendanceIndexRoute
@@ -866,6 +892,7 @@ export interface FileRoutesById {
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
   '/employees/departments/new': typeof EmployeesDepartmentsNewRoute
+  '/picking-tickets/$soId/print': typeof PickingTicketsSoIdPrintRoute
   '/accounts/masters/': typeof AccountsMastersIndexRoute
   '/attendance/history/': typeof AttendanceHistoryIndexRoute
   '/employees/$id/': typeof EmployeesIdIndexRoute
@@ -903,6 +930,7 @@ export interface FileRouteTypes {
     | '/masters'
     | '/operations'
     | '/payroll'
+    | '/picking-tickets'
     | '/report-master'
     | '/reports'
     | '/screen-control-host'
@@ -949,6 +977,7 @@ export interface FileRouteTypes {
     | '/payroll/ledger'
     | '/payroll/loans'
     | '/payroll/pending'
+    | '/picking-tickets/print-all'
     | '/settings/attendance-module'
     | '/accounts/'
     | '/attendance/'
@@ -966,6 +995,7 @@ export interface FileRouteTypes {
     | '/attendance/history/$id'
     | '/employees/$id/edit'
     | '/employees/departments/new'
+    | '/picking-tickets/$soId/print'
     | '/accounts/masters/'
     | '/attendance/history/'
     | '/employees/$id/'
@@ -996,6 +1026,7 @@ export interface FileRouteTypes {
     | '/ltms'
     | '/masters'
     | '/operations'
+    | '/picking-tickets'
     | '/report-master'
     | '/reports'
     | '/screen-control-host'
@@ -1039,6 +1070,7 @@ export interface FileRouteTypes {
     | '/payroll/ledger'
     | '/payroll/loans'
     | '/payroll/pending'
+    | '/picking-tickets/print-all'
     | '/settings/attendance-module'
     | '/accounts'
     | '/attendance'
@@ -1056,6 +1088,7 @@ export interface FileRouteTypes {
     | '/attendance/history/$id'
     | '/employees/$id/edit'
     | '/employees/departments/new'
+    | '/picking-tickets/$soId/print'
     | '/accounts/masters'
     | '/attendance/history'
     | '/employees/$id'
@@ -1091,6 +1124,7 @@ export interface FileRouteTypes {
     | '/masters'
     | '/operations'
     | '/payroll'
+    | '/picking-tickets'
     | '/report-master'
     | '/reports'
     | '/screen-control-host'
@@ -1137,6 +1171,7 @@ export interface FileRouteTypes {
     | '/payroll/ledger'
     | '/payroll/loans'
     | '/payroll/pending'
+    | '/picking-tickets/print-all'
     | '/settings/attendance-module'
     | '/accounts/'
     | '/attendance/'
@@ -1154,6 +1189,7 @@ export interface FileRouteTypes {
     | '/attendance/history/$id'
     | '/employees/$id/edit'
     | '/employees/departments/new'
+    | '/picking-tickets/$soId/print'
     | '/accounts/masters/'
     | '/attendance/history/'
     | '/employees/$id/'
@@ -1190,6 +1226,7 @@ export interface RootRouteChildren {
   MastersRoute: typeof MastersRoute
   OperationsRoute: typeof OperationsRoute
   PayrollRoute: typeof PayrollRouteWithChildren
+  PickingTicketsRoute: typeof PickingTicketsRouteWithChildren
   ReportMasterRoute: typeof ReportMasterRoute
   ReportsRoute: typeof ReportsRoute
   ScreenControlHostRoute: typeof ScreenControlHostRoute
@@ -1341,6 +1378,13 @@ declare module '@tanstack/react-router' {
       path: '/payroll'
       fullPath: '/payroll'
       preLoaderRoute: typeof PayrollRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/picking-tickets': {
+      id: '/picking-tickets'
+      path: '/picking-tickets'
+      fullPath: '/picking-tickets'
+      preLoaderRoute: typeof PickingTicketsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report-master': {
@@ -1700,6 +1744,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PayrollPendingRouteImport
       parentRoute: typeof PayrollRoute
     }
+    '/picking-tickets/print-all': {
+      id: '/picking-tickets/print-all'
+      path: '/print-all'
+      fullPath: '/picking-tickets/print-all'
+      preLoaderRoute: typeof PickingTicketsPrintAllRouteImport
+      parentRoute: typeof PickingTicketsRoute
+    }
     '/settings/attendance-module': {
       id: '/settings/attendance-module'
       path: '/attendance-module'
@@ -1811,6 +1862,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/employees/departments/new'
       preLoaderRoute: typeof EmployeesDepartmentsNewRouteImport
       parentRoute: typeof EmployeesDepartmentsRoute
+    }
+    '/picking-tickets/$soId/print': {
+      id: '/picking-tickets/$soId/print'
+      path: '/$soId/print'
+      fullPath: '/picking-tickets/$soId/print'
+      preLoaderRoute: typeof PickingTicketsSoIdPrintRouteImport
+      parentRoute: typeof PickingTicketsRoute
     }
     '/api/driver/trips/claim': {
       id: '/api/driver/trips/claim'
@@ -2067,6 +2125,20 @@ const PayrollRouteChildren: PayrollRouteChildren = {
 const PayrollRouteWithChildren =
   PayrollRoute._addFileChildren(PayrollRouteChildren)
 
+interface PickingTicketsRouteChildren {
+  PickingTicketsPrintAllRoute: typeof PickingTicketsPrintAllRoute
+  PickingTicketsSoIdPrintRoute: typeof PickingTicketsSoIdPrintRoute
+}
+
+const PickingTicketsRouteChildren: PickingTicketsRouteChildren = {
+  PickingTicketsPrintAllRoute: PickingTicketsPrintAllRoute,
+  PickingTicketsSoIdPrintRoute: PickingTicketsSoIdPrintRoute,
+}
+
+const PickingTicketsRouteWithChildren = PickingTicketsRoute._addFileChildren(
+  PickingTicketsRouteChildren,
+)
+
 interface SettingsRouteChildren {
   SettingsAttendanceModuleRoute: typeof SettingsAttendanceModuleRoute
 }
@@ -2096,6 +2168,7 @@ const rootRouteChildren: RootRouteChildren = {
   MastersRoute: MastersRoute,
   OperationsRoute: OperationsRoute,
   PayrollRoute: PayrollRouteWithChildren,
+  PickingTicketsRoute: PickingTicketsRouteWithChildren,
   ReportMasterRoute: ReportMasterRoute,
   ReportsRoute: ReportsRoute,
   ScreenControlHostRoute: ScreenControlHostRoute,
