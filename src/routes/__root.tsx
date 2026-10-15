@@ -215,7 +215,12 @@ function DynamicImportRecovery() {
 /** Renders the SPARROW AI panel — admin only, persists across route changes */
 function PasskeyProtectionGate({ children }: { children: ReactNode }) {
   const { data: settings, isLoading } = useAppSettings();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   if (isLoading) return <ModuleLoadingScreen shellTitle="Garuda Logistics Solutions" />;
+  // Picking tickets open in a new tab. The device gate is sessionStorage
+  // scoped, so prompting again here would block a print-only WMS page even
+  // though the WMS session cookie remains valid.
+  if (pathname.startsWith("/picking-tickets")) return <>{children}</>;
   if (settings?.passkey_protection_enabled !== true) return <>{children}</>;
   return <PasskeyGate>{children}</PasskeyGate>;
 }
