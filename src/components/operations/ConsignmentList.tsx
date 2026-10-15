@@ -856,7 +856,7 @@ export function ConsignmentList({
           .order("eway_bill_date", { ascending: false }),
         db
           .from("consignment_package_information")
-          .select("id,package_rate_type_id,package_type,basis,quantity,weight_kg,sku,item_id,item_name,shipment:shipments(eway_bill_number)")
+          .select("id,package_rate_type_id,package_type,basis,quantity,weight_kg,sku,item_name,shipment:shipments(eway_bill_number)")
           .eq("consignment_id", row.id)
           .order("created_at"),
       ]);
@@ -2288,7 +2288,12 @@ function ConsignmentForm(props: any) {
         <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h3 className="text-sm font-semibold text-sky-800">E-Way Bills</h3>
-            <Button type="button" variant="outline" onClick={() => openManualShipment()}>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => openManualShipment()}
+              disabled={isEdit}
+            >
               <Plus className="mr-1 size-4" /> Add Manually
             </Button>
           </div>
@@ -2297,6 +2302,7 @@ function ConsignmentForm(props: any) {
               <Label className="text-xs font-semibold">Add Another E-Way Bill No.</Label>
               <Input
                 value={additionalEwayNo}
+                disabled={isEdit}
                 onChange={(event) =>
                   setAdditionalEwayNo(event.target.value.replace(/\D/g, "").slice(0, 12))
                 }
@@ -2313,7 +2319,7 @@ function ConsignmentForm(props: any) {
               {fetching ? "Fetching…" : "Verify / Add"}
             </Button>
           </div>
-          <EwayTable drafts={drafts} remove={removeEway} />
+          <EwayTable drafts={drafts} remove={removeEway} readOnly={isEdit} />
         </section>
         <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
           <h3 className="text-sm font-semibold text-sky-800">Goods from all E-Way Bills</h3>
