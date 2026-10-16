@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { Link } from "@tanstack/react-router";
 import { ArrowLeft, CalendarClock, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -9,6 +10,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AccountsMobileNav, AccountsSidebar } from "@/components/accounts/AccountsSectionNav";
+import { AppShell } from "@/components/AppShell";
+import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
+import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 
 const db = supabase as any;
 type Tab = "create" | "manage";
@@ -30,7 +34,7 @@ const nextPeriod = (date: string, period: Schedule["period"]) => {
 };
 
 export function AccountsDepreciationRoute() {
-  return <AccountsDepreciationPage />;
+  return <AccountsAccessGuard><AccountsDepreciationPage /></AccountsAccessGuard>;
 }
 
 function AccountsDepreciationPage() {
@@ -129,18 +133,19 @@ function AccountsDepreciationPage() {
     await loadData();
   }
 
-  return <div className="min-h-screen bg-background text-foreground">
-    <AccountsMobileNav pathname="/accounts/depreciation" />
-    <div className="mx-auto max-w-[1600px] px-4 py-4 lg:flex lg:gap-4">
-      <aside className="hidden w-56 shrink-0 lg:block"><AccountsSidebar mode="depreciation" activeTabId={tab} onSelectTab={(id) => { setTab(id as Tab); setCreating(false); }} /></aside>
-      <main className="min-w-0 flex-1 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-wider text-muted-foreground">Accounts / Depreciation</p><h1 className="text-2xl font-bold">Depreciation</h1><p className="text-sm text-muted-foreground">Manual period-by-period depreciation posting.</p></div>{tab === "create" && !creating && <Button onClick={() => setCreating(true)}><Plus className="mr-1 size-4" />Create Schedule</Button>}</div>
-        <div className="flex gap-2 border-b"><Button variant={tab === "create" ? "default" : "ghost"} onClick={() => { setTab("create"); setCreating(false); }}>Create Schedule</Button><Button variant={tab === "manage" ? "default" : "ghost"} onClick={() => { setTab("manage"); setCreating(false); }}>Manage Schedule</Button></div>
-        {tab === "create" && (creating ? <CreateForm form={form} setForm={setForm} branches={branches} assets={assets} expenses={expenses} selectedAsset={selectedAsset} changeBranch={changeBranch} changeAsset={changeAsset} onSubmit={createSchedule} onBack={() => setCreating(false)} /> : <ScheduleList rows={filteredSchedules} branches={branches} branchFilter={branchFilter} setBranchFilter={setBranchFilter} assetSearch={assetSearch} setAssetSearch={setAssetSearch} loading={loading} onDelete={deleteSchedule} />)}
-        {tab === "manage" && <ManageList schedules={dueSchedules} entries={filteredEntries} allEntries={entries} branches={branches} branchFilter={branchFilter} setBranchFilter={setBranchFilter} assetSearch={assetSearch} setAssetSearch={setAssetSearch} monthFilter={monthFilter} setMonthFilter={setMonthFilter} onPost={postEntry} onDelete={deleteSchedule} loading={loading} />}
-      </main>
+  return <AppShell variant="ltms" shellTitle="Accounts" breadcrumb={<span className="flex items-center gap-1.5 text-sm text-muted-foreground"><Link to="/home">Workspace</Link><span>/</span><Link to="/accounts">Accounts</Link><span>/</span><span className="text-foreground">Depreciation</span></span>}>
+    <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
+      <AccountsSidebar mode="depreciation" activeTabId={tab} onSelectTab={(id) => { setTab(id as Tab); setCreating(false); }} />
+      <div className="ltms-reference-content min-w-0">
+        <AccountsMobileNav pathname="/accounts/depreciation" />
+        <div className="lg:hidden"><MobileTabDropdown tabs={[{ id: "create", label: "Create Schedule", desc: "Create depreciation schedule", icon: Plus }, { id: "manage", label: "Manage Schedule", desc: "Post and review entries", icon: CalendarClock }]} activeId={tab} label="Depreciation tabs" compact onChange={(id) => { setTab(id as Tab); setCreating(false); }} /></div>
+        <main className="min-w-0 space-y-4 p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="text-xs uppercase tracking-wider text-muted-foreground">Accounts / Depreciation</p><h1 className="text-2xl font-bold">Depreciation</h1><p className="text-sm text-muted-foreground">Manual period-by-period depreciation posting.</p></div>{tab === "create" && !creating && <Button onClick={() => setCreating(true)}><Plus className="mr-1 size-4" />Create Schedule</Button>}</div>
+          {tab === "create" && (creating ? <CreateForm form={form} setForm={setForm} branches={branches} assets={assets} expenses={expenses} selectedAsset={selectedAsset} changeBranch={changeBranch} changeAsset={changeAsset} onSubmit={createSchedule} onBack={() => setCreating(false)} /> : <ScheduleList rows={filteredSchedules} branches={branches} branchFilter={branchFilter} setBranchFilter={setBranchFilter} assetSearch={assetSearch} setAssetSearch={setAssetSearch} loading={loading} onDelete={deleteSchedule} />)}
+          {tab === "manage" && <ManageList schedules={dueSchedules} entries={filteredEntries} allEntries={entries} branches={branches} branchFilter={branchFilter} setBranchFilter={setBranchFilter} assetSearch={assetSearch} setAssetSearch={setAssetSearch} monthFilter={monthFilter} setMonthFilter={setMonthFilter} onPost={postEntry} onDelete={deleteSchedule} loading={loading} />}
+        </main>
+      </div>
     </div>
-  </div>;
+  </AppShell>;
 }
 
 function CreateForm({ form, setForm, branches, assets, expenses, selectedAsset, changeBranch, changeAsset, onSubmit, onBack }: any) {
