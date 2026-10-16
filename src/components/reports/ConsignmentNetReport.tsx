@@ -183,17 +183,21 @@ export function ConsignmentNetReport({
   onFiltersChange,
   dashboardCompact = false,
   reportMonth,
+  initialFilters,
+  hideFilterControls = false,
 }: {
   onRowsChange?: (rows: ConsignmentNetReportRow[]) => void;
   onWorkbookRows?: (rows: object[]) => void;
   onFiltersChange?: (filters: { fromDate: string; toDate: string; branchId: string }) => void;
   dashboardCompact?: boolean;
   reportMonth?: string;
+  initialFilters?: { fromDate: string; toDate: string; branchId: string };
+  hideFilterControls?: boolean;
 } = {}) {
   const monthDate = reportMonth ? new Date(`${reportMonth}-15T12:00:00`) : new Date();
-  const [fromDate, setFromDate] = useState(() => monthStart(monthDate));
-  const [toDate, setToDate] = useState(() => monthEnd(monthDate));
-  const [branchId, setBranchId] = useState("all");
+  const [fromDate, setFromDate] = useState(() => initialFilters?.fromDate ?? monthStart(monthDate));
+  const [toDate, setToDate] = useState(() => initialFilters?.toDate ?? monthEnd(monthDate));
+  const [branchId, setBranchId] = useState(() => initialFilters?.branchId ?? "all");
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [search, setSearch] = useState("");
@@ -573,72 +577,74 @@ export function ConsignmentNetReport({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-muted/30 p-3">
-        <div className="relative w-full sm:w-60">
-          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
-          <Input
-            className="h-9 pl-9"
-            placeholder="Search consignment number…"
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
+      {!hideFilterControls && (
+        <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border bg-muted/30 p-3">
+          <div className="relative w-full sm:w-60">
+            <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+            <Input
+              className="h-9 pl-9"
+              placeholder="Search consignment number…"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">From Date</label>
+            <Input
+              className="h-9 w-40"
+              type="date"
+              value={fromDate}
+              onChange={(event) => setFromDate(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">To Date</label>
+            <Input
+              className="h-9 w-40"
+              type="date"
+              value={toDate}
+              onChange={(event) => setToDate(event.target.value)}
+            />
+          </div>
+          <div className="space-y-1">
+            <label className="text-xs font-medium text-muted-foreground">Branch</label>
+            <Select value={branchId} onValueChange={setBranchId}>
+              <SelectTrigger className="h-9 w-48">
+                <SelectValue placeholder="All branches" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All branches</SelectItem>
+                {branches.map((branch) => (
+                  <SelectItem key={branch.id} value={branch.id}>
+                    {branch.branch_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="ml-auto flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportReport}
+              disabled={!filtered.length}
+              className="h-9 gap-2"
+            >
+              <Download className="size-4" /> Export CSV
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => void loadData()}
+              disabled={loading}
+              className="size-9"
+              title="Refresh"
+            >
+              <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">From Date</label>
-          <Input
-            className="h-9 w-40"
-            type="date"
-            value={fromDate}
-            onChange={(event) => setFromDate(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">To Date</label>
-          <Input
-            className="h-9 w-40"
-            type="date"
-            value={toDate}
-            onChange={(event) => setToDate(event.target.value)}
-          />
-        </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">Branch</label>
-          <Select value={branchId} onValueChange={setBranchId}>
-            <SelectTrigger className="h-9 w-48">
-              <SelectValue placeholder="All branches" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All branches</SelectItem>
-              {branches.map((branch) => (
-                <SelectItem key={branch.id} value={branch.id}>
-                  {branch.branch_name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="ml-auto flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={exportReport}
-            disabled={!filtered.length}
-            className="h-9 gap-2"
-          >
-            <Download className="size-4" /> Export CSV
-          </Button>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => void loadData()}
-            disabled={loading}
-            className="size-9"
-            title="Refresh"
-          >
-            <RefreshCw className={`size-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
-      </div>
+      )}
       {!dashboardCompact && (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
           <div className="rounded-xl border border-border bg-card p-4 shadow-sm">

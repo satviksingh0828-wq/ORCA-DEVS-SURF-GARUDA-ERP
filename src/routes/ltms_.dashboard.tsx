@@ -4,6 +4,7 @@ import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { LtmsDashboard } from "@/components/ltms/LtmsDashboard";
+import { LtmsComparison } from "@/components/ltms/LtmsComparison";
 import { LtmsWorkbook } from "@/components/ltms/LtmsWorkbook";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
@@ -68,6 +69,7 @@ function DashboardPage() {
           <div className="mb-5 border-b" role="tablist" aria-label="LTMS Dashboard tabs">
             {[
               { id: "data", label: "Data" },
+              { id: "comparison", label: "Comparison" },
               { id: "workbook", label: "Workbook" },
             ].map((tab) => (
               <button
@@ -85,6 +87,11 @@ function DashboardPage() {
           <div hidden={activeTab !== "data"} role="tabpanel" aria-label="Data">
             <LtmsDashboard />
           </div>
+          {activeTab === "comparison" && (
+            <div role="tabpanel" aria-label="Comparison">
+              <LtmsComparison />
+            </div>
+          )}
           {activeTab === "workbook" && (
             <div role="tabpanel" aria-label="Workbook">
               <LtmsWorkbook />

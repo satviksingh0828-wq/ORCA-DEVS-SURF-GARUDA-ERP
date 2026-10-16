@@ -10,7 +10,7 @@ import { fetchAll } from "@/lib/fetch-all";
 
 /* The report-era LTMS tables are newer than the generated Supabase types. */
 const db = supabase as any;
-type Amounts = {
+export type LtmsDashboardAmounts = {
   trip: number;
   workmen: number;
   transporter: number;
@@ -20,7 +20,13 @@ type Amounts = {
   financeIncome: number;
   financeExpenditure: number;
 };
-const zero = (): Amounts => ({
+export type LtmsDashboardFilters = { fromDate: string; toDate: string; branchId: string };
+export type LtmsDashboardSummary = {
+  system: LtmsDashboardAmounts;
+  posted: LtmsDashboardAmounts;
+  loading: boolean;
+};
+const zero = (): LtmsDashboardAmounts => ({
   trip: 0,
   workmen: 0,
   transporter: 0,
@@ -30,6 +36,16 @@ const zero = (): Amounts => ({
   financeIncome: 0,
   financeExpenditure: 0,
 });
+const metrics: Array<[keyof LtmsDashboardAmounts, string]> = [
+  ["trip", "Trip Expenditure"],
+  ["workmen", "Workmen Charges"],
+  ["transporter", "Transporter Expenditure"],
+  ["unloading", "Unloading Income"],
+  ["consignment", "Consignment Income"],
+  ["net", "Consignment Net"],
+  ["financeIncome", "LTMS Finance Income"],
+  ["financeExpenditure", "LTMS Finance Expenditure"],
+];
 const money = (value: number) =>
   new Intl.NumberFormat("en-IN", {
     style: "currency",
@@ -50,23 +66,34 @@ const add = (rows: ConsignmentNetReportRow[]) =>
     zero(),
   );
 
-export function LtmsDashboard() {
+export function LtmsDashboard({
+  initialFilters,
+  onSummaryChange,
+  comparisonMode = false,
+}: {
+  initialFilters?: LtmsDashboardFilters;
+  onSummaryChange?: (summary: LtmsDashboardSummary) => void;
+  comparisonMode?: boolean;
+} = {}) {
   const [rows, setRows] = useState<ConsignmentNetReportRow[]>([]);
-  const [system, setSystem] = useState<Amounts>(zero());
-  const [posted, setPosted] = useState<Amounts>(zero());
+  const [system, setSystem] = useState<LtmsDashboardAmounts>(zero());
+  const [posted, setPosted] = useState<LtmsDashboardAmounts>(zero());
   const [systemWorkmenUnloading, setSystemWorkmenUnloading] = useState(0);
   const [financeTotals, setFinanceTotals] = useState({ income: 0, expenditure: 0 });
-  const [financeLoading, setFinanceLoading] = useState(false);
-  const [loadingPosted, setLoadingPosted] = useState(false);
-  const [filters, setFilters] = useState({
-    fromDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`,
-    toDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
-      .toISOString()
-      .slice(0, 10),
-    branchId: "all",
-  });
+  const [financeLoading, setFinanceLoading] = useState(comparisonMode);
+  const [loadingPosted, setLoadingPosted] = useState(comparisonMode);
+  const [filters, setFilters] = useState<LtmsDashboardFilters>(
+    () =>
+      initialFilters ?? {
+        fromDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`,
+        toDate: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0)
+          .toISOString()
+          .slice(0, 10),
+        branchId: "all",
+      },
+  );
   const onRowsChange = useCallback((value: ConsignmentNetReportRow[]) => setRows(value), []);
-  const onFiltersChange = useCallback((value: typeof filters) => setFilters(value), []);
+  const onFiltersChange = useCallback((value: LtmsDashboardFilters) => setFilters(value), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -391,51 +418,75 @@ export function LtmsDashboard() {
     };
   }, [rows, filters]);
 
-  const metrics: Array<[keyof Amounts, string]> = [
-    ["trip", "Trip Expenditure"],
-    ["workmen", "Workmen Charges"],
-    ["transporter", "Transporter Expenditure"],
-    ["unloading", "Unloading Income"],
-    ["consignment", "Consignment Income"],
-    ["net", "Consignment Net"],
-    ["financeIncome", "LTMS Finance Income"],
-    ["financeExpenditure", "LTMS Finance Expenditure"],
-  ];
+  useEffect(() => {
+    if (!onSummaryChange) return;
+    onSummaryChange({
+      system: {
+        ...system,
+        workmen: system.workmen + systemWorkmenUnloading,
+        financeIncome: financeTotals.income,
+        financeExpenditure: financeTotals.expenditure,
+      },
+      posted: {
+        ...posted,
+        financeIncome: financeTotals.income,
+        financeExpenditure: financeTotals.expenditure,
+      },
+      loading: financeLoading || loadingPosted,
+    });
+  }, [
+    financeLoading,
+    financeTotals,
+    loadingPosted,
+    onSummaryChange,
+    posted,
+    system,
+    systemWorkmenUnloading,
+  ]);
+
   return (
     <div className="space-y-4">
-      <p className="text-xs text-muted-foreground">
-        Figures use the LTMS report calculations for the selected period and branch.
-      </p>
-      <ConsignmentNetReport
-        onRowsChange={onRowsChange}
-        onFiltersChange={onFiltersChange}
-        dashboardCompact
-      />
-      <div className="grid gap-4 xl:grid-cols-2">
-        <MetricGroup
-          title="IN SYSTEM"
-          subtitle="Final report values; Workmen Charges = loading + unloading"
-          values={{
-            ...system,
-            workmen: system.workmen + systemWorkmenUnloading,
-            financeIncome: financeTotals.income,
-            financeExpenditure: financeTotals.expenditure,
-          }}
-          loading={financeLoading}
-          metrics={metrics}
-        />
-        <MetricGroup
-          title="IN SYSTEM AND POSTED"
-          subtitle="Posted journal-linked amounts; Workmen Charges = loading + unloading"
-          values={{
-            ...posted,
-            financeIncome: financeTotals.income,
-            financeExpenditure: financeTotals.expenditure,
-          }}
-          loading={loadingPosted || financeLoading}
-          metrics={metrics}
+      {!comparisonMode && (
+        <p className="text-xs text-muted-foreground">
+          Figures use the LTMS report calculations for the selected period and branch.
+        </p>
+      )}
+      <div className={comparisonMode ? "hidden" : undefined}>
+        <ConsignmentNetReport
+          onRowsChange={onRowsChange}
+          onFiltersChange={onFiltersChange}
+          initialFilters={initialFilters ?? filters}
+          hideFilterControls={comparisonMode}
+          dashboardCompact
         />
       </div>
+      {!comparisonMode && (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <MetricGroup
+            title="IN SYSTEM"
+            subtitle="Final report values; Workmen Charges = loading + unloading"
+            values={{
+              ...system,
+              workmen: system.workmen + systemWorkmenUnloading,
+              financeIncome: financeTotals.income,
+              financeExpenditure: financeTotals.expenditure,
+            }}
+            loading={financeLoading}
+            metrics={metrics}
+          />
+          <MetricGroup
+            title="IN SYSTEM AND POSTED"
+            subtitle="Posted journal-linked amounts; Workmen Charges = loading + unloading"
+            values={{
+              ...posted,
+              financeIncome: financeTotals.income,
+              financeExpenditure: financeTotals.expenditure,
+            }}
+            loading={loadingPosted || financeLoading}
+            metrics={metrics}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -448,9 +499,9 @@ function MetricGroup({
 }: {
   title: string;
   subtitle: string;
-  values: Amounts;
+  values: LtmsDashboardAmounts;
   loading: boolean;
-  metrics: Array<[keyof Amounts, string]>;
+  metrics: Array<[keyof LtmsDashboardAmounts, string]>;
 }) {
   return (
     <section className="rounded-xl border bg-card p-4">
