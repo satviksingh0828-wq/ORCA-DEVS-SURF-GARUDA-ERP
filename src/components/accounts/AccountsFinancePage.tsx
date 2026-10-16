@@ -6,7 +6,11 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
-import { AccountsMobileNav, AccountsSidebar } from "@/components/accounts/AccountsSectionNav";
+import {
+  AccountsMobileNav,
+  AccountsSidebar,
+  consumeAccountsTabNavigation,
+} from "@/components/accounts/AccountsSectionNav";
 import { LtmsAccountingBilling } from "@/components/reports/LtmsAccountingBilling";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -85,6 +89,10 @@ export function AccountsFinancePage() {
     setTab(nextTab);
     setOpen(false);
   };
+  useEffect(() => {
+    const pending = consumeAccountsTabNavigation("finance");
+    if (pending && tabs.some((item) => item.id === pending)) changeTab(pending as TabId);
+  }, []);
   const allowed = useMemo(() => new Set(branches.map((b) => b.id)), [branches]);
   const currency = (amount: number | string) =>
     `₹${Number(amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;

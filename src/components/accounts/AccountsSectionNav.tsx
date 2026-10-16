@@ -175,7 +175,13 @@ export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
   {
     section: "finance",
     label: "Finance",
-    items: [{ id: "finance", label: "Parties & Vouchers", to: "/accounts/finance" }],
+    items: [
+      { id: "parties", label: "Parties", to: "/accounts/finance" },
+      { id: "debit-notes", label: "Debit Notes", to: "/accounts/finance" },
+      { id: "credit-notes", label: "Credit Notes", to: "/accounts/finance" },
+      { id: "cash-receipt", label: "Cash Receipt", to: "/accounts/finance" },
+      { id: "cash-payment", label: "Cash Payment", to: "/accounts/finance" },
+    ],
   },
   {
     section: "gst",
