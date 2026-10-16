@@ -33,6 +33,7 @@ const BRANCH_TYPES = [
 // Branch fields are extended by later Supabase migrations and are not fully represented in generated types.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Branch = Record<string, any> & { id?: string };
+type GstSlabOption = { id: string; branch_id: string; slab_name: string };
 
 type EwbCredentialState = {
   api_username: string;
@@ -66,6 +67,7 @@ const EMPTY: Branch = {
   gstin: "",
   pan: "",
   state_code: "",
+  default_gst_slab_id: null,
   _eway_api_username: "",
   _eway_api_password: "",
   _eway_configured: "false",
@@ -91,6 +93,7 @@ export function BranchSettings() {
   const [editing, setEditing] = useState<Branch | null>(null);
   const [saving, setSaving] = useState(false);
   const [wmsWarehouses, setWmsWarehouses] = useState<WmsWarehouse[]>([]);
+  const [gstSlabs, setGstSlabs] = useState<GstSlabOption[]>([]);
   const [wmsLoading, setWmsLoading] = useState(false);
   const { user } = useSession();
 
@@ -102,6 +105,13 @@ export function BranchSettings() {
       .order("created_at", { ascending: true });
     if (error) toast.error("Could not load branches");
     setBranches((data as Branch[]) ?? []);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: slabRows, error: slabError } = await (supabase as any)
+      .from("account_gst_slabs")
+      .select("id,branch_id,slab_name")
+      .order("slab_name");
+    if (slabError) toast.error("Could not load GST slabs");
+    setGstSlabs((slabRows ?? []) as GstSlabOption[]);
     setLoading(false);
   }
 
@@ -127,6 +137,7 @@ export function BranchSettings() {
       ),
       wms_enabled: branch.wms_enabled === true || branch.wms_enabled === "true",
       wms_warehouse_id: branch.wms_warehouse_id ?? null,
+      default_gst_slab_id: branch.default_gst_slab_id ?? null,
     };
     setEditing(next);
     if (!branch.id) return;
@@ -195,6 +206,15 @@ export function BranchSettings() {
     }
     if (editing.wms_enabled && !editing.wms_warehouse_id) {
       toast.error("Select a WMS warehouse when WMS is enabled");
+      return;
+    }
+    if (
+      editing.default_gst_slab_id &&
+      !gstSlabs.some(
+        (slab) => slab.id === editing.default_gst_slab_id && slab.branch_id === editing.id,
+      )
+    ) {
+      toast.error("Choose a GST slab that belongs to this branch");
       return;
     }
     setSaving(true);
@@ -437,6 +457,38 @@ export function BranchSettings() {
           <Field label="GSTIN" value={editing.gstin} onChange={set("gstin")} />
           <Field label="PAN (if separate)" value={editing.pan} onChange={set("pan")} />
           <Field label="State Code" value={editing.state_code} onChange={set("state_code")} />
+          <div className="space-y-1.5 sm:col-span-2">
+            <Label className="text-xs font-medium text-muted-foreground">Default GST slab</Label>
+            <Select
+              value={editing.default_gst_slab_id || "none"}
+              onValueChange={(value) =>
+                setEditing((current) =>
+                  current
+                    ? { ...current, default_gst_slab_id: value === "none" ? null : value }
+                    : current,
+                )
+              }
+              disabled={!editing.id}
+            >
+              <SelectTrigger className="h-10 w-full">
+                <SelectValue placeholder="Select the branch default GST slab" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">No default GST slab</SelectItem>
+                {gstSlabs
+                  .filter((slab) => slab.branch_id === editing.id)
+                  .map((slab) => (
+                    <SelectItem key={slab.id} value={slab.id}>
+                      {slab.slab_name}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
+            <p className="text-[11px] text-muted-foreground">
+              Choose a GST slab created for this branch. New branches can select one after their GST
+              slab has been created.
+            </p>
+          </div>
         </Section>
 
         {!editing.id ? (
