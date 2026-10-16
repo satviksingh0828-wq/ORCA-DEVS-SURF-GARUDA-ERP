@@ -41,6 +41,8 @@ import { Route as AccountsAutoRulesRouteImport } from './routes/accounts.auto-ru
 import { Route as AccountsBankRouteImport } from './routes/accounts.bank'
 import { Route as AccountsCashRouteImport } from './routes/accounts.cash'
 import { Route as AccountsFinalRouteImport } from './routes/accounts.final'
+import { Route as AccountsFinanceRouteImport } from './routes/accounts.finance'
+import { Route as AccountsGstRouteImport } from './routes/accounts.gst'
 import { Route as AccountsJournalRouteImport } from './routes/accounts.journal'
 import { Route as AccountsLedgerRouteImport } from './routes/accounts.ledger'
 import { Route as AccountsMastersRouteImport } from './routes/accounts.masters'
@@ -267,6 +269,16 @@ const AccountsCashRoute = AccountsCashRouteImport.update({
 const AccountsFinalRoute = AccountsFinalRouteImport.update({
   id: '/final',
   path: '/final',
+  getParentRoute: () => AccountsRoute,
+} as any)
+const AccountsFinanceRoute = AccountsFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => AccountsRoute,
+} as any)
+const AccountsGstRoute = AccountsGstRouteImport.update({
+  id: '/gst',
+  path: '/gst',
   getParentRoute: () => AccountsRoute,
 } as any)
 const AccountsJournalRoute = AccountsJournalRouteImport.update({
@@ -647,6 +659,8 @@ export interface FileRoutesByFullPath {
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
   '/accounts/final': typeof AccountsFinalRoute
+  '/accounts/finance': typeof AccountsFinanceRoute
+  '/accounts/gst': typeof AccountsGstRoute
   '/accounts/journal': typeof AccountsJournalRoute
   '/accounts/ledger': typeof AccountsLedgerRoute
   '/accounts/masters': typeof AccountsMastersRouteWithChildren
@@ -743,6 +757,8 @@ export interface FileRoutesByTo {
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
   '/accounts/final': typeof AccountsFinalRoute
+  '/accounts/finance': typeof AccountsFinanceRoute
+  '/accounts/gst': typeof AccountsGstRoute
   '/accounts/journal': typeof AccountsJournalRoute
   '/accounts/ledger': typeof AccountsLedgerRoute
   '/api/fetch-eway-bills': typeof ApiFetchEwayBillsRoute
@@ -842,6 +858,8 @@ export interface FileRoutesById {
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
   '/accounts/final': typeof AccountsFinalRoute
+  '/accounts/finance': typeof AccountsFinanceRoute
+  '/accounts/gst': typeof AccountsGstRoute
   '/accounts/journal': typeof AccountsJournalRoute
   '/accounts/ledger': typeof AccountsLedgerRoute
   '/accounts/masters': typeof AccountsMastersRouteWithChildren
@@ -945,6 +963,8 @@ export interface FileRouteTypes {
     | '/accounts/bank'
     | '/accounts/cash'
     | '/accounts/final'
+    | '/accounts/finance'
+    | '/accounts/gst'
     | '/accounts/journal'
     | '/accounts/ledger'
     | '/accounts/masters'
@@ -1041,6 +1061,8 @@ export interface FileRouteTypes {
     | '/accounts/bank'
     | '/accounts/cash'
     | '/accounts/final'
+    | '/accounts/finance'
+    | '/accounts/gst'
     | '/accounts/journal'
     | '/accounts/ledger'
     | '/api/fetch-eway-bills'
@@ -1139,6 +1161,8 @@ export interface FileRouteTypes {
     | '/accounts/bank'
     | '/accounts/cash'
     | '/accounts/final'
+    | '/accounts/finance'
+    | '/accounts/gst'
     | '/accounts/journal'
     | '/accounts/ledger'
     | '/accounts/masters'
@@ -1490,6 +1514,20 @@ declare module '@tanstack/react-router' {
       path: '/final'
       fullPath: '/accounts/final'
       preLoaderRoute: typeof AccountsFinalRouteImport
+      parentRoute: typeof AccountsRoute
+    }
+    '/accounts/finance': {
+      id: '/accounts/finance'
+      path: '/finance'
+      fullPath: '/accounts/finance'
+      preLoaderRoute: typeof AccountsFinanceRouteImport
+      parentRoute: typeof AccountsRoute
+    }
+    '/accounts/gst': {
+      id: '/accounts/gst'
+      path: '/gst'
+      fullPath: '/accounts/gst'
+      preLoaderRoute: typeof AccountsGstRouteImport
       parentRoute: typeof AccountsRoute
     }
     '/accounts/journal': {
@@ -1987,6 +2025,8 @@ interface AccountsRouteChildren {
   AccountsBankRoute: typeof AccountsBankRoute
   AccountsCashRoute: typeof AccountsCashRoute
   AccountsFinalRoute: typeof AccountsFinalRoute
+  AccountsFinanceRoute: typeof AccountsFinanceRoute
+  AccountsGstRoute: typeof AccountsGstRoute
   AccountsJournalRoute: typeof AccountsJournalRoute
   AccountsLedgerRoute: typeof AccountsLedgerRoute
   AccountsMastersRoute: typeof AccountsMastersRouteWithChildren
@@ -1998,6 +2038,8 @@ const AccountsRouteChildren: AccountsRouteChildren = {
   AccountsBankRoute: AccountsBankRoute,
   AccountsCashRoute: AccountsCashRoute,
   AccountsFinalRoute: AccountsFinalRoute,
+  AccountsFinanceRoute: AccountsFinanceRoute,
+  AccountsGstRoute: AccountsGstRoute,
   AccountsJournalRoute: AccountsJournalRoute,
   AccountsLedgerRoute: AccountsLedgerRoute,
   AccountsMastersRoute: AccountsMastersRouteWithChildren,

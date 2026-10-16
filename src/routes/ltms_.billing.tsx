@@ -7,9 +7,6 @@ import {
   Package,
   Banknote,
   CircleDollarSign,
-  Users,
-  FileWarning,
-  FileCheck2,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -22,7 +19,6 @@ import { TransporterBilling } from "@/components/reports/TransporterBilling";
 import { WorkmenBilling } from "@/components/reports/WorkmenBilling";
 import { UnloadingReceived } from "@/components/reports/UnloadingReceived";
 import { ApprovalIncome } from "@/components/reports/ApprovalIncome";
-import { LtmsAccountingBilling } from "@/components/reports/LtmsAccountingBilling";
 import { useSession } from "@/lib/session";
 
 const TABS = [
@@ -37,19 +33,6 @@ const TABS = [
     label: "Source Billing",
     desc: "Bill consignments by source",
     icon: FileText,
-  },
-  { id: "parties", label: "Parties", desc: "Debtors and creditors", icon: Users },
-  {
-    id: "debit-notes",
-    label: "Debit Notes",
-    desc: "Create and settle debit notes",
-    icon: FileWarning,
-  },
-  {
-    id: "credit-notes",
-    label: "Credit Notes",
-    desc: "Create and settle credit notes",
-    icon: FileCheck2,
   },
   {
     id: "unloading-received",
@@ -148,9 +131,6 @@ function BillingPage() {
           </header>
           {safeTab === "trip-billing" && <TripBilling />}
           {safeTab === "source-billing" && <SourceBilling />}
-          {safeTab === "parties" && <LtmsAccountingBilling initialTab="parties" />}
-          {safeTab === "debit-notes" && <LtmsAccountingBilling initialTab="debit-notes" />}
-          {safeTab === "credit-notes" && <LtmsAccountingBilling initialTab="credit-notes" />}
           {safeTab === "unloading-received" && <UnloadingReceived />}
           {safeTab === "approval-income" && <ApprovalIncome />}
           {safeTab === "transporter-billing" && <TransporterBilling />}

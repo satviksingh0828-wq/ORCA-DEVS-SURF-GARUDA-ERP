@@ -76,9 +76,27 @@ const ledgerMobileTabs = ledgerLinks.map((item) => ({
 }));
 
 const journalLinks = [
-  { key: "create", label: "Create", description: "Post journal entry", icon: Plus, to: "/accounts/journal?tab=create" },
-  { key: "transfer", label: "Transfer", description: "Move bank / cash", icon: ArrowRightLeft, to: "/accounts/journal?tab=transfer" },
-  { key: "list", label: "List", description: "Browse journal entries", icon: List, to: "/accounts/journal?tab=list" },
+  {
+    key: "create",
+    label: "Create",
+    description: "Post journal entry",
+    icon: Plus,
+    to: "/accounts/journal?tab=create",
+  },
+  {
+    key: "transfer",
+    label: "Transfer",
+    description: "Move bank / cash",
+    icon: ArrowRightLeft,
+    to: "/accounts/journal?tab=transfer",
+  },
+  {
+    key: "list",
+    label: "List",
+    description: "Browse journal entries",
+    icon: List,
+    to: "/accounts/journal?tab=list",
+  },
 ] as const;
 const journalMobileTabs = journalLinks.map((item) => ({
   id: item.key,
@@ -96,6 +114,8 @@ export const accountModules = [
   { id: "journal", label: "Journal", to: "/accounts/journal", prefix: "/accounts/journal" },
   { id: "ledger", label: "Ledger", to: "/accounts/ledger", prefix: "/accounts/ledger" },
   { id: "final", label: "Final Accounts", to: "/accounts/final", prefix: "/accounts/final" },
+  { id: "finance", label: "Finance", to: "/accounts/finance", prefix: "/accounts/finance" },
+  { id: "gst", label: "GST", to: "/accounts/gst", prefix: "/accounts/gst" },
 ] as const;
 
 const ACCOUNTS_PENDING_TAB_KEY = "accounts.pending-sidebar-tab";
@@ -123,7 +143,8 @@ export function consumeAccountsTabNavigation(section: string): string | null {
   }
 }
 
-export type AccountsArea = "masters" | "journal" | "ledger" | "final" | "auto-rules";
+export type AccountsArea =
+  "masters" | "journal" | "ledger" | "final" | "auto-rules" | "finance" | "gst";
 
 export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
   {
@@ -150,6 +171,16 @@ export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
       { id: "profit-loss", label: "Profit & Loss", to: "/accounts/final" },
       { id: "cash-flow", label: "Cash Flow", to: "/accounts/final" },
     ],
+  },
+  {
+    section: "finance",
+    label: "Finance",
+    items: [{ id: "finance", label: "Parties & Vouchers", to: "/accounts/finance" }],
+  },
+  {
+    section: "gst",
+    label: "GST",
+    items: [{ id: "gst-master", label: "GST Master", to: "/accounts/gst" }],
   },
 ];
 

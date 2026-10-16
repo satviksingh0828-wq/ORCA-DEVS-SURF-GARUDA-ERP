@@ -45,6 +45,15 @@ export const Route = createFileRoute("/home")({
 
 const BASIC_MODULES = [
   {
+    key: "accounts",
+    label: "Accounts",
+    desc: "Branch finance and cash vouchers",
+    icon: Landmark,
+    active: true,
+    to: "/accounts/finance" as const,
+    roles: ["basic"] as const,
+  },
+  {
     key: "ltms",
     label: "LTMS",
     desc: "Branch operations, finance, reports, billing & masters",
@@ -142,7 +151,7 @@ const ADMIN_VIEWER_MODULES = [
   {
     key: "accounts",
     label: "Accounts",
-    desc: "Branch bank & cash account masters",
+    desc: "Branch bank, cash and accounting finance",
     icon: Landmark,
     active: true,
     to: "/accounts" as const,
