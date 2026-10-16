@@ -506,7 +506,7 @@ export function LtmsWorkbook() {
     return () => {
       cancelled = true;
     };
-  }, [reportMonth]);
+  }, [reportMonth, refreshKey]);
 
   useEffect(() => {
     const timer = window.setInterval(

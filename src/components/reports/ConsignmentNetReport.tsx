@@ -182,6 +182,7 @@ export function ConsignmentNetReport({
   onWorkbookRows,
   onFiltersChange,
   dashboardCompact = false,
+  reportMonth,
 }: {
   onRowsChange?: (rows: ConsignmentNetReportRow[]) => void;
   onWorkbookRows?: (rows: object[]) => void;
