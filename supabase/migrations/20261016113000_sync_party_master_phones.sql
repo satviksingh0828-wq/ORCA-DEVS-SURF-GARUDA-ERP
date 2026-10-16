@@ -59,8 +59,7 @@ EXECUTE FUNCTION public.sync_party_master_phone_to_consignment_records();
 -- A branch-specific master wins over a legacy NULL-branch master; the newest
 -- master is used if old duplicate legacy rows exist.
 UPDATE public.shipments AS s
-SET supplier_phone = pm.phone_number
-FROM LATERAL (
+SET supplier_phone = (
   SELECT p.phone_number
   FROM public.party_masters AS p
   WHERE p.party_type = 'consignor'
@@ -68,12 +67,26 @@ FROM LATERAL (
     AND (p.branch_id IS NULL OR p.branch_id = s.branch_id)
   ORDER BY (p.branch_id IS NULL), p.updated_at DESC, p.id DESC
   LIMIT 1
-) AS pm
-WHERE s.supplier_phone IS DISTINCT FROM pm.phone_number;
+)
+WHERE EXISTS (
+  SELECT 1
+  FROM public.party_masters AS p
+  WHERE p.party_type = 'consignor'
+    AND upper(p.gstin) = upper(s.supplier_gstin)
+    AND (p.branch_id IS NULL OR p.branch_id = s.branch_id)
+)
+AND s.supplier_phone IS DISTINCT FROM (
+  SELECT p.phone_number
+  FROM public.party_masters AS p
+  WHERE p.party_type = 'consignor'
+    AND upper(p.gstin) = upper(s.supplier_gstin)
+    AND (p.branch_id IS NULL OR p.branch_id = s.branch_id)
+  ORDER BY (p.branch_id IS NULL), p.updated_at DESC, p.id DESC
+  LIMIT 1
+);
 
 UPDATE public.shipments AS s
-SET recipient_phone = pm.phone_number
-FROM LATERAL (
+SET recipient_phone = (
   SELECT p.phone_number
   FROM public.party_masters AS p
   WHERE p.party_type = 'consignee'
@@ -81,8 +94,23 @@ FROM LATERAL (
     AND (p.branch_id IS NULL OR p.branch_id = s.branch_id)
   ORDER BY (p.branch_id IS NULL), p.updated_at DESC, p.id DESC
   LIMIT 1
-) AS pm
-WHERE s.recipient_phone IS DISTINCT FROM pm.phone_number;
+)
+WHERE EXISTS (
+  SELECT 1
+  FROM public.party_masters AS p
+  WHERE p.party_type = 'consignee'
+    AND upper(p.gstin) = upper(s.recipient_gstin)
+    AND (p.branch_id IS NULL OR p.branch_id = s.branch_id)
+)
+AND s.recipient_phone IS DISTINCT FROM (
+  SELECT p.phone_number
+  FROM public.party_masters AS p
+  WHERE p.party_type = 'consignee'
+    AND upper(p.gstin) = upper(s.recipient_gstin)
+    AND (p.branch_id IS NULL OR p.branch_id = s.branch_id)
+  ORDER BY (p.branch_id IS NULL), p.updated_at DESC, p.id DESC
+  LIMIT 1
+);
 
 -- Backfill the JSON party snapshots stored on the consignment itself. The same
 -- branch-specific/newest-master precedence is used as for shipments.
@@ -90,10 +118,18 @@ UPDATE public.consignments AS c
 SET from_details = jsonb_set(
   coalesce(c.from_details, '{}'::jsonb),
   '{phone}',
-  to_jsonb(pm.phone_number),
+  to_jsonb((
+    SELECT p.phone_number
+    FROM public.party_masters AS p
+    WHERE p.party_type = 'consignor'
+      AND upper(p.gstin) = upper(c.from_gstin)
+      AND (p.branch_id IS NULL OR p.branch_id = c.branch_id)
+    ORDER BY (p.branch_id IS NULL), p.updated_at DESC, p.id DESC
+    LIMIT 1
+  )),
   true
 )
-FROM LATERAL (
+WHERE coalesce(c.from_details->>'phone', '') IS DISTINCT FROM (
   SELECT p.phone_number
   FROM public.party_masters AS p
   WHERE p.party_type = 'consignor'
@@ -101,17 +137,31 @@ FROM LATERAL (
     AND (p.branch_id IS NULL OR p.branch_id = c.branch_id)
   ORDER BY (p.branch_id IS NULL), p.updated_at DESC, p.id DESC
   LIMIT 1
-) AS pm
-WHERE coalesce(c.from_details->>'phone', '') IS DISTINCT FROM pm.phone_number;
+)
+AND EXISTS (
+  SELECT 1
+  FROM public.party_masters AS p
+  WHERE p.party_type = 'consignor'
+    AND upper(p.gstin) = upper(c.from_gstin)
+    AND (p.branch_id IS NULL OR p.branch_id = c.branch_id)
+);
 
 UPDATE public.consignments AS c
 SET to_details = jsonb_set(
   coalesce(c.to_details, '{}'::jsonb),
   '{phone}',
-  to_jsonb(pm.phone_number),
+  to_jsonb((
+    SELECT p.phone_number
+    FROM public.party_masters AS p
+    WHERE p.party_type = 'consignee'
+      AND upper(p.gstin) = upper(c.to_gstin)
+      AND (p.branch_id IS NULL OR p.branch_id = c.branch_id)
+    ORDER BY (p.branch_id IS NULL), p.updated_at DESC, p.id DESC
+    LIMIT 1
+  )),
   true
 )
-FROM LATERAL (
+WHERE coalesce(c.to_details->>'phone', '') IS DISTINCT FROM (
   SELECT p.phone_number
   FROM public.party_masters AS p
   WHERE p.party_type = 'consignee'
@@ -119,8 +169,14 @@ FROM LATERAL (
     AND (p.branch_id IS NULL OR p.branch_id = c.branch_id)
   ORDER BY (p.branch_id IS NULL), p.updated_at DESC, p.id DESC
   LIMIT 1
-) AS pm
-WHERE coalesce(c.to_details->>'phone', '') IS DISTINCT FROM pm.phone_number;
+)
+AND EXISTS (
+  SELECT 1
+  FROM public.party_masters AS p
+  WHERE p.party_type = 'consignee'
+    AND upper(p.gstin) = upper(c.to_gstin)
+    AND (p.branch_id IS NULL OR p.branch_id = c.branch_id)
+);
 
 GRANT EXECUTE ON FUNCTION public.sync_party_master_phone_to_consignment_records() TO anon, authenticated;
 
