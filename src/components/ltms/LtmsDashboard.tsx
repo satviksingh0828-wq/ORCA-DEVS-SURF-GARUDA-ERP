@@ -49,6 +49,7 @@ export function LtmsDashboard() {
   const [rows, setRows] = useState<ConsignmentNetReportRow[]>([]);
   const [system, setSystem] = useState<Amounts>(zero());
   const [posted, setPosted] = useState<Amounts>(zero());
+  const [systemWorkmenUnloading, setSystemWorkmenUnloading] = useState(0);
   const [loadingPosted, setLoadingPosted] = useState(false);
   const [filters, setFilters] = useState({
     fromDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`,
@@ -67,7 +68,7 @@ export function LtmsDashboard() {
         let query = db
           .from("stock_inward_receipts")
           .select(
-            "id,branch_id,receipt_date,unloading_amount_received,additional_income_mode,approval_amount,approval_income_journal_entry_id,unloading_received_journal_entry_id,stock_inward_packages(package_rate_type_id,quantity,weight_kg)",
+            "id,branch_id,receipt_date,unloading_amount_received,additional_income_mode,approval_amount,approval_income_journal_entry_id,unloading_received_journal_entry_id,unloading_deduction,additional_unloading,stock_inward_packages(package_rate_type_id,quantity,weight_kg)",
           )
           .gte("receipt_date", filters.fromDate)
           .lte("receipt_date", filters.toDate);
@@ -135,6 +136,7 @@ export function LtmsDashboard() {
         const rates = ratesResult.data ?? [];
         let all = 0;
         let postedAmount = 0;
+        let finalWorkmenUnloading = 0;
         for (const receipt of receipts) {
           const mode = receipt.additional_income_mode;
           const approval = mode === "approval" || mode === "both" ? n(receipt.approval_amount) : 0;
@@ -154,6 +156,29 @@ export function LtmsDashboard() {
           }, 0);
           const received = n(receipt.unloading_amount_received);
           all += received + approval + source;
+          const calculatedUnloading = (receipt.stock_inward_packages ?? []).reduce(
+            (sum: number, item: any) => {
+              const type = typeMap.get(item.package_rate_type_id);
+              const measure = type?.basis === "weight" ? n(item.weight_kg) : n(item.quantity);
+              const slab = rates
+                .filter((rate: any) => rate.package_rate_type_id === item.package_rate_type_id)
+                .sort((a: any, b: any) => n(b.from_value) - n(a.from_value))
+                .find(
+                  (rate: any) =>
+                    n(rate.from_value) <= measure &&
+                    (rate.to_value == null || measure <= n(rate.to_value)),
+                );
+              if (!type || !slab) return sum;
+              return (
+                sum + (type.charge_mode === "rate" ? n(slab.amount) * measure : n(slab.amount))
+              );
+            },
+            0,
+          );
+          finalWorkmenUnloading += Math.max(
+            0,
+            calculatedUnloading - n(receipt.unloading_deduction) + n(receipt.additional_unloading),
+          );
           if (receipt.unloading_received_journal_entry_id) postedAmount += received;
           if (receipt.approval_income_journal_entry_id) postedAmount += approval;
           postedAmount += sourcePostedByReceipt.get(receipt.id) ?? 0;
@@ -161,6 +186,7 @@ export function LtmsDashboard() {
         if (!cancelled) {
           setSystem((current) => ({ ...current, unloading: all }));
           setPosted((current) => ({ ...current, unloading: postedAmount }));
+          setSystemWorkmenUnloading(finalWorkmenUnloading);
         }
       } catch (error) {
         if (!cancelled)
@@ -184,11 +210,16 @@ export function LtmsDashboard() {
       try {
         const all = add(rows);
         setSystem((current) => ({ ...all, unloading: current.unloading }));
-        if (!rows.length) {
-          setPosted(zero());
-          setLoadingPosted(false);
-          return;
-        }
+        let receiptQuery = db
+          .from("stock_inward_receipts")
+          .select("id")
+          .gte("receipt_date", filters.fromDate)
+          .lte("receipt_date", filters.toDate);
+        if (filters.branchId !== "all")
+          receiptQuery = receiptQuery.eq("branch_id", filters.branchId);
+        const receiptResult = await receiptQuery;
+        if (receiptResult.error) throw receiptResult.error;
+        const receiptIds = (receiptResult.data ?? []).map((row: { id: string }) => row.id);
         const sourceBillIds = [
           ...new Set(rows.map((row) => row.source_bill_id).filter(Boolean)),
         ] as string[];
@@ -197,34 +228,43 @@ export function LtmsDashboard() {
         ] as string[];
         const tripIds = [...new Set(rows.map((row) => row.trip_id).filter(Boolean))] as string[];
         const consignmentIds = rows.map((row) => row.id);
-        const [sourceBills, transporterBills, trips, workmenItems] = await Promise.all([
-          sourceBillIds.length
-            ? db
-                .from("ltms_source_bills")
-                .select("id,journal_entry_id")
-                .in("id", sourceBillIds)
-                .is("deleted_at", null)
-            : Promise.resolve({ data: [], error: null }),
-          transporterBillIds.length
-            ? db
-                .from("ltms_transporter_bills")
-                .select("id,journal_entry_id")
-                .in("id", transporterBillIds)
-                .is("deleted_at", null)
-            : Promise.resolve({ data: [], error: null }),
-          tripIds.length
-            ? db.from("trips").select("id,posted_journal_entry_id").in("id", tripIds)
-            : Promise.resolve({ data: [], error: null }),
-          consignmentIds.length
-            ? db
-                .from("workmen_bill_items")
-                .select("consignment_id,bill_id,final_amount")
-                .eq("charge_type", "loading")
-                .in("consignment_id", consignmentIds)
-            : Promise.resolve({ data: [], error: null }),
-        ]);
-        for (const result of [sourceBills, transporterBills, trips, workmenItems])
+        const [sourceBills, transporterBills, trips, loadingItems, unloadingItems] =
+          await Promise.all([
+            sourceBillIds.length
+              ? db
+                  .from("ltms_source_bills")
+                  .select("id,journal_entry_id")
+                  .in("id", sourceBillIds)
+                  .is("deleted_at", null)
+              : Promise.resolve({ data: [], error: null }),
+            transporterBillIds.length
+              ? db
+                  .from("ltms_transporter_bills")
+                  .select("id,journal_entry_id")
+                  .in("id", transporterBillIds)
+                  .is("deleted_at", null)
+              : Promise.resolve({ data: [], error: null }),
+            tripIds.length
+              ? db.from("trips").select("id,posted_journal_entry_id").in("id", tripIds)
+              : Promise.resolve({ data: [], error: null }),
+            consignmentIds.length
+              ? db
+                  .from("workmen_bill_items")
+                  .select("consignment_id,bill_id,final_amount")
+                  .eq("charge_type", "loading")
+                  .in("consignment_id", consignmentIds)
+              : Promise.resolve({ data: [], error: null }),
+            receiptIds.length
+              ? db
+                  .from("workmen_bill_items")
+                  .select("stock_inward_receipt_id,bill_id,final_amount")
+                  .eq("charge_type", "unloading")
+                  .in("stock_inward_receipt_id", receiptIds)
+              : Promise.resolve({ data: [], error: null }),
+          ]);
+        for (const result of [sourceBills, transporterBills, trips, loadingItems, unloadingItems])
           if (result.error) throw result.error;
+        const workmenItems = [...(loadingItems.data ?? []), ...(unloadingItems.data ?? [])];
         const workmenBillIds = [
           ...new Set((workmenItems.data ?? []).map((item: { bill_id: string }) => item.bill_id)),
         ];
@@ -255,12 +295,15 @@ export function LtmsDashboard() {
             .map((bill: { id: string }) => bill.id),
         );
         const postedWorkmenByConsignment = new Map<string, number>();
-        for (const item of workmenItems.data ?? []) {
+        let postedWorkmenUnloading = 0;
+        for (const item of workmenItems) {
           if (!postedWorkmenBills.has(item.bill_id)) continue;
-          postedWorkmenByConsignment.set(
-            item.consignment_id,
-            (postedWorkmenByConsignment.get(item.consignment_id) ?? 0) + n(item.final_amount),
-          );
+          if (item.consignment_id)
+            postedWorkmenByConsignment.set(
+              item.consignment_id,
+              (postedWorkmenByConsignment.get(item.consignment_id) ?? 0) + n(item.final_amount),
+            );
+          else postedWorkmenUnloading += n(item.final_amount);
         }
         const postedRows = rows.reduce((total, row) => {
           const income =
@@ -279,6 +322,7 @@ export function LtmsDashboard() {
           total.net += income - transporter - workmen - trip;
           return total;
         }, zero());
+        postedRows.workmen += postedWorkmenUnloading;
         if (!cancelled) setPosted((current) => ({ ...postedRows, unloading: current.unloading }));
       } catch (error) {
         if (!cancelled)
@@ -293,7 +337,7 @@ export function LtmsDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [rows]);
+  }, [rows, filters]);
 
   const metrics: Array<[keyof Amounts, string]> = [
     ["trip", "Trip Expenditure"],
@@ -316,14 +360,14 @@ export function LtmsDashboard() {
       <div className="grid gap-4 xl:grid-cols-2">
         <MetricGroup
           title="IN SYSTEM"
-          subtitle="Final values calculated by the LTMS report"
-          values={system}
+          subtitle="Final report values; Workmen Charges = loading + unloading"
+          values={{ ...system, workmen: system.workmen + systemWorkmenUnloading }}
           loading={false}
           metrics={metrics}
         />
         <MetricGroup
           title="IN SYSTEM AND POSTED"
-          subtitle="Only values linked to a posted journal entry"
+          subtitle="Posted journal-linked amounts; Workmen Charges = loading + unloading"
           values={posted}
           loading={loadingPosted}
           metrics={metrics}
