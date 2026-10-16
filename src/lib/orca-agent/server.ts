@@ -1,6 +1,7 @@
 import Browserbase from "@browserbasehq/sdk";
 import { Stagehand } from "@browserbasehq/stagehand";
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
+import { ORCA_PUTER_MODEL, PuterLLMClient } from "@/lib/orca-agent/puter-llm";
 
 const BROWSERBASE_TIMEOUT_SECONDS = 30 * 60;
 
@@ -8,13 +9,6 @@ function requiredEnv(name: string) {
   const value = process.env[name]?.trim();
   if (!value) throw new Error(`${name} is not configured on the server.`);
   return value;
-}
-
-function browserModel() {
-  // Stagehand runs its own browser-action model. Puter remains ORCA's primary
-  // reasoning/vision model in the client; this model is only used to translate
-  // approved browser instructions into reliable Stagehand actions.
-  return process.env.STAGEHAND_MODEL?.trim() || "openai/gpt-4o-mini";
 }
 
 export type BrowserRuntime = {
@@ -46,7 +40,9 @@ export async function openBrowserRuntime(existingSessionId?: string): Promise<Br
           userMetadata: { product: "ORCA AGENT" },
         },
     keepAlive: true,
-    model: { modelName: browserModel() as never },
+    // Puter is the only AI provider. The model name is fixed in code.
+    model: { modelName: ORCA_PUTER_MODEL as never },
+    llmClient: new PuterLLMClient(),
     systemPrompt:
       "You are ORCA AGENT operating a remote browser. Follow the user's instruction precisely. Never invent a successful result. Stop if the requested action would be unsafe, ambiguous, or outside the current page.",
     selfHeal: true,

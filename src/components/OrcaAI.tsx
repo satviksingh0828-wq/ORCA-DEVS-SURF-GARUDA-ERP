@@ -955,6 +955,7 @@ const uid = () => Math.random().toString(36).slice(2);
 
 const ADMIN_CHIPS = ["New expenditure", "New driver", "Open trip form", "Add vehicle", "Open dashboard"];
 const BASIC_CHIPS = ["New expenditure", "New driver", "Open trip form", "New transporter"];
+const ORCA_PUTER_MODEL = "gpt-5.4-nano";
 const BROWSER_TASK_PATTERN = /\b(browser|website|web page|open https?:\/\/|search online|visit https?:\/\/|fill (?:in|out) (?:this|the) (?:form|page)|click on|navigate to https?:\/\/|log(?:in| into)\b)/i;
 
 function isBrowserAgentRequest(text: string) {
@@ -966,7 +967,7 @@ async function callPuter(messages: { role: string; content: string }[]): Promise
   if (!p?.ai?.chat) throw new Error("AI engine not ready. Please reload and try again.");
   type R = { message: { content: string } };
   const result = await Promise.race<R>([
-    p.ai.chat(messages, { model: "gpt-4o-mini" }) as Promise<R>,
+    p.ai.chat(messages, { model: ORCA_PUTER_MODEL }) as Promise<R>,
     new Promise<never>((_, rej) =>
       setTimeout(() => rej(new Error("Request timed out. Please try again.")), 30000),
     ),
