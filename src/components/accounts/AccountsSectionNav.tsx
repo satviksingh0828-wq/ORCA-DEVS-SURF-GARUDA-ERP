@@ -14,7 +14,7 @@ import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { LtmsSidebar, type LtmsSidebarGroup } from "@/components/ltms/LtmsSidebar";
 
 export type LedgerTab = "capital" | "create" | "list" | "view";
-type SectionMode = "masters" | "ledger" | "journal" | "auto-rules";
+type SectionMode = "masters" | "ledger" | "journal" | "auto-rules" | "depreciation";
 export type JournalTab = "create" | "transfer" | "list";
 export type AutoRulesTab = "verify" | "base" | "rules";
 
@@ -116,6 +116,7 @@ export const accountModules = [
   { id: "final", label: "Final Accounts", to: "/accounts/final", prefix: "/accounts/final" },
   { id: "finance", label: "Finance", to: "/accounts/finance", prefix: "/accounts/finance" },
   { id: "gst", label: "GST", to: "/accounts/gst", prefix: "/accounts/gst" },
+  { id: "depreciation", label: "Depreciation", to: "/accounts/depreciation", prefix: "/accounts/depreciation" },
 ] as const;
 
 const ACCOUNTS_PENDING_TAB_KEY = "accounts.pending-sidebar-tab";
@@ -144,7 +145,14 @@ export function consumeAccountsTabNavigation(section: string): string | null {
 }
 
 export type AccountsArea =
-  "masters" | "journal" | "ledger" | "final" | "auto-rules" | "finance" | "gst";
+  | "masters"
+  | "journal"
+  | "ledger"
+  | "final"
+  | "auto-rules"
+  | "finance"
+  | "gst"
+  | "depreciation";
 
 export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
   {
@@ -187,6 +195,14 @@ export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
     section: "gst",
     label: "GST",
     items: [{ id: "gst-master", label: "GST Master", to: "/accounts/gst" }],
+  },
+  {
+    section: "depreciation",
+    label: "Depreciation",
+    items: [
+      { id: "create", label: "Create Schedule", to: "/accounts/depreciation" },
+      { id: "manage", label: "Manage Schedule", to: "/accounts/depreciation" },
+    ],
   },
 ];
 
@@ -288,7 +304,9 @@ export function AccountsSectionNav({
               ? ledgerTab
               : mode === "journal"
                 ? journalTab
-                : autoRulesTab
+                : mode === "depreciation"
+                  ? "create"
+                  : autoRulesTab
         }
         onSelectTab={(id) => {
           if (mode === "masters") window.location.assign(id);

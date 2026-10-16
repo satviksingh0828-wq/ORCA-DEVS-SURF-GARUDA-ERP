@@ -40,6 +40,7 @@ import { Route as AccountsIndexRouteImport } from './routes/accounts.index'
 import { Route as AccountsAutoRulesRouteImport } from './routes/accounts.auto-rules'
 import { Route as AccountsBankRouteImport } from './routes/accounts.bank'
 import { Route as AccountsCashRouteImport } from './routes/accounts.cash'
+import { Route as AccountsDepreciationRouteImport } from './routes/accounts.depreciation'
 import { Route as AccountsFinalRouteImport } from './routes/accounts.final'
 import { Route as AccountsFinanceRouteImport } from './routes/accounts.finance'
 import { Route as AccountsGstRouteImport } from './routes/accounts.gst'
@@ -264,6 +265,11 @@ const AccountsBankRoute = AccountsBankRouteImport.update({
 const AccountsCashRoute = AccountsCashRouteImport.update({
   id: '/cash',
   path: '/cash',
+  getParentRoute: () => AccountsRoute,
+} as any)
+const AccountsDepreciationRoute = AccountsDepreciationRouteImport.update({
+  id: '/depreciation',
+  path: '/depreciation',
   getParentRoute: () => AccountsRoute,
 } as any)
 const AccountsFinalRoute = AccountsFinalRouteImport.update({
@@ -658,6 +664,7 @@ export interface FileRoutesByFullPath {
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
+  '/accounts/depreciation': typeof AccountsDepreciationRoute
   '/accounts/final': typeof AccountsFinalRoute
   '/accounts/finance': typeof AccountsFinanceRoute
   '/accounts/gst': typeof AccountsGstRoute
@@ -756,6 +763,7 @@ export interface FileRoutesByTo {
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
+  '/accounts/depreciation': typeof AccountsDepreciationRoute
   '/accounts/final': typeof AccountsFinalRoute
   '/accounts/finance': typeof AccountsFinanceRoute
   '/accounts/gst': typeof AccountsGstRoute
@@ -857,6 +865,7 @@ export interface FileRoutesById {
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
+  '/accounts/depreciation': typeof AccountsDepreciationRoute
   '/accounts/final': typeof AccountsFinalRoute
   '/accounts/finance': typeof AccountsFinanceRoute
   '/accounts/gst': typeof AccountsGstRoute
@@ -962,6 +971,7 @@ export interface FileRouteTypes {
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
+    | '/accounts/depreciation'
     | '/accounts/final'
     | '/accounts/finance'
     | '/accounts/gst'
@@ -1060,6 +1070,7 @@ export interface FileRouteTypes {
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
+    | '/accounts/depreciation'
     | '/accounts/final'
     | '/accounts/finance'
     | '/accounts/gst'
@@ -1160,6 +1171,7 @@ export interface FileRouteTypes {
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
+    | '/accounts/depreciation'
     | '/accounts/final'
     | '/accounts/finance'
     | '/accounts/gst'
@@ -1507,6 +1519,13 @@ declare module '@tanstack/react-router' {
       path: '/cash'
       fullPath: '/accounts/cash'
       preLoaderRoute: typeof AccountsCashRouteImport
+      parentRoute: typeof AccountsRoute
+    }
+    '/accounts/depreciation': {
+      id: '/accounts/depreciation'
+      path: '/depreciation'
+      fullPath: '/accounts/depreciation'
+      preLoaderRoute: typeof AccountsDepreciationRouteImport
       parentRoute: typeof AccountsRoute
     }
     '/accounts/final': {
@@ -2024,6 +2043,7 @@ interface AccountsRouteChildren {
   AccountsAutoRulesRoute: typeof AccountsAutoRulesRoute
   AccountsBankRoute: typeof AccountsBankRoute
   AccountsCashRoute: typeof AccountsCashRoute
+  AccountsDepreciationRoute: typeof AccountsDepreciationRoute
   AccountsFinalRoute: typeof AccountsFinalRoute
   AccountsFinanceRoute: typeof AccountsFinanceRoute
   AccountsGstRoute: typeof AccountsGstRoute
@@ -2037,6 +2057,7 @@ const AccountsRouteChildren: AccountsRouteChildren = {
   AccountsAutoRulesRoute: AccountsAutoRulesRoute,
   AccountsBankRoute: AccountsBankRoute,
   AccountsCashRoute: AccountsCashRoute,
+  AccountsDepreciationRoute: AccountsDepreciationRoute,
   AccountsFinalRoute: AccountsFinalRoute,
   AccountsFinanceRoute: AccountsFinanceRoute,
   AccountsGstRoute: AccountsGstRoute,
