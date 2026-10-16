@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any -- LTMS tables added after generated Supabase types. */
 import { useEffect, useMemo, useState } from "react";
 import { Download, RefreshCw, Search } from "lucide-react";
 import { toast } from "sonner";
@@ -26,6 +27,8 @@ type ConsignmentRow = {
   transport_mode: string | null;
   trip_id: string | null;
   source_id: string | null;
+  source_bill_id?: string | null;
+  transporter_bill_id?: string | null;
   transporter_id: string | null;
   transporter_source_id: string | null;
   freight_deduction: number | string | null;
@@ -49,7 +52,7 @@ type ShipmentPinRow = {
   dispatch_from_pin_code: string | null;
   ship_to_pin_code: string | null;
 };
-type ConsignmentEntry = EntryLite & { mode?: string | null };
+type ConsignmentEntry = EntryLite & { mode?: string | null; source_id?: string | null };
 type LoadingRateType = {
   id: string;
   branch_id: string;
@@ -84,8 +87,12 @@ type TripRow = {
 type TripExpenseRow = { trip_id: string; amount: number | string | null };
 type TripIncomeRow = { trip_id: string; amount: number | string | null };
 
-type ReportRow = {
+export type ConsignmentNetReportRow = {
   id: string;
+  branch_id: string | null;
+  trip_id: string | null;
+  source_bill_id: string | null;
+  transporter_bill_id: string | null;
   consignment_number: string;
   consignment_date: string;
   income: number;
@@ -95,6 +102,7 @@ type ReportRow = {
   total_expenditure: number;
   net: number;
 };
+type ReportRow = ConsignmentNetReportRow;
 
 type Manifest = {
   from_location_id: null;
@@ -169,7 +177,15 @@ function packageCharge(
   };
 }
 
-export function ConsignmentNetReport() {
+export function ConsignmentNetReport({
+  onRowsChange,
+  onFiltersChange,
+  dashboardCompact = false,
+}: {
+  onRowsChange?: (rows: ConsignmentNetReportRow[]) => void;
+  onFiltersChange?: (filters: { fromDate: string; toDate: string; branchId: string }) => void;
+  dashboardCompact?: boolean;
+} = {}) {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [branchId, setBranchId] = useState("all");
@@ -195,7 +211,7 @@ export function ConsignmentNetReport() {
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,branch_id,consignment_date,consignment_type,movement_mode,transport_mode,trip_id,source_id,transporter_id,transporter_source_id,freight_deduction,additional_freight,loading_deduction,additional_loading,from_pin_code,to_pin_code,to_details",
+          "id,consignment_number,branch_id,consignment_date,consignment_type,movement_mode,transport_mode,trip_id,source_id,source_bill_id,transporter_id,transporter_source_id,transporter_bill_id,freight_deduction,additional_freight,loading_deduction,additional_loading,from_pin_code,to_pin_code,to_details",
         )
         .gte("consignment_date", fromDate)
         .lte("consignment_date", toDate)
@@ -466,6 +482,10 @@ export function ConsignmentNetReport() {
           const totalExpenditure = (transporterExpenditure ?? 0) + loading + (tripExpenditure ?? 0);
           return {
             id: row.id,
+            branch_id: row.branch_id,
+            trip_id: row.trip_id,
+            source_bill_id: row.source_bill_id ?? null,
+            transporter_bill_id: row.transporter_bill_id ?? null,
             consignment_number: row.consignment_number,
             consignment_date: row.consignment_date ?? "",
             income: income.freight + income.loading,
@@ -487,9 +507,17 @@ export function ConsignmentNetReport() {
   useEffect(() => {
     void loadBranches();
   }, []);
+  // loadData intentionally follows report filters.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => {
     void loadData();
   }, [fromDate, toDate, branchId]);
+  useEffect(() => {
+    onRowsChange?.(rows);
+  }, [rows, onRowsChange]);
+  useEffect(() => {
+    onFiltersChange?.({ fromDate, toDate, branchId });
+  }, [fromDate, toDate, branchId, onFiltersChange]);
 
   const filtered = useMemo(() => {
     const value = search.trim().toLowerCase();
@@ -605,90 +633,98 @@ export function ConsignmentNetReport() {
           </Button>
         </div>
       </div>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-xs text-muted-foreground">Total Income</p>
-          <p className="mt-1 text-xl font-bold text-emerald-600">{displayMoney(totals.income)}</p>
+      {!dashboardCompact && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-xs text-muted-foreground">Total Income</p>
+            <p className="mt-1 text-xl font-bold text-emerald-600">{displayMoney(totals.income)}</p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-xs text-muted-foreground">Total Expenditure</p>
+            <p className="mt-1 text-xl font-bold text-red-600">
+              {displayMoney(totals.expenditure)}
+            </p>
+          </div>
+          <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+            <p className="text-xs text-muted-foreground">Net</p>
+            <p
+              className={`mt-1 text-xl font-bold ${totals.net >= 0 ? "text-emerald-600" : "text-red-600"}`}
+            >
+              {displayMoney(totals.net)}
+            </p>
+          </div>
         </div>
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-xs text-muted-foreground">Total Expenditure</p>
-          <p className="mt-1 text-xl font-bold text-red-600">{displayMoney(totals.expenditure)}</p>
-        </div>
-        <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
-          <p className="text-xs text-muted-foreground">Net</p>
-          <p
-            className={`mt-1 text-xl font-bold ${totals.net >= 0 ? "text-emerald-600" : "text-red-600"}`}
-          >
-            {displayMoney(totals.net)}
-          </p>
-        </div>
-      </div>
-      <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
-        <div className="flex items-center justify-between border-b border-border px-4 py-3">
-          <h2 className="text-sm font-semibold">Consignment Net ({filtered.length})</h2>
-          <span className="text-xs text-muted-foreground">Expenses are negative in CSV export</span>
-        </div>
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1180px] text-left text-sm">
-            <thead>
-              <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-3">Consignment Number</th>
-                <th className="px-4 py-3">Date</th>
-                <th className="px-4 py-3 text-right">Total Income</th>
-                <th className="px-4 py-3 text-right">Transporter Expenditure</th>
-                <th className="px-4 py-3 text-right">Loading Charges</th>
-                <th className="px-4 py-3 text-right">Trip Expenditure</th>
-                <th className="px-4 py-3 text-right">Total Expenditure</th>
-                <th className="px-4 py-3 text-right">Net Income/Expenditure</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-border">
-              {loading ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                    <RefreshCw className="mx-auto mb-2 size-6 animate-spin opacity-20" /> Loading…
-                  </td>
+      )}
+      {!dashboardCompact && (
+        <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
+          <div className="flex items-center justify-between border-b border-border px-4 py-3">
+            <h2 className="text-sm font-semibold">Consignment Net ({filtered.length})</h2>
+            <span className="text-xs text-muted-foreground">
+              Expenses are negative in CSV export
+            </span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1180px] text-left text-sm">
+              <thead>
+                <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  <th className="px-4 py-3">Consignment Number</th>
+                  <th className="px-4 py-3">Date</th>
+                  <th className="px-4 py-3 text-right">Total Income</th>
+                  <th className="px-4 py-3 text-right">Transporter Expenditure</th>
+                  <th className="px-4 py-3 text-right">Loading Charges</th>
+                  <th className="px-4 py-3 text-right">Trip Expenditure</th>
+                  <th className="px-4 py-3 text-right">Total Expenditure</th>
+                  <th className="px-4 py-3 text-right">Net Income/Expenditure</th>
                 </tr>
-              ) : !filtered.length ? (
-                <tr>
-                  <td colSpan={8} className="py-12 text-center text-muted-foreground">
-                    No consignments found for these filters.
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((row) => (
-                  <tr key={row.id} className="transition-colors hover:bg-muted/30">
-                    <td className="px-4 py-3 font-medium">{row.consignment_number}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {row.consignment_date || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-emerald-600">
-                      {displayMoney(row.income)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {optionalMoney(row.transporter_expenditure)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {displayMoney(row.loading_charges)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums">
-                      {optionalMoney(row.trip_expenditure)}
-                    </td>
-                    <td className="px-4 py-3 text-right tabular-nums text-red-600">
-                      {displayMoney(row.total_expenditure)}
-                    </td>
-                    <td
-                      className={`px-4 py-3 text-right font-semibold tabular-nums ${row.net >= 0 ? "text-emerald-600" : "text-red-600"}`}
-                    >
-                      {displayMoney(row.net)}
+              </thead>
+              <tbody className="divide-y divide-border">
+                {loading ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                      <RefreshCw className="mx-auto mb-2 size-6 animate-spin opacity-20" /> Loading…
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : !filtered.length ? (
+                  <tr>
+                    <td colSpan={8} className="py-12 text-center text-muted-foreground">
+                      No consignments found for these filters.
+                    </td>
+                  </tr>
+                ) : (
+                  filtered.map((row) => (
+                    <tr key={row.id} className="transition-colors hover:bg-muted/30">
+                      <td className="px-4 py-3 font-medium">{row.consignment_number}</td>
+                      <td className="px-4 py-3 text-muted-foreground">
+                        {row.consignment_date || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-emerald-600">
+                        {displayMoney(row.income)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {optionalMoney(row.transporter_expenditure)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {displayMoney(row.loading_charges)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums">
+                        {optionalMoney(row.trip_expenditure)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-red-600">
+                        {displayMoney(row.total_expenditure)}
+                      </td>
+                      <td
+                        className={`px-4 py-3 text-right font-semibold tabular-nums ${row.net >= 0 ? "text-emerald-600" : "text-red-600"}`}
+                      >
+                        {displayMoney(row.net)}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
