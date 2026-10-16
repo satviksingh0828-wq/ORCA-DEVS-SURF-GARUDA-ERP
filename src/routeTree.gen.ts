@@ -90,6 +90,7 @@ import { Route as ApiDriverThemeRouteImport } from './routes/api/driver/theme'
 import { Route as ApiHrPayrollEmailRouteImport } from './routes/api/hr/payroll-email'
 import { Route as ApiMobileOutwardPodRouteImport } from './routes/api/mobile/outward-pod'
 import { Route as ApiMobileVerifyRouteImport } from './routes/api/mobile/verify'
+import { Route as ApiOrcaAgentRouteImport } from './routes/api/orca/agent'
 import { Route as ApiScreenControlDisconnectRouteImport } from './routes/api/screen-control/disconnect'
 import { Route as AttendanceHistoryIndexRouteImport } from './routes/attendance.history.index'
 import { Route as AttendanceHistoryIdRouteImport } from './routes/attendance.history.$id'
@@ -518,6 +519,11 @@ const ApiMobileVerifyRoute = ApiMobileVerifyRouteImport.update({
   path: '/api/mobile/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOrcaAgentRoute = ApiOrcaAgentRouteImport.update({
+  id: '/api/orca/agent',
+  path: '/api/orca/agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiScreenControlDisconnectRoute =
   ApiScreenControlDisconnectRouteImport.update({
     id: '/api/screen-control/disconnect',
@@ -714,6 +720,7 @@ export interface FileRoutesByFullPath {
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
+  '/api/orca/agent': typeof ApiOrcaAgentRoute
   '/api/screen-control/disconnect': typeof ApiScreenControlDisconnectRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
@@ -810,6 +817,7 @@ export interface FileRoutesByTo {
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
+  '/api/orca/agent': typeof ApiOrcaAgentRoute
   '/api/screen-control/disconnect': typeof ApiScreenControlDisconnectRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
@@ -915,6 +923,7 @@ export interface FileRoutesById {
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
+  '/api/orca/agent': typeof ApiOrcaAgentRoute
   '/api/screen-control/disconnect': typeof ApiScreenControlDisconnectRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
   '/employees/$id/edit': typeof EmployeesIdEditRoute
@@ -1021,6 +1030,7 @@ export interface FileRouteTypes {
     | '/api/hr/payroll-email'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
+    | '/api/orca/agent'
     | '/api/screen-control/disconnect'
     | '/attendance/history/$id'
     | '/employees/$id/edit'
@@ -1117,6 +1127,7 @@ export interface FileRouteTypes {
     | '/api/hr/payroll-email'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
+    | '/api/orca/agent'
     | '/api/screen-control/disconnect'
     | '/attendance/history/$id'
     | '/employees/$id/edit'
@@ -1221,6 +1232,7 @@ export interface FileRouteTypes {
     | '/api/hr/payroll-email'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
+    | '/api/orca/agent'
     | '/api/screen-control/disconnect'
     | '/attendance/history/$id'
     | '/employees/$id/edit'
@@ -1288,6 +1300,7 @@ export interface RootRouteChildren {
   ApiHrPayrollEmailRoute: typeof ApiHrPayrollEmailRoute
   ApiMobileOutwardPodRoute: typeof ApiMobileOutwardPodRoute
   ApiMobileVerifyRoute: typeof ApiMobileVerifyRoute
+  ApiOrcaAgentRoute: typeof ApiOrcaAgentRoute
   ApiScreenControlDisconnectRoute: typeof ApiScreenControlDisconnectRoute
   ApiDriverTripsClaimRoute: typeof ApiDriverTripsClaimRoute
   ApiDriverTripsCurrentRoute: typeof ApiDriverTripsCurrentRoute
@@ -1871,6 +1884,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMobileVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/orca/agent': {
+      id: '/api/orca/agent'
+      path: '/api/orca/agent'
+      fullPath: '/api/orca/agent'
+      preLoaderRoute: typeof ApiOrcaAgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/screen-control/disconnect': {
       id: '/api/screen-control/disconnect'
       path: '/api/screen-control/disconnect'
@@ -2257,6 +2277,7 @@ const rootRouteChildren: RootRouteChildren = {
   ApiHrPayrollEmailRoute: ApiHrPayrollEmailRoute,
   ApiMobileOutwardPodRoute: ApiMobileOutwardPodRoute,
   ApiMobileVerifyRoute: ApiMobileVerifyRoute,
+  ApiOrcaAgentRoute: ApiOrcaAgentRoute,
   ApiScreenControlDisconnectRoute: ApiScreenControlDisconnectRoute,
   ApiDriverTripsClaimRoute: ApiDriverTripsClaimRoute,
   ApiDriverTripsCurrentRoute: ApiDriverTripsCurrentRoute,

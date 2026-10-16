@@ -14,6 +14,7 @@ import { buildExpenseImportActions } from "@/lib/ai/workflows/expense-import-wor
 import { validateActions } from "@/lib/ai/action-validator";
 import type { SparrowAction } from "@/lib/ai/types";
 import { PoweredBy } from "./PoweredBy";
+import { callBrowserAgent } from "@/lib/orca-agent/client";
 
 type ReadOnlyRow = {
   id?: string;
@@ -940,12 +941,25 @@ function renderMessage(text: string): React.ReactNode {
 }
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-type Msg = { id: string; role: "user" | "assistant"; content: string; executing?: boolean; download?: { name: string; url: string } };
+type Msg = {
+  id: string;
+  role: "user" | "assistant";
+  content: string;
+  executing?: boolean;
+  download?: { name: string; url: string };
+  liveViewUrl?: string;
+};
 type PendingPlan = { aiMsgId: string; actions: SparrowAction[]; steps: string[] };
+type BrowserApproval = { taskId: string; sessionId: string; instruction: string; liveViewUrl?: string | null };
 const uid = () => Math.random().toString(36).slice(2);
 
 const ADMIN_CHIPS = ["New expenditure", "New driver", "Open trip form", "Add vehicle", "Open dashboard"];
 const BASIC_CHIPS = ["New expenditure", "New driver", "Open trip form", "New transporter"];
+const BROWSER_TASK_PATTERN = /\b(browser|website|web page|open https?:\/\/|search online|visit https?:\/\/|fill (?:in|out) (?:this|the) (?:form|page)|click on|navigate to https?:\/\/|log(?:in| into)\b)/i;
+
+function isBrowserAgentRequest(text: string) {
+  return BROWSER_TASK_PATTERN.test(text);
+}
 
 async function callPuter(messages: { role: string; content: string }[]): Promise<string> {
   const p = window.puter;
@@ -973,6 +987,8 @@ export function OrcaAIPanel() {
   const [loading, setLoading] = useState(false);
   const [currentStep, setCurrentStep] = useState("");
   const [pendingPlan, setPendingPlan] = useState<PendingPlan | null>(null);
+  const [browserApproval, setBrowserApproval] = useState<BrowserApproval | null>(null);
+  const [browserSessionId, setBrowserSessionId] = useState<string | undefined>();
   const [isListening, setIsListening] = useState(false);
 
   const endRef = useRef<HTMLDivElement>(null);
@@ -989,6 +1005,25 @@ export function OrcaAIPanel() {
 
   const STORAGE_KEY = `sparrow_history_${user?.id ?? "guest"}`;
   const MAX_STORED = 50;
+
+  useEffect(() => {
+    try {
+      const stored = sessionStorage.getItem(`orca.browser.session.${user?.id ?? "guest"}`);
+      if (stored) setBrowserSessionId(stored);
+    } catch {
+      // Session storage is optional.
+    }
+  }, [user?.id]);
+
+  const rememberBrowserSession = useCallback((sessionId?: string) => {
+    if (!sessionId) return;
+    setBrowserSessionId(sessionId);
+    try {
+      sessionStorage.setItem(`orca.browser.session.${user?.id ?? "guest"}`, sessionId);
+    } catch {
+      // Session storage is optional.
+    }
+  }, [user?.id]);
 
   // ── Persistence ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -1113,6 +1148,95 @@ export function OrcaAIPanel() {
     }
   }, []);
 
+  const runBrowserTask = useCallback(
+    async (instruction: string) => {
+      if (!user?.sessionToken) throw new Error("Your session has expired. Please sign in again.");
+      let browserInstruction = instruction;
+      try {
+        const refined = await callPuter([
+          {
+            role: "system",
+            content:
+              "You are ORCA AGENT's planning layer. Rewrite the user's browser request as one concise, deterministic instruction for a remote browser worker. Preserve URLs, names, amounts, and constraints. Do not claim that anything was completed.",
+          },
+          { role: "user", content: instruction },
+        ]);
+        if (refined.trim()) browserInstruction = refined.trim();
+      } catch {
+        // Browser execution can still proceed with the user's original request.
+      }
+      const response = await callBrowserAgent({
+        sessionToken: user.sessionToken,
+        action: "task",
+        instruction: browserInstruction,
+        sessionId: browserSessionId,
+      });
+      rememberBrowserSession(response.sessionId);
+      if (response.requiresApproval && response.taskId && response.sessionId) {
+        setBrowserApproval({
+          taskId: response.taskId,
+          sessionId: response.sessionId,
+          instruction: browserInstruction,
+          liveViewUrl: response.liveViewUrl,
+        });
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: uid(),
+            role: "assistant",
+            content: response.message ?? "This browser action needs your approval before it runs.",
+            liveViewUrl: response.liveViewUrl ?? undefined,
+          },
+        ]);
+        return;
+      }
+      const result = response.result;
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: "assistant",
+          content: `Browser task completed.${result?.title ? `\n\n**${result.title}**` : ""}${result?.url ? `\n${result.url}` : ""}`,
+          liveViewUrl: response.liveViewUrl ?? undefined,
+        },
+      ]);
+    },
+    [browserSessionId, rememberBrowserSession, user?.sessionToken],
+  );
+
+  const approveBrowserTask = useCallback(async () => {
+    if (!browserApproval || !user?.sessionToken) return;
+    setLoading(true);
+    try {
+      const response = await callBrowserAgent({
+        sessionToken: user.sessionToken,
+        action: "approve",
+        taskId: browserApproval.taskId,
+        sessionId: browserApproval.sessionId,
+      });
+      rememberBrowserSession(response.sessionId);
+      setBrowserApproval(null);
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: uid(),
+          role: "assistant",
+          content: response.ok
+            ? `Approved browser task completed.${response.result?.url ? `\n${response.result.url}` : ""}`
+            : response.error ?? "The approved browser task failed.",
+          liveViewUrl: response.liveViewUrl ?? undefined,
+        },
+      ]);
+    } catch (error) {
+      setMessages((prev) => [
+        ...prev,
+        { id: uid(), role: "assistant", content: error instanceof Error ? error.message : "Browser approval failed." },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }, [browserApproval, rememberBrowserSession, user?.sessionToken]);
+
   // ── Send message ──────────────────────────────────────────────────────────
   const send = useCallback(
     async (text: string) => {
@@ -1131,6 +1255,11 @@ export function OrcaAIPanel() {
       setCurrentStep("");
 
       try {
+        if (isBrowserAgentRequest(trimmed)) {
+          await runBrowserTask(trimmed);
+          return;
+        }
+
         if (wantsCsvReport(trimmed)) {
           try {
             const download = await generateDataCsv(trimmed, role, user?.branchIds);
@@ -1182,7 +1311,7 @@ export function OrcaAIPanel() {
         setLoading(false);
       }
     },
-    [loading, messages, role, displayName, currentPath, user?.branchIds],
+    [loading, messages, role, displayName, currentPath, runBrowserTask, user?.branchIds],
   );
 
   if (!user) return null;
@@ -1249,6 +1378,17 @@ export function OrcaAIPanel() {
                 >
                   <Download className="size-3" />
                   Download {msg.download.name}
+                </a>
+              )}
+              {msg.liveViewUrl && (
+                <a
+                  href={msg.liveViewUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-background px-2.5 py-1.5 text-xs font-medium text-primary hover:underline"
+                >
+                  <Play className="size-3" />
+                  Watch live browser
                 </a>
               )}
               {msg.executing && (
@@ -1329,6 +1469,31 @@ export function OrcaAIPanel() {
                 className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted"
               >
                 Skip
+              </button>
+            </div>
+          </div>
+        )}
+
+        {browserApproval && !loading && (
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/5 p-3">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
+              Browser approval required
+            </span>
+            <p className="mt-2 text-xs leading-relaxed text-foreground">{browserApproval.instruction}</p>
+            <div className="mt-3 flex gap-2">
+              <button
+                type="button"
+                onClick={() => void approveBrowserTask()}
+                className="rounded-lg bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:bg-primary/90"
+              >
+                Approve &amp; run
+              </button>
+              <button
+                type="button"
+                onClick={() => setBrowserApproval(null)}
+                className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted"
+              >
+                Cancel
               </button>
             </div>
           </div>

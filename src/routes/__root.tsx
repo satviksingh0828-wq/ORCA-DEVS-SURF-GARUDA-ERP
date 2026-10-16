@@ -261,13 +261,15 @@ function OrcaAgentMount() {
   return (
     <>
       {agentOpen && (
-        <div className="fixed bottom-24 right-4 z-[65] h-[min(680px,calc(100dvh-7rem))] w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-2xl shadow-2xl shadow-black/20">
+        <div className="fixed bottom-5 right-4 z-[65] h-[min(680px,calc(100dvh-2.5rem))] w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-2xl shadow-2xl shadow-black/20">
           <OrcaAIPanel />
         </div>
       )}
-      <div className="fixed bottom-5 right-5 z-[66]">
-        <OrcaAITrigger />
-      </div>
+      {!agentOpen && (
+        <div className="fixed bottom-20 right-5 z-[66]">
+          <OrcaAITrigger />
+        </div>
+      )}
     </>
   );
 }
