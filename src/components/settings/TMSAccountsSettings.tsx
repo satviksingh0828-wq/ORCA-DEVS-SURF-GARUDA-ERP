@@ -43,6 +43,12 @@ type Mapping = {
   workmen_payout_liability_ledger_id?: string | null;
   workmen_additional_pay_expenditure_ledger_id?: string | null;
   workmen_deduction_income_ledger_id?: string | null;
+  input_igst_ledger_id?: string | null;
+  input_cgst_ledger_id?: string | null;
+  input_sgst_ledger_id?: string | null;
+  output_igst_ledger_id?: string | null;
+  output_cgst_ledger_id?: string | null;
+  output_sgst_ledger_id?: string | null;
 };
 
 const FIELDS = [
@@ -77,6 +83,12 @@ const FIELDS = [
   ["workmen_payout_liability_ledger_id", "Workmen Payout", "liability"],
   ["workmen_additional_pay_expenditure_ledger_id", "Workmen Additional Pay", "expenditure"],
   ["workmen_deduction_income_ledger_id", "Workmen Deduction", "income"],
+  ["input_igst_ledger_id", "Input IGST", "asset"],
+  ["input_cgst_ledger_id", "Input CGST", "asset"],
+  ["input_sgst_ledger_id", "Input SGST", "asset"],
+  ["output_igst_ledger_id", "Output IGST", "liability"],
+  ["output_cgst_ledger_id", "Output CGST", "liability"],
+  ["output_sgst_ledger_id", "Output SGST", "liability"],
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number][0];
@@ -193,7 +205,8 @@ export function TMSAccountsSettings() {
             defaults for general expenditure entries. Other Income and Other Income Receivable are
             the defaults for general income entries. Loading and Unloading use expenditure ledgers;
             Workmen Payout uses a liability ledger; Workmen Additional Pay uses an expenditure
-            ledger; and Workmen Deduction uses an income ledger.
+            ledger; Workmen Deduction uses an income ledger; Input IGST, Input CGST, and Input SGST
+            use asset ledgers; and Output IGST, Output CGST, and Output SGST use liability ledgers.
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map(([key, label, type]) => (
