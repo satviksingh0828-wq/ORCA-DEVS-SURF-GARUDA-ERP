@@ -786,16 +786,14 @@ function Dialog({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-      <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-xl border border-border bg-background p-5 shadow-xl">
-        <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-lg font-semibold">{title}</h3>
-          <Button variant="outline" size="sm" onClick={onClose}>
-            Close
-          </Button>
-        </div>
-        {children}
+    <section className="surface-card mt-4 space-y-4 p-5">
+      <div className="flex items-center justify-between">
+        <h3 className="text-lg font-semibold">{title}</h3>
+        <Button variant="outline" size="sm" onClick={onClose}>
+          Cancel
+        </Button>
       </div>
-    </div>
+      {children}
+    </section>
   );
 }

@@ -6,9 +6,11 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
+import { AccountsMobileNav, AccountsSidebar } from "@/components/accounts/AccountsSectionNav";
 import { LtmsAccountingBilling } from "@/components/reports/LtmsAccountingBilling";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
@@ -218,9 +220,34 @@ export function AccountsFinancePage() {
         </span>
       }
     >
-      <div className="ltms-reference-shell accounts-reference-shell">
+      <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
+        <AccountsSidebar
+          desktop
+          mode="finance"
+          activeTabId={tab}
+          onSelectTab={(id) => setTab(id as TabId)}
+        />
         <div className="ltms-reference-content min-w-0">
-          <div className="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="Accounts Finance">
+          <AccountsMobileNav pathname="/accounts/finance" />
+          <div className="lg:hidden">
+            <MobileTabDropdown
+              tabs={tabs.map((item) => ({
+                id: item.id,
+                label: item.label,
+                desc: item.label,
+                icon: FilePlus2,
+              }))}
+              activeId={tab}
+              label="Finance tabs"
+              compact
+              onChange={(id) => setTab(id as TabId)}
+            />
+          </div>
+          <div
+            className="mb-5 hidden flex-wrap gap-2 lg:flex"
+            role="tablist"
+            aria-label="Accounts Finance"
+          >
             {tabs.map((item) => (
               <button
                 key={item.id}
@@ -349,15 +376,10 @@ export function AccountsFinancePage() {
             </div>
           )}
           {open && (
-            <div
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-              role="presentation"
-            >
+            <section className="surface-card mt-4 space-y-4 p-5">
               <form
                 onSubmit={createVoucher}
-                className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-xl bg-background p-5 shadow-xl"
-                role="dialog"
-                aria-modal="true"
+                className="space-y-4"
                 aria-label={`Create ${isReceipt ? "cash receipt" : "cash payment"}`}
               >
                 <h2 className="mb-4 text-lg font-semibold">
@@ -451,7 +473,7 @@ export function AccountsFinancePage() {
                   </Button>
                 </div>
               </form>
-            </div>
+            </section>
           )}
         </div>
       </div>

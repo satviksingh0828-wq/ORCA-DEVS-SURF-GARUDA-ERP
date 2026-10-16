@@ -6,8 +6,10 @@ import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
+import { AccountsMobileNav, AccountsSidebar } from "@/components/accounts/AccountsSectionNav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
@@ -40,11 +42,10 @@ export function AccountsGstPage() {
     user?.role === "basic"
       ? allBranches.filter((b) => (user.branchIds ?? []).includes(b.id))
       : allBranches;
-  const [subTab, setSubTab] = useState("gst-master");
+  const [subTab, setSubTab] = useState<"gst-master" | "create">("gst-master");
   const [branch, setBranch] = useState("all");
   const [search, setSearch] = useState("");
   const [rows, setRows] = useState<Slab[]>([]);
-  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ branch: "", igst: "0", cgst: "0", sgst: "0" });
   const assigned = useMemo(() => new Set(branches.map((item) => item.id)), [branches]);
@@ -88,7 +89,7 @@ export function AccountsGstPage() {
     if (error) toast.error(error.message);
     else {
       toast.success("GST slab created. GST slabs are view-only after creation.");
-      setOpen(false);
+      setSubTab("gst-master");
       await load();
     }
   }
@@ -106,23 +107,26 @@ export function AccountsGstPage() {
         </span>
       }
     >
-      <div className="ltms-reference-shell accounts-reference-shell">
+      <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
+        <AccountsSidebar
+          desktop
+          mode="gst"
+          activeTabId={subTab}
+          onSelectTab={(id) => setSubTab(id as "gst-master" | "create")}
+        />
         <div className="ltms-reference-content min-w-0">
-          <div className="mb-5 flex flex-wrap gap-2" role="tablist" aria-label="GST tabs">
-            <button
-              role="tab"
-              aria-selected={subTab === "gst-master"}
-              onClick={() => setSubTab("gst-master")}
-              className="rounded-lg border border-primary bg-primary px-3 py-2 text-sm font-medium text-primary-foreground"
-            >
-              GST Master
-            </button>
-            <Link
-              to="/accounts/finance"
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
-            >
-              Finance
-            </Link>
+          <AccountsMobileNav pathname="/accounts/gst" />
+          <div className="lg:hidden">
+            <MobileTabDropdown
+              tabs={[
+                { id: "gst-master", label: "GST Master", desc: "View GST slabs", icon: Search },
+                { id: "create", label: "Create Slab", desc: "Create GST slab", icon: FilePlus2 },
+              ]}
+              activeId={subTab}
+              label="GST tabs"
+              compact
+              onChange={(id) => setSubTab(id as "gst-master" | "create")}
+            />
           </div>
           {subTab === "gst-master" && (
             <section className="space-y-4">
@@ -130,7 +134,7 @@ export function AccountsGstPage() {
                 <Button
                   onClick={() => {
                     setForm((prev) => ({ ...prev, branch: branches[0]?.id ?? "" }));
-                    setOpen(true);
+                    setSubTab("create");
                   }}
                 >
                   <FilePlus2 className="mr-2 size-4" />
@@ -205,15 +209,9 @@ export function AccountsGstPage() {
               </p>
             </section>
           )}
-          {open && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-              <form
-                onSubmit={createSlab}
-                className="w-full max-w-xl space-y-4 rounded-xl bg-background p-5 shadow-xl"
-                role="dialog"
-                aria-modal="true"
-                aria-label="Create GST slab"
-              >
+          {subTab === "create" && (
+            <section className="surface-card mt-4 space-y-4 p-5">
+              <form onSubmit={createSlab} className="space-y-4" aria-label="Create GST slab">
                 <div>
                   <h2 className="text-lg font-semibold">Create GST Slab</h2>
                   <p className="text-sm text-muted-foreground">
@@ -262,7 +260,7 @@ export function AccountsGstPage() {
                   <Input readOnly value={slabName} />
                 </label>
                 <div className="flex justify-end gap-2">
-                  <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => setSubTab("gst-master")}>
                     Cancel
                   </Button>
                   <Button type="submit" disabled={saving}>
@@ -270,7 +268,7 @@ export function AccountsGstPage() {
                   </Button>
                 </div>
               </form>
-            </div>
+            </section>
           )}
         </div>
       </div>

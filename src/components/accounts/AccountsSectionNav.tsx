@@ -193,6 +193,30 @@ export function AccountsSidebar({
   activeTabId: string;
   onSelectTab: (tabId: string) => void;
 }) {
+  const sidebarGroups = ACCOUNTS_SIDEBAR_GROUPS.map((group) => {
+    if (mode === "finance" && group.section === "finance") {
+      return {
+        ...group,
+        items: [
+          { id: "parties", label: "Parties" },
+          { id: "debit-notes", label: "Debit Notes" },
+          { id: "credit-notes", label: "Credit Notes" },
+          { id: "cash-receipt", label: "Cash Receipt" },
+          { id: "cash-payment", label: "Cash Payment" },
+        ],
+      };
+    }
+    if (mode === "gst" && group.section === "gst") {
+      return {
+        ...group,
+        items: [
+          { id: "gst-master", label: "GST Master" },
+          { id: "create", label: "Create GST Slab" },
+        ],
+      };
+    }
+    return group;
+  });
   return (
     <LtmsSidebar
       label="Accounts navigation"
@@ -200,7 +224,7 @@ export function AccountsSidebar({
       activeTabId={activeTabId}
       onSelectTab={onSelectTab}
       onCrossGroupNavigate={queueAccountsTabNavigation}
-      groups={ACCOUNTS_SIDEBAR_GROUPS}
+      groups={sidebarGroups}
       showCustomMobileNav={false}
     />
   );
