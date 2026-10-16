@@ -84,11 +84,14 @@ const moneyFormat = new Intl.NumberFormat("en-IN", {
 });
 const displayNumber = (value: number) => numberFormat.format(value);
 const displayMoney = (value: number) => moneyFormat.format(value);
+function formatLocalDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
 function monthStart(date = new Date()) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
+  return formatLocalDate(new Date(date.getFullYear(), date.getMonth(), 1));
 }
 function monthEnd(date = new Date()) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return formatLocalDate(new Date(date.getFullYear(), date.getMonth() + 1, 0));
 }
 function packageCharge(packageRow: PackageRow, type: RateType | undefined, entries: RateEntry[]) {
   const measure = type?.basis === "weight" ? num(packageRow.weight_kg) : num(packageRow.quantity);
@@ -130,11 +133,14 @@ function packageCharge(packageRow: PackageRow, type: RateType | undefined, entri
 
 export function LoadingChargesReportContent({
   onWorkbookRows,
+  reportMonth,
 }: {
   onWorkbookRows?: (rows: object[]) => void;
+  reportMonth?: string;
 }) {
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(monthEnd);
+  const monthDate = reportMonth ? new Date(`${reportMonth}-15T12:00:00`) : new Date();
+  const [fromDate, setFromDate] = useState(() => monthStart(monthDate));
+  const [toDate, setToDate] = useState(() => monthEnd(monthDate));
   const [branchId, setBranchId] = useState("all");
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [rows, setRows] = useState<ReportRow[]>([]);
@@ -714,11 +720,14 @@ type InwardAdjustment = { deduction: string; addition: string };
 
 export function InwardReceiptChargesReport({
   onWorkbookRows,
+  reportMonth,
 }: {
   onWorkbookRows?: (rows: object[]) => void;
+  reportMonth?: string;
 }) {
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(monthEnd);
+  const monthDate = reportMonth ? new Date(`${reportMonth}-15T12:00:00`) : new Date();
+  const [fromDate, setFromDate] = useState(() => monthStart(monthDate));
+  const [toDate, setToDate] = useState(() => monthEnd(monthDate));
   const [branchId, setBranchId] = useState("all");
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [rows, setRows] = useState<InwardReceiptRow[]>([]);

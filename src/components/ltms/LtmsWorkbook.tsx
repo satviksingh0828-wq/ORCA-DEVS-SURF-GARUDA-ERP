@@ -76,10 +76,6 @@ function rowsToMatrix(rows: object[]) {
   };
 }
 
-function excelRows(rows: object[]) {
-  return rowsToMatrix(rows).matrix;
-}
-
 function getManualSnapshot(worksheet: any): WorkbookSheetSnapshot {
   return JSON.parse(JSON.stringify(worksheet.getSheet().getSnapshot())) as WorkbookSheetSnapshot;
 }
@@ -101,8 +97,10 @@ function visibleManualName(name: string, used: Set<string>) {
 
 function ReportRowSources({
   onRows,
+  reportMonth,
 }: {
   onRows: (sheet: ReportSheetName, rows: object[]) => void;
+  reportMonth: string;
 }) {
   const income = useCallback<RowSource>((rows) => onRows("Consignment Income", rows), [onRows]);
   const transporter = useCallback<RowSource>(
@@ -119,13 +117,13 @@ function ReportRowSources({
   const net = useCallback<RowSource>((rows) => onRows("Consignment Net", rows), [onRows]);
   return (
     <div aria-hidden="true" className="hidden">
-      <ConsignmentIncomeReport onWorkbookRows={income} />
-      <TransporterExpenditureReport onWorkbookRows={transporter} />
-      <UnloadingIncomeReport onWorkbookRows={unloadingIncome} />
-      <LoadingChargesReportContent onWorkbookRows={loading} />
-      <InwardReceiptChargesReport onWorkbookRows={unloading} />
-      <TripExpenditureReport onWorkbookRows={trip} />
-      <ConsignmentNetReport onWorkbookRows={net} />
+      <ConsignmentIncomeReport onWorkbookRows={income} reportMonth={reportMonth} />
+      <TransporterExpenditureReport onWorkbookRows={transporter} reportMonth={reportMonth} />
+      <UnloadingIncomeReport onWorkbookRows={unloadingIncome} reportMonth={reportMonth} />
+      <LoadingChargesReportContent onWorkbookRows={loading} reportMonth={reportMonth} />
+      <InwardReceiptChargesReport onWorkbookRows={unloading} reportMonth={reportMonth} />
+      <TripExpenditureReport onWorkbookRows={trip} reportMonth={reportMonth} />
+      <ConsignmentNetReport onWorkbookRows={net} reportMonth={reportMonth} />
     </div>
   );
 }
@@ -140,6 +138,10 @@ export function LtmsWorkbook() {
   const saveTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
   const reportUpdateQueue = useRef(Promise.resolve());
   const [reportRows, setReportRows] = useState<ReportRows>({});
+  const [reportMonth, setReportMonth] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  });
   const [manualSheets, setManualSheets] = useState<WorkbookManualSheet[]>([]);
   const [activeSubUnitId, setActiveSubUnitId] = useState<string | null>(null);
   const [ready, setReady] = useState(false);
@@ -232,7 +234,10 @@ export function LtmsWorkbook() {
               sheet: sheetSnapshot as never,
             },
           );
-          await sheet.getWorksheetPermission().setEditable();
+          const permission = sheet.getWorksheetPermission();
+          if (!permission.isProtected())
+            await permission.protect({ name: `${name} workbook sheet` });
+          await permission.setEditable();
           loadedSheets.push(item);
           manualSheetIdBySubUnit.current.set(sheet.getSheetId(), item.id);
           manualSheetNameById.current.set(item.id, item.name);
@@ -240,7 +245,10 @@ export function LtmsWorkbook() {
         for (const name of REPORT_SHEETS) {
           const sheet = workbook.getSheetByName(name);
           if (!sheet) continue;
-          await sheet.getWorksheetPermission().setReadOnly();
+          const permission = sheet.getWorksheetPermission();
+          if (!permission.isProtected())
+            await permission.protect({ name: `${name} monthly report` });
+          await permission.setReadOnly();
         }
         runtime = { univer, univerAPI, workbook };
         runtimeRef.current = runtime;
@@ -360,7 +368,7 @@ export function LtmsWorkbook() {
     };
     // Univer is mounted once after the per-admin manual-sheet list is loaded.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, refreshKey]);
+  }, [ready, refreshKey, reportMonth]);
 
   useEffect(() => {
     const runtime = runtimeRef.current;
@@ -369,17 +377,45 @@ export function LtmsWorkbook() {
       .then(async () => {
         if (runtimeRef.current !== runtime) return;
         for (const name of REPORT_SHEETS) {
-          if (name.startsWith("Workmen ")) continue;
           const sheet = runtime.workbook.getSheetByName(name);
           if (!sheet) continue;
           const { keys, matrix } = rowsToMatrix(reportRows[name] ?? EMPTY_ROWS);
           const permission = sheet.getWorksheetPermission();
+          if (!permission.isProtected())
+            await permission.protect({ name: `${name} monthly report` });
           await permission.setEditable();
           try {
-            sheet.setRowCount(Math.max(200, matrix.length));
+            const hasData = (reportRows[name] ?? EMPTY_ROWS).length > 0;
+            const totalsRow = hasData
+              ? keys.map((key, columnIndex) =>
+                  /(amount|freight|loading|unloading|income|expense|charge|deduction|addition|weight|quantity|total|net|balance|profit|cost)/i.test(
+                    key,
+                  )
+                    ? `=SUM(${XLSX.utils.encode_col(columnIndex)}2:${XLSX.utils.encode_col(columnIndex)}${matrix.length})`
+                    : columnIndex === 0
+                      ? "TOTAL"
+                      : null,
+                )
+              : [];
+            const fullMatrix = hasData ? [...matrix, totalsRow] : matrix;
+            sheet.setRowCount(Math.max(200, fullMatrix.length));
             sheet.setColumnCount(Math.max(26, keys.length));
             sheet.clearContents();
             sheet.getRange(0, 0, matrix.length, keys.length).setValues(matrix);
+            if (hasData) {
+              sheet.getRange(matrix.length, 0, 1, keys.length).setValues([totalsRow]);
+              keys.forEach((key, columnIndex) => {
+                if (
+                  /(amount|freight|loading|unloading|income|expense|charge|deduction|addition|weight|quantity|total|net|balance|profit|cost)/i.test(
+                    key,
+                  )
+                ) {
+                  sheet
+                    .getRange(matrix.length, columnIndex, 1, 1)
+                    .setFormulas([[totalsRow[columnIndex] as string]]);
+                }
+              });
+            }
             if (keys.length) sheet.getRange(0, 0, 1, keys.length).setFontWeight("bold");
           } finally {
             await permission.setReadOnly();
@@ -418,8 +454,19 @@ export function LtmsWorkbook() {
           : [];
         if (cancelled) return;
         const billMap = new Map(bills.map((bill) => [bill.id, bill]));
+        const monthStart = `${reportMonth}-01`;
+        const nextMonth = new Date(
+          Number(reportMonth.slice(0, 4)),
+          Number(reportMonth.slice(5, 7)),
+          1,
+        );
+        const monthEnd = `${nextMonth.getFullYear()}-${String(nextMonth.getMonth() + 1).padStart(2, "0")}-01`;
         const rows = items
-          .filter((item) => billMap.has(item.bill_id))
+          .filter((item) => {
+            const bill = billMap.get(item.bill_id);
+            const billDate = String(bill?.bill_date ?? "").slice(0, 10);
+            return Boolean(bill && billDate >= monthStart && billDate < monthEnd);
+          })
           .map((item) => {
             const bill = billMap.get(item.bill_id)!;
             return {
@@ -459,6 +506,17 @@ export function LtmsWorkbook() {
     return () => {
       cancelled = true;
     };
+  }, [reportMonth]);
+
+  useEffect(() => {
+    const timer = window.setInterval(
+      () => {
+        setReportRows({});
+        setRefreshKey((current) => current + 1);
+      },
+      5 * 60 * 1000,
+    );
+    return () => window.clearInterval(timer);
   }, []);
 
   const addSheet = useCallback(async () => {
@@ -476,7 +534,10 @@ export function LtmsWorkbook() {
     }
     const uniqueName = visibleManualName(name, currentNames);
     const sheet = runtimeRef.current.workbook.create(uniqueName, 1000, 26);
-    await sheet.getWorksheetPermission().setEditable();
+    const permission = sheet.getWorksheetPermission();
+    if (!permission.isProtected())
+      await permission.protect({ name: `${uniqueName} workbook sheet` });
+    await permission.setEditable();
     const initialData = getManualSnapshot(sheet);
     try {
       const created = await serverCreateWorkbookSheet({
@@ -558,13 +619,40 @@ export function LtmsWorkbook() {
       used.add(safeName.toLowerCase());
       return safeName;
     };
+    const totalColumnPattern =
+      /(amount|freight|loading|unloading|income|expense|charge|deduction|addition|weight|quantity|total|net|balance|profit|cost)/i;
     for (const name of REPORT_SHEETS) {
-      XLSX.utils.book_append_sheet(
-        workbook,
-        XLSX.utils.aoa_to_sheet(excelRows(reportRows[name] ?? EMPTY_ROWS)),
-        sheetName(name),
-      );
+      const { keys, matrix } = rowsToMatrix(reportRows[name] ?? EMPTY_ROWS);
+      const data = (reportRows[name] ?? EMPTY_ROWS).length > 0;
+      const worksheet = XLSX.utils.aoa_to_sheet(matrix);
+      if (data) {
+        const totalRowIndex = matrix.length;
+        const firstColumn = XLSX.utils.encode_col(0);
+        const lastColumn = XLSX.utils.encode_col(Math.max(keys.length - 1, 0));
+        worksheet[`${firstColumn}${totalRowIndex + 1}`] = { t: "s", v: "TOTAL" };
+        keys.forEach((key, columnIndex) => {
+          if (!totalColumnPattern.test(key)) return;
+          const address = XLSX.utils.encode_cell({ r: totalRowIndex, c: columnIndex });
+          worksheet[address] = {
+            t: "n",
+            f: `SUM(${XLSX.utils.encode_col(columnIndex)}2:${XLSX.utils.encode_col(columnIndex)}${totalRowIndex})`,
+          };
+        });
+        worksheet["!ref"] = `A1:${lastColumn}${totalRowIndex + 1}`;
+        worksheet["!autofilter"] = { ref: `${firstColumn}1:${lastColumn}${totalRowIndex}` };
+      }
+      XLSX.utils.book_append_sheet(workbook, worksheet, sheetName(name));
     }
+    const info = XLSX.utils.aoa_to_sheet([
+      ["LTMS Monthly Workbook"],
+      ["Report month", reportMonth],
+      ["Generated at", new Date().toLocaleString()],
+      [
+        "Formula totals",
+        "Financial amounts, quantities, weights and total columns use Excel SUM formulas.",
+      ],
+    ]);
+    XLSX.utils.book_append_sheet(workbook, info, sheetName("Workbook Info"));
     for (const item of manualSheets) {
       const sheet = runtime.workbook
         .getSheets()
@@ -586,7 +674,13 @@ export function LtmsWorkbook() {
         const row = cellData[String(rowIndex)] ?? {};
         return Array.from({ length: maxColumn + 1 }, (_, columnIndex) => {
           const cell = row[String(columnIndex)];
-          return cell?.v ?? (cell?.f ? `=${cell.f}` : null);
+          if (cell?.f)
+            return {
+              t: "n",
+              f: String(cell.f).replace(/^=/, ""),
+              ...(typeof cell.v === "number" ? { v: cell.v } : {}),
+            };
+          return cell?.v ?? null;
         });
       });
       XLSX.utils.book_append_sheet(
@@ -595,12 +689,16 @@ export function LtmsWorkbook() {
         sheetName(item.name),
       );
     }
-    XLSX.writeFile(workbook, `LTMS-Workbook-${new Date().toISOString().slice(0, 10)}.xlsx`);
-  }, [manualSheets, reportRows]);
+    XLSX.writeFile(workbook, `LTMS-Workbook-${reportMonth}.xlsx`);
+  }, [manualSheets, reportRows, reportMonth]);
 
   return (
     <div className="space-y-3">
-      <ReportRowSources key={refreshKey} onRows={updateReportRows} />
+      <ReportRowSources
+        key={`${reportMonth}-${refreshKey}`}
+        onRows={updateReportRows}
+        reportMonth={reportMonth}
+      />
       <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border bg-card px-3 py-2">
         <div
           className="flex items-center gap-2 text-sm text-muted-foreground"
@@ -621,10 +719,28 @@ export function LtmsWorkbook() {
                   ? "Shared sheet · editable by administrators"
                   : currentManualSheet
                     ? "Private sheet · only you can see it"
-                    : "Report sheets refresh automatically when Workbook opens"}
+                    : `Read-only monthly report tabs · ${reportMonth} · refreshed every 5 minutes`}
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <label className="flex items-center gap-2 text-sm">
+            <span className="text-muted-foreground">Report month</span>
+            <input
+              aria-label="Report month"
+              type="month"
+              value={reportMonth}
+              max={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`}
+              onChange={(event) => {
+                if (!event.target.value) return;
+                setWorkbookMounted(false);
+                setReportRows({});
+                setActiveSubUnitId(null);
+                activeSheetName.current = null;
+                setReportMonth(event.target.value);
+              }}
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+            />
+          </label>
           <Button
             size="sm"
             variant="outline"

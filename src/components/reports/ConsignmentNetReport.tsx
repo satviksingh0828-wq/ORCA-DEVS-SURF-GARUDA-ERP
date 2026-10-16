@@ -125,7 +125,7 @@ function monthStart(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-01`;
 }
 function monthEnd(date = new Date()) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
 }
 function normalizeMode(value: unknown) {
   return String(value ?? "")
@@ -187,9 +187,11 @@ export function ConsignmentNetReport({
   onWorkbookRows?: (rows: object[]) => void;
   onFiltersChange?: (filters: { fromDate: string; toDate: string; branchId: string }) => void;
   dashboardCompact?: boolean;
+  reportMonth?: string;
 } = {}) {
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(monthEnd);
+  const monthDate = reportMonth ? new Date(`${reportMonth}-15T12:00:00`) : new Date();
+  const [fromDate, setFromDate] = useState(() => monthStart(monthDate));
+  const [toDate, setToDate] = useState(() => monthEnd(monthDate));
   const [branchId, setBranchId] = useState("all");
   const [branches, setBranches] = useState<BranchOption[]>([]);
   const [rows, setRows] = useState<ReportRow[]>([]);

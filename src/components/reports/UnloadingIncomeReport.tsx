@@ -10,9 +10,15 @@ const money = (value: number | string | null | undefined) =>
     maximumFractionDigits: 2,
   });
 const num = (value: number | string | null | undefined) => Number(value ?? 0);
-const today = new Date();
-const monthStart = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
-const monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0).toISOString().slice(0, 10);
+function formatLocalDate(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+function monthStart(date = new Date()) {
+  return formatLocalDate(new Date(date.getFullYear(), date.getMonth(), 1));
+}
+function monthEnd(date = new Date()) {
+  return formatLocalDate(new Date(date.getFullYear(), date.getMonth() + 1, 0));
+}
 
 type PackageRow = {
   id: string;
@@ -69,11 +75,14 @@ async function fetchAll<T>(queryFactory: (from?: number) => any): Promise<T[]> {
 
 export function UnloadingIncomeReport({
   onWorkbookRows,
+  reportMonth,
 }: {
   onWorkbookRows?: (rows: object[]) => void;
+  reportMonth?: string;
 } = {}) {
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(monthEnd);
+  const monthDate = reportMonth ? new Date(`${reportMonth}-15T12:00:00`) : new Date();
+  const [fromDate, setFromDate] = useState(() => monthStart(monthDate));
+  const [toDate, setToDate] = useState(() => monthEnd(monthDate));
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

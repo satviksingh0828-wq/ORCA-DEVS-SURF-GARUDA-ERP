@@ -70,7 +70,7 @@ function monthStart(date = new Date()) {
 }
 
 function monthEnd(date = new Date()) {
-  return new Date(date.getFullYear(), date.getMonth() + 1, 0).toISOString().slice(0, 10);
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
 }
 
 function findConsignmentEntry(
@@ -89,11 +89,14 @@ function findConsignmentEntry(
 }
 export function ConsignmentIncomeReport({
   onWorkbookRows,
+  reportMonth,
 }: {
   onWorkbookRows?: (rows: object[]) => void;
+  reportMonth?: string;
 } = {}) {
-  const [fromDate, setFromDate] = useState(monthStart);
-  const [toDate, setToDate] = useState(monthEnd);
+  const monthDate = reportMonth ? new Date(`${reportMonth}-15T12:00:00`) : new Date();
+  const [fromDate, setFromDate] = useState(() => monthStart(monthDate));
+  const [toDate, setToDate] = useState(() => monthEnd(monthDate));
   const [sourceId, setSourceId] = useState("all");
   const [sources, setSources] = useState<SourceOption[]>([]);
   const [rows, setRows] = useState<ReportRow[]>([]);
