@@ -962,7 +962,7 @@ async function callPuter(messages: { role: string; content: string }[]): Promise
 
 // ── Panel ─────────────────────────────────────────────────────────────────────
 export function OrcaAIPanel() {
-  const { open, setOpen } = useOrcaAI();
+  const { agentOpen, setAgentOpen } = useOrcaAI();
   const { user } = useSession();
   const navigate = useNavigate();
   const routerState = useRouterState();
@@ -992,7 +992,7 @@ export function OrcaAIPanel() {
 
   // ── Persistence ───────────────────────────────────────────────────────────
   useEffect(() => {
-    if (!open || messages.length > 0) return;
+    if (!agentOpen || messages.length > 0) return;
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (raw) {
@@ -1001,7 +1001,7 @@ export function OrcaAIPanel() {
       }
     } catch { /* ignore corrupt storage */ }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [agentOpen]);
 
   useEffect(() => {
     if (messages.length === 0) return;
@@ -1020,7 +1020,7 @@ export function OrcaAIPanel() {
 
   // ── Scroll + focus ────────────────────────────────────────────────────────
   useEffect(() => { endRef.current?.scrollIntoView({ behavior: "smooth" }); }, [messages, loading, currentStep, pendingPlan]);
-  useEffect(() => { if (open) setTimeout(() => inputRef.current?.focus(), 100); }, [open]);
+  useEffect(() => { if (agentOpen) setTimeout(() => inputRef.current?.focus(), 100); }, [agentOpen]);
 
   // ── Auto-resize textarea ──────────────────────────────────────────────────
   const resizeTextarea = () => {
@@ -1190,7 +1190,7 @@ export function OrcaAIPanel() {
   const isExecuting = messages.some((m) => m.executing);
 
   return (
-    <div className="flex h-full min-h-0 flex-col overflow-hidden border-l border-border bg-card" role="complementary" aria-label="ORCA AI">
+    <div className="flex h-full min-h-0 flex-col overflow-hidden border border-border bg-card" role="complementary" aria-label="ORCA Agent">
 
       {/* ── Header ── */}
       <div className="flex h-14 shrink-0 items-center justify-between border-b border-border px-4">
@@ -1198,9 +1198,9 @@ export function OrcaAIPanel() {
           <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10">
             <Bot className="size-4 text-primary" />
           </div>
-          <span className="text-sm font-semibold tracking-tight text-foreground">ORCA AI</span>
-          <span className="rounded-full bg-muted px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-muted-foreground">
-            {isAdmin ? (role === "semi_admin" ? "Semi-Admin" : "Admin") : role === "viewer" ? "Manager" : "User"}
+          <span className="text-sm font-semibold tracking-tight text-foreground">ORCA AGENT</span>
+          <span className="rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-widest text-emerald-600">
+            Live
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -1216,7 +1216,7 @@ export function OrcaAIPanel() {
           )}
           <button
             type="button"
-            onClick={() => setOpen(false)}
+            onClick={() => setAgentOpen(false)}
             className="flex size-7 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
           >
             <X className="size-4" />
@@ -1449,20 +1449,21 @@ export function OrcaAIPanel() {
 
 // ── Trigger button ─────────────────────────────────────────────────────────────
 export function OrcaAITrigger() {
-  const { open, toggle } = useOrcaAI();
+  const { agentOpen, toggleAgent } = useOrcaAI();
   return (
     <button
       type="button"
-      onClick={toggle}
+      onClick={toggleAgent}
+      aria-label={agentOpen ? "Close ORCA Agent" : "Open ORCA Agent"}
+      title={agentOpen ? "Close ORCA Agent" : "Open ORCA Agent"}
       className={cn(
-        "flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs font-medium transition-colors",
-        open
-          ? "border-primary bg-primary/10 text-primary"
-          : "border-border bg-transparent text-muted-foreground hover:bg-muted hover:text-foreground",
+        "flex size-14 items-center justify-center rounded-full border shadow-lg transition-all duration-200",
+        agentOpen
+          ? "border-primary bg-primary text-primary-foreground shadow-primary/30"
+          : "border-primary/20 bg-primary text-primary-foreground shadow-primary/30 hover:-translate-y-0.5 hover:bg-primary/90",
       )}
     >
-      <Bot className="size-3.5" />
-      ORCA AI
+      <Bot className="size-6" />
     </button>
   );
 }

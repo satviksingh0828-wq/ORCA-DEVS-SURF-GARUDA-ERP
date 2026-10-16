@@ -7,6 +7,9 @@ interface OrcaAIContextValue {
   setOpen: (v: boolean) => void;
   setExpanded: (v: boolean) => void;
   toggle: () => void;
+  agentOpen: boolean;
+  setAgentOpen: (v: boolean) => void;
+  toggleAgent: () => void;
 }
 
 const OrcaAIContext = createContext<OrcaAIContextValue>({
@@ -15,18 +18,34 @@ const OrcaAIContext = createContext<OrcaAIContextValue>({
   setOpen: () => {},
   setExpanded: () => {},
   toggle: () => {},
+  agentOpen: false,
+  setAgentOpen: () => {},
+  toggleAgent: () => {},
 });
 
 export function OrcaAIProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(false);
   const changeOpen = (value: boolean) => {
     setOpen(value);
     if (!value) setExpanded(false);
   };
   const toggle = () => changeOpen(!open);
+  const toggleAgent = () => setAgentOpen((value) => !value);
   return (
-    <OrcaAIContext.Provider value={{ open, expanded, setOpen: changeOpen, setExpanded, toggle }}>
+    <OrcaAIContext.Provider
+      value={{
+        open,
+        expanded,
+        setOpen: changeOpen,
+        setExpanded,
+        toggle: toggle,
+        agentOpen,
+        setAgentOpen,
+        toggleAgent,
+      }}
+    >
       {children}
     </OrcaAIContext.Provider>
   );

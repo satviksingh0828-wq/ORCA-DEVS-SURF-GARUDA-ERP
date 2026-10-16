@@ -27,6 +27,7 @@ import { SplashScreen } from "../components/SplashScreen";
 import { OrcaLogo } from "../components/OrcaLogo";
 import { PasskeyGate } from "../components/PasskeyGate";
 import { ScreenControlWidget } from "../components/ScreenControlWidget";
+import { OrcaAIPanel, OrcaAITrigger } from "../components/OrcaAI";
 import { useAppSettings } from "../lib/hooks";
 import { ModuleLoadingScreen } from "../components/ModuleLoadingScreen";
 import { SupabaseStatusGate } from "../components/SupabaseStatusGate";
@@ -252,6 +253,25 @@ function MeetPanelMount() {
   );
 }
 
+function OrcaAgentMount() {
+  const { agentOpen } = useOrcaAI();
+  const { user } = useSession();
+
+  if (!user) return null;
+  return (
+    <>
+      {agentOpen && (
+        <div className="fixed bottom-24 right-4 z-[65] h-[min(680px,calc(100dvh-7rem))] w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-2xl shadow-2xl shadow-black/20">
+          <OrcaAIPanel />
+        </div>
+      )}
+      <div className="fixed bottom-5 right-5 z-[66]">
+        <OrcaAITrigger />
+      </div>
+    </>
+  );
+}
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
@@ -297,6 +317,7 @@ function RootComponent() {
               <ScreenControlWidget />
               <Toaster position="top-right" />
               <MeetPanelMount />
+              <OrcaAgentMount />
             </PasskeyProtectionGate>
           )}
         </SupabaseStatusGate>
