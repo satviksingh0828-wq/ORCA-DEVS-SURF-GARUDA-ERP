@@ -87,7 +87,11 @@ function findConsignmentEntry(
       String(entry.to_pin_code ?? "").trim() === toPin,
   );
 }
-export function ConsignmentIncomeReport() {
+export function ConsignmentIncomeReport({
+  onWorkbookRows,
+}: {
+  onWorkbookRows?: (rows: object[]) => void;
+} = {}) {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [sourceId, setSourceId] = useState("all");
@@ -252,6 +256,10 @@ export function ConsignmentIncomeReport() {
       ),
     );
   }, [rows, search]);
+
+  useEffect(() => {
+    onWorkbookRows?.(rows);
+  }, [rows, onWorkbookRows]);
 
   const totals = useMemo(
     () =>

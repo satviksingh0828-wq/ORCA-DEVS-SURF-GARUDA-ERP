@@ -128,7 +128,11 @@ function packageCharge(packageRow: PackageRow, type: RateType | undefined, entri
   };
 }
 
-function LoadingChargesReportContent() {
+export function LoadingChargesReportContent({
+  onWorkbookRows,
+}: {
+  onWorkbookRows?: (rows: object[]) => void;
+}) {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [branchId, setBranchId] = useState("all");
@@ -264,6 +268,19 @@ function LoadingChargesReportContent() {
       ),
     );
   }, [rows, search]);
+  useEffect(() => {
+    onWorkbookRows?.(
+      rows.map((row) => ({
+        ...row,
+        final_loading: Math.max(
+          0,
+          row.calculated_loading -
+            num(adjustments[row.id]?.deduction ?? 0) +
+            num(adjustments[row.id]?.addition ?? 0),
+        ),
+      })),
+    );
+  }, [rows, adjustments, onWorkbookRows]);
   const totals = useMemo(
     () =>
       filtered.reduce(
@@ -695,7 +712,11 @@ type InwardReceiptRow = {
 
 type InwardAdjustment = { deduction: string; addition: string };
 
-function InwardReceiptChargesReport() {
+export function InwardReceiptChargesReport({
+  onWorkbookRows,
+}: {
+  onWorkbookRows?: (rows: object[]) => void;
+}) {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [branchId, setBranchId] = useState("all");
@@ -806,6 +827,19 @@ function InwardReceiptChargesReport() {
       );
     });
   }, [rows, search]);
+  useEffect(() => {
+    onWorkbookRows?.(
+      rows.map((row) => ({
+        ...row,
+        final_unloading: Math.max(
+          0,
+          row.calculated_unloading -
+            num(adjustments[row.id]?.deduction ?? 0) +
+            num(adjustments[row.id]?.addition ?? 0),
+        ),
+      })),
+    );
+  }, [rows, adjustments, onWorkbookRows]);
 
   const totals = useMemo(
     () =>

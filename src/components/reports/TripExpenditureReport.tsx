@@ -89,7 +89,11 @@ function isEligibleWithoutTrip(consignment: ConsignmentRow) {
   return type === "own" || (type === "third_party" && mode === "drop");
 }
 
-export function TripExpenditureReport() {
+export function TripExpenditureReport({
+  onWorkbookRows,
+}: {
+  onWorkbookRows?: (rows: object[]) => void;
+} = {}) {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [branchId, setBranchId] = useState("all");
@@ -291,6 +295,11 @@ export function TripExpenditureReport() {
       ].some((value) => String(value).toLowerCase().includes(query)),
     );
   }, [rows, search]);
+
+  useEffect(() => {
+    onWorkbookRows?.(rows);
+  }, [rows, onWorkbookRows]);
+
   const totals = useMemo(
     () =>
       filtered.reduce(

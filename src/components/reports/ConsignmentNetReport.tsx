@@ -179,10 +179,12 @@ function packageCharge(
 
 export function ConsignmentNetReport({
   onRowsChange,
+  onWorkbookRows,
   onFiltersChange,
   dashboardCompact = false,
 }: {
   onRowsChange?: (rows: ConsignmentNetReportRow[]) => void;
+  onWorkbookRows?: (rows: object[]) => void;
   onFiltersChange?: (filters: { fromDate: string; toDate: string; branchId: string }) => void;
   dashboardCompact?: boolean;
 } = {}) {
@@ -514,7 +516,8 @@ export function ConsignmentNetReport({
   }, [fromDate, toDate, branchId]);
   useEffect(() => {
     onRowsChange?.(rows);
-  }, [rows, onRowsChange]);
+    onWorkbookRows?.(rows);
+  }, [rows, onRowsChange, onWorkbookRows]);
   useEffect(() => {
     onFiltersChange?.({ fromDate, toDate, branchId });
   }, [fromDate, toDate, branchId, onFiltersChange]);

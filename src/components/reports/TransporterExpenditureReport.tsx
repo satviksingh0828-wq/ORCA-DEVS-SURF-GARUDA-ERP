@@ -107,7 +107,11 @@ function findTransporterEntry(
       String(entry.to_pin_code ?? "").trim() === toPin,
   );
 }
-export function TransporterExpenditureReport() {
+export function TransporterExpenditureReport({
+  onWorkbookRows,
+}: {
+  onWorkbookRows?: (rows: object[]) => void;
+} = {}) {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [transporterId, setTransporterId] = useState("all");
@@ -320,6 +324,10 @@ export function TransporterExpenditureReport() {
       ),
     );
   }, [rows, search]);
+
+  useEffect(() => {
+    onWorkbookRows?.(rows);
+  }, [rows, onWorkbookRows]);
 
   const totals = useMemo(
     () =>

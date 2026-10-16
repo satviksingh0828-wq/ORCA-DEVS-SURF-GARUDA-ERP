@@ -54,6 +54,7 @@ type CalcLine = PackageRow & {
 };
 type ReportRow = Receipt & { sourceIncome: number; calculations: CalcLine[] };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function fetchAll<T>(queryFactory: (from?: number) => any): Promise<T[]> {
   const result: T[] = [];
   let offset = 0;
@@ -66,12 +67,20 @@ async function fetchAll<T>(queryFactory: (from?: number) => any): Promise<T[]> {
   }
 }
 
-export function UnloadingIncomeReport() {
+export function UnloadingIncomeReport({
+  onWorkbookRows,
+}: {
+  onWorkbookRows?: (rows: object[]) => void;
+} = {}) {
   const [fromDate, setFromDate] = useState(monthStart);
   const [toDate, setToDate] = useState(monthEnd);
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    onWorkbookRows?.(rows);
+  }, [rows, onWorkbookRows]);
 
   async function loadData() {
     if (!fromDate || !toDate || fromDate > toDate) return toast.error("Select a valid date range");

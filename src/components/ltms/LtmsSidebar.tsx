@@ -64,7 +64,10 @@ const NAVIGATION: LtmsSidebarGroup[] = [
   {
     section: "dashboard",
     label: "Dashboard",
-    items: [{ id: "data", label: "Data" }],
+    items: [
+      { id: "data", label: "Data" },
+      { id: "workbook", label: "Workbook" },
+    ],
   },
   {
     section: "operations",
