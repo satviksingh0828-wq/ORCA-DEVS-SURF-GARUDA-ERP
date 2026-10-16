@@ -6,6 +6,7 @@ import {
   ConsignmentNetReport,
   type ConsignmentNetReportRow,
 } from "@/components/reports/ConsignmentNetReport";
+import { fetchAll } from "@/lib/fetch-all";
 
 /* The report-era LTMS tables are newer than the generated Supabase types. */
 const db = supabase as any;
@@ -16,6 +17,8 @@ type Amounts = {
   consignment: number;
   net: number;
   unloading: number;
+  financeIncome: number;
+  financeExpenditure: number;
 };
 const zero = (): Amounts => ({
   trip: 0,
@@ -24,6 +27,8 @@ const zero = (): Amounts => ({
   consignment: 0,
   net: 0,
   unloading: 0,
+  financeIncome: 0,
+  financeExpenditure: 0,
 });
 const money = (value: number) =>
   new Intl.NumberFormat("en-IN", {
@@ -50,6 +55,8 @@ export function LtmsDashboard() {
   const [system, setSystem] = useState<Amounts>(zero());
   const [posted, setPosted] = useState<Amounts>(zero());
   const [systemWorkmenUnloading, setSystemWorkmenUnloading] = useState(0);
+  const [financeTotals, setFinanceTotals] = useState({ income: 0, expenditure: 0 });
+  const [financeLoading, setFinanceLoading] = useState(false);
   const [loadingPosted, setLoadingPosted] = useState(false);
   const [filters, setFilters] = useState({
     fromDate: `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}-01`,
@@ -60,6 +67,51 @@ export function LtmsDashboard() {
   });
   const onRowsChange = useCallback((value: ConsignmentNetReportRow[]) => setRows(value), []);
   const onFiltersChange = useCallback((value: typeof filters) => setFilters(value), []);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadFinanceTotals() {
+      setFinanceLoading(true);
+      try {
+        const [incomes, expenditures] = await Promise.all([
+          fetchAll<{ amount: string | number | null }>(() => {
+            let query = db
+              .from("incomes")
+              .select("amount")
+              .gte("entry_date", filters.fromDate)
+              .lte("entry_date", filters.toDate);
+            if (filters.branchId !== "all") query = query.eq("branch_id", filters.branchId);
+            return query;
+          }),
+          fetchAll<{ amount: string | number | null }>(() => {
+            let query = db
+              .from("expenditures")
+              .select("amount")
+              .gte("entry_date", filters.fromDate)
+              .lte("entry_date", filters.toDate);
+            if (filters.branchId !== "all") query = query.eq("branch_id", filters.branchId);
+            return query;
+          }),
+        ]);
+        const next = {
+          income: incomes.reduce((sum, row) => sum + n(row.amount), 0),
+          expenditure: expenditures.reduce((sum, row) => sum + n(row.amount), 0),
+        };
+        if (!cancelled) setFinanceTotals(next);
+      } catch (error) {
+        if (!cancelled)
+          toast.error(
+            error instanceof Error ? error.message : "Could not load LTMS Finance totals",
+          );
+      } finally {
+        if (!cancelled) setFinanceLoading(false);
+      }
+    }
+    void loadFinanceTotals();
+    return () => {
+      cancelled = true;
+    };
+  }, [filters]);
 
   useEffect(() => {
     let cancelled = false;
@@ -266,7 +318,7 @@ export function LtmsDashboard() {
           if (result.error) throw result.error;
         const workmenItems = [...(loadingItems.data ?? []), ...(unloadingItems.data ?? [])];
         const workmenBillIds = [
-          ...new Set((workmenItems.data ?? []).map((item: { bill_id: string }) => item.bill_id)),
+          ...new Set(workmenItems.map((item: { bill_id: string }) => item.bill_id)),
         ];
         const workmenBills = workmenBillIds.length
           ? await db.from("workmen_bills").select("id,journal_entry_id").in("id", workmenBillIds)
@@ -346,6 +398,8 @@ export function LtmsDashboard() {
     ["unloading", "Unloading Income"],
     ["consignment", "Consignment Income"],
     ["net", "Consignment Net"],
+    ["financeIncome", "LTMS Finance Income"],
+    ["financeExpenditure", "LTMS Finance Expenditure"],
   ];
   return (
     <div className="space-y-4">
@@ -361,15 +415,24 @@ export function LtmsDashboard() {
         <MetricGroup
           title="IN SYSTEM"
           subtitle="Final report values; Workmen Charges = loading + unloading"
-          values={{ ...system, workmen: system.workmen + systemWorkmenUnloading }}
-          loading={false}
+          values={{
+            ...system,
+            workmen: system.workmen + systemWorkmenUnloading,
+            financeIncome: financeTotals.income,
+            financeExpenditure: financeTotals.expenditure,
+          }}
+          loading={financeLoading}
           metrics={metrics}
         />
         <MetricGroup
           title="IN SYSTEM AND POSTED"
           subtitle="Posted journal-linked amounts; Workmen Charges = loading + unloading"
-          values={posted}
-          loading={loadingPosted}
+          values={{
+            ...posted,
+            financeIncome: financeTotals.income,
+            financeExpenditure: financeTotals.expenditure,
+          }}
+          loading={loadingPosted || financeLoading}
           metrics={metrics}
         />
       </div>
