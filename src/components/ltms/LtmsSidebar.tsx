@@ -6,10 +6,16 @@ import { SharedSidebar } from "@/components/SharedSidebar";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 
-export type LtmsSection = "operations" | "billing" | "reports" | "masters" | "finance";
+export type LtmsSection =
+  "dashboard" | "operations" | "billing" | "reports" | "masters" | "finance";
 
 type LtmsRoute =
-  "/ltms/operations" | "/ltms/billing" | "/ltms/reports" | "/ltms/masters" | "/ltms/finance";
+  | "/ltms/dashboard"
+  | "/ltms/operations"
+  | "/ltms/billing"
+  | "/ltms/reports"
+  | "/ltms/masters"
+  | "/ltms/finance";
 
 export type LtmsSidebarItem = { id: string; label: string; to?: string };
 
@@ -21,6 +27,7 @@ export type LtmsSidebarGroup = {
 };
 
 const ROUTES: Record<LtmsSection, LtmsRoute> = {
+  dashboard: "/ltms/dashboard",
   operations: "/ltms/operations",
   billing: "/ltms/billing",
   reports: "/ltms/reports",
@@ -54,6 +61,11 @@ export function consumeLtmsTabNavigation(section: LtmsSection): string | null {
 }
 
 const NAVIGATION: LtmsSidebarGroup[] = [
+  {
+    section: "dashboard",
+    label: "Dashboard",
+    items: [{ id: "data", label: "Data" }],
+  },
   {
     section: "operations",
     label: "Operations",
@@ -137,6 +149,7 @@ function visibleGroups(role: string | undefined): LtmsSidebarGroup[] {
   return NAVIGATION.map((group) => ({
     ...group,
     items: group.items.filter((item) => {
+      if (group.section === "dashboard") return isAdmin;
       if (group.section === "operations") return !(isBasic && item.id === "admin-mis");
       if (group.section === "billing") return !(isBasic && item.id === "source-billing");
       if (group.section === "reports")
