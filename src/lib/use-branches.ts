@@ -13,6 +13,7 @@ export type BranchOption = {
   pin_code: string | null;
   state_code: string | null;
   gstin: string | null;
+  default_gst_slab_id: string | null;
   wms_enabled: boolean;
   wms_warehouse_id: number | null;
 };
@@ -26,7 +27,7 @@ export function useBranches() {
         supabase
           .from("branches")
           .select(
-            "id,branch_name,branch_type,trip_series_prefix,lr_series_prefix,manifest_series_prefix,pin_code,state_code,gstin,wms_enabled,wms_warehouse_id",
+            "id,branch_name,branch_type,trip_series_prefix,lr_series_prefix,manifest_series_prefix,pin_code,state_code,gstin,default_gst_slab_id,wms_enabled,wms_warehouse_id",
           )
           .order("branch_name", { ascending: true }),
       );

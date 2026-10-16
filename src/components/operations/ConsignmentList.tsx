@@ -601,6 +601,8 @@ export function ConsignmentList({
   const [monthFilter, setMonthFilter] = useState(new Date().toISOString().slice(0, 7));
   const [completedLimit, setCompletedLimit] = useState(15);
   const [branchId, setBranchId] = useState("");
+  const [gstSlabId, setGstSlabId] = useState("");
+  const [gstSlabs, setGstSlabs] = useState<Master[]>([]);
   const [sourceId, setSourceId] = useState("");
   const [consignmentDate, setConsignmentDate] = useState(new Date().toISOString().slice(0, 10));
   const [billingStatus, setBillingStatus] = useState("to_be_billed");
@@ -776,6 +778,35 @@ export function ConsignmentList({
       });
   }, [branchId]);
   useEffect(() => {
+    if (!branchId) {
+      setGstSlabs([]);
+      return;
+    }
+    let active = true;
+    setGstSlabs([]);
+    void db
+      .from("account_gst_slabs")
+      .select("id,slab_name")
+      .eq("branch_id", branchId)
+      .order("slab_name")
+      .then(
+        (result: {
+          data: Array<{ id: string; slab_name: string }> | null;
+          error: { message: string } | null;
+        }) => {
+          if (!active) return;
+          if (result.error) toast.error(result.error.message);
+          else
+            setGstSlabs(
+              (result.data ?? []).map((row) => ({ id: row.id, label: row.slab_name })),
+            );
+        },
+      );
+    return () => {
+      active = false;
+    };
+  }, [branchId]);
+  useEffect(() => {
     if (type === "third_party") {
       if (movement === "drop") {
         setFromPin(branch?.pin_code ?? "");
@@ -818,7 +849,9 @@ export function ConsignmentList({
     setScreen("create");
     onSidebarVisibilityChange?.(false);
     onCreateModeChange?.(true);
-    setBranchId(branches.length === 1 ? branches[0].id : "");
+    const initialBranchId = branches.length === 1 ? branches[0].id : "";
+    setBranchId(initialBranchId);
+    setGstSlabId(branches.find((item) => item.id === initialBranchId)?.default_gst_slab_id ?? "");
     setSourceId("");
     setConsignmentDate(new Date().toISOString().slice(0, 10));
     setBillingStatus("to_be_billed");
@@ -870,6 +903,7 @@ export function ConsignmentList({
     setEditingId(row.id);
     setEditingRow(row);
     setBranchId(row.branch_id ?? "");
+    setGstSlabId(row.gst_slab_id ?? "");
     setSourceId(row.source_id ?? "");
     setConsignmentDate(row.consignment_date ?? "");
     setBillingStatus(row.billing_status ?? "to_be_billed");
@@ -1091,7 +1125,8 @@ export function ConsignmentList({
     const { error } = await db
       .from("consignments")
       .update({
-        // Edit mode intentionally sends only Type and Transport Assignment fields.
+        // Edit mode only saves GST slab, Type, and Transport Assignment fields.
+        gst_slab_id: gstSlabId || null,
         consignment_type: type,
         movement_mode: movement,
         own_transport_mode: type === "own" ? ownTransportMode : "own_vehicle",
@@ -1187,6 +1222,7 @@ export function ConsignmentList({
     }
     const payload = {
       branch_id: branchId,
+      gst_slab_id: gstSlabId || null,
       source_id: sourceId || null,
       consignment_date: consignmentDate,
       billing_status: billingStatus,
@@ -1249,6 +1285,7 @@ export function ConsignmentList({
       .from("consignments")
       .update({
         consignment_date: consignmentDate,
+        gst_slab_id: gstSlabId || null,
         billing_status: billingStatus,
         own_transport_mode: type === "own" ? ownTransportMode : "own_vehicle",
         rental_id: needsRental ? rentalId : null,
@@ -1977,7 +2014,7 @@ function ConsignmentForm(props: any) {
             <h2 className="shrink-0 text-base font-semibold">Consignment / {isEdit ? "Edit" : "Create"}</h2>
             <p className="truncate text-xs text-muted-foreground">
               {isEdit
-                ? "Edit only Type and Transport Assignment; all other fields are locked"
+                ? "Edit GST Slab, Type and Transport Assignment; all other fields are locked"
                 : "Create consignment from E-Way Bills"}
             </p>
           </div>
@@ -2022,7 +2059,10 @@ function ConsignmentForm(props: any) {
             <SelectField
               label="Branch *"
               value={branchId}
-              onChange={setBranchId}
+              onChange={(id) => {
+                setBranchId(id);
+                setGstSlabId(branches.find((item) => item.id === id)?.default_gst_slab_id ?? "");
+              }}
               options={branches.map((item: BranchOption) => ({
                 id: item.id,
                 label: item.branch_name,
@@ -2077,6 +2117,15 @@ function ConsignmentForm(props: any) {
                 </SelectContent>
               </Select>
             </div>
+            <SelectField
+              label="GST Slab (Optional)"
+              value={gstSlabId}
+              onChange={setGstSlabId}
+              options={gstSlabs}
+              placeholder={branchId ? "Select GST slab" : "Select a branch first"}
+              disabled={!branchId}
+              allowClear
+            />
             <div className="min-w-0 space-y-1 xl:col-span-2">
               <Label className="text-xs font-semibold">E-Way Bill No. *</Label>
               <div className="flex min-w-0 flex-wrap gap-1">
