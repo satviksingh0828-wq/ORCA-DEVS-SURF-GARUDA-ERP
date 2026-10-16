@@ -92,6 +92,11 @@ import { Route as ApiHrPayrollEmailRouteImport } from './routes/api/hr/payroll-e
 import { Route as ApiMcpLtmsReportsRouteImport } from './routes/api/mcp/ltms-reports'
 import { Route as ApiMobileOutwardPodRouteImport } from './routes/api/mobile/outward-pod'
 import { Route as ApiMobileVerifyRouteImport } from './routes/api/mobile/verify'
+import { Route as ApiOauthAuthorizationServerRouteImport } from './routes/api/oauth/authorization-server'
+import { Route as ApiOauthAuthorizeRouteImport } from './routes/api/oauth/authorize'
+import { Route as ApiOauthRegisterRouteImport } from './routes/api/oauth/register'
+import { Route as ApiOauthResourceRouteImport } from './routes/api/oauth/resource'
+import { Route as ApiOauthTokenRouteImport } from './routes/api/oauth/token'
 import { Route as ApiOrcaAgentRouteImport } from './routes/api/orca/agent'
 import { Route as ApiScreenControlDisconnectRouteImport } from './routes/api/screen-control/disconnect'
 import { Route as AttendanceHistoryIndexRouteImport } from './routes/attendance.history.index'
@@ -531,6 +536,32 @@ const ApiMobileVerifyRoute = ApiMobileVerifyRouteImport.update({
   path: '/api/mobile/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiOauthAuthorizationServerRoute =
+  ApiOauthAuthorizationServerRouteImport.update({
+    id: '/api/oauth/authorization-server',
+    path: '/api/oauth/authorization-server',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiOauthAuthorizeRoute = ApiOauthAuthorizeRouteImport.update({
+  id: '/api/oauth/authorize',
+  path: '/api/oauth/authorize',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOauthRegisterRoute = ApiOauthRegisterRouteImport.update({
+  id: '/api/oauth/register',
+  path: '/api/oauth/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOauthResourceRoute = ApiOauthResourceRouteImport.update({
+  id: '/api/oauth/resource',
+  path: '/api/oauth/resource',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiOauthTokenRoute = ApiOauthTokenRouteImport.update({
+  id: '/api/oauth/token',
+  path: '/api/oauth/token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiOrcaAgentRoute = ApiOrcaAgentRouteImport.update({
   id: '/api/orca/agent',
   path: '/api/orca/agent',
@@ -734,6 +765,11 @@ export interface FileRoutesByFullPath {
   '/api/mcp/ltms-reports': typeof ApiMcpLtmsReportsRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
+  '/api/oauth/authorization-server': typeof ApiOauthAuthorizationServerRoute
+  '/api/oauth/authorize': typeof ApiOauthAuthorizeRoute
+  '/api/oauth/register': typeof ApiOauthRegisterRoute
+  '/api/oauth/resource': typeof ApiOauthResourceRoute
+  '/api/oauth/token': typeof ApiOauthTokenRoute
   '/api/orca/agent': typeof ApiOrcaAgentRoute
   '/api/screen-control/disconnect': typeof ApiScreenControlDisconnectRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
@@ -833,6 +869,11 @@ export interface FileRoutesByTo {
   '/api/mcp/ltms-reports': typeof ApiMcpLtmsReportsRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
+  '/api/oauth/authorization-server': typeof ApiOauthAuthorizationServerRoute
+  '/api/oauth/authorize': typeof ApiOauthAuthorizeRoute
+  '/api/oauth/register': typeof ApiOauthRegisterRoute
+  '/api/oauth/resource': typeof ApiOauthResourceRoute
+  '/api/oauth/token': typeof ApiOauthTokenRoute
   '/api/orca/agent': typeof ApiOrcaAgentRoute
   '/api/screen-control/disconnect': typeof ApiScreenControlDisconnectRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
@@ -941,6 +982,11 @@ export interface FileRoutesById {
   '/api/mcp/ltms-reports': typeof ApiMcpLtmsReportsRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
+  '/api/oauth/authorization-server': typeof ApiOauthAuthorizationServerRoute
+  '/api/oauth/authorize': typeof ApiOauthAuthorizeRoute
+  '/api/oauth/register': typeof ApiOauthRegisterRoute
+  '/api/oauth/resource': typeof ApiOauthResourceRoute
+  '/api/oauth/token': typeof ApiOauthTokenRoute
   '/api/orca/agent': typeof ApiOrcaAgentRoute
   '/api/screen-control/disconnect': typeof ApiScreenControlDisconnectRoute
   '/attendance/history/$id': typeof AttendanceHistoryIdRoute
@@ -1050,6 +1096,11 @@ export interface FileRouteTypes {
     | '/api/mcp/ltms-reports'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
+    | '/api/oauth/authorization-server'
+    | '/api/oauth/authorize'
+    | '/api/oauth/register'
+    | '/api/oauth/resource'
+    | '/api/oauth/token'
     | '/api/orca/agent'
     | '/api/screen-control/disconnect'
     | '/attendance/history/$id'
@@ -1149,6 +1200,11 @@ export interface FileRouteTypes {
     | '/api/mcp/ltms-reports'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
+    | '/api/oauth/authorization-server'
+    | '/api/oauth/authorize'
+    | '/api/oauth/register'
+    | '/api/oauth/resource'
+    | '/api/oauth/token'
     | '/api/orca/agent'
     | '/api/screen-control/disconnect'
     | '/attendance/history/$id'
@@ -1256,6 +1312,11 @@ export interface FileRouteTypes {
     | '/api/mcp/ltms-reports'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
+    | '/api/oauth/authorization-server'
+    | '/api/oauth/authorize'
+    | '/api/oauth/register'
+    | '/api/oauth/resource'
+    | '/api/oauth/token'
     | '/api/orca/agent'
     | '/api/screen-control/disconnect'
     | '/attendance/history/$id'
@@ -1326,6 +1387,11 @@ export interface RootRouteChildren {
   ApiMcpLtmsReportsRoute: typeof ApiMcpLtmsReportsRoute
   ApiMobileOutwardPodRoute: typeof ApiMobileOutwardPodRoute
   ApiMobileVerifyRoute: typeof ApiMobileVerifyRoute
+  ApiOauthAuthorizationServerRoute: typeof ApiOauthAuthorizationServerRoute
+  ApiOauthAuthorizeRoute: typeof ApiOauthAuthorizeRoute
+  ApiOauthRegisterRoute: typeof ApiOauthRegisterRoute
+  ApiOauthResourceRoute: typeof ApiOauthResourceRoute
+  ApiOauthTokenRoute: typeof ApiOauthTokenRoute
   ApiOrcaAgentRoute: typeof ApiOrcaAgentRoute
   ApiScreenControlDisconnectRoute: typeof ApiScreenControlDisconnectRoute
   ApiDriverTripsClaimRoute: typeof ApiDriverTripsClaimRoute
@@ -1924,6 +1990,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiMobileVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/oauth/authorization-server': {
+      id: '/api/oauth/authorization-server'
+      path: '/api/oauth/authorization-server'
+      fullPath: '/api/oauth/authorization-server'
+      preLoaderRoute: typeof ApiOauthAuthorizationServerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/oauth/authorize': {
+      id: '/api/oauth/authorize'
+      path: '/api/oauth/authorize'
+      fullPath: '/api/oauth/authorize'
+      preLoaderRoute: typeof ApiOauthAuthorizeRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/oauth/register': {
+      id: '/api/oauth/register'
+      path: '/api/oauth/register'
+      fullPath: '/api/oauth/register'
+      preLoaderRoute: typeof ApiOauthRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/oauth/resource': {
+      id: '/api/oauth/resource'
+      path: '/api/oauth/resource'
+      fullPath: '/api/oauth/resource'
+      preLoaderRoute: typeof ApiOauthResourceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/oauth/token': {
+      id: '/api/oauth/token'
+      path: '/api/oauth/token'
+      fullPath: '/api/oauth/token'
+      preLoaderRoute: typeof ApiOauthTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/orca/agent': {
       id: '/api/orca/agent'
       path: '/api/orca/agent'
@@ -2319,6 +2420,11 @@ const rootRouteChildren: RootRouteChildren = {
   ApiMcpLtmsReportsRoute: ApiMcpLtmsReportsRoute,
   ApiMobileOutwardPodRoute: ApiMobileOutwardPodRoute,
   ApiMobileVerifyRoute: ApiMobileVerifyRoute,
+  ApiOauthAuthorizationServerRoute: ApiOauthAuthorizationServerRoute,
+  ApiOauthAuthorizeRoute: ApiOauthAuthorizeRoute,
+  ApiOauthRegisterRoute: ApiOauthRegisterRoute,
+  ApiOauthResourceRoute: ApiOauthResourceRoute,
+  ApiOauthTokenRoute: ApiOauthTokenRoute,
   ApiOrcaAgentRoute: ApiOrcaAgentRoute,
   ApiScreenControlDisconnectRoute: ApiScreenControlDisconnectRoute,
   ApiDriverTripsClaimRoute: ApiDriverTripsClaimRoute,

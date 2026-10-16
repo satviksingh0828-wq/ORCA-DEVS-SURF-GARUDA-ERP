@@ -136,6 +136,22 @@ export function LtmsReportMcpSettings() {
           </p>
         </div>
 
+        <div className="rounded-lg border p-4 text-sm">
+          <h2 className="font-medium">Connect ChatGPT</h2>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-muted-foreground">
+            <li>In ChatGPT, use OAuth and retry discovery for the endpoint above.</li>
+            <li>For client registration, choose Dynamic Client Registration (DCR).</li>
+            <li>If ChatGPT asks for Base scopes, enter reports:read and offline_access.</li>
+            <li>
+              When the ORCA authorization page opens, paste the MCP key below and approve read-only
+              access.
+            </li>
+          </ol>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Do not put the MCP key in OAuth Client ID/Secret fields or enter example.com endpoints.
+          </p>
+        </div>
+
         <div className="space-y-2">
           <label className="text-xs font-medium text-muted-foreground" htmlFor="ltms-mcp-url">
             Streamable HTTP MCP endpoint
@@ -158,7 +174,8 @@ export function LtmsReportMcpSettings() {
               <p className="font-medium">Copy this key now</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 This secret is shown once only. Anyone who has it can read the listed reports across
-                all branches. Store it in the MCP client's secure credential field, not in a chat.
+                all branches. Store it securely. For ChatGPT, enter it only on the ORCA-hosted OAuth
+                authorization page—not in a chat or ChatGPT's OAuth client fields.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
@@ -174,7 +191,7 @@ export function LtmsReportMcpSettings() {
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Authorization header: Bearer &lt;key&gt;
+              For MCP clients that accept Bearer tokens: Authorization: Bearer &lt;key&gt;
             </p>
           </div>
         )}
