@@ -27,7 +27,7 @@ import { SplashScreen } from "../components/SplashScreen";
 import { OrcaLogo } from "../components/OrcaLogo";
 import { PasskeyGate } from "../components/PasskeyGate";
 import { ScreenControlWidget } from "../components/ScreenControlWidget";
-import { OrcaAIPanel, OrcaAITrigger } from "../components/OrcaAI";
+import { OrcaAIPanel } from "../components/OrcaAI";
 import { useAppSettings } from "../lib/hooks";
 import { ModuleLoadingScreen } from "../components/ModuleLoadingScreen";
 import { SupabaseStatusGate } from "../components/SupabaseStatusGate";
@@ -263,11 +263,6 @@ function OrcaAgentMount() {
       {agentOpen && (
         <div className="fixed bottom-5 right-4 z-[65] h-[min(680px,calc(100dvh-2.5rem))] w-[min(390px,calc(100vw-2rem))] overflow-hidden rounded-2xl shadow-2xl shadow-black/20">
           <OrcaAIPanel />
-        </div>
-      )}
-      {!agentOpen && (
-        <div className="fixed bottom-20 right-5 z-[66]">
-          <OrcaAITrigger />
         </div>
       )}
     </>
