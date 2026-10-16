@@ -53,25 +53,64 @@ function displayValue(value: unknown): string | number | boolean | null {
   if (value == null) return null;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean")
     return value;
-  return JSON.stringify(value) ?? "";
+  return "";
+}
+
+function flattenReportRow(row: object) {
+  const flattened: Record<string, unknown> = {};
+  const addValue = (path: string, value: unknown) => {
+    if (value == null || typeof value !== "object") {
+      flattened[path] = value;
+      return;
+    }
+    if (Array.isArray(value)) {
+      const records = value.filter(
+        (item): item is Record<string, unknown> =>
+          typeof item === "object" && item !== null && !Array.isArray(item),
+      );
+      if (records.length) {
+        flattened[`${path}.Count`] = records.length;
+        const childKeys = [...new Set(records.flatMap((item) => Object.keys(item)))];
+        for (const key of childKeys) {
+          const childValues = records.map((item) => item[key]).filter((item) => item != null);
+          addValue(`${path}.${key}`, childValues.length === 1 ? childValues[0] : childValues);
+        }
+      } else {
+        flattened[path] = value
+          .map(displayValue)
+          .filter((item) => item != null && item !== "")
+          .join(", ");
+      }
+      return;
+    }
+    const entries = Object.entries(value as Record<string, unknown>);
+    if (!entries.length) {
+      flattened[path] = null;
+      return;
+    }
+    for (const [key, child] of entries) addValue(path ? `${path}.${key}` : key, child);
+  };
+  for (const [key, value] of Object.entries(row)) addValue(key, value);
+  return flattened;
 }
 
 function columnLabel(key: string) {
   return key
     .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
-    .replace(/_/g, " ")
+    .replace(/[._]/g, " ")
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
 function rowsToMatrix(rows: object[]) {
-  const keys = [...new Set(rows.flatMap((row) => Object.keys(row)))];
+  const flattenedRows = rows.map(flattenReportRow);
+  const keys = [...new Set(flattenedRows.flatMap((row) => Object.keys(row)))];
   if (!keys.length)
     return { keys: ["Status"], matrix: [["No report rows for the current report period"]] };
   return {
     keys,
     matrix: [
       keys.map(columnLabel),
-      ...rows.map((row) => keys.map((key) => displayValue((row as Record<string, unknown>)[key]))),
+      ...flattenedRows.map((row) => keys.map((key) => displayValue(row[key]))),
     ],
   };
 }
@@ -385,37 +424,10 @@ export function LtmsWorkbook() {
             await permission.protect({ name: `${name} monthly report` });
           await permission.setEditable();
           try {
-            const hasData = (reportRows[name] ?? EMPTY_ROWS).length > 0;
-            const totalsRow = hasData
-              ? keys.map((key, columnIndex) =>
-                  /(amount|freight|loading|unloading|income|expense|charge|deduction|addition|weight|quantity|total|net|balance|profit|cost)/i.test(
-                    key,
-                  )
-                    ? `=SUM(${XLSX.utils.encode_col(columnIndex)}2:${XLSX.utils.encode_col(columnIndex)}${matrix.length})`
-                    : columnIndex === 0
-                      ? "TOTAL"
-                      : null,
-                )
-              : [];
-            const fullMatrix = hasData ? [...matrix, totalsRow] : matrix;
-            sheet.setRowCount(Math.max(200, fullMatrix.length));
+            sheet.setRowCount(Math.max(200, matrix.length));
             sheet.setColumnCount(Math.max(26, keys.length));
             sheet.clearContents();
             sheet.getRange(0, 0, matrix.length, keys.length).setValues(matrix);
-            if (hasData) {
-              sheet.getRange(matrix.length, 0, 1, keys.length).setValues([totalsRow]);
-              keys.forEach((key, columnIndex) => {
-                if (
-                  /(amount|freight|loading|unloading|income|expense|charge|deduction|addition|weight|quantity|total|net|balance|profit|cost)/i.test(
-                    key,
-                  )
-                ) {
-                  sheet
-                    .getRange(matrix.length, columnIndex, 1, 1)
-                    .setFormulas([[totalsRow[columnIndex] as string]]);
-                }
-              });
-            }
             if (keys.length) sheet.getRange(0, 0, 1, keys.length).setFontWeight("bold");
           } finally {
             await permission.setReadOnly();
@@ -619,38 +631,18 @@ export function LtmsWorkbook() {
       used.add(safeName.toLowerCase());
       return safeName;
     };
-    const totalColumnPattern =
-      /(amount|freight|loading|unloading|income|expense|charge|deduction|addition|weight|quantity|total|net|balance|profit|cost)/i;
     for (const name of REPORT_SHEETS) {
       const { keys, matrix } = rowsToMatrix(reportRows[name] ?? EMPTY_ROWS);
-      const data = (reportRows[name] ?? EMPTY_ROWS).length > 0;
       const worksheet = XLSX.utils.aoa_to_sheet(matrix);
-      if (data) {
-        const totalRowIndex = matrix.length;
-        const firstColumn = XLSX.utils.encode_col(0);
-        const lastColumn = XLSX.utils.encode_col(Math.max(keys.length - 1, 0));
-        worksheet[`${firstColumn}${totalRowIndex + 1}`] = { t: "s", v: "TOTAL" };
-        keys.forEach((key, columnIndex) => {
-          if (!totalColumnPattern.test(key)) return;
-          const address = XLSX.utils.encode_cell({ r: totalRowIndex, c: columnIndex });
-          worksheet[address] = {
-            t: "n",
-            f: `SUM(${XLSX.utils.encode_col(columnIndex)}2:${XLSX.utils.encode_col(columnIndex)}${totalRowIndex})`,
-          };
-        });
-        worksheet["!ref"] = `A1:${lastColumn}${totalRowIndex + 1}`;
-        worksheet["!autofilter"] = { ref: `${firstColumn}1:${lastColumn}${totalRowIndex}` };
-      }
+      const lastColumn = XLSX.utils.encode_col(Math.max(keys.length - 1, 0));
+      worksheet["!autofilter"] = { ref: `A1:${lastColumn}${matrix.length}` };
       XLSX.utils.book_append_sheet(workbook, worksheet, sheetName(name));
     }
     const info = XLSX.utils.aoa_to_sheet([
       ["LTMS Monthly Workbook"],
       ["Report month", reportMonth],
       ["Generated at", new Date().toLocaleString()],
-      [
-        "Formula totals",
-        "Financial amounts, quantities, weights and total columns use Excel SUM formulas.",
-      ],
+      ["Manual formulas", "Formulas in editable sheets are preserved in the exported workbook."],
     ]);
     XLSX.utils.book_append_sheet(workbook, info, sheetName("Workbook Info"));
     for (const item of manualSheets) {
