@@ -41,11 +41,12 @@ const numberString = (value: number, fraction = 3) =>
   });
 
 function addressLines(party: AnyRecord, prefix: "supplier" | "recipient") {
-  return [
+  const lines = [
     text(party[`${prefix}_address_line_1`]) || text(party[`${prefix}_address`]),
     text(party[`${prefix}_address_line_2`]),
     join(party[`${prefix}_place`], party[`${prefix}_state`]),
   ].filter(Boolean);
+  return lines.filter((line, index) => lines.indexOf(line) === index);
 }
 
 function partyName(party: AnyRecord, prefix: "supplier" | "recipient") {
@@ -98,12 +99,12 @@ function field(doc: jsPDF, label: string, value: string, x: number, y: number, w
 }
 
 function checkbox(doc: jsPDF, x: number, y: number, label: string, checked: boolean) {
-  doc.rect(x, y - 8, 15, 10);
+  doc.rect(x, y - 8, 10, 8);
   doc.setFont("helvetica", "normal");
-  doc.text(label, x + 18, y);
+  doc.text(label, x + 13, y);
   if (checked) {
     doc.setFont("helvetica", "bold");
-    doc.text("✓", x + 3, y);
+    doc.text("✓", x + 1, y - 1);
   }
 }
 
@@ -119,14 +120,12 @@ export async function printConsignorCopyPdf({
   const companyName =
     text(companyResult.data?.company_name) || "GARUDA LOGISTICS SOLUTION PRIVATE LIMITED";
   const branch = (consignment.branch ?? {}) as AnyRecord;
-  const branchAddress = [
-    text(branch.address_line1),
-    text(branch.address_line2),
-    text(branch.area_locality),
-    text(branch.city),
-    text(branch.state) || "",
-    text(branch.pin_code) ? `- ${text(branch.pin_code)}` : "",
-  ].filter(Boolean);
+  const branchAddressLine1 = text(branch.address_line1);
+  const branchAddressLine2 = join(branch.address_line2, branch.area_locality);
+  const branchAddressLine3 = [text(branch.city), text(branch.state)]
+    .filter(Boolean)
+    .join(" , ")
+    .concat(text(branch.pin_code) ? ` - ${text(branch.pin_code)}` : "");
   const shipment = shipments[0] ?? {};
   const items = shipments.flatMap((entry) => (entry.shipment_items ?? []) as AnyRecord[]);
   const packageRows = packages as AnyRecord[];
@@ -159,7 +158,7 @@ export async function printConsignorCopyPdf({
   const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
   pdf.setTextColor(...BLACK);
   pdf.setDrawColor(...BLACK);
-  pdf.setLineWidth(0.7);
+  pdf.setLineWidth(0.55);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(6.3);
 
@@ -189,21 +188,25 @@ export async function printConsignorCopyPdf({
   if (logo) pdf.addImage(logo, "PNG", 18.5, 62.3, 70, 61);
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(6.5);
-  field(pdf, "SAC Code :", "", 20, 57, 78);
+  field(pdf, "SAC Code :", "9965", 20, 57, 78);
   field(pdf, "GST No. :", text(branch.gstin), 112, 57, 100);
   field(pdf, "PAN No. :", text(branch.pan), 238, 57, 120);
   pdf.setFontSize(10);
   pdf.text(companyName, 93, 73);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(6);
-  pdf.text(branchAddress.slice(0, 1).join(""), 119, 86);
-  pdf.text(branchAddress.slice(1).join(" "), 174, 96);
-  pdf.text(`GSTIN : ${text(branch.gstin)}`, 186, 107);
+  pdf.text(branchAddressLine1, 119, 86);
+  pdf.text(branchAddressLine2, 174, 96);
+  pdf.text(branchAddressLine3, 185, 106);
+  pdf.text(`GSTIN : ${text(branch.gstin)}`, 186, 116);
+  pdf.text(`Contact No. : ${text(branch.mobile_number || branch.telephone_number)}`, 178, 126);
 
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(6.7);
   pdf.text("CONSIGNOR COPY", 391, 58);
-  field(pdf, "GR No. :", text(consignment.consignment_number), 476, 58, 97);
+  pdf.text("GR", 476, 58);
+  pdf.text("No. :", 476, 64);
+  pdf.text(text(consignment.consignment_number), 499, 58);
   field(
     pdf,
     "DATE :",
@@ -237,21 +240,21 @@ export async function printConsignorCopyPdf({
     y += drawWrapped(pdf, line, 20, y, 348, 7);
   });
   field(pdf, "GST No. :", text(shipment.supplier_gstin), 20, 169, 270);
-  field(pdf, "M :", "0000000000", 315, 169, 55);
+  field(pdf, "M :", text(shipment.supplier_phone), 315, 169, 55);
   field(pdf, "Consignee :", toName, 20, 182, 348);
   y = 193;
   toAddress.forEach((line) => {
     y += drawWrapped(pdf, line, 20, y, 348, 7);
   });
-  field(pdf, "GST No. :", text(shipment.recipient_gstin), 20, 214, 270);
-  field(pdf, "M :", "0000000000", 315, 214, 55);
+  field(pdf, "GST No. :", text(shipment.recipient_gstin), 20, 221, 270);
+  field(pdf, "M :", text(shipment.recipient_phone), 315, 221, 55);
 
   field(pdf, "To :", text(shipment.recipient_place), 378, 137, 196);
   field(pdf, "Packing Type :", packageType, 378, 151, 196);
   field(pdf, "Article :", articleCount ? String(articleCount) : "", 378, 165, 98);
-  checkbox(pdf, 481, 165, "To Pay", billing.toPay);
-  checkbox(pdf, 523, 165, "Paid", billing.paid);
-  checkbox(pdf, 561, 165, "TBB", billing.tbb);
+  checkbox(pdf, 480, 165, "To Pay", billing.toPay);
+  checkbox(pdf, 521, 165, "Paid", billing.paid);
+  checkbox(pdf, 557, 165, "TBB", billing.tbb);
   pdf.setFont("helvetica", "bold");
   pdf.text("Actual Wt.", 379, 186);
   pdf.text("Particulars", 443, 186);
@@ -305,7 +308,10 @@ export async function printConsignorCopyPdf({
   field(pdf, "Remarks :", "", 20, 294, 550);
   field(pdf, "Rs in Words :", "", 20, 304, 550);
   field(pdf, "Delivery At :", text(shipment.recipient_place), 20, 318, 210);
-  field(pdf, "Acknowledgement :", "Goods received in good condition", 239, 318, 120);
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Acknowledgement :", 239, 318);
+  pdf.setFont("helvetica", "normal");
+  pdf.text("Goods received in good condition", 239, 329);
   field(pdf, "IGST Paid By :", "", 366, 318, 210);
 
   pdf.setFont("helvetica", "bold");

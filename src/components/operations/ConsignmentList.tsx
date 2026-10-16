@@ -672,7 +672,7 @@ export function ConsignmentList({
     let query = db
       .from("consignments")
       .select(
-        "*, branch:branches(branch_name,address_line1,address_line2,area_locality,city,state,pin_code,gstin,pan), source:contracts(contract_name), vehicle:vehicles(registration_number,nickname), driver:drivers(full_name,driver_code), rental:rentals(rental_name), transporter:ltms_transporters(transporter_name,gstin,pin_code)",
+        "*, branch:branches(branch_name,address_line1,address_line2,area_locality,city,state,pin_code,gstin,pan,mobile_number,telephone_number), source:contracts(contract_name), vehicle:vehicles(registration_number,nickname), driver:drivers(full_name,driver_code), rental:rentals(rental_name), transporter:ltms_transporters(transporter_name,gstin,pin_code)",
       )
       .order("created_at", { ascending: false });
     if (allowedBranchIds !== null) {
