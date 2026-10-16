@@ -1,5 +1,6 @@
 import jsPDF from "jspdf";
 import { supabase } from "@/integrations/supabase/client";
+import { formatConsignmentGst } from "./consignment-pdf-format";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -288,7 +289,7 @@ export async function printConsignorCopyPdf({
   );
   field(pdf, "Challan No. :", "", 271, 256, 135);
   field(pdf, "Date :", date(shipment.document_date), 20, 269, 240);
-  field(pdf, "GST", `${gstRate.toFixed(2)}%`, 442, 269, 120);
+  field(pdf, "GST", formatConsignmentGst(gstRate), 442, 269, 120);
   field(
     pdf,
     "E-Way Bill No. :",
