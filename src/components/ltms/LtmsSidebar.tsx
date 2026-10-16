@@ -67,7 +67,6 @@ const NAVIGATION: LtmsSidebarGroup[] = [
     items: [
       { id: "data", label: "Data" },
       { id: "comparison", label: "Comparison" },
-      { id: "workbook", label: "Workbook" },
     ],
   },
   {

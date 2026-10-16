@@ -89,6 +89,7 @@ import { Route as AccountsMastersCashRouteImport } from './routes/accounts.maste
 import { Route as AccountsMastersRulesRouteImport } from './routes/accounts.masters.rules'
 import { Route as ApiDriverThemeRouteImport } from './routes/api/driver/theme'
 import { Route as ApiHrPayrollEmailRouteImport } from './routes/api/hr/payroll-email'
+import { Route as ApiMcpLtmsReportsRouteImport } from './routes/api/mcp/ltms-reports'
 import { Route as ApiMobileOutwardPodRouteImport } from './routes/api/mobile/outward-pod'
 import { Route as ApiMobileVerifyRouteImport } from './routes/api/mobile/verify'
 import { Route as ApiOrcaAgentRouteImport } from './routes/api/orca/agent'
@@ -515,6 +516,11 @@ const ApiHrPayrollEmailRoute = ApiHrPayrollEmailRouteImport.update({
   path: '/api/hr/payroll-email',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiMcpLtmsReportsRoute = ApiMcpLtmsReportsRouteImport.update({
+  id: '/api/mcp/ltms-reports',
+  path: '/api/mcp/ltms-reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ApiMobileOutwardPodRoute = ApiMobileOutwardPodRouteImport.update({
   id: '/api/mobile/outward-pod',
   path: '/api/mobile/outward-pod',
@@ -725,6 +731,7 @@ export interface FileRoutesByFullPath {
   '/accounts/masters/rules': typeof AccountsMastersRulesRoute
   '/api/driver/theme': typeof ApiDriverThemeRoute
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
+  '/api/mcp/ltms-reports': typeof ApiMcpLtmsReportsRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
   '/api/orca/agent': typeof ApiOrcaAgentRoute
@@ -823,6 +830,7 @@ export interface FileRoutesByTo {
   '/accounts/masters/rules': typeof AccountsMastersRulesRoute
   '/api/driver/theme': typeof ApiDriverThemeRoute
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
+  '/api/mcp/ltms-reports': typeof ApiMcpLtmsReportsRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
   '/api/orca/agent': typeof ApiOrcaAgentRoute
@@ -930,6 +938,7 @@ export interface FileRoutesById {
   '/accounts/masters/rules': typeof AccountsMastersRulesRoute
   '/api/driver/theme': typeof ApiDriverThemeRoute
   '/api/hr/payroll-email': typeof ApiHrPayrollEmailRoute
+  '/api/mcp/ltms-reports': typeof ApiMcpLtmsReportsRoute
   '/api/mobile/outward-pod': typeof ApiMobileOutwardPodRoute
   '/api/mobile/verify': typeof ApiMobileVerifyRoute
   '/api/orca/agent': typeof ApiOrcaAgentRoute
@@ -1038,6 +1047,7 @@ export interface FileRouteTypes {
     | '/accounts/masters/rules'
     | '/api/driver/theme'
     | '/api/hr/payroll-email'
+    | '/api/mcp/ltms-reports'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
     | '/api/orca/agent'
@@ -1136,6 +1146,7 @@ export interface FileRouteTypes {
     | '/accounts/masters/rules'
     | '/api/driver/theme'
     | '/api/hr/payroll-email'
+    | '/api/mcp/ltms-reports'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
     | '/api/orca/agent'
@@ -1242,6 +1253,7 @@ export interface FileRouteTypes {
     | '/accounts/masters/rules'
     | '/api/driver/theme'
     | '/api/hr/payroll-email'
+    | '/api/mcp/ltms-reports'
     | '/api/mobile/outward-pod'
     | '/api/mobile/verify'
     | '/api/orca/agent'
@@ -1311,6 +1323,7 @@ export interface RootRouteChildren {
   LtmsReportsRoute: typeof LtmsReportsRoute
   ApiDriverThemeRoute: typeof ApiDriverThemeRoute
   ApiHrPayrollEmailRoute: typeof ApiHrPayrollEmailRoute
+  ApiMcpLtmsReportsRoute: typeof ApiMcpLtmsReportsRoute
   ApiMobileOutwardPodRoute: typeof ApiMobileOutwardPodRoute
   ApiMobileVerifyRoute: typeof ApiMobileVerifyRoute
   ApiOrcaAgentRoute: typeof ApiOrcaAgentRoute
@@ -1890,6 +1903,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiHrPayrollEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/mcp/ltms-reports': {
+      id: '/api/mcp/ltms-reports'
+      path: '/api/mcp/ltms-reports'
+      fullPath: '/api/mcp/ltms-reports'
+      preLoaderRoute: typeof ApiMcpLtmsReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/api/mobile/outward-pod': {
       id: '/api/mobile/outward-pod'
       path: '/api/mobile/outward-pod'
@@ -2296,6 +2316,7 @@ const rootRouteChildren: RootRouteChildren = {
   LtmsReportsRoute: LtmsReportsRoute,
   ApiDriverThemeRoute: ApiDriverThemeRoute,
   ApiHrPayrollEmailRoute: ApiHrPayrollEmailRoute,
+  ApiMcpLtmsReportsRoute: ApiMcpLtmsReportsRoute,
   ApiMobileOutwardPodRoute: ApiMobileOutwardPodRoute,
   ApiMobileVerifyRoute: ApiMobileVerifyRoute,
   ApiOrcaAgentRoute: ApiOrcaAgentRoute,

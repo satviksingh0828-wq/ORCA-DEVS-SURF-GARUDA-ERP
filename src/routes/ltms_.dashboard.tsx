@@ -5,7 +5,6 @@ import { RequireAuth } from "@/components/RequireAuth";
 import { LtmsSidebar } from "@/components/ltms/LtmsSidebar";
 import { LtmsDashboard } from "@/components/ltms/LtmsDashboard";
 import { LtmsComparison } from "@/components/ltms/LtmsComparison";
-import { LtmsWorkbook } from "@/components/ltms/LtmsWorkbook";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 import { useState } from "react";
@@ -70,7 +69,6 @@ function DashboardPage() {
             {[
               { id: "data", label: "Data" },
               { id: "comparison", label: "Comparison" },
-              { id: "workbook", label: "Workbook" },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -90,11 +88,6 @@ function DashboardPage() {
           {activeTab === "comparison" && (
             <div role="tabpanel" aria-label="Comparison">
               <LtmsComparison />
-            </div>
-          )}
-          {activeTab === "workbook" && (
-            <div role="tabpanel" aria-label="Workbook">
-              <LtmsWorkbook />
             </div>
           )}
         </main>

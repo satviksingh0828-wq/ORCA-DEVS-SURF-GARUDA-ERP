@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Mail,
   Film,
+  KeyRound,
   Warehouse,
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -33,6 +34,7 @@ import { WhatsAppSettings } from "@/components/settings/WhatsAppSettings";
 import { MailSettings } from "@/components/settings/MailSettings";
 import { HRMSAccountsSettings } from "@/components/settings/HRMSAccountsSettings";
 import { TMSAccountsSettings } from "@/components/settings/TMSAccountsSettings";
+import { LtmsReportMcpSettings } from "@/components/settings/LtmsReportMcpSettings";
 import { WMS_SYSTEM_TABS, WmsSystemSettings } from "@/components/WmsSystemSettings";
 
 export const Route = createFileRoute("/settings")({
@@ -85,6 +87,12 @@ const TABS = [
     label: "Passkey Security",
     desc: "Admin-controlled device protection",
     icon: ShieldCheck,
+  },
+  {
+    id: "mcp-reports",
+    label: "AI Report MCP",
+    desc: "Read-only keys for LTMS reports",
+    icon: KeyRound,
   },
 ] as const;
 
@@ -204,6 +212,7 @@ function SettingsPage() {
                 {tab === "hrms-accounts" ? <HRMSAccountsSettings /> : null}
                 {tab === "tms-accounts" ? <TMSAccountsSettings /> : null}
                 {tab === "passkey" ? <PasskeySecurityPanel /> : null}
+                {tab === "mcp-reports" ? <LtmsReportMcpSettings /> : null}
               </div>
             </>
           )}
