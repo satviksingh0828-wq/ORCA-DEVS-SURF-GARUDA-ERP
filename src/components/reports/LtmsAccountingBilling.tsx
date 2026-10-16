@@ -194,7 +194,7 @@ function PartiesTab({ branches, user }: { branches: any[]; user: any }) {
     }
   }
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${open ? "[&>*:not(:last-child)]:hidden" : ""}`}>
       <div className="flex flex-wrap items-end justify-end gap-3">
         <Button
           onClick={() => {
@@ -506,7 +506,7 @@ function NotesTab({
     }
   }
   return (
-    <div className="space-y-4">
+    <div className={`space-y-4 ${open ? "[&>*:not(:last-child)]:hidden" : ""}`}>
       <div className="flex flex-wrap items-end justify-end gap-3">
         <Button
           onClick={() => {

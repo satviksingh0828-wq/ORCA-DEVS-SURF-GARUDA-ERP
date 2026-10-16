@@ -81,6 +81,10 @@ export function AccountsFinancePage() {
   const [cashLines, setCashLines] = useState<Line[]>([{ account: "", amount: "" }]);
   const isReceipt = tab === "cash-receipt";
   const isCashTab = tab === "cash-receipt" || tab === "cash-payment";
+  const changeTab = (nextTab: TabId) => {
+    setTab(nextTab);
+    setOpen(false);
+  };
   const allowed = useMemo(() => new Set(branches.map((b) => b.id)), [branches]);
   const currency = (amount: number | string) =>
     `₹${Number(amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -225,7 +229,7 @@ export function AccountsFinancePage() {
           desktop
           mode="finance"
           activeTabId={tab}
-          onSelectTab={(id) => setTab(id as TabId)}
+          onSelectTab={(id) => changeTab(id as TabId)}
         />
         <div className="ltms-reference-content min-w-0">
           <AccountsMobileNav pathname="/accounts/finance" />
@@ -240,36 +244,13 @@ export function AccountsFinancePage() {
               activeId={tab}
               label="Finance tabs"
               compact
-              onChange={(id) => setTab(id as TabId)}
+              onChange={(id) => changeTab(id as TabId)}
             />
-          </div>
-          <div
-            className="mb-5 hidden flex-wrap gap-2 lg:flex"
-            role="tablist"
-            aria-label="Accounts Finance"
-          >
-            {tabs.map((item) => (
-              <button
-                key={item.id}
-                role="tab"
-                aria-selected={tab === item.id}
-                onClick={() => setTab(item.id)}
-                className={`rounded-lg border px-3 py-2 text-sm font-medium transition ${tab === item.id ? "border-primary bg-primary text-primary-foreground" : "border-border bg-background text-muted-foreground hover:bg-muted"}`}
-              >
-                {item.label}
-              </button>
-            ))}
-            <Link
-              to="/accounts/gst"
-              className="rounded-lg border border-border bg-background px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted"
-            >
-              GST
-            </Link>
           </div>
           {(tab === "parties" || tab === "debit-notes" || tab === "credit-notes") && (
             <LtmsAccountingBilling initialTab={tab} />
           )}
-          {isCashTab && (
+          {isCashTab && !open && (
             <div className="space-y-4">
               <div className="flex justify-end">
                 <Button
@@ -375,7 +356,7 @@ export function AccountsFinancePage() {
               </div>
             </div>
           )}
-          {open && (
+          {isCashTab && open && (
             <section className="surface-card mt-4 space-y-4 p-5">
               <form
                 onSubmit={createVoucher}
