@@ -1159,21 +1159,23 @@ async function findEmployeeIds(db: AnyDb, employeeNumber?: string): Promise<stri
   return ids(employees, "id");
 }
 async function hrPayrolls(db: AnyDb, input: HrInput): Promise<DataResult> {
-  const range = resolveRange(input);
+  const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
   let query = db.from("payrolls").select(
-    "employee_id,period_start,period_end,period_type,basic_salary,hra,travel_allowance,special_allowance,other_allowance,gross,pf_deduction,tax_deduction,loan_deduction,advance_deduction,loss_deduction,unpaid_leave_deduction,paid_leave_payout_amount,paid_leave_final_settlement_amount,extra_work_days,extra_work_pay,incentive_amount,net,payment_status,payment_date,payment_amount,payment_history,present_days,working_days,paid_leaves_used,paid_leaves_left,unpaid_leaves,employee:employees(employee_number,first_name,middle_name,last_name)",
-  ).lte("period_start", range.to).gte("period_end", range.from).order("period_start", { ascending: false });
+    "employee_id,period_start,period_end,period_type,basic_salary,hra,travel_allowance,special_allowance,other_allowance,gross,pf_deduction,tax_deduction,loan_deduction,advance_deduction,loss_deduction,unpaid_leave_deduction,paid_leave_payout_amount,paid_leave_final_settlement_amount,paid_leave_daily_rate,extra_work_days,extra_work_pay,incentive_amount,unpaid_leave_deduction_rate,paid_leave_payout_rate,net,payment_status,payment_date,payment_amount,payment_history,present_days,working_days,paid_leaves_used,paid_leaves_left,unpaid_leaves,notes,employee:employees(employee_number,first_name,middle_name,last_name)",
+  ).order("period_start", { ascending: false });
+  if (input.from_date) query = query.gte("period_end", range.from);
+  if (input.to_date) query = query.lte("period_start", range.to);
   if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const rows = records.map((row: any) => {
     const status = row.payment_status ?? "paid";
     const net = num(row.net);
     const history = Array.isArray(row.payment_history) ? row.payment_history : [];
-    const paidToDate = status === "paid"
-      ? net
-      : history.length
-        ? history.reduce((sum: number, payment: any) => sum + num(payment?.amount), 0)
+    const paidToDate = history.length
+      ? history.reduce((sum: number, payment: any) => sum + num(payment?.amount), 0)
+      : status === "paid"
+        ? num(row.payment_amount ?? net)
         : num(row.payment_amount);
     const statusLabel = status === "partial_paid" ? "Partially paid" : status === "paid" ? "Paid" : "Not paid";
     return {
@@ -1187,21 +1189,28 @@ async function hrPayrolls(db: AnyDb, input: HrInput): Promise<DataResult> {
       "Travel Allowance": num(row.travel_allowance),
       "Special Allowance": num(row.special_allowance),
       "Other Allowance": num(row.other_allowance),
+      "Gross Salary Base": num(row.gross),
+      "Extra Work Days": num(row.extra_work_days),
       "Extra Work Pay": num(row.extra_work_pay),
-      "Paid Leave Payout": num(row.paid_leave_payout_amount) + num(row.paid_leave_final_settlement_amount),
+      "Paid Leave Payout": num(row.paid_leave_payout_amount),
+      "Paid Leave Final Settlement": num(row.paid_leave_final_settlement_amount),
+      "Paid Leave Daily Rate": num(row.paid_leave_daily_rate),
       Incentive: num(row.incentive_amount),
-      Gross: num(row.gross),
+      "Total Earnings": num(row.gross) + num(row.extra_work_pay) + num(row.paid_leave_final_settlement_amount) + num(row.incentive_amount),
       "PF Deduction": num(row.pf_deduction),
       "Tax Deduction": num(row.tax_deduction),
       "Loan Deduction": num(row.loan_deduction),
       "Advance Deduction": num(row.advance_deduction),
       "Loss Deduction": num(row.loss_deduction),
       "Unpaid Leave Deduction": num(row.unpaid_leave_deduction),
+      "Unpaid Leave Deduction Rate": num(row.unpaid_leave_deduction_rate),
+      "Paid Leave Payout Rate": num(row.paid_leave_payout_rate),
       Net: net,
       "Payment Status": statusLabel,
       "Paid To Date": paidToDate,
-      Outstanding: Math.max(0, net - paidToDate),
+      Outstanding: status === "paid" ? 0 : Math.max(0, net - paidToDate),
       "Payment Date": row.payment_date ?? null,
+      Notes: row.notes ?? null,
       "Payment History": history.map((payment: any) => ({ date: payment?.date ?? null, amount: num(payment?.amount) })),
       "Present Days": num(row.present_days),
       "Working Days": num(row.working_days),
@@ -1249,9 +1258,14 @@ async function hrLoansOrAdvances(db: AnyDb, kind: "loan" | "advance", input: HrI
     Installments: (installmentsByParent.get(row.id) ?? []).map((inst: any) => ({
       "EMI Number": num(inst.emi_number),
       "Due Date": inst.due_date,
+      "Due Year": num(inst.due_year),
+      "Due Month": num(inst.due_month) + 1,
       Amount: num(inst.amount),
       "Amount Paid Directly": num(inst.paid_amount),
       Status: inst.status,
+      "Tail/Deferred Installment": Boolean(inst.skip_generated),
+      "Payroll Period Start": inst.payroll?.period_start ?? null,
+      "Payroll Period End": inst.payroll?.period_end ?? null,
     })),
   }));
   return page(kind === "loan" ? "HR Loans" : "HR Advances", range, input, rows);
@@ -1301,11 +1315,13 @@ async function hrIncentives(db: AnyDb, input: HrInput): Promise<DataResult> {
   return page("HR Incentives", range, input, rows);
 }
 async function hrAttendance(db: AnyDb, input: HrInput): Promise<DataResult> {
-  const range = resolveRange(input);
+  const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
   let query = db.from("attendance").select(
     "date,status,note,employee_id,employee:employees(employee_number,first_name,middle_name,last_name)",
-  ).gte("date", range.from).lte("date", range.to).order("date", { ascending: false });
+  ).order("date", { ascending: false });
+  if (input.from_date) query = query.gte("date", range.from);
+  if (input.to_date) query = query.lte("date", range.to);
   if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const rows = records.map((row: any) => ({
@@ -1318,9 +1334,11 @@ async function hrAttendance(db: AnyDb, input: HrInput): Promise<DataResult> {
   return page("HR Attendance", range, input, rows);
 }
 async function hrCheckinEvents(db: AnyDb, input: HrInput): Promise<DataResult> {
-  const range = resolveRange(input);
+  const range = hrRange(input);
   let query = db.from("checkin_logs").select("employee_number,employee_name,department,kind,logged_at,date")
-    .gte("date", range.from).lte("date", range.to).order("logged_at", { ascending: false });
+    .order("logged_at", { ascending: false });
+  if (input.from_date) query = query.gte("date", range.from);
+  if (input.to_date) query = query.lte("date", range.to);
   if (input.employee_number) query = query.eq("employee_number", input.employee_number);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const rows = records.map((row: any) => ({
@@ -1332,6 +1350,54 @@ async function hrCheckinEvents(db: AnyDb, input: HrInput): Promise<DataResult> {
     "Logged At": row.logged_at,
   }));
   return page("HR Check-in/Check-out Events", range, input, rows);
+}
+
+
+async function hrPaidLeaveAccruals(db: AnyDb, input: HrInput): Promise<DataResult> {
+  const range = hrRange(input);
+  const employeeIds = await findEmployeeIds(db, input.employee_number);
+  let query = db.from("paid_leave_accruals").select(
+    "accrual_month,earned_units,used_units,daily_pay_rate,employee_id,source_payroll_id,employee:employees(employee_number,first_name,middle_name,last_name),payroll:payrolls(period_start,period_end)",
+  ).order("accrual_month", { ascending: false });
+  if (input.from_date) query = query.gte("accrual_month", range.from);
+  if (input.to_date) query = query.lte("accrual_month", range.to);
+  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const rows = records.map((row: any) => ({
+    "Employee Number": row.employee?.employee_number ?? null,
+    Employee: employeeDisplayName(row.employee) || null,
+    "Accrual Month": row.accrual_month,
+    "Earned Leave Units": num(row.earned_units),
+    "Used Leave Units": num(row.used_units),
+    "Remaining Leave Units": Math.max(0, num(row.earned_units) - num(row.used_units)),
+    "Daily Pay Rate": num(row.daily_pay_rate),
+    "Source Payroll Period Start": row.payroll?.period_start ?? null,
+    "Source Payroll Period End": row.payroll?.period_end ?? null,
+  }));
+  return page("HR Paid Leave Accrual History", range, input, rows);
+}
+async function hrPaidLeaveUsage(db: AnyDb, input: HrInput): Promise<DataResult> {
+  const range = hrRange(input);
+  const employeeIds = await findEmployeeIds(db, input.employee_number);
+  let query = db.from("paid_leave_usage_allocations").select(
+    "employee_id,usage_type,units,amount,created_at,employee:employees(employee_number,first_name,middle_name,last_name),payroll:payrolls(period_start,period_end),accrual:paid_leave_accruals(accrual_month)",
+  ).order("created_at", { ascending: false });
+  if (input.from_date) query = query.gte("created_at", `${range.from}T00:00:00.000Z`);
+  if (input.to_date) query = query.lte("created_at", `${range.to}T23:59:59.999Z`);
+  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const rows = records.map((row: any) => ({
+    "Employee Number": row.employee?.employee_number ?? null,
+    Employee: employeeDisplayName(row.employee) || null,
+    "Usage Type": row.usage_type === "leave_used" ? "Leave used" : "Final settlement",
+    "Accrual Month": row.accrual?.accrual_month ?? null,
+    Units: num(row.units),
+    Amount: num(row.amount),
+    "Payroll Period Start": row.payroll?.period_start ?? null,
+    "Payroll Period End": row.payroll?.period_end ?? null,
+    "Recorded At": row.created_at,
+  }));
+  return page("HR Paid Leave Usage/Settlement History", range, input, rows);
 }
 
 function registerReadTool(
@@ -1388,9 +1454,23 @@ export function registerLtmsReportTools(server: McpServer, db: AnyDb) {
   registerReadTool(server, db, {
     name: "hr_payrolls",
     title: "HRMS Payrolls",
-    description: "Read-only HRMS payroll records for the current month by default. Includes employee name/number, pay-period earnings and deductions, Paid / Partially paid / Not paid status, payment history, and paid/outstanding amounts. Optional filters: from_date, to_date, employee_number, limit, offset. Legacy records without a status are treated as paid. Does not return system IDs or bank details.",
-    schema: HR_SCHEMA,
+    description: "Read-only complete HRMS payroll history by default. Includes employee name/number, pay-period earnings and deductions, Paid / Partially paid / Not paid status, payment history, and paid/outstanding amounts. Optional filters: from_date, to_date, employee_number, limit, offset. Legacy records without a status are treated as paid. Does not return system IDs or bank details.",
+    schema: HR_ALL_SCHEMA,
     load: (input) => hrPayrolls(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "hr_paid_leave_accruals",
+    title: "HRMS Paid Leave Accrual History",
+    description: "Read-only complete history of employee paid leave accruals with earned/used/remaining units, pay rate, source payroll period and employee display name. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    schema: HR_ALL_SCHEMA,
+    load: (input) => hrPaidLeaveAccruals(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "hr_paid_leave_usage",
+    title: "HRMS Paid Leave Usage and Settlement History",
+    description: "Read-only history of paid leave used and final-settlement allocations, with employee, accrual month, units, amount, and payroll period. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    schema: HR_ALL_SCHEMA,
+    load: (input) => hrPaidLeaveUsage(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_loans",
@@ -1423,15 +1503,15 @@ export function registerLtmsReportTools(server: McpServer, db: AnyDb) {
   registerReadTool(server, db, {
     name: "hr_attendance",
     title: "HRMS Attendance",
-    description: "Read-only daily HRMS attendance records with employee name/number, date, status, and note. Defaults to the current month. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
-    schema: HR_SCHEMA,
+    description: "Read-only complete daily HRMS attendance history with employee name/number, date, status, and note. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    schema: HR_ALL_SCHEMA,
     load: (input) => hrAttendance(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_checkin_events",
     title: "HRMS Check-in/Check-out Events",
-    description: "Read-only attendance device check-in/check-out events with employee name/number, department, event type, and timestamp. Defaults to the current month. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
-    schema: HR_SCHEMA,
+    description: "Read-only complete attendance device check-in/check-out history with employee name/number, department, event type, and timestamp. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    schema: HR_ALL_SCHEMA,
     load: (input) => hrCheckinEvents(db, input),
   });
   registerReadTool(server, db, {

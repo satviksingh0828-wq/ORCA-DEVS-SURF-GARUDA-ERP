@@ -128,8 +128,8 @@ export function LtmsReportMcpSettings() {
             <ShieldCheck className="size-4 text-emerald-600" /> Read-only scope
           </div>
           <p className="mt-2 text-muted-foreground">
-            Keys can query read-only LTMS finance and operations reports plus HRMS payrolls, loans, advances,
-            deductions, incentives, attendance, and check-in events. They cannot create, edit, delete,
+            Keys can query read-only LTMS finance and operations reports plus HRMS payroll and payment history, loans and installments, advances and installments, deductions,
+            incentives, paid-leave accrual/usage, attendance history, and check-in events. They cannot create, edit, delete,
             or post ERP data. HRMS reports include sensitive staff and compensation information and
             are available only through MCP keys issued by active administrators. Report calls can be limited by date and,
             where that report supports it, branch. An administrator-level key can read every branch.
