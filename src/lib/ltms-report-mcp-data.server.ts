@@ -1324,14 +1324,54 @@ async function hrAttendance(db: AnyDb, input: HrInput): Promise<DataResult> {
   if (input.to_date) query = query.lte("date", range.to);
   if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const statusLabels: Record<string, string> = {
+    present: "Present",
+    absent: "Absent",
+    half_day: "Half day",
+    extra_work: "Extra work",
+    half_extra_work: "Half extra work",
+  };
   const rows = records.map((row: any) => ({
     Date: row.date,
     "Employee Number": row.employee?.employee_number ?? null,
     Employee: employeeDisplayName(row.employee) || null,
-    Status: row.status,
+    Status: statusLabels[row.status] ?? row.status,
+    "Status Code": row.status,
     Note: row.note ?? null,
   }));
   return page("HR Attendance", range, input, rows);
+}
+async function hrAttendanceSummary(db: AnyDb, input: HrInput): Promise<DataResult> {
+  const range = hrRange(input);
+  const employeeIds = await findEmployeeIds(db, input.employee_number);
+  let query = db.from("attendance").select(
+    "employee_id,date,status,employee:employees(employee_number,first_name,middle_name,last_name)",
+  ).order("date", { ascending: false });
+  if (input.from_date) query = query.gte("date", range.from);
+  if (input.to_date) query = query.lte("date", range.to);
+  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const totals = new Map<string, any>();
+  for (const row of records) {
+    const summary = totals.get(row.employee_id) ?? {
+      "Employee Number": row.employee?.employee_number ?? null,
+      Employee: employeeDisplayName(row.employee) || null,
+      "Recorded Attendance Days": 0,
+      "Present Days": 0,
+      "Absent Days": 0,
+      "Half Days": 0,
+      "Extra Work Days": 0,
+      "Half Extra Work Days": 0,
+    };
+    summary["Recorded Attendance Days"] += 1;
+    if (row.status === "present") summary["Present Days"] += 1;
+    else if (row.status === "absent") summary["Absent Days"] += 1;
+    else if (row.status === "half_day") summary["Half Days"] += 1;
+    else if (row.status === "extra_work") summary["Extra Work Days"] += 1;
+    else if (row.status === "half_extra_work") summary["Half Extra Work Days"] += 1;
+    totals.set(row.employee_id, summary);
+  }
+  return page("HR Attendance Summary", range, input, [...totals.values()]);
 }
 async function hrCheckinEvents(db: AnyDb, input: HrInput): Promise<DataResult> {
   const range = hrRange(input);
@@ -1506,6 +1546,13 @@ export function registerLtmsReportTools(server: McpServer, db: AnyDb) {
     description: "Read-only complete daily HRMS attendance history with employee name/number, date, status, and note. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrAttendance(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "hr_attendance_summary",
+    title: "HRMS Attendance Summary",
+    description: "Read-only all-history attendance counts by employee. Explicitly totals recorded dates, Present, Absent, Half day, Extra work and Half extra work. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    schema: HR_ALL_SCHEMA,
+    load: (input) => hrAttendanceSummary(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_checkin_events",
