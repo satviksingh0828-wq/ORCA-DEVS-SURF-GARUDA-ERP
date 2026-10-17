@@ -1735,10 +1735,10 @@ async function accountingBalancesAsOf(db: AnyDb, input: any): Promise<DataResult
 }
 
 async function wmsStockByBin(input: z.infer<typeof WMS_STOCK_SCHEMA>): Promise<DataResult> {
-  const baseUrl = String(process.env.WMS_API_URL ?? "").trim().replace(/\/$/, "");
-  const token = String(process.env.WMS_API_KEY ?? "").trim();
+  const baseUrl = String(process.env.WMS_API_URL ?? process.env.VITE_WMS_API_URL ?? "").trim().replace(/\/$/, "");
+  const token = String(process.env.WMS_API_KEY ?? process.env.WMS_API_TOKEN ?? process.env.WMS_TOKEN ?? "").trim();
   if (!baseUrl || !token) {
-    throw new Error("WMS_API_URL and the existing WMS_API_KEY must be configured for WMS stock MCP access.");
+    throw new Error("The existing WMS API URL and token configuration are required for WMS stock MCP access.");
   }
   const params = new URLSearchParams();
   if (input.warehouse_name) params.set("warehouse_name", input.warehouse_name);
@@ -1777,10 +1777,10 @@ function stripSystemIds(row: Record<string, unknown>): Record<string, unknown> {
 }
 
 async function wmsWarehouses(): Promise<DataResult> {
-  const baseUrl = String(process.env.WMS_API_URL ?? "").trim().replace(/\/$/, "");
-  const token = String(process.env.WMS_API_KEY ?? "").trim();
+  const baseUrl = String(process.env.WMS_API_URL ?? process.env.VITE_WMS_API_URL ?? "").trim().replace(/\/$/, "");
+  const token = String(process.env.WMS_API_KEY ?? process.env.WMS_API_TOKEN ?? process.env.WMS_TOKEN ?? "").trim();
   if (!baseUrl || !token) {
-    throw new Error("WMS_API_URL and the existing WMS_API_KEY must be configured for WMS stock MCP access.");
+    throw new Error("The existing WMS API URL and token configuration are required for WMS stock MCP access.");
   }
   const response = await fetch(`${baseUrl}/api/v1/snapshot/stock?list_warehouses=1`, {
     method: "GET",
@@ -1845,7 +1845,7 @@ function registerReadTool(
             {
               type: "text",
               text:
-                error instanceof Error && /date|offset|limit/i.test(error.message)
+                error instanceof Error && /date|offset|limit|wms|warehouse|scope|token|api/i.test(error.message)
                   ? error.message
                   : "Could not load this report. Try a narrower date range or a later page.",
             },
