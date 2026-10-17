@@ -63,6 +63,29 @@ const HR_ALL_SCHEMA = z.object({
   employee_number: z.string().trim().max(80).optional().describe("Optional employee number filter."),
 });
 
+const ACCOUNTING_JOURNAL_SCHEMA = z.object({
+  ...BASE_INPUT,
+  branch_name: z.string().trim().max(160).optional().describe("Optional exact branch name filter."),
+  status: z.enum(["pending", "approved", "rejected"]).optional().describe("Optional journal status filter; defaults to all statuses."),
+});
+const ACCOUNT_LIST_SCHEMA = z.object({
+  branch_name: z.string().trim().max(160).optional().describe("Optional exact branch name filter."),
+  include_inactive: z.boolean().optional().describe("Include inactive ledger accounts; defaults to true."),
+  limit: z.number().int().min(1).max(500).optional().describe("Rows per page; default 100, maximum 500."),
+  offset: z.number().int().min(0).max(SOURCE_ROW_CAP).optional().describe("Zero-based result offset for pagination."),
+});
+const PERIOD_LEDGER_SCHEMA = z.object({
+  ...BASE_INPUT,
+  branch_name: z.string().trim().min(1).max(160).describe("Exact branch name for the account ledger."),
+  account_name: z.string().trim().min(1).max(200).describe("Exact ledger account name."),
+});
+const BALANCE_AS_OF_SCHEMA = z.object({
+  as_of: z.string().trim().min(10).max(40).describe("Accounting cutoff as YYYY-MM-DD or ISO-8601 timestamp with timezone, e.g. 2026-10-17T16:30:00+05:30."),
+  branch_name: z.string().trim().max(160).optional().describe("Optional exact branch name filter."),
+  account_name: z.string().trim().max(200).optional().describe("Optional exact ledger account name filter."),
+  limit: z.number().int().min(1).max(500).optional().describe("Rows per page; default 100, maximum 500."),
+  offset: z.number().int().min(0).max(SOURCE_ROW_CAP).optional().describe("Zero-based result offset for pagination."),
+});
 type DateRange = { from: string; to: string };
 type Paging = { limit?: number; offset?: number };
 type AnyDb = { from: (table: string) => any };
@@ -81,6 +104,10 @@ type DataResult = {
   offset: number;
   next_offset: number | null;
   rows: Record<string, unknown>[];
+  summary?: Record<string, unknown>;
+  account?: Record<string, unknown>;
+  as_of?: string;
+  as_of_semantics?: string;
 };
 
 function currentMonthRange(): DateRange {
@@ -1440,6 +1467,265 @@ async function hrPaidLeaveUsage(db: AnyDb, input: HrInput): Promise<DataResult> 
   return page("HR Paid Leave Usage/Settlement History", range, input, rows);
 }
 
+
+function safeAccountingText(value: unknown): string | null {
+  if (value == null) return null;
+  return String(value).replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "[system ID hidden]");
+}
+function isAccountingOpeningReference(value: unknown) {
+  const text = String(value ?? "");
+  return text.startsWith("ledger_opening:") || text.startsWith("account_opening:");
+}
+function safeAccountingReference(value: unknown): string | null {
+  if (value == null || value === "") return null;
+  const text = String(value);
+  if (isAccountingOpeningReference(text)) return "Opening balance";
+  return safeAccountingText(text);
+}
+async function getBranchByName(db: AnyDb, branchName?: string) {
+  if (!branchName) return null;
+  const branches = await fetchAll<any>((from, to) =>
+    db.from("branches").select("id,branch_name").order("branch_name").range(from, to),
+  );
+  const matches = branches.filter((row: any) => String(row.branch_name ?? "").trim().toLocaleLowerCase() === branchName.trim().toLocaleLowerCase());
+  if (!matches.length) throw new Error(`Branch not found: ${branchName}`);
+  if (matches.length > 1) throw new Error(`Branch name is ambiguous: ${branchName}`);
+  return matches[0];
+}
+async function loadAccountingLedgers(db: AnyDb) {
+  return fetchAll<any>((from, to) =>
+    db.from("ledger_accounts").select(
+      "id,branch_id,account_name,description,ledger_type,account_kind,opening_balance,opening_balance_date,opening_balance_side,is_active,branch:branches(branch_name)",
+    ).order("account_name").range(from, to),
+  );
+}
+function accountNameMatches(account: any, name?: string) {
+  return !name || String(account.account_name ?? "").trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase();
+}
+function branchNameOf(row: any) {
+  return row?.branch?.branch_name ?? null;
+}
+function parseAccountingCutoff(value: string) {
+  const isDate = /^\d{4}-\d{2}-\d{2}$/.test(value);
+  let cutoffDate: string;
+  let cutoffMs: number;
+  if (isDate) {
+    cutoffDate = validDate(value, "as_of");
+    cutoffMs = Date.parse(`${cutoffDate}T23:59:59.999+05:30`);
+  } else {
+    if (!/(Z|[+-]\d{2}:\d{2})$/i.test(value)) throw new Error("as_of must be YYYY-MM-DD or an ISO-8601 timestamp with an explicit timezone.");
+    const instant = new Date(value);
+    if (Number.isNaN(instant.getTime())) throw new Error("as_of must be a valid date or ISO-8601 timestamp.");
+    cutoffMs = instant.getTime();
+    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(instant);
+    const year = parts.find((part) => part.type === "year")?.value ?? "1970";
+    const month = parts.find((part) => part.type === "month")?.value ?? "01";
+    const day = parts.find((part) => part.type === "day")?.value ?? "01";
+    cutoffDate = `${year}-${month}-${day}`;
+  }
+  return { cutoffDate, cutoffMs };
+}
+async function accountingJournalEntries(db: AnyDb, input: any): Promise<DataResult> {
+  const range = resolveRange(input);
+  const branch = await getBranchByName(db, input.branch_name);
+  let query = db.from("journal_entries").select(
+    "voucher_number,entry_date,branch_id,description,reference,source_module,status,approved_at,created_at,branch:branches(branch_name),lines:journal_lines(line_no,debit,credit,line_description,account_kind,branch_id,branch:branches(branch_name),ledger_account:ledger_accounts(account_name,ledger_type,account_kind))",
+  ).gte("entry_date", range.from).lte("entry_date", range.to)
+    .order("entry_date", { ascending: true }).order("created_at", { ascending: true });
+  if (branch) query = query.eq("branch_id", branch.id);
+  if (input.status) query = query.eq("status", input.status);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const rows = records.map((entry: any) => {
+    const lines = (entry.lines ?? []).map((line: any) => ({
+      "Line Number": num(line.line_no),
+      Branch: branchNameOf(line) ?? branchNameOf(entry) ?? null,
+      Account: safeAccountingText(line.ledger_account?.account_name) ?? (line.account_kind ? `${line.account_kind} account` : "Unmapped account"),
+      "Account Type": line.ledger_account?.ledger_type ?? line.account_kind ?? null,
+      Description: safeAccountingText(line.line_description),
+      Debit: num(line.debit),
+      Credit: num(line.credit),
+    }));
+    const debit = lines.reduce((sum: number, line: any) => sum + num(line.Debit), 0);
+    const credit = lines.reduce((sum: number, line: any) => sum + num(line.Credit), 0);
+    return {
+      "Voucher Number": safeAccountingText(entry.voucher_number),
+      Date: entry.entry_date,
+      Branch: branchNameOf(entry),
+      Description: safeAccountingText(entry.description),
+      Reference: safeAccountingReference(entry.reference),
+      "Source Module": entry.source_module,
+      Status: entry.status,
+      "Approved At": entry.approved_at ?? null,
+      "Total Debit": debit,
+      "Total Credit": credit,
+      Balanced: Math.abs(debit - credit) < 0.005,
+      Lines: lines,
+    };
+  });
+  return page("Accounting Journal Entries", range, input, rows);
+}
+async function accountingLedgerAccounts(db: AnyDb, input: any): Promise<DataResult> {
+  const branch = await getBranchByName(db, input.branch_name);
+  const accounts = await loadAccountingLedgers(db);
+  const filtered = accounts.filter((account: any) =>
+    (!branch || account.branch_id === branch.id) &&
+    (input.include_inactive !== false || account.is_active),
+  );
+  const rows = filtered.map((account: any) => ({
+    Branch: branchNameOf(account),
+    "Account Name": safeAccountingText(account.account_name),
+    Description: safeAccountingText(account.description),
+    "Ledger Type": account.ledger_type,
+    "Account Kind": account.account_kind,
+    "Opening Balance": num(account.opening_balance),
+    "Opening Balance Side": String(account.opening_balance_side ?? "dr").toUpperCase(),
+    "Opening Balance Date": account.opening_balance_date ?? null,
+    Status: account.is_active ? "Active" : "Inactive",
+  }));
+  return page("Accounting Ledger Accounts", { from: "all", to: "all" }, input, rows);
+}
+async function accountingPeriodLedger(db: AnyDb, input: any): Promise<DataResult> {
+  const range = resolveRange(input);
+  const branch = await getBranchByName(db, input.branch_name);
+  const ledgers = await loadAccountingLedgers(db);
+  const matches = ledgers.filter((account: any) =>
+    account.branch_id === branch.id && accountNameMatches(account, input.account_name),
+  );
+  if (!matches.length) throw new Error(`Ledger account not found in ${input.branch_name}: ${input.account_name}`);
+  if (matches.length > 1) throw new Error(`Ledger account name is ambiguous in ${input.branch_name}: ${input.account_name}`);
+  const account = matches[0];
+  let query = db.from("journal_lines").select(
+    "line_no,debit,credit,line_description,journal_entry:journal_entries!inner(voucher_number,entry_date,description,reference,source_module,status)",
+  ).eq("ledger_account_id", account.id).eq("journal_entry.status", "approved")
+    .lte("journal_entry.entry_date", range.to)
+    .order("entry_date", { foreignTable: "journal_entries", ascending: true })
+    .order("line_no", { ascending: true });
+  const allLines = await fetchAll<any>((from, to) => query.range(from, to));
+  const ordered = allLines.slice().sort((a: any, b: any) =>
+    String(a.journal_entry?.entry_date ?? "").localeCompare(String(b.journal_entry?.entry_date ?? "")) || num(a.line_no) - num(b.line_no),
+  );
+  const hasOpeningJournal = ordered.some((line: any) => isAccountingOpeningReference(line.journal_entry?.reference));
+  const before = ordered.filter((line: any) => String(line.journal_entry?.entry_date ?? "") < range.from);
+  let openingNet = before.reduce((sum: number, line: any) => sum + num(line.debit) - num(line.credit), 0);
+  const openingDate = String(account.opening_balance_date ?? "");
+  const manualOpeningNet = String(account.opening_balance_side ?? "dr") === "cr" ? -num(account.opening_balance) : num(account.opening_balance);
+  const fallbackOpeningApplies = !hasOpeningJournal && Boolean(openingDate) && num(account.opening_balance) !== 0;
+  if (fallbackOpeningApplies && openingDate < range.from) openingNet += manualOpeningNet;
+  const periodLines = ordered.filter((line: any) => {
+    const date = String(line.journal_entry?.entry_date ?? "");
+    return date >= range.from && date <= range.to;
+  });
+  const events: any[] = periodLines.map((line: any) => ({ kind: "journal", date: line.journal_entry.entry_date, line }));
+  if (fallbackOpeningApplies && openingDate >= range.from && openingDate <= range.to) {
+    events.push({ kind: "opening", date: openingDate, line: null });
+  }
+  events.sort((a, b) => a.date.localeCompare(b.date) || (a.kind === "opening" ? -1 : b.kind === "opening" ? 1 : num(a.line?.line_no) - num(b.line?.line_no)));
+  let running = openingNet;
+  let periodDebit = 0;
+  let periodCredit = 0;
+  const rows = events.map((event: any) => {
+    const line = event.line;
+    const debit = event.kind === "opening" ? (manualOpeningNet > 0 ? manualOpeningNet : 0) : num(line.debit);
+    const credit = event.kind === "opening" ? (manualOpeningNet < 0 ? -manualOpeningNet : 0) : num(line.credit);
+    running += debit - credit;
+    periodDebit += debit;
+    periodCredit += credit;
+    return {
+      Date: event.date,
+      "Voucher Number": event.kind === "opening" ? "Opening balance" : safeAccountingText(line.journal_entry?.voucher_number),
+      Description: event.kind === "opening" ? "Ledger opening balance" : safeAccountingText(line.line_description || line.journal_entry?.description),
+      Reference: event.kind === "opening" ? "Opening balance" : safeAccountingReference(line.journal_entry?.reference),
+      "Source Module": event.kind === "opening" ? "opening_balance" : line.journal_entry?.source_module,
+      "Line Number": event.kind === "opening" ? null : num(line.line_no),
+      Debit: debit,
+      Credit: credit,
+      "Balance Debit": Math.max(running, 0),
+      "Balance Credit": Math.max(-running, 0),
+    };
+  });
+  const result = page("Accounting Period Ledger", range, input, rows);
+  return {
+    ...result,
+    account: { Branch: branchNameOf(account), "Account Name": safeAccountingText(account.account_name), "Ledger Type": account.ledger_type, "Account Kind": account.account_kind },
+    summary: {
+      "Opening Balance Debit": Math.max(openingNet, 0),
+      "Opening Balance Credit": Math.max(-openingNet, 0),
+      "Period Debit Total": periodDebit,
+      "Period Credit Total": periodCredit,
+      "Closing Balance Debit": Math.max(running, 0),
+      "Closing Balance Credit": Math.max(-running, 0),
+      "Included Status": "Approved journal entries only",
+      "Opening Balance Source": hasOpeningJournal ? "Opening journal entry" : fallbackOpeningApplies ? "Ledger opening-balance field" : "None recorded",
+    },
+  };
+}
+async function accountingBalancesAsOf(db: AnyDb, input: any): Promise<DataResult> {
+  const { cutoffDate, cutoffMs } = parseAccountingCutoff(input.as_of);
+  const branch = await getBranchByName(db, input.branch_name);
+  const allAccounts = await loadAccountingLedgers(db);
+  const accounts = allAccounts.filter((account: any) =>
+    (!branch || account.branch_id === branch.id) && accountNameMatches(account, input.account_name),
+  );
+  if (input.account_name && accounts.length === 0) throw new Error(`Ledger account not found: ${input.account_name}`);
+  const accountIds = accounts.map((account: any) => account.id);
+  const totals = new Map<string, { net: number; debits: number; credits: number; hasOpeningJournal: boolean }>();
+  for (const account of accounts) totals.set(account.id, { net: 0, debits: 0, credits: 0, hasOpeningJournal: false });
+  if (accountIds.length) {
+    let query = db.from("journal_lines").select(
+      "ledger_account_id,debit,credit,journal_entry:journal_entries!inner(entry_date,status,reference,approved_at,created_at)",
+    ).in("ledger_account_id", accountIds).eq("journal_entry.status", "approved").lte("journal_entry.entry_date", cutoffDate);
+    const records = await fetchAll<any>((from, to) => query.range(from, to));
+    for (const line of records) {
+      const entry = line.journal_entry;
+      if (!entry || (entry.created_at && Date.parse(entry.created_at) > cutoffMs) || (entry.approved_at && Date.parse(entry.approved_at) > cutoffMs)) continue;
+      const summary = totals.get(line.ledger_account_id);
+      if (!summary) continue;
+      summary.net += num(line.debit) - num(line.credit);
+      summary.debits += num(line.debit);
+      summary.credits += num(line.credit);
+      if (isAccountingOpeningReference(entry.reference)) summary.hasOpeningJournal = true;
+    }
+  }
+  const rows = accounts.map((account: any) => {
+    const total = totals.get(account.id)!;
+    const openingDate = String(account.opening_balance_date ?? "");
+    if (!total.hasOpeningJournal && openingDate && openingDate <= cutoffDate && num(account.opening_balance) !== 0) {
+      if (String(account.opening_balance_side ?? "dr") === "cr") {
+        total.net -= num(account.opening_balance);
+        total.credits += num(account.opening_balance);
+      } else {
+        total.net += num(account.opening_balance);
+        total.debits += num(account.opening_balance);
+      }
+    }
+    return {
+      Branch: branchNameOf(account),
+      "Account Name": safeAccountingText(account.account_name),
+      "Ledger Type": account.ledger_type,
+      "Account Kind": account.account_kind,
+      "Debit Balance": Math.max(total.net, 0),
+      "Credit Balance": Math.max(-total.net, 0),
+      "Total Debits Through Cutoff": total.debits,
+      "Total Credits Through Cutoff": total.credits,
+      "Opening Balance Date": account.opening_balance_date ?? null,
+      Status: account.is_active ? "Active" : "Inactive",
+    };
+  });
+  const result = page("Accounting Ledger Balances As Of", { from: "all", to: cutoffDate }, input, rows);
+  const totalDebitBalance = rows.reduce((sum, row: any) => sum + num(row["Debit Balance"]), 0);
+  const totalCreditBalance = rows.reduce((sum, row: any) => sum + num(row["Credit Balance"]), 0);
+  return {
+    ...result,
+    summary: {
+      "Total Debit Balances": totalDebitBalance,
+      "Total Credit Balances": totalCreditBalance,
+      "Debit/Credit Difference": totalDebitBalance - totalCreditBalance,
+    },
+    as_of: input.as_of,
+    as_of_semantics: "Approved entries with accounting date on or before the Asia/Kolkata cutoff are included; for timestamp cutoffs, entries created or approved after that instant are excluded. Journal effective dates and opening-balance dates are stored as dates, so within-day effective-date ordering and historical revisions to opening-balance metadata cannot be reconstructed.",
+  };
+}
+
 function registerReadTool(
   server: McpServer,
   db: AnyDb,
@@ -1491,6 +1777,34 @@ function registerReadTool(
 }
 
 export function registerLtmsReportTools(server: McpServer, db: AnyDb) {
+  registerReadTool(server, db, {
+    name: "accounting_journal_entries",
+    title: "Accounting Journal Entries",
+    description: "Read-only complete journal entries for a selected period. Includes voucher, effective date, branch, description, reference, source, status, approval time, debit/credit totals, and all display-safe account lines. Defaults to the current month; optional filters: from_date, to_date, branch_name, status, limit, offset. Pending, approved and rejected statuses are available. System UUIDs are never returned.",
+    schema: ACCOUNTING_JOURNAL_SCHEMA,
+    load: (input) => accountingJournalEntries(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "accounting_ledger_accounts",
+    title: "Accounting Ledger Accounts",
+    description: "Read-only list of ledger accounts with branch, name, type, opening balance/date/side and active status. Optional branch_name and include_inactive filters. Use these display names to request an account ledger. Does not return system IDs.",
+    schema: ACCOUNT_LIST_SCHEMA,
+    load: (input) => accountingLedgerAccounts(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "accounting_period_ledger",
+    title: "Accounting Ledger for a Period",
+    description: "Read-only full account ledger for one branch and ledger account over an inclusive date period. Includes opening balance, each approved journal line, running debit/credit balance and closing balance. Defaults to the current month. Required: branch_name, account_name. Optional: from_date, to_date, limit, offset. System UUIDs are never returned.",
+    schema: PERIOD_LEDGER_SCHEMA,
+    load: (input) => accountingPeriodLedger(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "accounting_balances_as_of",
+    title: "Accounting Ledger Balances as of a Date/Time",
+    description: "Read-only debit/credit ledger balances by account as of an Asia/Kolkata date or ISO timestamp. Optional branch_name/account_name filters. Date-only cutoff includes that full date. Timestamp cutoff excludes entries created/approved after that instant. Because effective journal and opening-balance dates are date-granular and opening-balance edits are not versioned, the report cannot reconstruct within-day date ordering or past edits to opening-balance metadata. Does not return system UUIDs.",
+    schema: BALANCE_AS_OF_SCHEMA,
+    load: (input) => accountingBalancesAsOf(db, input),
+  });
   registerReadTool(server, db, {
     name: "hr_payrolls",
     title: "HRMS Payrolls",
