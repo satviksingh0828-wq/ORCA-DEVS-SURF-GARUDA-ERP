@@ -1735,9 +1735,9 @@ async function accountingBalancesAsOf(db: AnyDb, input: any): Promise<DataResult
 
 async function wmsStockByBin(input: z.infer<typeof WMS_STOCK_SCHEMA>): Promise<DataResult> {
   const baseUrl = String(process.env.WMS_API_URL ?? "").trim().replace(/\/$/, "");
-  const token = String(process.env.WMS_READONLY_TOKEN ?? "").trim();
+  const token = String(process.env.WMS_API_KEY ?? "").trim();
   if (!baseUrl || !token) {
-    throw new Error("WMS_API_URL and WMS_READONLY_TOKEN must be configured for WMS stock MCP access.");
+    throw new Error("WMS_API_URL and the existing WMS_API_KEY must be configured for WMS stock MCP access.");
   }
   const params = new URLSearchParams({ warehouse_id: String(input.warehouse_id) });
   if (input.q) params.set("q", input.q);

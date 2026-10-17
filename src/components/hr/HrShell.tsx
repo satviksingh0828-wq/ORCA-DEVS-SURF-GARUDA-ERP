@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { Link, useRouterState } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { HrSectionNav, type HrArea } from "@/components/hr/HrSectionNav";
@@ -59,9 +59,11 @@ export const HR_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
 /** Shared page shell for each independent HR workspace module. */
 export function HrShell({ area, children }: { area: HrArea; children: ReactNode }) {
   const label = areaLabels[area];
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const areaGroup = HR_SIDEBAR_GROUPS.find((group) => group.section === `hr-${area}`);
   const activeItemId =
-    HR_SIDEBAR_GROUPS.find((group) => group.section === `hr-${area}`)?.items.find((item) =>
+    areaGroup?.items.find((item) =>
       item.to ? pathname === item.to || pathname.startsWith(`${item.to}/`) : false,
     )?.id ?? (area === "master" ? "employees" : "");
 
@@ -89,7 +91,10 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
           groups={HR_SIDEBAR_GROUPS}
           section={`hr-${area}`}
           activeTabId={activeItemId}
-          onSelectTab={() => undefined}
+          onSelectTab={(tabId) => {
+            const target = areaGroup?.items.find((item) => item.id === tabId)?.to;
+            if (target) navigate({ to: target as "/" });
+          }}
         />
         <div className="ltms-reference-content min-w-0">
           <HrSectionNav area={area} />
