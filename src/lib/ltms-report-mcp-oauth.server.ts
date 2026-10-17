@@ -232,7 +232,25 @@ function authorizationErrorPage(message: string, status = 400) {
     status,
   );
 }
-
+function authorizationRedirectPage(targetUrl: string) {
+  const nonce = randomBytes(18).toString("base64url");
+  const safeTarget = escapeHtml(targetUrl);
+  const scriptTarget = JSON.stringify(targetUrl).replace(/</g, "\\u003c");
+  return new Response(
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Returning to ChatGPT</title><meta name="referrer" content="no-referrer"><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f5f7fa;color:#14202e;margin:0;padding:32px}.card{max-width:520px;margin:8vh auto;background:white;border:1px solid #dce3ea;border-radius:16px;padding:28px;box-shadow:0 10px 32px #14202e12}h1{font-size:22px;margin:0 0 10px}.muted{color:#526174;line-height:1.55}a{display:inline-block;margin-top:12px;background:#123b62;color:white;text-decoration:none;border-radius:8px;padding:11px 16px;font-weight:650}</style><script nonce="${nonce}">window.location.replace(${scriptTarget});</script></head><body><main class="card"><h1>Returning to ChatGPT</h1><p class="muted">Your authorization is complete. If you are not redirected automatically, continue to ChatGPT using this button.</p><a href="${safeTarget}">Continue to ChatGPT</a></main></body></html>`,
+    {
+      status: 200,
+      headers: {
+        ...noStore,
+        "Content-Type": "text/html; charset=utf-8",
+        "Content-Security-Policy": `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; navigate-to https://chatgpt.com; base-uri 'none'; frame-ancestors 'none'`,
+        "X-Content-Type-Options": "nosniff",
+        "Referrer-Policy": "no-referrer",
+        "X-Frame-Options": "DENY",
+      },
+    },
+  );
+}
 async function validateAuthorizationParams(params: URLSearchParams, request: Request) {
   const clientId = params.get("client_id") ?? "";
   const redirectUri = params.get("redirect_uri") ?? "";
@@ -332,7 +350,7 @@ export async function handleOAuthAuthorize(request: Request) {
         "error_description",
         "The user did not authorize read-only report access.",
       );
-      return Response.redirect(redirect.toString(), 303);
+      return authorizationRedirectPage(redirect.toString());
     }
     if (decision !== "allow")
       return authorizationErrorPage("Choose whether to authorize or cancel.");
@@ -345,24 +363,10 @@ export async function handleOAuthAuthorize(request: Request) {
         "That key is invalid, revoked, or no longer belongs to an active administrator.",
       );
 
-    const now = new Date().toISOString();
-    const { data: consumed, error: consumeError } = await db
-      .from("ltms_report_mcp_oauth_requests")
-      .update({ consumed_at: now })
-      .eq("id", pending.id)
-      .is("consumed_at", null)
-      .gt("expires_at", now)
-      .select("id")
-      .maybeSingle();
-    if (consumeError) throw new Error("oauth_database");
-    if (!consumed)
-      return authorizationErrorPage(
-        "This authorization request was already used. Restart the connection.",
-      );
-
     const code = randomToken("orca_code_");
+    const codeHash = hash(code);
     const { error: codeError } = await db.from("ltms_report_mcp_oauth_codes").insert({
-      code_hash: hash(code),
+      code_hash: codeHash,
       client_id: pending.client_id,
       mcp_key_id: key.id,
       redirect_uri: pending.redirect_uri,
@@ -372,8 +376,24 @@ export async function handleOAuthAuthorize(request: Request) {
       expires_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(),
     });
     if (codeError) throw new Error("oauth_database");
+    const now = new Date().toISOString();
+    const { data: consumed, error: consumeError } = await db
+      .from("ltms_report_mcp_oauth_requests")
+      .update({ consumed_at: now })
+      .eq("id", pending.id)
+      .is("consumed_at", null)
+      .gt("expires_at", now)
+      .select("id")
+      .maybeSingle();
+    if (consumeError || !consumed) {
+      await db.from("ltms_report_mcp_oauth_codes").delete().eq("code_hash", codeHash);
+      if (consumeError) throw new Error("oauth_database");
+      return authorizationErrorPage(
+        "This authorization request was already used. Restart the connection.",
+      );
+    }
     redirect.searchParams.set("code", code);
-    return Response.redirect(redirect.toString(), 303);
+    return authorizationRedirectPage(redirect.toString());
   } catch (error) {
     console.error(
       "[ltms-report-mcp-oauth] Authorization POST failed:",
