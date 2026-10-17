@@ -1734,28 +1734,61 @@ async function accountingBalancesAsOf(db: AnyDb, input: any): Promise<DataResult
   };
 }
 
-async function wmsStockByBin(input: z.infer<typeof WMS_STOCK_SCHEMA>): Promise<DataResult> {
+async function wmsRequest(
+  db: AnyDb,
+  actorId: string,
+  path: string,
+  init?: RequestInit,
+): Promise<Record<string, unknown>> {
   const baseUrl = String(process.env.WMS_API_URL ?? process.env.VITE_WMS_API_URL ?? "").trim().replace(/\/$/, "");
-  const token = String(process.env.WMS_API_KEY ?? process.env.WMS_API_TOKEN ?? process.env.WMS_TOKEN ?? "").trim();
-  if (!baseUrl || !token) {
-    throw new Error("The existing WMS API URL and token configuration are required for WMS stock MCP access.");
+  if (!baseUrl) throw new Error("The existing WMS API URL configuration is required for WMS stock MCP access.");
+  const machineToken = String(process.env.WMS_API_KEY ?? process.env.WMS_API_TOKEN ?? process.env.WMS_TOKEN ?? "").trim();
+  const headers = new Headers(init?.headers);
+  headers.set("Accept", "application/json");
+  if (machineToken) {
+    headers.set("X-WMS-Token", machineToken);
+  } else {
+    const { data: session, error } = await db
+      .from("user_sessions")
+      .select("session_token")
+      .eq("user_id", actorId)
+      .maybeSingle();
+    if (error || !session?.session_token) {
+      throw new Error("No active ERP session is available for the MCP key owner to access WMS.");
+    }
+    const exchange = await fetch(`${baseUrl}/api/auth/erp-session`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({ erp_session_token: session.session_token }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!exchange.ok) {
+      const exchangeBody = (await exchange.json().catch(() => null)) as Record<string, unknown> | null;
+      const errorText = typeof exchangeBody?.error === "string" ? exchangeBody.error : `WMS ERP session exchange failed (${exchange.status})`;
+      throw new Error(errorText);
+    }
+    const setCookie = exchange.headers.get("set-cookie");
+    const cookie = setCookie?.split(";")[0];
+    if (!cookie) throw new Error("WMS ERP session exchange did not return an authenticated session cookie.");
+    headers.set("Cookie", cookie);
   }
+  const response = await fetch(`${baseUrl}${path}`, { ...init, headers, signal: AbortSignal.timeout(15_000) });
+  const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!response.ok) {
+    const error = typeof body?.error === "string" ? body.error : `WMS request failed (${response.status})`;
+    throw new Error(error);
+  }
+  return body ?? {};
+}
+
+async function wmsStockByBin(db: AnyDb, actorId: string, input: z.infer<typeof WMS_STOCK_SCHEMA>): Promise<DataResult> {
   const params = new URLSearchParams();
   if (input.warehouse_name) params.set("warehouse_name", input.warehouse_name);
   if (input.q) params.set("q", input.q);
   if (input.bin_code) params.set("bin_code", input.bin_code);
   if (input.limit !== undefined) params.set("limit", String(input.limit));
   if (input.offset !== undefined) params.set("offset", String(input.offset));
-  const response = await fetch(`${baseUrl}/api/v1/snapshot/stock?${params.toString()}`, {
-    method: "GET",
-    headers: { Accept: "application/json", "X-WMS-Token": token },
-    signal: AbortSignal.timeout(15_000),
-  });
-  const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!response.ok) {
-    const error = typeof body?.error === "string" ? body.error : `WMS request failed (${response.status})`;
-    throw new Error(error);
-  }
+  const body = await wmsRequest(db, actorId, `/api/v1/snapshot/stock?${params.toString()}`);
   const rows = Array.isArray(body?.rows)
     ? (body.rows as Record<string, unknown>[]).map(stripSystemIds)
     : [];
@@ -1776,22 +1809,8 @@ function stripSystemIds(row: Record<string, unknown>): Record<string, unknown> {
   );
 }
 
-async function wmsWarehouses(): Promise<DataResult> {
-  const baseUrl = String(process.env.WMS_API_URL ?? process.env.VITE_WMS_API_URL ?? "").trim().replace(/\/$/, "");
-  const token = String(process.env.WMS_API_KEY ?? process.env.WMS_API_TOKEN ?? process.env.WMS_TOKEN ?? "").trim();
-  if (!baseUrl || !token) {
-    throw new Error("The existing WMS API URL and token configuration are required for WMS stock MCP access.");
-  }
-  const response = await fetch(`${baseUrl}/api/v1/snapshot/stock?list_warehouses=1`, {
-    method: "GET",
-    headers: { Accept: "application/json", "X-WMS-Token": token },
-    signal: AbortSignal.timeout(15_000),
-  });
-  const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-  if (!response.ok) {
-    const error = typeof body?.error === "string" ? body.error : `WMS request failed (${response.status})`;
-    throw new Error(error);
-  }
+async function wmsWarehouses(db: AnyDb, actorId: string): Promise<DataResult> {
+  const body = await wmsRequest(db, actorId, "/api/v1/snapshot/stock?list_warehouses=1");
   const warehouses = Array.isArray(body?.warehouses)
     ? (body.warehouses as Record<string, unknown>[]).map(stripSystemIds)
     : [];
@@ -1856,14 +1875,14 @@ function registerReadTool(
   );
 }
 
-export function registerLtmsReportTools(server: McpServer, db: AnyDb) {
+export function registerLtmsReportTools(server: McpServer, db: AnyDb, actorId: string) {
   registerReadTool(server, db, {
     name: "wms_warehouses",
     title: "WMS Warehouses",
     description:
       "Read-only list of warehouses accessible to the configured WMS credential. Returns only warehouse names and warehouse codes; internal warehouse IDs are never exposed. Use the returned warehouse_name with wms_stock_by_bin, or omit warehouse_name there to query all accessible warehouses.",
     schema: WMS_WAREHOUSES_SCHEMA,
-    load: () => wmsWarehouses(),
+    load: () => wmsWarehouses(db, actorId),
   });
   registerReadTool(server, db, {
     name: "wms_stock_by_bin",
@@ -1871,7 +1890,7 @@ export function registerLtmsReportTools(server: McpServer, db: AnyDb) {
     description:
       "Read-only current WMS stock by warehouse and bin. Optional warehouse_name/warehouse_code selects one accessible warehouse; omit it to return all accessible warehouses. Returns SKU, item name, warehouse, zone, bin code/barcode/type, lot and expiry data, on-hand, allocated, and available quantities. Optional: q, exact bin_code, limit, offset. Internal/system IDs are never exposed. The WMS token remains warehouse-scoped and this tool has no create, update, delete, adjustment, or transfer operation.",
     schema: WMS_STOCK_SCHEMA,
-    load: (input) => wmsStockByBin(input),
+    load: (input) => wmsStockByBin(db, actorId, input),
   });
   registerReadTool(server, db, {
     name: "accounting_journal_entries",
