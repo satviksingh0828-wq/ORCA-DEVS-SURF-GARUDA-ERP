@@ -128,8 +128,9 @@ export function LtmsReportMcpSettings() {
             <ShieldCheck className="size-4 text-emerald-600" /> Read-only scope
           </div>
           <p className="mt-2 text-muted-foreground">
-            Keys can query only Consignment Income, Transporter Expenditure, Stock Inward Unloading
-            Income, Workmen Loading, Workmen Unloading, Trip Expenditure, and Consignment Net. They
+            Keys can query only LTMS Finance Income and Expenditure, Consignment Income, Transporter
+            Expenditure, Stock Inward Unloading Income, Workmen Loading, Workmen Unloading, Trip
+            Expenditure, and Consignment Net. They
             cannot create, edit, delete, or post ERP data. Report calls can be limited by date and,
             where that report supports it, branch. An administrator-level key can read every branch.
             MCP returns persisted report values; unsaved browser-only edits are not visible.

@@ -203,12 +203,12 @@ export function FinancePage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
           </header>
           {safeTab === "income" && (
             <TabErrorBoundary label="Income">
-              <FinanceList kind="income" readOnly={ltmsMode} />
+              <FinanceList kind="income" />
             </TabErrorBoundary>
           )}
           {safeTab === "expenditure" && (
             <TabErrorBoundary label="Expenditure">
-              <FinanceList kind="expenditure" readOnly={ltmsMode} />
+              <FinanceList kind="expenditure" />
             </TabErrorBoundary>
           )}
           {safeTab === "driver-payroll" && (

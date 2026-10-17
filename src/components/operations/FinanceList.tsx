@@ -71,7 +71,7 @@ const CSV_COLUMNS = [
   "status_date",
 ];
 
-export function FinanceList({ kind, readOnly = false }: { kind: FinanceKind; readOnly?: boolean }) {
+export function FinanceList({ kind }: { kind: FinanceKind }) {
   const cfg = FINANCE_CONFIG[kind];
   const allBranches = useBranches();
   const { user } = useSession();
@@ -498,7 +498,7 @@ export function FinanceList({ kind, readOnly = false }: { kind: FinanceKind; rea
 
   return (
     <div className="space-y-4">
-      {!editing && !readOnly && (
+      {!editing && (
       <div className="flex flex-wrap items-center gap-2">
         <Button size="sm" onClick={() => {
           const row = emptyFinanceRow();
@@ -851,19 +851,19 @@ export function FinanceList({ kind, readOnly = false }: { kind: FinanceKind; rea
                       >
                         <Download className="size-4" /> PDF
                       </Button>
-                      {!readOnly && r.verification_id && (user?.role === "admin" || user?.role === "semi_admin" || user?.role === "viewer") ? (
+                      {r.verification_id && (user?.role === "admin" || user?.role === "semi_admin" || user?.role === "viewer") ? (
                         <Button variant="outline" size="sm" onClick={() => void approvePending(r)}>
                           Approve
                         </Button>
                       ) : null}
-                      {!readOnly && !r.verification_id && !r.settled ? (
+                      {!r.verification_id && !r.settled ? (
                         <Button variant="outline" size="sm" onClick={() => (kind === "expenditure" || kind === "income" || r.is_fixed_income || r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
                           <Check className="size-4" />
                           {cfg.actionLabel}
                         </Button>
                       ) : null}
                       {/* Admin-only: per-row logs */}
-                      {!readOnly && isAdmin && r.id ? (
+                      {isAdmin && r.id ? (
                         <ItemLogsButton
                           entityType={kind}
                           entityId={r.id}
@@ -879,7 +879,7 @@ export function FinanceList({ kind, readOnly = false }: { kind: FinanceKind; rea
         </div>
       )}
 
-      {!readOnly && <Dialog open={!!paymentRow} onOpenChange={(open) => { if (!open) setPaymentRow(null); }}>
+      <Dialog open={!!paymentRow} onOpenChange={(open) => { if (!open) setPaymentRow(null); }}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>{paymentRow?.is_fixed_income ? "Receive Fixed Income" : paymentRow?.is_emi ? "Pay Vehicle EMI" : "Pay Driver Salary"}</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
@@ -900,7 +900,7 @@ export function FinanceList({ kind, readOnly = false }: { kind: FinanceKind; rea
             <Button onClick={() => paymentRow && void settle(paymentRow)} disabled={!paymentLedgerId}>Confirm Payment</Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>}
+      </Dialog>
     </div>
   );
 }

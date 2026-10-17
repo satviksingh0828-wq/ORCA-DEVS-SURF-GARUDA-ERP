@@ -1078,6 +1078,48 @@ async function consignmentNet(db: AnyDb, input: QueryInput): Promise<DataResult>
   return page("Consignment Net", range, input, rows);
 }
 
+
+async function ltmsFinanceEntries(
+  db: AnyDb,
+  kind: "income" | "expenditure",
+  input: QueryInput,
+): Promise<DataResult> {
+  const range = resolveRange(input);
+  const isIncome = kind === "income";
+  const table = isIncome ? "incomes" : "expenditures";
+  const nameColumn = isIncome ? "income_name" : "expenditure_name";
+  const statusColumn = isIncome ? "is_received" : "is_paid";
+  const statusDateColumn = isIncome ? "received_date" : "paid_date";
+  let query = db
+    .from(table)
+    .select(
+      `${nameColumn},amount,note,entry_date,branch_id,vehicle_id,driver_id,transporter_id,${statusColumn},${statusDateColumn},branch:branches(branch_name),vehicle:vehicles(registration_number),driver:drivers(full_name),transporter:transporters(transporter_name)`,
+    )
+    .gte("entry_date", range.from)
+    .lte("entry_date", range.to)
+    .order("entry_date", { ascending: false });
+  if (input.branch_id) query = query.eq("branch_id", input.branch_id);
+  const entries = await fetchAll<any>((from, to) => query.range(from, to));
+  const rows = entries.map((entry: any) => {
+    const linkedTo =
+      entry.vehicle?.registration_number ??
+      entry.driver?.full_name ??
+      entry.transporter?.transporter_name ??
+      null;
+    return {
+      [isIncome ? "Income" : "Expenditure"]: entry[nameColumn] ?? "",
+      Date: entry.entry_date ?? null,
+      Amount: num(entry.amount),
+      Branch: entry.branch?.branch_name ?? null,
+      "Linked To": linkedTo,
+      Status: entry[statusColumn] ? (isIncome ? "Received" : "Paid") : isIncome ? "Not received" : "Unpaid",
+      "Status Date": entry[statusDateColumn] || null,
+      Note: entry.note || null,
+    };
+  });
+  return page(isIncome ? "LTMS Finance Income" : "LTMS Finance Expenditure", range, input, rows);
+}
+
 function registerReadTool(
   server: McpServer,
   db: AnyDb,
@@ -1129,6 +1171,22 @@ function registerReadTool(
 }
 
 export function registerLtmsReportTools(server: McpServer, db: AnyDb) {
+  registerReadTool(server, db, {
+    name: "ltms_finance_income",
+    title: "LTMS Finance — Income",
+    description:
+      "Read-only rows from LTMS Finance → Income. Returns the income name, date, amount, branch name, linked vehicle/driver/transporter display name, receipt status/date, and note; never returns record or system IDs. Optional filters: from_date, to_date, branch_id, limit, offset. Defaults to the current month.",
+    schema: BRANCH_SCHEMA,
+    load: (input) => ltmsFinanceEntries(db, "income", input),
+  });
+  registerReadTool(server, db, {
+    name: "ltms_finance_expenditure",
+    title: "LTMS Finance — Expenditure",
+    description:
+      "Read-only rows from LTMS Finance → Expenditure. Returns the expenditure name, date, amount, branch name, linked vehicle/driver/transporter display name, payment status/date, and note; never returns record or system IDs. Optional filters: from_date, to_date, branch_id, limit, offset. Defaults to the current month.",
+    schema: BRANCH_SCHEMA,
+    load: (input) => ltmsFinanceEntries(db, "expenditure", input),
+  });
   registerReadTool(server, db, {
     name: "consignment_income",
     title: "Consignment Income report",
