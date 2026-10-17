@@ -51,6 +51,17 @@ const TRANSPORTER_SCHEMA = z.object({
   transporter_id: z.string().uuid().optional().describe("Optional transporter UUID."),
   source_id: z.string().uuid().optional().describe("Optional transporter source UUID."),
 });
+const HR_SCHEMA = z.object({
+  ...BASE_INPUT,
+  employee_number: z.string().trim().max(80).optional().describe("Optional employee number filter."),
+});
+const HR_ALL_SCHEMA = z.object({
+  from_date: z.string().optional().describe("Optional inclusive start date, YYYY-MM-DD. Defaults to all history."),
+  to_date: z.string().optional().describe("Optional inclusive end date, YYYY-MM-DD. Defaults to all history."),
+  limit: z.number().int().min(1).max(500).optional().describe("Rows per page; default 100, maximum 500."),
+  offset: z.number().int().min(0).max(SOURCE_ROW_CAP).optional().describe("Zero-based result offset for pagination."),
+  employee_number: z.string().trim().max(80).optional().describe("Optional employee number filter."),
+});
 
 type DateRange = { from: string; to: string };
 type Paging = { limit?: number; offset?: number };
@@ -1120,6 +1131,209 @@ async function ltmsFinanceEntries(
   return page(isIncome ? "LTMS Finance Income" : "LTMS Finance Expenditure", range, input, rows);
 }
 
+
+type HrInput = {
+  from_date?: string;
+  to_date?: string;
+  limit?: number;
+  offset?: number;
+  employee_number?: string;
+};
+function employeeDisplayName(employee: any) {
+  return [employee?.first_name, employee?.middle_name, employee?.last_name]
+    .filter(Boolean)
+    .join(" ");
+}
+function hrRange(input: HrInput): DateRange {
+  if (!input.from_date && !input.to_date) return { from: "all", to: "all" };
+  const from = validDate(input.from_date ?? "1900-01-01", "from_date");
+  const to = validDate(input.to_date ?? "9999-12-31", "to_date");
+  if (from > to) throw new Error("from_date must be on or before to_date.");
+  return { from, to };
+}
+async function findEmployeeIds(db: AnyDb, employeeNumber?: string): Promise<string[] | null> {
+  if (!employeeNumber) return null;
+  const employees = await fetchAll<any>((from, to) =>
+    db.from("employees").select("id").ilike("employee_number", employeeNumber).range(from, to),
+  );
+  return ids(employees, "id");
+}
+async function hrPayrolls(db: AnyDb, input: HrInput): Promise<DataResult> {
+  const range = resolveRange(input);
+  const employeeIds = await findEmployeeIds(db, input.employee_number);
+  let query = db.from("payrolls").select(
+    "employee_id,period_start,period_end,period_type,basic_salary,hra,travel_allowance,special_allowance,other_allowance,gross,pf_deduction,tax_deduction,loan_deduction,advance_deduction,loss_deduction,unpaid_leave_deduction,paid_leave_payout_amount,paid_leave_final_settlement_amount,extra_work_days,extra_work_pay,incentive_amount,net,payment_status,payment_date,payment_amount,payment_history,present_days,working_days,paid_leaves_used,paid_leaves_left,unpaid_leaves,employee:employees(employee_number,first_name,middle_name,last_name)",
+  ).lte("period_start", range.to).gte("period_end", range.from).order("period_start", { ascending: false });
+  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const rows = records.map((row: any) => {
+    const status = row.payment_status ?? "paid";
+    const net = num(row.net);
+    const history = Array.isArray(row.payment_history) ? row.payment_history : [];
+    const paidToDate = status === "paid"
+      ? net
+      : history.length
+        ? history.reduce((sum: number, payment: any) => sum + num(payment?.amount), 0)
+        : num(row.payment_amount);
+    const statusLabel = status === "partial_paid" ? "Partially paid" : status === "paid" ? "Paid" : "Not paid";
+    return {
+      "Employee Number": row.employee?.employee_number ?? null,
+      Employee: employeeDisplayName(row.employee) || null,
+      "Period Start": row.period_start,
+      "Period End": row.period_end,
+      "Period Type": row.period_type,
+      "Basic Salary": num(row.basic_salary),
+      HRA: num(row.hra),
+      "Travel Allowance": num(row.travel_allowance),
+      "Special Allowance": num(row.special_allowance),
+      "Other Allowance": num(row.other_allowance),
+      "Extra Work Pay": num(row.extra_work_pay),
+      "Paid Leave Payout": num(row.paid_leave_payout_amount) + num(row.paid_leave_final_settlement_amount),
+      Incentive: num(row.incentive_amount),
+      Gross: num(row.gross),
+      "PF Deduction": num(row.pf_deduction),
+      "Tax Deduction": num(row.tax_deduction),
+      "Loan Deduction": num(row.loan_deduction),
+      "Advance Deduction": num(row.advance_deduction),
+      "Loss Deduction": num(row.loss_deduction),
+      "Unpaid Leave Deduction": num(row.unpaid_leave_deduction),
+      Net: net,
+      "Payment Status": statusLabel,
+      "Paid To Date": paidToDate,
+      Outstanding: Math.max(0, net - paidToDate),
+      "Payment Date": row.payment_date ?? null,
+      "Payment History": history.map((payment: any) => ({ date: payment?.date ?? null, amount: num(payment?.amount) })),
+      "Present Days": num(row.present_days),
+      "Working Days": num(row.working_days),
+      "Paid Leaves Used": num(row.paid_leaves_used),
+      "Paid Leaves Left": num(row.paid_leaves_left),
+      "Unpaid Leaves": num(row.unpaid_leaves),
+    };
+  });
+  return page("HR Payroll", range, input, rows);
+}
+async function hrLoansOrAdvances(db: AnyDb, kind: "loan" | "advance", input: HrInput): Promise<DataResult> {
+  const range = hrRange(input);
+  const employeeIds = await findEmployeeIds(db, input.employee_number);
+  const table = kind === "loan" ? "loans" : "advances";
+  const relation = kind === "loan" ? "loan_installments" : "advance_installments";
+  const fk = kind === "loan" ? "loan_id" : "advance_id";
+  let query = db.from(table).select(
+    "id,employee_id,principal,interest_rate,interest_method,months,emi,total_payable,start_date,paid_months,status,paid_off_date,discount_amount,notes,employee:employees(employee_number,first_name,middle_name,last_name)",
+  ).order("start_date", { ascending: false });
+  if (input.from_date) query = query.gte("start_date", range.from);
+  if (input.to_date) query = query.lte("start_date", range.to);
+  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const parentIds = ids(records, "id");
+  const installmentRows = parentIds.length
+    ? await fetchAll<any>((from, to) => db.from(relation).select(`${fk},emi_number,due_date,amount,paid_amount,status`).in(fk, parentIds).order("due_date").range(from, to))
+    : [];
+  const installmentsByParent = new Map<string, any[]>();
+  for (const inst of installmentRows) installmentsByParent.set(inst[fk], [...(installmentsByParent.get(inst[fk]) ?? []), inst]);
+  const rows = records.map((row: any) => ({
+    "Employee Number": row.employee?.employee_number ?? null,
+    Employee: employeeDisplayName(row.employee) || null,
+    Principal: num(row.principal),
+    "Interest Rate": num(row.interest_rate),
+    "Interest Method": row.interest_method,
+    Months: num(row.months),
+    EMI: num(row.emi),
+    "Total Payable": num(row.total_payable),
+    "Paid Months": num(row.paid_months),
+    Status: row.status,
+    "Start Date": row.start_date,
+    "Paid Off Date": row.paid_off_date,
+    "Discount Amount": num(row.discount_amount),
+    Notes: row.notes ?? null,
+    Installments: (installmentsByParent.get(row.id) ?? []).map((inst: any) => ({
+      "EMI Number": num(inst.emi_number),
+      "Due Date": inst.due_date,
+      Amount: num(inst.amount),
+      "Amount Paid Directly": num(inst.paid_amount),
+      Status: inst.status,
+    })),
+  }));
+  return page(kind === "loan" ? "HR Loans" : "HR Advances", range, input, rows);
+}
+async function hrDeductions(db: AnyDb, input: HrInput): Promise<DataResult> {
+  const range = hrRange(input);
+  const employeeIds = await findEmployeeIds(db, input.employee_number);
+  let query = db.from("loss_deductions").select(
+    "employee_id,amount,reason,status,deducted_on,created_at,employee:employees(employee_number,first_name,middle_name,last_name),payroll:payrolls(period_start,period_end)",
+  ).order("created_at", { ascending: false });
+  if (input.from_date) query = query.gte("created_at", `${range.from}T00:00:00.000Z`);
+  if (input.to_date) query = query.lte("created_at", `${range.to}T23:59:59.999Z`);
+  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const rows = records.map((row: any) => ({
+    "Employee Number": row.employee?.employee_number ?? null,
+    Employee: employeeDisplayName(row.employee) || null,
+    Amount: num(row.amount),
+    Reason: row.reason,
+    Status: row.status,
+    "Deducted On": row.deducted_on ?? null,
+    "Payroll Period Start": row.payroll?.period_start ?? null,
+    "Payroll Period End": row.payroll?.period_end ?? null,
+  }));
+  return page("HR Deductions", range, input, rows);
+}
+async function hrIncentives(db: AnyDb, input: HrInput): Promise<DataResult> {
+  const range = hrRange(input);
+  const employeeIds = await findEmployeeIds(db, input.employee_number);
+  let query = db.from("incentive_amounts").select(
+    "employee_id,amount,reason,status,added_on,created_at,payroll:payrolls(period_start,period_end),employee:employees(employee_number,first_name,middle_name,last_name)",
+  ).order("created_at", { ascending: false });
+  if (input.from_date) query = query.gte("created_at", `${range.from}T00:00:00.000Z`);
+  if (input.to_date) query = query.lte("created_at", `${range.to}T23:59:59.999Z`);
+  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const rows = records.map((row: any) => ({
+    "Employee Number": row.employee?.employee_number ?? null,
+    Employee: employeeDisplayName(row.employee) || null,
+    Amount: num(row.amount),
+    Reason: row.reason ?? null,
+    Status: row.status,
+    "Added On": row.added_on ?? null,
+    "Payroll Period Start": row.payroll?.period_start ?? null,
+    "Payroll Period End": row.payroll?.period_end ?? null,
+  }));
+  return page("HR Incentives", range, input, rows);
+}
+async function hrAttendance(db: AnyDb, input: HrInput): Promise<DataResult> {
+  const range = resolveRange(input);
+  const employeeIds = await findEmployeeIds(db, input.employee_number);
+  let query = db.from("attendance").select(
+    "date,status,note,employee_id,employee:employees(employee_number,first_name,middle_name,last_name)",
+  ).gte("date", range.from).lte("date", range.to).order("date", { ascending: false });
+  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const rows = records.map((row: any) => ({
+    Date: row.date,
+    "Employee Number": row.employee?.employee_number ?? null,
+    Employee: employeeDisplayName(row.employee) || null,
+    Status: row.status,
+    Note: row.note ?? null,
+  }));
+  return page("HR Attendance", range, input, rows);
+}
+async function hrCheckinEvents(db: AnyDb, input: HrInput): Promise<DataResult> {
+  const range = resolveRange(input);
+  let query = db.from("checkin_logs").select("employee_number,employee_name,department,kind,logged_at,date")
+    .gte("date", range.from).lte("date", range.to).order("logged_at", { ascending: false });
+  if (input.employee_number) query = query.eq("employee_number", input.employee_number);
+  const records = await fetchAll<any>((from, to) => query.range(from, to));
+  const rows = records.map((row: any) => ({
+    Date: row.date,
+    "Employee Number": row.employee_number,
+    Employee: row.employee_name,
+    Department: row.department,
+    Event: row.kind === "check_in" ? "Check in" : "Check out",
+    "Logged At": row.logged_at,
+  }));
+  return page("HR Check-in/Check-out Events", range, input, rows);
+}
+
 function registerReadTool(
   server: McpServer,
   db: AnyDb,
@@ -1171,6 +1385,55 @@ function registerReadTool(
 }
 
 export function registerLtmsReportTools(server: McpServer, db: AnyDb) {
+  registerReadTool(server, db, {
+    name: "hr_payrolls",
+    title: "HRMS Payrolls",
+    description: "Read-only HRMS payroll records for the current month by default. Includes employee name/number, pay-period earnings and deductions, Paid / Partially paid / Not paid status, payment history, and paid/outstanding amounts. Optional filters: from_date, to_date, employee_number, limit, offset. Legacy records without a status are treated as paid. Does not return system IDs or bank details.",
+    schema: HR_SCHEMA,
+    load: (input) => hrPayrolls(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "hr_loans",
+    title: "HRMS Loans",
+    description: "Read-only employee loan records and installment schedule, including principal, interest, EMI, status, and payments. Defaults to all loan history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs or bank details.",
+    schema: HR_ALL_SCHEMA,
+    load: (input) => hrLoansOrAdvances(db, "loan", input),
+  });
+  registerReadTool(server, db, {
+    name: "hr_advances",
+    title: "HRMS Advances",
+    description: "Read-only employee salary advances and installment schedule, including principal, interest, EMI, status, and payments. Defaults to all advance history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs or bank details.",
+    schema: HR_ALL_SCHEMA,
+    load: (input) => hrLoansOrAdvances(db, "advance", input),
+  });
+  registerReadTool(server, db, {
+    name: "hr_deductions",
+    title: "HRMS Loss Deductions",
+    description: "Read-only loss deduction records with employee, reason, amount, pending/deducted/paid status, and linked payroll period. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    schema: HR_ALL_SCHEMA,
+    load: (input) => hrDeductions(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "hr_incentives",
+    title: "HRMS Incentives",
+    description: "Read-only one-time incentive records with employee, amount, reason, pending/added/paid status, and linked payroll period. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    schema: HR_ALL_SCHEMA,
+    load: (input) => hrIncentives(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "hr_attendance",
+    title: "HRMS Attendance",
+    description: "Read-only daily HRMS attendance records with employee name/number, date, status, and note. Defaults to the current month. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    schema: HR_SCHEMA,
+    load: (input) => hrAttendance(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "hr_checkin_events",
+    title: "HRMS Check-in/Check-out Events",
+    description: "Read-only attendance device check-in/check-out events with employee name/number, department, event type, and timestamp. Defaults to the current month. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    schema: HR_SCHEMA,
+    load: (input) => hrCheckinEvents(db, input),
+  });
   registerReadTool(server, db, {
     name: "ltms_finance_income",
     title: "LTMS Finance — Income",
