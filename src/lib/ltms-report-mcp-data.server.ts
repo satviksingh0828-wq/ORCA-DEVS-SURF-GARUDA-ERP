@@ -51,6 +51,13 @@ const TRANSPORTER_SCHEMA = z.object({
   transporter_id: z.string().uuid().optional().describe("Optional transporter UUID."),
   source_id: z.string().uuid().optional().describe("Optional transporter source UUID."),
 });
+const WMS_STOCK_SCHEMA = z.object({
+  warehouse_id: z.number().int().positive().describe("WMS warehouse ID. The configured read-only WMS token must be scoped to this warehouse."),
+  q: z.string().trim().max(160).optional().describe("Optional search across SKU, item name, UPC, MPN, and bin code."),
+  bin_code: z.string().trim().max(80).optional().describe("Optional exact WMS bin code filter."),
+  limit: z.number().int().min(1).max(500).optional().describe("Rows per page; default 100, maximum 500."),
+  offset: z.number().int().min(0).max(SOURCE_ROW_CAP).optional().describe("Zero-based result offset for pagination."),
+});
 const HR_SCHEMA = z.object({
   ...BASE_INPUT,
   employee_number: z.string().trim().max(80).optional().describe("Optional employee number filter."),
@@ -1726,6 +1733,39 @@ async function accountingBalancesAsOf(db: AnyDb, input: any): Promise<DataResult
   };
 }
 
+async function wmsStockByBin(input: z.infer<typeof WMS_STOCK_SCHEMA>): Promise<DataResult> {
+  const baseUrl = String(process.env.WMS_API_URL ?? "").trim().replace(/\/$/, "");
+  const token = String(process.env.WMS_READONLY_TOKEN ?? "").trim();
+  if (!baseUrl || !token) {
+    throw new Error("WMS_API_URL and WMS_READONLY_TOKEN must be configured for WMS stock MCP access.");
+  }
+  const params = new URLSearchParams({ warehouse_id: String(input.warehouse_id) });
+  if (input.q) params.set("q", input.q);
+  if (input.bin_code) params.set("bin_code", input.bin_code);
+  if (input.limit !== undefined) params.set("limit", String(input.limit));
+  if (input.offset !== undefined) params.set("offset", String(input.offset));
+  const response = await fetch(`${baseUrl}/api/v1/snapshot/stock?${params.toString()}`, {
+    method: "GET",
+    headers: { Accept: "application/json", "X-WMS-Token": token },
+    signal: AbortSignal.timeout(15_000),
+  });
+  const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
+  if (!response.ok) {
+    const error = typeof body?.error === "string" ? body.error : `WMS request failed (${response.status})`;
+    throw new Error(error);
+  }
+  const rows = Array.isArray(body?.rows) ? (body.rows as Record<string, unknown>[]) : [];
+  return {
+    report: "WMS Stock by Bin",
+    date_range: { from: "current", to: "current" },
+    total_count: Number(body?.total ?? rows.length),
+    limit: Number(body?.limit ?? input.limit ?? 100),
+    offset: Number(body?.offset ?? input.offset ?? 0),
+    next_offset: body?.next_offset === null || body?.next_offset === undefined ? null : Number(body.next_offset),
+    rows,
+  };
+}
+
 function registerReadTool(
   server: McpServer,
   db: AnyDb,
@@ -1777,6 +1817,14 @@ function registerReadTool(
 }
 
 export function registerLtmsReportTools(server: McpServer, db: AnyDb) {
+  registerReadTool(server, db, {
+    name: "wms_stock_by_bin",
+    title: "WMS Stock by Bin",
+    description:
+      "Read-only current WMS stock by warehouse and bin. Returns SKU, item name, warehouse, zone, bin code/barcode/type, lot and expiry data, on-hand, allocated, and available quantities. Required: warehouse_id. Optional: q, exact bin_code, limit, offset. The WMS token remains warehouse-scoped and this tool has no create, update, delete, adjustment, or transfer operation.",
+    schema: WMS_STOCK_SCHEMA,
+    load: (input) => wmsStockByBin(input),
+  });
   registerReadTool(server, db, {
     name: "accounting_journal_entries",
     title: "Accounting Journal Entries",

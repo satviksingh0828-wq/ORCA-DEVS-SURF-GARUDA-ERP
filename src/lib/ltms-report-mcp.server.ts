@@ -83,7 +83,7 @@ export async function handleLtmsReportMcpRequest(request: Request): Promise<Resp
     }
 
     const server = new McpServer({
-      name: "ORCA DEVS SURF LTMS Reports",
+      name: "ORCA DEVS SURF Reports and WMS",
       version: "1.0.0",
     });
     registerLtmsReportTools(server, db);
