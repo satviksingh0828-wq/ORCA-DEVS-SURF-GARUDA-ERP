@@ -1745,17 +1745,12 @@ async function wmsRequest(
   const machineToken = String(process.env.WMS_API_KEY ?? process.env.WMS_API_TOKEN ?? process.env.WMS_TOKEN ?? "").trim();
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
-  if (machineToken) {
-    headers.set("X-WMS-Token", machineToken);
-  } else {
-    const { data: session, error } = await db
-      .from("user_sessions")
-      .select("session_token")
-      .eq("user_id", actorId)
-      .maybeSingle();
-    if (error || !session?.session_token) {
-      throw new Error("No active ERP session is available for the MCP key owner to access WMS.");
-    }
+  const { data: session, error } = await db
+    .from("user_sessions")
+    .select("session_token")
+    .eq("user_id", actorId)
+    .maybeSingle();
+  if (session?.session_token) {
     const exchange = await fetch(`${baseUrl}/api/auth/erp-session`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Accept: "application/json" },
@@ -1771,6 +1766,13 @@ async function wmsRequest(
     const cookie = setCookie?.split(";")[0];
     if (!cookie) throw new Error("WMS ERP session exchange did not return an authenticated session cookie.");
     headers.set("Cookie", cookie);
+  } else if (machineToken) {
+    // Keep service-token deployments working when this actor has no ERP
+    // session, but never let a stale machine token override a live ERP
+    // session. The latter was the source of MCP-wide invalid_token failures.
+    headers.set("X-WMS-Token", machineToken);
+  } else {
+    throw new Error("No active ERP session is available for the MCP key owner to access WMS.");
   }
   const response = await fetch(`${baseUrl}${path}`, { ...init, headers, signal: AbortSignal.timeout(15_000) });
   const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
