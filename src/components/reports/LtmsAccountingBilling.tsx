@@ -568,7 +568,7 @@ function NotesTab({
                 <td className="px-3 py-3 font-medium">
                   {r.note_number}
                   <span className="block text-[11px] text-muted-foreground">
-                    {r.journal_entry_id}
+                    {r.journal_entry_id ? "Posted" : "—"}
                   </span>
                 </td>
                 <td className="px-3 py-3">{r.note_date}</td>

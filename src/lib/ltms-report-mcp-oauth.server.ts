@@ -332,7 +332,7 @@ export async function handleOAuthAuthorize(request: Request) {
         "error_description",
         "The user did not authorize read-only report access.",
       );
-      return Response.redirect(redirect.toString(), 302);
+      return Response.redirect(redirect.toString(), 303);
     }
     if (decision !== "allow")
       return authorizationErrorPage("Choose whether to authorize or cancel.");
@@ -373,7 +373,7 @@ export async function handleOAuthAuthorize(request: Request) {
     });
     if (codeError) throw new Error("oauth_database");
     redirect.searchParams.set("code", code);
-    return Response.redirect(redirect.toString(), 302);
+    return Response.redirect(redirect.toString(), 303);
   } catch (error) {
     console.error(
       "[ltms-report-mcp-oauth] Authorization POST failed:",
