@@ -36,6 +36,8 @@ import { Route as SystemRouteImport } from './routes/system'
 import { Route as TmsRouteImport } from './routes/tms'
 import { Route as UsersRouteImport } from './routes/users'
 import { Route as WmsRouteImport } from './routes/wms'
+import { Route as DotwellKnownOauthAuthorizationServerRouteImport } from './routes/[.]well-known.oauth-authorization-server'
+import { Route as DotwellKnownOauthProtectedResourceRouteImport } from './routes/[.]well-known.oauth-protected-resource'
 import { Route as AccountsIndexRouteImport } from './routes/accounts.index'
 import { Route as AccountsAutoRulesRouteImport } from './routes/accounts.auto-rules'
 import { Route as AccountsBankRouteImport } from './routes/accounts.bank'
@@ -255,6 +257,18 @@ const WmsRoute = WmsRouteImport.update({
   path: '/wms',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DotwellKnownOauthAuthorizationServerRoute =
+  DotwellKnownOauthAuthorizationServerRouteImport.update({
+    id: '/.well-known/oauth-authorization-server',
+    path: '/.well-known/oauth-authorization-server',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const DotwellKnownOauthProtectedResourceRoute =
+  DotwellKnownOauthProtectedResourceRouteImport.update({
+    id: '/.well-known/oauth-protected-resource',
+    path: '/.well-known/oauth-protected-resource',
+    getParentRoute: () => rootRouteImport,
+  } as any)
 const AccountsIndexRoute = AccountsIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -710,6 +724,8 @@ export interface FileRoutesByFullPath {
   '/tms': typeof TmsRoute
   '/users': typeof UsersRoute
   '/wms': typeof WmsRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRoute
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
@@ -817,6 +833,8 @@ export interface FileRoutesByTo {
   '/tms': typeof TmsRoute
   '/users': typeof UsersRoute
   '/wms': typeof WmsRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRoute
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
@@ -927,6 +945,8 @@ export interface FileRoutesById {
   '/tms': typeof TmsRoute
   '/users': typeof UsersRoute
   '/wms': typeof WmsRoute
+  '/.well-known/oauth-authorization-server': typeof DotwellKnownOauthAuthorizationServerRoute
+  '/.well-known/oauth-protected-resource': typeof DotwellKnownOauthProtectedResourceRoute
   '/accounts/auto-rules': typeof AccountsAutoRulesRoute
   '/accounts/bank': typeof AccountsBankRoute
   '/accounts/cash': typeof AccountsCashRoute
@@ -1041,6 +1061,8 @@ export interface FileRouteTypes {
     | '/tms'
     | '/users'
     | '/wms'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
@@ -1148,6 +1170,8 @@ export interface FileRouteTypes {
     | '/tms'
     | '/users'
     | '/wms'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
@@ -1257,6 +1281,8 @@ export interface FileRouteTypes {
     | '/tms'
     | '/users'
     | '/wms'
+    | '/.well-known/oauth-authorization-server'
+    | '/.well-known/oauth-protected-resource'
     | '/accounts/auto-rules'
     | '/accounts/bank'
     | '/accounts/cash'
@@ -1370,6 +1396,8 @@ export interface RootRouteChildren {
   TmsRoute: typeof TmsRoute
   UsersRoute: typeof UsersRoute
   WmsRoute: typeof WmsRoute
+  DotwellKnownOauthAuthorizationServerRoute: typeof DotwellKnownOauthAuthorizationServerRoute
+  DotwellKnownOauthProtectedResourceRoute: typeof DotwellKnownOauthProtectedResourceRoute
   ApiFetchEwayBillsRoute: typeof ApiFetchEwayBillsRoute
   ApiNotifyAdminRoute: typeof ApiNotifyAdminRoute
   ApiNotifyExpiryRoute: typeof ApiNotifyExpiryRoute
@@ -1596,6 +1624,20 @@ declare module '@tanstack/react-router' {
       path: '/wms'
       fullPath: '/wms'
       preLoaderRoute: typeof WmsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-authorization-server': {
+      id: '/.well-known/oauth-authorization-server'
+      path: '/.well-known/oauth-authorization-server'
+      fullPath: '/.well-known/oauth-authorization-server'
+      preLoaderRoute: typeof DotwellKnownOauthAuthorizationServerRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/.well-known/oauth-protected-resource': {
+      id: '/.well-known/oauth-protected-resource'
+      path: '/.well-known/oauth-protected-resource'
+      fullPath: '/.well-known/oauth-protected-resource'
+      preLoaderRoute: typeof DotwellKnownOauthProtectedResourceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/accounts/': {
@@ -2403,6 +2445,10 @@ const rootRouteChildren: RootRouteChildren = {
   TmsRoute: TmsRoute,
   UsersRoute: UsersRoute,
   WmsRoute: WmsRoute,
+  DotwellKnownOauthAuthorizationServerRoute:
+    DotwellKnownOauthAuthorizationServerRoute,
+  DotwellKnownOauthProtectedResourceRoute:
+    DotwellKnownOauthProtectedResourceRoute,
   ApiFetchEwayBillsRoute: ApiFetchEwayBillsRoute,
   ApiNotifyAdminRoute: ApiNotifyAdminRoute,
   ApiNotifyExpiryRoute: ApiNotifyExpiryRoute,
