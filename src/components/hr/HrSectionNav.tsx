@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SharedSidebar } from "@/components/SharedSidebar";
+import { isHrNavLinkActive } from "@/lib/hr-route-matching";
 
 export type HrArea = "master" | "attendance" | "payroll";
 
@@ -129,28 +130,10 @@ const areaLabels: Record<HrArea, string> = {
   payroll: "HR Payroll",
 };
 
-function linkIsActive(pathname: string, to: string) {
-  if (pathname === to || pathname === `${to}/`) return true;
-  if (to === "/employees") {
-    return (
-      pathname.startsWith("/employees/") &&
-      !pathname.startsWith("/employees/new") &&
-      !pathname.startsWith("/employees/departments")
-    );
-  }
-  if (to === "/employees/departments") {
-    return (
-      pathname.startsWith("/employees/departments/") &&
-      !pathname.startsWith("/employees/departments/new")
-    );
-  }
-  return false;
-}
-
 export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?: boolean }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const links = sectionLinks[area];
-  const activeLink = links.find(({ to }) => linkIsActive(pathname, to)) ?? links[0];
+  const activeLink = links.find(({ to }) => isHrNavLinkActive(pathname, to)) ?? links[0];
   const ActiveIcon = activeLink.icon;
 
   if (desktop) {
@@ -164,7 +147,7 @@ export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?
       >
         <ul className="space-y-1">
           {links.map(({ label, description, to, icon: Icon }) => {
-            const active = linkIsActive(pathname, to);
+            const active = isHrNavLinkActive(pathname, to);
             return (
               <li key={to}>
                 <Link
@@ -219,7 +202,7 @@ export function HrSectionNav({ area, desktop = false }: { area: HrArea; desktop?
           className="max-h-[min(70dvh,var(--radix-dropdown-menu-content-available-height))] w-[var(--radix-dropdown-menu-trigger-width)] overflow-y-auto overscroll-contain rounded-2xl border-border p-1.5 shadow-xl"
         >
           {links.map(({ label, description, to, icon: Icon }) => {
-            const active = linkIsActive(pathname, to);
+            const active = isHrNavLinkActive(pathname, to);
             return (
               <DropdownMenuItem key={to} asChild>
                 <Link

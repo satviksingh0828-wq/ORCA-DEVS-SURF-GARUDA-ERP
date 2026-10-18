@@ -4,6 +4,7 @@ import { ChevronRight } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { HrSectionNav, type HrArea } from "@/components/hr/HrSectionNav";
 import { LtmsSidebar, type LtmsSidebarGroup } from "@/components/ltms/LtmsSidebar";
+import { isHrNavLinkActive } from "@/lib/hr-route-matching";
 
 const areaLabels: Record<HrArea, string> = {
   master: "HR Master",
@@ -29,6 +30,7 @@ export const HR_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
       { id: "mark-attendance", label: "Mark Attendance", to: "/attendance/mark" },
       { id: "attendance-history", label: "Attendance History", to: "/attendance/history" },
       { id: "holidays", label: "Holidays", to: "/attendance/holidays" },
+      { id: "automarker", label: "Automarker", to: "/attendance/automarker" },
     ],
   },
   {
@@ -46,6 +48,7 @@ export const HR_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
     label: "HR Payroll",
     items: [
       { id: "generate-payroll", label: "Generate Payroll", to: "/payroll/generate" },
+      { id: "pending-payroll", label: "Pending Payroll", to: "/payroll/pending" },
       { id: "payroll-history", label: "Payroll History", to: "/payroll/history" },
       { id: "payroll-ledger", label: "Payroll Ledger", to: "/payroll/ledger" },
       { id: "loans", label: "Loans", to: "/payroll/loans" },
@@ -63,9 +66,8 @@ export function HrShell({ area, children }: { area: HrArea; children: ReactNode 
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const areaGroup = HR_SIDEBAR_GROUPS.find((group) => group.section === `hr-${area}`);
   const activeItemId =
-    areaGroup?.items.find((item) =>
-      item.to ? pathname === item.to || pathname.startsWith(`${item.to}/`) : false,
-    )?.id ?? (area === "master" ? "employees" : "");
+    areaGroup?.items.find((item) => (item.to ? isHrNavLinkActive(pathname, item.to) : false))?.id ??
+    (area === "master" ? "employees" : "");
 
   return (
     <AppShell
