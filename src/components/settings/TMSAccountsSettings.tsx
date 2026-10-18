@@ -49,6 +49,8 @@ type Mapping = {
   output_igst_ledger_id?: string | null;
   output_cgst_ledger_id?: string | null;
   output_sgst_ledger_id?: string | null;
+  tds_receivable_ledger_id?: string | null;
+  tds_payable_ledger_id?: string | null;
 };
 
 const FIELDS = [
@@ -89,6 +91,8 @@ const FIELDS = [
   ["output_igst_ledger_id", "Output IGST", "liability"],
   ["output_cgst_ledger_id", "Output CGST", "liability"],
   ["output_sgst_ledger_id", "Output SGST", "liability"],
+  ["tds_receivable_ledger_id", "TDS Receivable", "asset"],
+  ["tds_payable_ledger_id", "TDS Payable", "liability"],
 ] as const;
 
 type FieldKey = (typeof FIELDS)[number][0];
@@ -206,7 +210,8 @@ export function TMSAccountsSettings() {
             the defaults for general income entries. Loading and Unloading use expenditure ledgers;
             Workmen Payout uses a liability ledger; Workmen Additional Pay uses an expenditure
             ledger; Workmen Deduction uses an income ledger; Input IGST, Input CGST, and Input SGST
-            use asset ledgers; and Output IGST, Output CGST, and Output SGST use liability ledgers.
+            use asset ledgers; Output IGST, Output CGST, and Output SGST use liability ledgers; TDS
+            Receivable uses an asset ledger; and TDS Payable uses a liability ledger.
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             {FIELDS.map(([key, label, type]) => (
