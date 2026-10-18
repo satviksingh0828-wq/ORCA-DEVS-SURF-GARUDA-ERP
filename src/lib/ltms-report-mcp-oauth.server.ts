@@ -87,7 +87,12 @@ function isChatGptRedirect(value: string): boolean {
 }
 
 function parseScopes(value: string | null | undefined) {
-  const requested = [...new Set((value ?? REPORT_SCOPE).split(/\s+/).filter(Boolean))];
+  // MCP clients commonly omit offline_access. Include it by default so a
+  // short-lived access token can be refreshed instead of forcing the user
+  // through the authorization screen again every 15 minutes.
+  const requested = [
+    ...new Set((value ?? `${REPORT_SCOPE} ${OFFLINE_SCOPE}`).split(/\s+/).filter(Boolean)),
+  ];
   if (!requested.includes(REPORT_SCOPE)) return null;
   if (requested.some((scope) => scope !== REPORT_SCOPE && scope !== OFFLINE_SCOPE)) return null;
   return requested.sort().join(" ");
@@ -221,7 +226,7 @@ export async function handleOAuthClientRegistration(request: Request) {
 }
 
 function authorizeForm(requestHandle: string, errorText?: string) {
-  const body = `${errorText ? `<p class="error">${escapeHtml(errorText)}</p>` : ""}<p class="muted"><strong>ORCA LTMS Reports</strong> is requesting read-only access to report data. The connection cannot create, edit, delete, or post ERP records.</p><div class="scope"><strong>Permission</strong><br><span class="muted">Read-only LTMS finance/operations and accounting journal, ledger and balance reports, plus complete HRMS payroll, payment, loan, advance, deduction, incentive, paid-leave and attendance histories. This includes sensitive financial, employee and compensation data; an active administrator must authorize access.</span></div><form method="post" action="/api/oauth/authorize"><input type="hidden" name="request_handle" value="${escapeHtml(requestHandle)}"><label for="mcp_key">Paste the ORCA read-only MCP key</label><input id="mcp_key" name="mcp_key" type="password" autocomplete="off" required minlength="49" maxlength="80" placeholder="orca_mcp_…"><p class="muted">Your key is sent only to this ORCA server over HTTPS. It is not sent to ChatGPT.</p><div><button class="primary" name="decision" value="allow">Authorize read-only access</button><button class="secondary" name="decision" value="deny" formnovalidate>Cancel</button></div></form><p class="footer">You can revoke this key at any time in ERP → Settings → AI Report MCP.</p>`;
+  const body = `${errorText ? `<p class="error">${escapeHtml(errorText)}</p>` : ""}<p class="muted"><strong>ORCA LTMS Reports</strong> is requesting read-only access to report data. The connection cannot create, edit, delete, or post ERP records.</p><div class="scope"><strong>Permission</strong><br><span class="muted">Read-only LTMS finance/operations and accounting journal, ledger and balance reports, plus complete HRMS payroll, payment, loan, advance, deduction, incentive, paid-leave and attendance histories. This includes sensitive financial, employee and compensation data; an active administrator must authorize access.</span></div><form method="post" action="/api/oauth/authorize"><input type="hidden" name="request_handle" value="${escapeHtml(requestHandle)}"><label for="admin_username">Admin login ID</label><input id="admin_username" name="admin_username" type="text" autocomplete="username" required maxlength="120" placeholder="admin"><label for="admin_password">Admin password</label><input id="admin_password" name="admin_password" type="password" autocomplete="current-password" required maxlength="200"><p class="muted">Credentials are submitted only to this ORCA server over HTTPS. They are not stored or sent to ChatGPT.</p><div><button class="primary" name="decision" value="allow">Authorize read-only access</button><button class="secondary" name="decision" value="deny" formnovalidate>Cancel</button></div></form><p class="footer">You can revoke this connection from ERP → Settings → AI Report MCP.</p>`;
   return authPage("Connect ChatGPT to ORCA", body);
 }
 
@@ -355,20 +360,54 @@ export async function handleOAuthAuthorize(request: Request) {
     if (decision !== "allow")
       return authorizationErrorPage("Choose whether to authorize or cancel.");
 
-    const rawKey = String(form.get("mcp_key") ?? "").trim();
-    const key = await findActiveMcpKey(rawKey);
-    if (!key)
-      return authorizeForm(
-        requestHandle,
-        "That key is invalid, revoked, or no longer belongs to an active administrator.",
-      );
+    const username = String(form.get("admin_username") ?? "").trim().toLowerCase();
+    const password = String(form.get("admin_password") ?? "");
+    if (!username || !password) return authorizeForm(requestHandle, "Enter the administrator login ID and password.");
+    const { data: admin, error: adminError } = await db
+      .from("app_users")
+      .select("id,role,password,is_active,is_paused")
+      .eq("username", username)
+      .maybeSingle();
+    if (adminError) throw new Error("oauth_database");
+    if (!admin || admin.role !== "admin" || !admin.is_active || admin.is_paused || admin.password !== password)
+      return authorizeForm(requestHandle, "Invalid administrator login ID or password.");
+
+    // OAuth report credentials are issued directly for the verified admin.
+    // No static API key is required, and the password is never persisted.
+    const { data: key, error: keyError } = await db
+      .from("ltms_report_mcp_keys")
+      .select("id,created_by")
+      .eq("created_by", admin.id)
+      .is("revoked_at", null)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (keyError) throw new Error("oauth_database");
+    let oauthKey = key as { id: string; created_by: string } | null;
+    if (!oauthKey) {
+      // The OAuth flow no longer asks the administrator to create or paste an
+      // API key. Keep the existing FK model by creating an internal anchor;
+      // only its hash is stored and the raw random value is discarded.
+      const internalSecret = randomToken("orca_oauth_anchor_");
+      const { data: createdKey, error: createKeyError } = await db
+        .from("ltms_report_mcp_keys")
+        .insert({
+          display_name: "OAuth admin login",
+          token_hash: hash(internalSecret),
+          created_by: admin.id,
+        })
+        .select("id,created_by")
+        .single();
+      if (createKeyError) throw new Error("oauth_database");
+      oauthKey = createdKey as { id: string; created_by: string };
+    }
 
     const code = randomToken("orca_code_");
     const codeHash = hash(code);
     const { error: codeError } = await db.from("ltms_report_mcp_oauth_codes").insert({
       code_hash: codeHash,
       client_id: pending.client_id,
-      mcp_key_id: key.id,
+      mcp_key_id: oauthKey.id,
       redirect_uri: pending.redirect_uri,
       code_challenge: pending.code_challenge,
       resource: pending.resource,
