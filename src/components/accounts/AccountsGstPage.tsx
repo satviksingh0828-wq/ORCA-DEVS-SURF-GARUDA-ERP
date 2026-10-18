@@ -52,7 +52,7 @@ export function AccountsGstPage() {
   const load = useCallback(async () => {
     let q = db
       .from("account_gst_slabs")
-      .select("*,branch:branches(branch_name)")
+      .select("*,branch:branches!account_gst_slabs_branch_id_fkey(branch_name)")
       .order("slab_name");
     if (user?.role === "basic")
       q = q.in(
