@@ -1573,6 +1573,11 @@ export type Database = {
           id: string;
           income_name: string;
           note: string | null;
+          payment_ledger_id: string | null;
+          receipt_journal_entry_id: string | null;
+          received_at: string | null;
+          received_by: string | null;
+          to_be_received: boolean;
           trip_id: string;
           updated_at: string;
         };
@@ -1582,6 +1587,11 @@ export type Database = {
           id?: string;
           income_name?: string;
           note?: string | null;
+          payment_ledger_id?: string | null;
+          receipt_journal_entry_id?: string | null;
+          received_at?: string | null;
+          received_by?: string | null;
+          to_be_received?: boolean;
           trip_id: string;
           updated_at?: string;
         };
@@ -1591,6 +1601,11 @@ export type Database = {
           id?: string;
           income_name?: string;
           note?: string | null;
+          payment_ledger_id?: string | null;
+          receipt_journal_entry_id?: string | null;
+          received_at?: string | null;
+          received_by?: string | null;
+          to_be_received?: boolean;
           trip_id?: string;
           updated_at?: string;
         };

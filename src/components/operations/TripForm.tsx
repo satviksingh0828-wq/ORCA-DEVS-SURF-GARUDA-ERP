@@ -125,6 +125,7 @@ type LineRow = {
   amount: string;
   note: string;
   paymentLedgerId?: string;
+  toBeReceived?: boolean;
   advance?: string;
 };
 
@@ -445,6 +446,7 @@ export function TripForm({
         amount: string;
         note: string;
         payment_ledger_id?: string | null;
+        to_be_received?: boolean;
       }[]) ?? []
     ).map((r) => ({
       id: r.id,
@@ -452,6 +454,7 @@ export function TripForm({
       amount: r.amount ?? "",
       note: r.note ?? "",
       paymentLedgerId: r.payment_ledger_id ?? "",
+      toBeReceived: Boolean(r.to_be_received),
     }));
     const incDefList = DEFAULT_INCOMES;
     setIncomes(
@@ -644,8 +647,7 @@ export function TripForm({
 
   const lines = manifests.map((m) => {
     const mContract = contracts.find((c) => c.id === m.source_id) as
-      | (AnyRow & ContractLite)
-      | undefined;
+      (AnyRow & ContractLite) | undefined;
     const mEntries = allEntries.filter((e) => e.contract_id === m.source_id);
     return {
       m,
@@ -799,7 +801,8 @@ export function TripForm({
         income_name: row.name,
         amount: row.amount,
         note: row.note,
-        payment_ledger_id: row.paymentLedgerId || null,
+        payment_ledger_id: row.toBeReceived ? null : row.paymentLedgerId || null,
+        to_be_received: Boolean(row.toBeReceived),
       }));
     const expenseRows = (table === "trip_expenses" ? rows : expenses)
       .filter((row) => row.name.trim() !== "")
@@ -814,6 +817,7 @@ export function TripForm({
     const missingPaymentAccount = rowsToValidate.find(
       (row) =>
         num(row.amount) > 0 &&
+        !(table === "trip_other_income" && row.toBeReceived) &&
         !(table === "trip_expenses" && isInformationalTollCharge(row.name)) &&
         !row.paymentLedgerId,
     );
@@ -1545,6 +1549,7 @@ export function TripForm({
               isViewer={isViewer}
               tripClosed={tripClosed}
               paymentLedgers={paymentLedgers}
+              allowToBeReceived
             />
           ) : null}
           {activeTab === "expense" ? (
@@ -3015,6 +3020,7 @@ function LineTab({
   tripClosed = false,
   showHireChargeFields = false,
   paymentLedgers = [],
+  allowToBeReceived = false,
 }: {
   title: string;
   nameLabel: string;
@@ -3026,6 +3032,7 @@ function LineTab({
   tripClosed?: boolean;
   showHireChargeFields?: boolean;
   paymentLedgers?: PaymentLedger[];
+  allowToBeReceived?: boolean;
 }) {
   const update = (i: number, p: Partial<LineRow>) =>
     setRows(rows.map((r, idx) => (idx === i ? { ...r, ...p } : r)));
@@ -3050,6 +3057,8 @@ function LineTab({
             showHireChargeFields && r.name.trim().toLowerCase() === "hire charges";
           const informationalTollCharge =
             nameLabel === "Expense name" && isInformationalTollCharge(r.name);
+          const canDeferReceipt =
+            allowToBeReceived && r.name.trim().toLowerCase() === "approval charge";
           const balance = Math.max(num(r.amount) - num(r.advance ?? ""), 0);
           return (
             <div
@@ -3093,11 +3102,17 @@ function LineTab({
                     </Label>
                     <Select
                       disabled={isViewer || tripClosed}
-                      value={r.paymentLedgerId || "__none__"}
+                      value={
+                        r.toBeReceived ? "__to_be_received__" : r.paymentLedgerId || "__none__"
+                      }
                       onValueChange={(value) =>
                         !isViewer &&
                         !tripClosed &&
-                        update(i, { paymentLedgerId: value === "__none__" ? "" : value })
+                        update(i, {
+                          toBeReceived: value === "__to_be_received__",
+                          paymentLedgerId:
+                            value === "__none__" || value === "__to_be_received__" ? "" : value,
+                        })
                       }
                     >
                       <SelectTrigger className="h-10">
@@ -3105,6 +3120,9 @@ function LineTab({
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="__none__">Select account</SelectItem>
+                        {canDeferReceipt ? (
+                          <SelectItem value="__to_be_received__">To be Received</SelectItem>
+                        ) : null}
                         {paymentLedgers.map((ledger) => (
                           <SelectItem key={ledger.id} value={ledger.id}>
                             {ledger.account_name} ({ledger.ledger_type})

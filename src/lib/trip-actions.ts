@@ -13,6 +13,7 @@ export const serverSaveTripLines = createServerFn({ method: "POST" })
           amount: z.string(),
           note: z.string(),
           payment_ledger_id: z.string().uuid().nullable(),
+          to_be_received: z.boolean().optional(),
         }),
       ),
       expenses: z.array(
@@ -216,6 +217,7 @@ const billingLineSchema = z.object({
   amount: z.string(),
   note: z.string(),
   payment_ledger_id: z.string().uuid().nullable(),
+  to_be_received: z.boolean().optional(),
   advance: z.string().nullable().optional(),
 });
 
@@ -236,7 +238,7 @@ export const serverPostTripBilling = createServerFn({ method: "POST" })
         .nullable(),
     }),
   )
-  .handler(async ({ data }): Promise<string> => {
+  .handler(async ({ data }): Promise<string | null> => {
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const db = supabaseAdmin as any;
@@ -278,7 +280,72 @@ export const serverPostTripBilling = createServerFn({ method: "POST" })
       p_approval: data.approval,
       p_posted_by: session.uid,
     });
-    if (error || !entryId) throw new Error(error?.message ?? "Could not post trip billing");
+    if (error) throw new Error(error.message ?? "Could not post trip billing");
+    return entryId ? String(entryId) : null;
+  });
+
+export const serverReceivePendingTripApproval = createServerFn({ method: "POST" })
+  .validator(
+    z.object({
+      sessionToken: z.string().min(1),
+      incomeId: z.string().uuid(),
+      paymentLedgerId: z.string().uuid(),
+      receivedOn: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    }),
+  )
+  .handler(async ({ data }): Promise<string> => {
+    const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabaseAdmin as any;
+    const session = await verifyAppToken(data.sessionToken);
+    if (!session) throw new Error("Your session has expired. Please sign in again.");
+
+    const { data: user, error: userError } = await db
+      .from("app_users")
+      .select("id,role,is_active")
+      .eq("id", session.uid)
+      .maybeSingle();
+    if (userError || !user?.is_active || user.role !== session.role || user.role === "viewer") {
+      throw new Error("Forbidden: active editor access is required.");
+    }
+
+    const { data: income, error: incomeError } = await db
+      .from("trip_other_income")
+      .select("id,trip_id,to_be_received,received_at")
+      .eq("id", data.incomeId)
+      .maybeSingle();
+    if (incomeError || !income) throw new Error("Pending trip approval income was not found.");
+    if (!income.to_be_received || income.received_at) {
+      throw new Error("This trip approval income is no longer pending.");
+    }
+
+    const { data: trip, error: tripError } = await db
+      .from("trips")
+      .select("branch_id,posted_at")
+      .eq("id", income.trip_id)
+      .maybeSingle();
+    if (tripError || !trip?.posted_at) throw new Error("The trip must be billed before receipt.");
+    if (user.role === "basic") {
+      const { data: accessRows, error: accessError } = await db
+        .from("user_branch_access")
+        .select("branch_id")
+        .eq("user_id", session.uid);
+      if (
+        accessError ||
+        !accessRows?.some((row: { branch_id: string }) => row.branch_id === trip.branch_id)
+      ) {
+        throw new Error("Forbidden: your account does not have access to this trip.");
+      }
+    }
+
+    const { data: entryId, error } = await db.rpc("receive_trip_approval_income_atomic", {
+      p_income_id: data.incomeId,
+      p_payment_ledger_id: data.paymentLedgerId,
+      p_received_on: data.receivedOn,
+      p_received_by: session.uid,
+    });
+    if (error || !entryId)
+      throw new Error(error?.message ?? "Could not post trip approval receipt.");
     return String(entryId);
   });
 

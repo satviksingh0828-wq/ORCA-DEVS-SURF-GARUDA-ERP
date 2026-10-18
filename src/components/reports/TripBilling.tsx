@@ -126,8 +126,8 @@ export function TripBilling() {
           allowedBranchIds.length ? allowedBranchIds : ["00000000-0000-0000-0000-000000000000"],
         );
       }
-      if (postingStatus === "posted") query = query.not("posted_journal_entry_id", "is", null);
-      if (postingStatus === "not_posted") query = query.is("posted_journal_entry_id", null);
+      if (postingStatus === "posted") query = query.not("posted_at", "is", null);
+      if (postingStatus === "not_posted") query = query.is("posted_at", null);
 
       const active = await fetchAll<Record<string, unknown>>(() => query);
       const activeIds = active.map((row) => String(row.id));
@@ -137,7 +137,9 @@ export function TripBilling() {
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               (supabase as any)
                 .from("trip_other_income")
-                .select("id,trip_id,income_name,amount,note,payment_ledger_id")
+                .select(
+                  "id,trip_id,income_name,amount,note,payment_ledger_id,to_be_received,received_at",
+                )
                 .in("trip_id", activeIds),
             )
           : Promise.resolve([]),
@@ -354,12 +356,12 @@ export function TripBilling() {
                   <td className="px-4 py-3 text-center">
                     <span
                       className={
-                        row.posted_journal_entry_id
+                        row.posted_at
                           ? "text-emerald-700 dark:text-emerald-400"
                           : "text-amber-700 dark:text-amber-400"
                       }
                     >
-                      {row.posted_journal_entry_id ? "Posted" : "Not Posted"}
+                      {row.posted_at ? "Posted" : "Not Posted"}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-center">
@@ -368,7 +370,7 @@ export function TripBilling() {
                         <Eye className="mr-1.5 size-3.5" />
                         View
                       </Button>
-                      {!row.posted_journal_entry_id ? (
+                      {!row.posted_at ? (
                         <Button size="sm" onClick={() => setPostingTrip(row)}>
                           <BookOpenCheck className="mr-1.5 size-3.5" />
                           Post Entry
@@ -563,6 +565,7 @@ type PostingLine = {
   amount: string;
   note: string;
   paymentLedgerId: string;
+  toBeReceived: boolean;
   advance: string;
 };
 
@@ -598,6 +601,7 @@ function PostEntryDialog({
         amount: String(row.amount ?? ""),
         note: String(row.note ?? ""),
         paymentLedgerId: String(row.payment_ledger_id ?? ""),
+        toBeReceived: Boolean(row.to_be_received),
         advance: "",
       })),
     );
@@ -608,6 +612,7 @@ function PostEntryDialog({
         amount: String(row.amount ?? ""),
         note: String(row.note ?? ""),
         paymentLedgerId: String(row.payment_ledger_id ?? ""),
+        toBeReceived: false,
         advance:
           String(row.expense_name ?? "")
             .trim()
@@ -656,7 +661,9 @@ function PostEntryDialog({
 
   async function post() {
     if (!trip || !user?.sessionToken) return;
-    const missingIncomeAccount = income.find((row) => num(row.amount) > 0 && !row.paymentLedgerId);
+    const missingIncomeAccount = income.find(
+      (row) => num(row.amount) > 0 && !row.toBeReceived && !row.paymentLedgerId,
+    );
     if (missingIncomeAccount) {
       toast.error(`Select a Cash / Bank Account for ${missingIncomeAccount.name}`);
       return;
@@ -687,6 +694,7 @@ function PostEntryDialog({
             amount: row.amount,
             note: row.note,
             payment_ledger_id: row.paymentLedgerId || null,
+            to_be_received: row.toBeReceived,
             advance: null,
           })),
           expenses: expenses.map((row) => ({
@@ -709,7 +717,11 @@ function PostEntryDialog({
             : null,
         },
       });
-      toast.success(`Trip posted. Journal entry ${entryId} created.`);
+      toast.success(
+        entryId
+          ? `Trip posted. Journal entry ${entryId} created.`
+          : "Trip billing posted. No journal entry was needed until the pending approval is received.",
+      );
       onPosted();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : String(error));
@@ -735,6 +747,7 @@ function PostEntryDialog({
             kind="income"
             ledgers={ledgers}
             onUpdate={updateLine}
+            allowToBeReceived
           />
           <PostingSection
             title="Expenses"
@@ -763,12 +776,14 @@ function PostingSection({
   kind,
   ledgers,
   onUpdate,
+  allowToBeReceived = false,
 }: {
   title: string;
   rows: PostingLine[];
   kind: "income" | "expenses";
   ledgers: PaymentLedger[];
   onUpdate: (kind: "income" | "expenses", index: number, patch: Partial<PostingLine>) => void;
+  allowToBeReceived?: boolean;
 }) {
   const expense = kind === "expenses";
   return (
@@ -795,6 +810,8 @@ function PostingSection({
               .map((row, index) => {
                 const toll = row.name.trim().toLowerCase() === "toll charges";
                 const hire = row.name.trim().toLowerCase() === "hire charges";
+                const canDeferReceipt =
+                  allowToBeReceived && row.name.trim().toLowerCase() === "approval charge";
                 return (
                   <tr key={row.id || `${row.name}-${index}`}>
                     <td className="px-3 py-2 font-medium">{row.name}</td>
@@ -831,10 +848,16 @@ function PostingSection({
                         <span className="text-xs text-muted-foreground">Not used in journal</span>
                       ) : (
                         <Select
-                          value={row.paymentLedgerId || "__none__"}
+                          value={
+                            row.toBeReceived
+                              ? "__to_be_received__"
+                              : row.paymentLedgerId || "__none__"
+                          }
                           onValueChange={(value) =>
                             onUpdate(kind, index, {
-                              paymentLedgerId: value === "__none__" ? "" : value,
+                              toBeReceived: value === "__to_be_received__",
+                              paymentLedgerId:
+                                value === "__none__" || value === "__to_be_received__" ? "" : value,
                             })
                           }
                         >
@@ -845,6 +868,9 @@ function PostingSection({
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="__none__">Select account</SelectItem>
+                            {canDeferReceipt ? (
+                              <SelectItem value="__to_be_received__">To be Received</SelectItem>
+                            ) : null}
                             {ledgers.map((ledger) => (
                               <SelectItem key={ledger.id} value={ledger.id}>
                                 {ledger.account_name} ({ledger.ledger_type})

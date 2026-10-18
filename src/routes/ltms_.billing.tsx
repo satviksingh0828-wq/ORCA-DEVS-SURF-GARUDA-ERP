@@ -19,6 +19,7 @@ import { TransporterBilling } from "@/components/reports/TransporterBilling";
 import { WorkmenBilling } from "@/components/reports/WorkmenBilling";
 import { UnloadingReceived } from "@/components/reports/UnloadingReceived";
 import { ApprovalIncome } from "@/components/reports/ApprovalIncome";
+import { PendingTripApproval } from "@/components/reports/PendingTripApproval";
 import { useSession } from "@/lib/session";
 
 const TABS = [
@@ -27,6 +28,12 @@ const TABS = [
     label: "Trip Billing",
     desc: "Closed-trip income and expenditure",
     icon: ReceiptText,
+  },
+  {
+    id: "pending-trip-approval",
+    label: "Pending Trip Approval",
+    desc: "Receive billed trip approval charges",
+    icon: Banknote,
   },
   {
     id: "source-billing",
@@ -130,6 +137,7 @@ function BillingPage() {
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>
           {safeTab === "trip-billing" && <TripBilling />}
+          {safeTab === "pending-trip-approval" && <PendingTripApproval />}
           {safeTab === "source-billing" && <SourceBilling />}
           {safeTab === "unloading-received" && <UnloadingReceived />}
           {safeTab === "approval-income" && <ApprovalIncome />}

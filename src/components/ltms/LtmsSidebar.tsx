@@ -90,6 +90,7 @@ const NAVIGATION: LtmsSidebarGroup[] = [
     label: "Billing",
     items: [
       { id: "trip-billing", label: "Trip Billing" },
+      { id: "pending-trip-approval", label: "Pending Trip Approval" },
       { id: "source-billing", label: "Source Billing" },
       { id: "unloading-received", label: "Unloading Received" },
       { id: "approval-income", label: "Approval Income" },
