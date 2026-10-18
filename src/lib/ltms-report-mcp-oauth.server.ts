@@ -52,21 +52,104 @@ function escapeHtml(value: string) {
 }
 
 function authPage(title: string, body: string, status = 200) {
-  return new Response(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title><meta name="referrer" content="no-referrer"><style>body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;background:#f5f7fa;color:#14202e;margin:0;padding:32px}.card{max-width:520px;margin:8vh auto;background:white;border:1px solid #dce3ea;border-radius:16px;padding:28px;box-shadow:0 10px 32px #14202e12}h1{font-size:22px;margin:0 0 10px}.muted{color:#526174;line-height:1.55}.scope{background:#f3f7fb;border-radius:10px;padding:14px;margin:18px 0}label{display:block;font-size:14px;font-weight:600;margin:18px 0 7px}input[type=password]{box-sizing:border-box;width:100%;padding:12px;border:1px solid #aab7c5;border-radius:8px;font-size:15px}button{border:0;border-radius:8px;padding:11px 16px;font-size:14px;font-weight:650;cursor:pointer}.primary{background:#123b62;color:white}.secondary{background:#edf1f5;color:#1b2733;margin-left:8px}.error{color:#9c2525;background:#fff0f0;border-radius:8px;padding:10px;margin:12px 0}.footer{font-size:12px;color:#69798b;margin-top:20px}</style></head><body><main class="card"><h1>${escapeHtml(title)}</h1>${body}</main></body></html>`,
-    {
-      status,
-      headers: {
-        ...noStore,
-        "Content-Type": "text/html; charset=utf-8",
-        "Content-Security-Policy":
-          "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
-        "X-Content-Type-Options": "nosniff",
-        "Referrer-Policy": "no-referrer",
-        "X-Frame-Options": "DENY",
-      },
+  const page = `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${escapeHtml(title)} — Garuda Logistics Solutions</title>
+  <meta name="referrer" content="no-referrer">
+  <style>
+    :root { color-scheme: light; font-family: "LTMS Instrument Sans", "Helvetica Neue", Arial, sans-serif; color: #1a1714; background: #fafaf7; }
+    * { box-sizing: border-box; }
+    body { min-width: 320px; min-height: 100vh; margin: 0; }
+    .shell { position: relative; isolation: isolate; display: flex; min-height: 100vh; flex-direction: column; overflow: hidden; background: #fafaf7; }
+    .shell::before, .shell::after { position: absolute; inset: 0; z-index: -1; content: ""; pointer-events: none; }
+    .shell::before { background-image: radial-gradient(circle at 1px 1px, #b8733370 1.4px, transparent 2px), linear-gradient(30deg, transparent 49.4%, #b873331c 50%, transparent 50.6%), linear-gradient(150deg, transparent 49.4%, #b873331c 50%, transparent 50.6%); background-size: 96px 82px; opacity: .65; mask-image: radial-gradient(ellipse at center, #000 8%, transparent 88%); }
+    .shell::after { background: radial-gradient(ellipse at 14% 18%, #b873331f, transparent 38%), radial-gradient(ellipse at 86% 82%, #9a5b2d1f, transparent 42%); }
+    .header { position: relative; z-index: 1; display: flex; height: 56px; flex: 0 0 56px; align-items: center; border-bottom: 2px solid #b87333; background: #2a2520; color: #fdf4e3; }
+    .header-inner { display: flex; width: 100%; height: 54px; align-items: center; gap: 12px; padding: 0 16px; }
+    .header-logo { width: auto; height: 40px; max-width: 108px; object-fit: contain; }
+    .header-title { display: none; min-width: 0; max-width: min(320px, calc(100vw - 220px)); flex: 0 1 auto; margin-left: -2px; font-size: clamp(11px, calc(.55vw + 10px), 16px); font-weight: 600; line-height: 1.12; }
+    .header-tagline { min-width: 0; max-width: 48%; margin-left: auto; text-align: right; color: #ffffffcc; font-size: 9px; line-height: 1.25; }
+    .header-tagline strong { color: #fff; }
+    .main { position: relative; z-index: 1; display: flex; width: 100%; flex: 1; align-items: center; justify-content: center; overflow-y: auto; padding: 32px 16px; }
+    .card { width: 100%; max-width: 460px; border: 1px solid #dedbd6; border-radius: 12px; background: #fff; padding: 28px; box-shadow: 0 10px 32px #2a252012; animation: fade-up .35s ease-out both; }
+    .eyebrow { margin: 0 0 8px; color: #88572f; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
+    h1 { margin: 0; font-size: 25px; font-weight: 650; letter-spacing: -.025em; text-align: center; }
+    .intro { margin: 8px 0 0; color: #625d57; font-size: 14px; line-height: 1.55; text-align: center; }
+    .scope { margin: 20px 0; border: 1px solid #e9e1d8; border-radius: 10px; background: #faf8f5; padding: 14px 15px; }
+    .scope h2 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
+    .scope p { margin: 0; color: #514b45; font-size: 13px; line-height: 1.55; }
+    .scope .notice { margin-top: 8px; color: #70451f; font-size: 12px; }
+    .muted { color: #625d57; line-height: 1.55; }
+    .error { margin: 14px 0; border: 1px solid #f1caca; border-radius: 8px; background: #fff2f2; padding: 10px 12px; color: #9c2525; font-size: 13px; line-height: 1.45; }
+    .field { margin-top: 14px; }
+    label { display: block; margin: 0 0 6px; font-size: 13px; font-weight: 600; }
+    input { width: 100%; height: 44px; border: 1px solid #c9c4bd; border-radius: 8px; background: #fff; padding: 0 12px; color: #1a1714; font: inherit; font-size: 14px; }
+    input:focus { border-color: #a36633; outline: 3px solid #b8733328; }
+    .security { margin: 12px 0 16px; color: #625d57; font-size: 12px; line-height: 1.5; }
+    .actions { display: flex; gap: 10px; }
+    button { min-height: 44px; border: 0; border-radius: 8px; padding: 0 16px; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; transition: background .15s ease, transform .15s ease; }
+    button:focus-visible, a:focus-visible { outline: 3px solid #b8733370; outline-offset: 2px; }
+    button:active { transform: translateY(1px); }
+    .primary { flex: 1; background: #2a2520; color: #fff; }
+    .primary:hover { background: #40372f; }
+    .secondary { border: 1px solid #ddd7d0; background: #f5f3f0; color: #352f2a; }
+    .secondary:hover { background: #ebe6df; }
+    .revoke { margin: 16px 0 0; color: #746d65; font-size: 11px; line-height: 1.45; text-align: center; }
+    .footer { position: relative; z-index: 1; display: flex; min-height: 56px; flex: 0 0 auto; align-items: center; border-top: 2px solid #b87333; background: #2a2520; color: #fff; }
+    .footer-inner { display: flex; width: 100%; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 8px 16px; font-size: 11px; }
+    .powered, .contact { display: flex; align-items: center; gap: 8px; }
+    .powered-label { color: #ffffffb3; letter-spacing: .08em; text-transform: uppercase; }
+    .footer-logo { width: 20px; height: 20px; object-fit: contain; }
+    .footer a { color: #fff; text-decoration: none; text-underline-offset: 3px; }
+    .footer a:hover { text-decoration: underline; }
+    .contact { flex-wrap: wrap; gap: 6px 12px; color: #ffffffcc; }
+    .separator { color: #ffffff66; }
+    @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+    @media (min-width: 640px) { .header-title { display: block; } .header-tagline { max-width: none; font-size: 12px; white-space: nowrap; } .footer-inner { min-height: 52px; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 24px; font-size: 12px; } }
+    @media (max-width: 420px) { .card { padding: 22px 18px; } .actions { flex-direction: column; } .secondary { width: 100%; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header class="header">
+      <div class="header-inner">
+        <img class="header-logo" src="/garuda-logo.png" alt="Garuda Logistics Solutions">
+        <span class="header-title">Garuda Logistics Solutions</span>
+        <span class="header-tagline"><strong>ERP</strong> — Enterprise Resource Planning</span>
+      </div>
+    </header>
+    <main class="main">
+      <section class="card" aria-labelledby="page-title">
+        <p class="eyebrow">Secure connection</p>
+        <h1 id="page-title">${escapeHtml(title)}</h1>
+        ${body}
+      </section>
+    </main>
+    <footer class="footer">
+      <div class="footer-inner">
+        <div class="powered"><span class="powered-label">Powered by</span><img class="footer-logo" src="/orca-logo-light.svg" alt="ORCA logo"><a href="https://orca.devs.surf" target="_blank" rel="noopener noreferrer">ORCA DEVS SURF</a></div>
+        <div class="contact"><a href="mailto:orcadevssurf@outlook.com">orcadevssurf@outlook.com</a><span class="separator" aria-hidden="true">|</span><a href="https://orca.devs.surf" target="_blank" rel="noopener noreferrer">orca.devs.surf</a></div>
+      </div>
+    </footer>
+  </div>
+</body>
+</html>`;
+  return new Response(page, {
+    status,
+    headers: {
+      ...noStore,
+      "Content-Type": "text/html; charset=utf-8",
+      "Content-Security-Policy":
+        "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'",
+      "X-Content-Type-Options": "nosniff",
+      "Referrer-Policy": "no-referrer",
+      "X-Frame-Options": "DENY",
     },
-  );
+  });
 }
 
 function isChatGptRedirect(value: string): boolean {
@@ -226,7 +309,30 @@ export async function handleOAuthClientRegistration(request: Request) {
 }
 
 function authorizeForm(requestHandle: string, errorText?: string) {
-  const body = `${errorText ? `<p class="error">${escapeHtml(errorText)}</p>` : ""}<p class="muted"><strong>ORCA LTMS Reports</strong> is requesting read-only access to report data. The connection cannot create, edit, delete, or post ERP records.</p><div class="scope"><strong>Permission</strong><br><span class="muted">Read-only LTMS finance/operations and accounting journal, ledger and balance reports, plus complete HRMS payroll, payment, loan, advance, deduction, incentive, paid-leave and attendance histories. This includes sensitive financial, employee and compensation data; an active administrator must authorize access.</span></div><form method="post" action="/api/oauth/authorize"><input type="hidden" name="request_handle" value="${escapeHtml(requestHandle)}"><label for="admin_username">Admin login ID</label><input id="admin_username" name="admin_username" type="text" autocomplete="username" required maxlength="120" placeholder="admin"><label for="admin_password">Admin password</label><input id="admin_password" name="admin_password" type="password" autocomplete="current-password" required maxlength="200"><p class="muted">Credentials are submitted only to this ORCA server over HTTPS. They are not stored or sent to ChatGPT.</p><div><button class="primary" name="decision" value="allow">Authorize read-only access</button><button class="secondary" name="decision" value="deny" formnovalidate>Cancel</button></div></form><p class="footer">You can revoke this connection from ERP → Settings → AI Report MCP.</p>`;
+  const body = `${errorText ? `<p class="error">${escapeHtml(errorText)}</p>` : ""}
+    <p class="intro"><strong>ORCA LTMS Reports</strong> can read reports only. It cannot change or post ERP records.</p>
+    <section class="scope" aria-labelledby="scope-title">
+      <h2 id="scope-title">Data access requested</h2>
+      <p>LTMS finance and operations reports, journals, ledgers and balances; plus full HRMS histories for payroll, payments, loans, advances, deductions, incentives, paid leave and attendance.</p>
+      <p class="notice">This includes sensitive financial, employee and compensation data. An active administrator must approve.</p>
+    </section>
+    <form method="post" action="/api/oauth/authorize">
+      <input type="hidden" name="request_handle" value="${escapeHtml(requestHandle)}">
+      <div class="field">
+        <label for="admin_username">Admin login ID</label>
+        <input id="admin_username" name="admin_username" type="text" autocomplete="username" required maxlength="120" placeholder="admin">
+      </div>
+      <div class="field">
+        <label for="admin_password">Admin password</label>
+        <input id="admin_password" name="admin_password" type="password" autocomplete="current-password" required maxlength="200">
+      </div>
+      <p class="security">Your credentials are sent to ORCA over HTTPS only. They are not stored or shared with ChatGPT.</p>
+      <div class="actions">
+        <button class="primary" type="submit" name="decision" value="allow">Authorize access</button>
+        <button class="secondary" type="submit" name="decision" value="deny" formnovalidate>Cancel</button>
+      </div>
+    </form>
+    <p class="revoke">You can revoke access anytime in ERP → Settings → AI Report MCP.</p>`;
   return authPage("Connect ChatGPT to ORCA", body);
 }
 
@@ -360,16 +466,25 @@ export async function handleOAuthAuthorize(request: Request) {
     if (decision !== "allow")
       return authorizationErrorPage("Choose whether to authorize or cancel.");
 
-    const username = String(form.get("admin_username") ?? "").trim().toLowerCase();
+    const username = String(form.get("admin_username") ?? "")
+      .trim()
+      .toLowerCase();
     const password = String(form.get("admin_password") ?? "");
-    if (!username || !password) return authorizeForm(requestHandle, "Enter the administrator login ID and password.");
+    if (!username || !password)
+      return authorizeForm(requestHandle, "Enter the administrator login ID and password.");
     const { data: admin, error: adminError } = await db
       .from("app_users")
       .select("id,role,password,is_active,is_paused")
       .eq("username", username)
       .maybeSingle();
     if (adminError) throw new Error("oauth_database");
-    if (!admin || admin.role !== "admin" || !admin.is_active || admin.is_paused || admin.password !== password)
+    if (
+      !admin ||
+      admin.role !== "admin" ||
+      !admin.is_active ||
+      admin.is_paused ||
+      admin.password !== password
+    )
       return authorizeForm(requestHandle, "Invalid administrator login ID or password.");
 
     // OAuth report credentials are issued directly for the verified admin.
