@@ -16,10 +16,10 @@ export function BrandFooter() {
         </div>
         <div className="flex flex-col items-start gap-x-3 gap-y-1 text-white/80 sm:flex-row sm:items-center sm:justify-end sm:text-right">
           <a
-            href="mailto:orcadevssurf@outlook.com"
+            href="mailto:orca.devs.surf@outlook.com"
             className="underline-offset-4 hover:text-white hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
           >
-            orcadevssurf@outlook.com
+            orca.devs.surf@outlook.com
           </a>
           <span aria-hidden="true" className="hidden text-white/40 sm:inline">
             |

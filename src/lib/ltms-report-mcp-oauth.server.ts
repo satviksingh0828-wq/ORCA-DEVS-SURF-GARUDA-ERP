@@ -125,7 +125,7 @@ function authPage(title: string, body: string, status = 200) {
     <footer class="footer">
       <div class="footer-inner">
         <div class="powered"><span class="powered-label">Powered by</span><img class="footer-logo" src="/orca-logo-light.svg" alt="ORCA logo"><a href="https://orca.devs.surf" target="_blank" rel="noopener noreferrer">ORCA DEVS SURF</a></div>
-        <div class="contact"><a href="mailto:orcadevssurf@outlook.com">orcadevssurf@outlook.com</a><span class="separator" aria-hidden="true">|</span><a href="https://orca.devs.surf" target="_blank" rel="noopener noreferrer">orca.devs.surf</a></div>
+        <div class="contact"><a href="mailto:orca.devs.surf@outlook.com">orca.devs.surf@outlook.com</a><span class="separator" aria-hidden="true">|</span><a href="https://orca.devs.surf" target="_blank" rel="noopener noreferrer">orca.devs.surf</a></div>
       </div>
     </footer>
   </div>
