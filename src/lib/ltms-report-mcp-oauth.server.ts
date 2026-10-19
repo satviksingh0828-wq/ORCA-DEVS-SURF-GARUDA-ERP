@@ -73,31 +73,24 @@ function authPage(title: string, body: string, status = 200) {
     .header-title { display: none; min-width: 0; max-width: min(320px, calc(100vw - 220px)); flex: 0 1 auto; margin-left: -2px; font-size: clamp(11px, calc(.55vw + 10px), 16px); font-weight: 600; line-height: 1.12; }
     .header-tagline { min-width: 0; max-width: 48%; margin-left: auto; text-align: right; color: #ffffffcc; font-size: 9px; line-height: 1.25; }
     .header-tagline strong { color: #fff; }
-    .main { position: relative; z-index: 1; display: flex; width: 100%; flex: 1; align-items: center; justify-content: center; overflow-y: auto; padding: 32px 16px; }
-    .card { width: 100%; max-width: 460px; border: 1px solid #dedbd6; border-radius: 12px; background: #fff; padding: 28px; box-shadow: 0 10px 32px #2a252012; animation: fade-up .35s ease-out both; }
-    .eyebrow { margin: 0 0 8px; color: #88572f; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-align: center; text-transform: uppercase; }
-    h1 { margin: 0; font-size: 25px; font-weight: 650; letter-spacing: -.025em; text-align: center; }
-    .intro { margin: 8px 0 0; color: #625d57; font-size: 14px; line-height: 1.55; text-align: center; }
-    .scope { margin: 20px 0; border: 1px solid #e9e1d8; border-radius: 10px; background: #faf8f5; padding: 14px 15px; }
-    .scope h2 { margin: 0 0 6px; font-size: 13px; font-weight: 700; }
-    .scope p { margin: 0; color: #514b45; font-size: 13px; line-height: 1.55; }
-    .scope .notice { margin-top: 8px; color: #70451f; font-size: 12px; }
+    .main { position: relative; z-index: 1; display: flex; width: 100%; flex: 1; align-items: center; justify-content: center; overflow: hidden; padding: 12px 16px; }
+    .card { width: 100%; max-width: 420px; border: 1px solid #dedbd6; border-radius: 12px; background: #fff; padding: 22px 24px; box-shadow: 0 10px 32px #2a252012; animation: fade-up .35s ease-out both; }
+    h1 { margin: 0; font-size: 23px; font-weight: 650; letter-spacing: -.025em; text-align: center; }
+    .intro { margin: 8px 0 16px; color: #625d57; font-size: 14px; line-height: 1.45; text-align: center; }
     .muted { color: #625d57; line-height: 1.55; }
     .error { margin: 14px 0; border: 1px solid #f1caca; border-radius: 8px; background: #fff2f2; padding: 10px 12px; color: #9c2525; font-size: 13px; line-height: 1.45; }
-    .field { margin-top: 14px; }
-    label { display: block; margin: 0 0 6px; font-size: 13px; font-weight: 600; }
-    input { width: 100%; height: 44px; border: 1px solid #c9c4bd; border-radius: 8px; background: #fff; padding: 0 12px; color: #1a1714; font: inherit; font-size: 14px; }
+    .field { margin-top: 12px; }
+    label { display: block; margin: 0 0 5px; font-size: 13px; font-weight: 600; }
+    input { width: 100%; height: 40px; border: 1px solid #c9c4bd; border-radius: 8px; background: #fff; padding: 0 12px; color: #1a1714; font: inherit; font-size: 14px; }
     input:focus { border-color: #a36633; outline: 3px solid #b8733328; }
-    .security { margin: 12px 0 16px; color: #625d57; font-size: 12px; line-height: 1.5; }
-    .actions { display: flex; gap: 10px; }
-    button { min-height: 44px; border: 0; border-radius: 8px; padding: 0 16px; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; transition: background .15s ease, transform .15s ease; }
+    .actions { display: flex; gap: 10px; margin-top: 18px; }
+    button { min-height: 40px; border: 0; border-radius: 8px; padding: 0 16px; font: inherit; font-size: 14px; font-weight: 650; cursor: pointer; transition: background .15s ease, transform .15s ease; }
     button:focus-visible, a:focus-visible { outline: 3px solid #b8733370; outline-offset: 2px; }
     button:active { transform: translateY(1px); }
     .primary { flex: 1; background: #2a2520; color: #fff; }
     .primary:hover { background: #40372f; }
     .secondary { border: 1px solid #ddd7d0; background: #f5f3f0; color: #352f2a; }
     .secondary:hover { background: #ebe6df; }
-    .revoke { margin: 16px 0 0; color: #746d65; font-size: 11px; line-height: 1.45; text-align: center; }
     .footer { position: relative; z-index: 1; display: flex; min-height: 56px; flex: 0 0 auto; align-items: center; border-top: 2px solid #b87333; background: #2a2520; color: #fff; }
     .footer-inner { display: flex; width: 100%; flex-direction: column; align-items: flex-start; justify-content: center; gap: 4px; padding: 8px 16px; font-size: 11px; }
     .powered, .contact { display: flex; align-items: center; gap: 8px; }
@@ -109,7 +102,8 @@ function authPage(title: string, body: string, status = 200) {
     .separator { color: #ffffff66; }
     @keyframes fade-up { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
     @media (min-width: 640px) { .header-title { display: block; } .header-tagline { max-width: none; font-size: 12px; white-space: nowrap; } .footer-inner { min-height: 52px; flex-direction: row; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 24px; font-size: 12px; } }
-    @media (max-width: 420px) { .card { padding: 22px 18px; } .actions { flex-direction: column; } .secondary { width: 100%; } }
+    @media (max-width: 420px) { .card { padding: 20px 18px; } .header-tagline { font-size: 8px; } .actions { gap: 8px; } button { padding: 0 11px; font-size: 13px; } }
+    @media (max-height: 640px) { .header { height: 48px; flex-basis: 48px; } .header-inner { height: 46px; } .header-logo { height: 34px; } .main { padding: 6px 12px; } .card { padding: 14px 20px; } h1 { font-size: 20px; } .intro { margin: 5px 0 8px; } .field { margin-top: 8px; } .actions { margin-top: 10px; } .footer { min-height: 48px; } .footer-inner { padding-top: 5px; padding-bottom: 5px; } }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
   </style>
 </head>
@@ -124,7 +118,6 @@ function authPage(title: string, body: string, status = 200) {
     </header>
     <main class="main">
       <section class="card" aria-labelledby="page-title">
-        <p class="eyebrow">Secure connection</p>
         <h1 id="page-title">${escapeHtml(title)}</h1>
         ${body}
       </section>
@@ -310,12 +303,7 @@ export async function handleOAuthClientRegistration(request: Request) {
 
 function authorizeForm(requestHandle: string, errorText?: string) {
   const body = `${errorText ? `<p class="error">${escapeHtml(errorText)}</p>` : ""}
-    <p class="intro"><strong>ORCA LTMS Reports</strong> can read reports only. It cannot change or post ERP records.</p>
-    <section class="scope" aria-labelledby="scope-title">
-      <h2 id="scope-title">Data access requested</h2>
-      <p>LTMS finance and operations reports, journals, ledgers and balances; plus full HRMS histories for payroll, payments, loans, advances, deductions, incentives, paid leave and attendance.</p>
-      <p class="notice">This includes sensitive financial, employee and compensation data. An active administrator must approve.</p>
-    </section>
+    <p class="intro">ChatGPT is requesting access to ORCA data.</p>
     <form method="post" action="/api/oauth/authorize">
       <input type="hidden" name="request_handle" value="${escapeHtml(requestHandle)}">
       <div class="field">
@@ -326,13 +314,12 @@ function authorizeForm(requestHandle: string, errorText?: string) {
         <label for="admin_password">Admin password</label>
         <input id="admin_password" name="admin_password" type="password" autocomplete="current-password" required maxlength="200">
       </div>
-      <p class="security">Your credentials are sent to ORCA over HTTPS only. They are not stored or shared with ChatGPT.</p>
       <div class="actions">
-        <button class="primary" type="submit" name="decision" value="allow">Authorize access</button>
+        <button class="primary" type="submit" name="decision" value="allow">Authorize</button>
         <button class="secondary" type="submit" name="decision" value="deny" formnovalidate>Cancel</button>
       </div>
     </form>
-    <p class="revoke">You can revoke access anytime in ERP → Settings → AI Report MCP.</p>`;
+    `;
   return authPage("Connect ChatGPT to ORCA", body);
 }
 
