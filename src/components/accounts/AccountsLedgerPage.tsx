@@ -28,6 +28,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
 import { openBrandedTablePdf } from "@/lib/branded-pdf";
+import { useSession } from "@/lib/session";
+import { isAdminLike } from "@/lib/roles";
 
 // The committed Supabase schema predates the ledger tables. Keep the feature
 // compatible with the live SQL migration while the generated types catch up.
@@ -76,6 +78,7 @@ type TrialBalanceRow = {
   debit: number;
   credit: number;
 };
+type BasicUser = { id: string; full_name: string; username: string };
 
 type FormState = {
   branch_id: string;
@@ -210,6 +213,7 @@ function LedgerTypeBadge({ type }: { type: LedgerType }) {
 }
 
 export function AccountsLedgerPage() {
+  const { user } = useSession();
   const branches = useBranches();
   const branchById = useMemo(
     () => new Map(branches.map((branch) => [branch.id, branch])),
@@ -223,6 +227,12 @@ export function AccountsLedgerPage() {
   });
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [ledgers, setLedgers] = useState<LedgerRow[]>([]);
+  const [assignedLedgerIds, setAssignedLedgerIds] = useState<Set<string>>(() => new Set());
+  const [basicUsers, setBasicUsers] = useState<BasicUser[]>([]);
+  const [ledgerAssignments, setLedgerAssignments] = useState<Record<string, string[]>>({});
+  const [assignmentLedgerId, setAssignmentLedgerId] = useState<string | null>(null);
+  const [assignmentUserIds, setAssignmentUserIds] = useState<string[]>([]);
+  const [assignmentSaving, setAssignmentSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [listBranch, setListBranch] = useState("all");
@@ -247,6 +257,18 @@ export function AccountsLedgerPage() {
   async function loadLedgers() {
     setLoading(true);
     try {
+      let accessibleLedgerIds: Set<string> | null = null;
+      if (user?.role === "basic") {
+        const { data: accessRows, error: accessError } = await db
+          .from("ledger_basic_user_access")
+          .select("ledger_account_id")
+          .eq("basic_user_id", user.id);
+        if (accessError) throw new Error(accessError.message);
+        accessibleLedgerIds = new Set(
+          (accessRows ?? []).map((row: { ledger_account_id: string }) => row.ledger_account_id),
+        );
+        setAssignedLedgerIds(accessibleLedgerIds);
+      }
       const { data, error } = await db
         .from("ledger_accounts")
         .select(
@@ -255,7 +277,12 @@ export function AccountsLedgerPage() {
         .eq("is_active", true)
         .order("account_name", { ascending: true });
       if (error) throw new Error(error.message);
-      setLedgers((data as LedgerRow[]) ?? []);
+      const loadedLedgers = (data as LedgerRow[]) ?? [];
+      setLedgers(
+        accessibleLedgerIds
+          ? loadedLedgers.filter((ledger) => accessibleLedgerIds?.has(ledger.id))
+          : loadedLedgers,
+      );
     } catch (error) {
       toast.error(
         `Could not load ledgers: ${error instanceof Error ? error.message : String(error)}`,
@@ -268,7 +295,38 @@ export function AccountsLedgerPage() {
 
   useEffect(() => {
     void loadLedgers();
-  }, []);
+  }, [user?.id, user?.role]);
+
+  useEffect(() => {
+    if (!isAdminLike(user?.role)) return;
+    void (async () => {
+      const [{ data: users, error: usersError }, { data: accessRows, error: accessError }] =
+        await Promise.all([
+          db
+            .from("app_users")
+            .select("id,full_name,username")
+            .eq("role", "basic")
+            .eq("is_active", true)
+            .order("full_name"),
+          db.from("ledger_basic_user_access").select("ledger_account_id,basic_user_id"),
+        ]);
+      if (usersError || accessError) {
+        toast.error(usersError?.message ?? accessError?.message ?? "Could not load ledger access");
+        return;
+      }
+      setBasicUsers((users ?? []) as BasicUser[]);
+      const next: Record<string, string[]> = {};
+      for (const row of accessRows ?? []) {
+        next[row.ledger_account_id] = [...(next[row.ledger_account_id] ?? []), row.basic_user_id];
+      }
+      setLedgerAssignments(next);
+    })();
+  }, [user?.role]);
+
+  useEffect(() => {
+    if (user?.role === "basic" && !assignedLedgerIds.size && (tab === "list" || tab === "view"))
+      setTab("create");
+  }, [assignedLedgerIds, tab, user?.role]);
 
   useEffect(() => {
     if (!viewBranch && branches[0]) setViewBranch(branches[0].id);
@@ -301,6 +359,43 @@ export function AccountsLedgerPage() {
     [ledgers, ledgerSearch, viewBranch],
   );
   const selectedLedger = ledgers.find((ledger) => ledger.id === viewLedgerId) ?? null;
+  const isAdmin = isAdminLike(user?.role);
+  const showLedgerListView = user?.role !== "basic" || assignedLedgerIds.size > 0;
+
+  function openAssignment(ledgerId: string) {
+    setAssignmentLedgerId(ledgerId);
+    setAssignmentUserIds(ledgerAssignments[ledgerId] ?? []);
+  }
+
+  async function saveAssignment() {
+    if (!assignmentLedgerId) return;
+    setAssignmentSaving(true);
+    try {
+      const { error: deleteError } = await db
+        .from("ledger_basic_user_access")
+        .delete()
+        .eq("ledger_account_id", assignmentLedgerId);
+      if (deleteError) throw new Error(deleteError.message);
+      if (assignmentUserIds.length) {
+        const { error: insertError } = await db.from("ledger_basic_user_access").insert(
+          assignmentUserIds.map((basicUserId) => ({
+            ledger_account_id: assignmentLedgerId,
+            basic_user_id: basicUserId,
+          })),
+        );
+        if (insertError) throw new Error(insertError.message);
+      }
+      setLedgerAssignments((current) => ({ ...current, [assignmentLedgerId]: assignmentUserIds }));
+      toast.success("Basic-user ledger access updated.");
+      setAssignmentLedgerId(null);
+    } catch (error) {
+      toast.error(
+        `Could not update ledger access: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      setAssignmentSaving(false);
+    }
+  }
 
   async function fetchLedgerLines(endDate: string) {
     if (!selectedLedger) return [];
@@ -670,9 +765,20 @@ export function AccountsLedgerPage() {
       }
     >
       <div className="ltms-reference-shell accounts-reference-shell grid grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
-        <AccountsSectionNav desktop mode="ledger" ledgerTab={tab} onLedgerTabChange={setTab} />
+        <AccountsSectionNav
+          desktop
+          mode="ledger"
+          ledgerTab={tab}
+          onLedgerTabChange={setTab}
+          showLedgerListView={showLedgerListView}
+        />
         <div className="ltms-reference-content min-w-0">
-          <AccountsSectionNav mode="ledger" ledgerTab={tab} onLedgerTabChange={setTab} />
+          <AccountsSectionNav
+            mode="ledger"
+            ledgerTab={tab}
+            onLedgerTabChange={setTab}
+            showLedgerListView={showLedgerListView}
+          />
           {tab === "capital" && (
             <form onSubmit={saveCapitalOpening} className="animate-fade-up space-y-5">
               <section className="surface-card p-6">
@@ -964,18 +1070,25 @@ export function AccountsLedgerPage() {
                         <th className="px-4 py-3">Opening balance</th>
                         <th className="px-4 py-3">Opening date</th>
                         <th className="px-4 py-3">Source</th>
+                        {isAdmin && <th className="px-4 py-3">Basic-user access</th>}
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
                       {loading ? (
                         <tr>
-                          <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                          <td
+                            colSpan={isAdmin ? 7 : 6}
+                            className="py-12 text-center text-muted-foreground"
+                          >
                             <Loader2 className="mx-auto size-5 animate-spin" />
                           </td>
                         </tr>
                       ) : filteredList.length === 0 ? (
                         <tr>
-                          <td colSpan={6} className="py-12 text-center text-muted-foreground">
+                          <td
+                            colSpan={isAdmin ? 7 : 6}
+                            className="py-12 text-center text-muted-foreground"
+                          >
                             <WalletCards className="mx-auto mb-2 size-6 opacity-50" />
                             No active ledgers match these filters.
                           </td>
@@ -1007,6 +1120,18 @@ export function AccountsLedgerPage() {
                             <td className="px-4 py-3 text-xs text-muted-foreground">
                               {ledger.is_system ? "Automatic account" : "Manual ledger"}
                             </td>
+                            {isAdmin && (
+                              <td className="px-4 py-3">
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => openAssignment(ledger.id)}
+                                >
+                                  Assign ({(ledgerAssignments[ledger.id] ?? []).length})
+                                </Button>
+                              </td>
+                            )}
                           </tr>
                         ))
                       )}
@@ -1014,6 +1139,50 @@ export function AccountsLedgerPage() {
                   </table>
                 </div>
               </section>
+              {isAdmin && assignmentLedgerId && (
+                <section className="surface-card space-y-4 p-5">
+                  <div>
+                    <h3 className="font-semibold">Assign Basic users to a ledger</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Select one or more Basic users. Clear all selections to hide this ledger from
+                      Basic users.
+                    </p>
+                  </div>
+                  <select
+                    multiple
+                    size={Math.min(Math.max(basicUsers.length, 3), 8)}
+                    value={assignmentUserIds}
+                    onChange={(event) =>
+                      setAssignmentUserIds(
+                        Array.from(event.target.selectedOptions, (option) => option.value),
+                      )
+                    }
+                    className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {basicUsers.map((basicUser) => (
+                      <option key={basicUser.id} value={basicUser.id}>
+                        {basicUser.full_name || basicUser.username} ({basicUser.username})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setAssignmentLedgerId(null)}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => void saveAssignment()}
+                      disabled={assignmentSaving}
+                    >
+                      {assignmentSaving ? "Saving…" : "Save access"}
+                    </Button>
+                  </div>
+                </section>
+              )}
             </div>
           )}
 
@@ -1123,6 +1292,51 @@ export function AccountsLedgerPage() {
                   </Button>
                 </div>
               </section>
+              {isAdmin && selectedLedger && (
+                <section className="surface-card space-y-4 p-5">
+                  <div>
+                    <h3 className="font-semibold">Basic-user access</h3>
+                    <p className="text-sm text-muted-foreground">
+                      Assign this ledger to Basic users. Remove all selections to hide it from them.
+                    </p>
+                  </div>
+                  <select
+                    multiple
+                    size={Math.min(Math.max(basicUsers.length, 3), 8)}
+                    value={
+                      assignmentLedgerId === selectedLedger.id
+                        ? assignmentUserIds
+                        : (ledgerAssignments[selectedLedger.id] ?? [])
+                    }
+                    onFocus={() => {
+                      if (assignmentLedgerId !== selectedLedger.id)
+                        openAssignment(selectedLedger.id);
+                    }}
+                    onChange={(event) => {
+                      openAssignment(selectedLedger.id);
+                      setAssignmentUserIds(
+                        Array.from(event.target.selectedOptions, (option) => option.value),
+                      );
+                    }}
+                    className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    {basicUsers.map((basicUser) => (
+                      <option key={basicUser.id} value={basicUser.id}>
+                        {basicUser.full_name || basicUser.username} ({basicUser.username})
+                      </option>
+                    ))}
+                  </select>
+                  <div className="flex justify-end">
+                    <Button
+                      type="button"
+                      onClick={() => void saveAssignment()}
+                      disabled={assignmentSaving || assignmentLedgerId !== selectedLedger.id}
+                    >
+                      {assignmentSaving ? "Saving…" : "Save access"}
+                    </Button>
+                  </div>
+                </section>
+              )}
               <LedgerStatement
                 ledger={selectedLedger}
                 branch={selectedLedger ? branchById.get(selectedLedger.branch_id) : undefined}
@@ -1329,7 +1543,7 @@ function LedgerStatement({
 
 export function AccountsLedgerRoute() {
   return (
-    <AccountsAccessGuard>
+    <AccountsAccessGuard allowBasicFinance>
       <AccountsLedgerPage />
     </AccountsAccessGuard>
   );

@@ -209,17 +209,28 @@ export function AccountsSidebar({
   mode,
   activeTabId,
   onSelectTab,
+  showLedgerListView = true,
 }: {
   mode: AccountsArea;
   activeTabId: string;
   onSelectTab: (tabId: string) => void;
+  showLedgerListView?: boolean;
 }) {
   const { user } = useSession();
   const visibleGroups =
     user?.role === "basic"
-      ? ACCOUNTS_SIDEBAR_GROUPS.filter((group) => group.section === "finance")
+      ? ACCOUNTS_SIDEBAR_GROUPS.filter(
+          (group) =>
+            group.section === "finance" || (mode === "ledger" && group.section === "ledger"),
+        )
       : ACCOUNTS_SIDEBAR_GROUPS;
   const sidebarGroups = visibleGroups.map((group) => {
+    if (mode === "ledger" && group.section === "ledger" && !showLedgerListView) {
+      return {
+        ...group,
+        items: group.items.filter((item) => !["list", "view"].includes(item.id)),
+      };
+    }
     if (mode === "finance" && group.section === "finance") {
       return {
         ...group,
@@ -260,7 +271,7 @@ export function AccountsMobileNav({ pathname }: { pathname: string }) {
   const { user } = useSession();
   const visibleModules =
     user?.role === "basic"
-      ? accountModules.filter((module) => module.id === "finance")
+      ? accountModules.filter((module) => ["finance", "ledger"].includes(module.id))
       : accountModules;
   return (
     <nav className="ltms-reference-mobile-nav lg:hidden" aria-label="Accounts modules">
@@ -290,6 +301,7 @@ export function AccountsSectionNav({
   onJournalTabChange,
   autoRulesTab = "verify",
   onAutoRulesTabChange,
+  showLedgerListView = true,
 }: {
   desktop?: boolean;
   mode: SectionMode;
@@ -299,6 +311,7 @@ export function AccountsSectionNav({
   onJournalTabChange?: (tab: JournalTab) => void;
   autoRulesTab?: AutoRulesTab;
   onAutoRulesTabChange?: (tab: AutoRulesTab) => void;
+  showLedgerListView?: boolean;
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const selectedMaster = masterLinks.find((item) => activeFor(pathname, item.to));
@@ -323,6 +336,7 @@ export function AccountsSectionNav({
           if (mode === "journal") onJournalTabChange?.(id as JournalTab);
           if (mode === "auto-rules") onAutoRulesTabChange?.(id as AutoRulesTab);
         }}
+        showLedgerListView={showLedgerListView}
       />
     );
   if (mode === "masters")
@@ -368,7 +382,11 @@ export function AccountsSectionNav({
     <>
       <AccountsMobileNav pathname={pathname} />
       <MobileTabDropdown
-        tabs={ledgerMobileTabs}
+        tabs={
+          showLedgerListView
+            ? ledgerMobileTabs
+            : ledgerMobileTabs.filter((tab) => !["list", "view"].includes(tab.id))
+        }
         activeId={ledgerTab}
         label="Ledger tabs"
         onChange={(tab) => onLedgerTabChange?.(tab as LedgerTab)}
