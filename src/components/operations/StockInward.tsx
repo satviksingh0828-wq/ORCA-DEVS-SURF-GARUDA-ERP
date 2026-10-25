@@ -17,7 +17,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
-import { createWmsPurchaseOrder, deleteWmsPurchaseOrder, resolveWmsSku, type WmsItem } from "@/lib/wms-stock-inward";
+import {
+  createWmsPurchaseOrder,
+  deleteWmsPurchaseOrder,
+  resolveWmsSku,
+  type WmsItem,
+} from "@/lib/wms-stock-inward";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -31,7 +36,17 @@ import {
 
 const db = supabase as any;
 type AdditionalIncomeMode = "approval" | "source" | "both" | "none";
-type PackageLine = { packageTypeId: string; sourceId: string; quantity: string; weightKg: string; sku: string; itemId?: number; itemName?: string };
+type PackageLine = {
+  packageTypeId: string;
+  sourceId: string;
+  inwardDocumentId: string;
+  quantity: string;
+  weightKg: string;
+  sku: string;
+  itemId?: number;
+  itemName?: string;
+};
+type InwardDocument = { id: string; document_no: string };
 type FormState = {
   branchId: string;
   sourceIds: string[];
@@ -40,6 +55,7 @@ type FormState = {
   unloadingAmountReceived: string;
   additionalIncomeMode: AdditionalIncomeMode;
   approvalAmount: string;
+  documentNumbers: string[];
 };
 
 type PackageType = {
@@ -69,6 +85,7 @@ const blankForm: FormState = {
   unloadingAmountReceived: "0",
   additionalIncomeMode: "none",
   approvalAmount: "",
+  documentNumbers: [""],
 };
 
 function money(value: unknown) {
@@ -79,6 +96,7 @@ function newPackageLine(sourceIds: string[]): PackageLine {
   return {
     packageTypeId: "",
     sourceId: sourceIds.length === 1 ? sourceIds[0] : "",
+    inwardDocumentId: "",
     quantity: "",
     weightKg: "",
     sku: "",
@@ -167,7 +185,7 @@ export function StockInward() {
     let query = db
       .from("stock_inward_receipts")
       .select(
-        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_received_journal_entry_id,additional_income_mode,approval_amount,approval_income_journal_entry_id,wms_purchase_order_id,wms_purchase_order_number,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,sku,item_name,source:contracts(contract_name))",
+        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_received_journal_entry_id,additional_income_mode,approval_amount,approval_income_journal_entry_id,wms_purchase_order_id,wms_purchase_order_number,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_documents(id,document_no),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,inward_document_id,sku,item_name,source:contracts(contract_name))",
       )
       .gte("receipt_date", filters.from)
       .lte("receipt_date", filters.to)
@@ -274,7 +292,12 @@ export function StockInward() {
     }
     try {
       const item = await resolveWmsSku(line.sku);
-      updateLine(index, item ? { sku: item.sku, itemId: item.item_id, itemName: item.item_name } : { itemId: undefined, itemName: "" });
+      updateLine(
+        index,
+        item
+          ? { sku: item.sku, itemId: item.item_id, itemName: item.item_name }
+          : { itemId: undefined, itemName: "" },
+      );
     } catch (error) {
       updateLine(index, { itemId: undefined, itemName: "" });
       toast.error(error instanceof Error ? error.message : "Could not validate SKU");
@@ -287,18 +310,35 @@ export function StockInward() {
       return toast.error(
         "Branch, at least one source, receipt date and unloading date are required",
       );
+    const documentNumbers = form.documentNumbers.map((value) => value.trim()).filter(Boolean);
+    if (!documentNumbers.length) return toast.error("Add at least one Inward Document No.");
+    if (
+      new Set(documentNumbers.map((value) => value.toLowerCase())).size !== documentNumbers.length
+    )
+      return toast.error("Inward Document No. values must be unique");
     if (!packageLines.length) return toast.error("Add at least one package type");
     const branch = branches.find((item) => item.id === form.branchId);
     const wmsEnabled = Boolean(branch?.wms_enabled);
     if (wmsEnabled && !branch?.wms_warehouse_id)
-      return toast.error("Select a WMS warehouse for this WMS-enabled branch before creating Stock Inward");
+      return toast.error(
+        "Select a WMS warehouse for this WMS-enabled branch before creating Stock Inward",
+      );
     if (
       packageLines.some(
         (line) =>
-          !line.packageTypeId || !line.sourceId || !Number(line.quantity) || !Number(line.weightKg) || (wmsEnabled && !line.sku.trim()),
+          !line.packageTypeId ||
+          !line.sourceId ||
+          !line.inwardDocumentId ||
+          !Number(line.quantity) ||
+          !Number(line.weightKg) ||
+          (wmsEnabled && !line.sku.trim()),
       )
     )
-      return toast.error(wmsEnabled ? "Each package line needs a type, source, quantity, weight and valid SKU" : "Each package line needs a type, source, quantity and weight");
+      return toast.error(
+        wmsEnabled
+          ? "Each package line needs a type, source, Inward Document No., quantity, weight and valid SKU"
+          : "Each package line needs a type, source, Inward Document No., quantity and weight",
+      );
     const validatedItems: Array<WmsItem | null> = [];
     if (wmsEnabled) {
       for (const line of packageLines) {
@@ -347,48 +387,85 @@ export function StockInward() {
     const sourceResult = await db
       .from("stock_inward_sources")
       .insert(form.sourceIds.map((sourceId) => ({ receipt_id: receipt.id, source_id: sourceId })));
+    const { data: savedDocuments, error: documentResult } = await db
+      .from("stock_inward_documents")
+      .insert(documentNumbers.map((document_no) => ({ receipt_id: receipt.id, document_no })))
+      .select("id,document_no");
+    const documentIdByNumber = new Map(
+      (savedDocuments ?? []).map((document: InwardDocument) => [
+        document.document_no.toLowerCase(),
+        document.id,
+      ]),
+    );
     const packageResult = await db.from("stock_inward_packages").insert(
       packageLines.map((line, index) => ({
         receipt_id: receipt.id,
         package_rate_type_id: line.packageTypeId,
         source_id: line.sourceId,
+        inward_document_id:
+          documentIdByNumber.get(line.inwardDocumentId.toLowerCase()) ?? line.inwardDocumentId,
         quantity: Number(line.quantity),
         weight_kg: Number(line.weightKg),
-        ...(wmsEnabled && validatedItems[index] ? {
-          wms_item_id: validatedItems[index]!.item_id,
-          sku: validatedItems[index]!.sku,
-          item_name: validatedItems[index]!.item_name,
-        } : {}),
+        ...(wmsEnabled && validatedItems[index]
+          ? {
+              wms_item_id: validatedItems[index]!.item_id,
+              sku: validatedItems[index]!.sku,
+              item_name: validatedItems[index]!.item_name,
+            }
+          : {}),
       })),
     );
-    if (sourceResult.error || packageResult.error) {
+    if (sourceResult.error || documentResult?.error || packageResult.error) {
       await db.from("stock_inward_receipts").delete().eq("id", receipt.id);
       setSaving(false);
       return toast.error(
         sourceResult.error?.message ??
+          documentResult?.error?.message ??
           packageResult.error?.message ??
           "Could not save package lines",
       );
     }
     if (wmsEnabled) {
       const quantities = new Map<number, number>();
-      validatedItems.forEach((item, index) => { if (item) quantities.set(item.item_id, (quantities.get(item.item_id) ?? 0) + Number(packageLines[index].quantity)); });
+      validatedItems.forEach((item, index) => {
+        if (item)
+          quantities.set(
+            item.item_id,
+            (quantities.get(item.item_id) ?? 0) + Number(packageLines[index].quantity),
+          );
+      });
       let purchaseOrder: { id: number; number: string } | null = null;
       try {
-      purchaseOrder = await createWmsPurchaseOrder({
-        poNumber: String(receiptNumber),
-        warehouseId: branch.wms_warehouse_id,
-        stockInwardId: receipt.id,
-        lines: [...quantities.entries()].map(([item_id, quantity_ordered]) => ({ item_id, quantity_ordered })),
-      });
-      if (!Number.isFinite(purchaseOrder.id)) throw new Error("WMS did not return a Purchase Order ID");
-      const { error: linkError } = await db.from("stock_inward_receipts").update({ wms_purchase_order_id: purchaseOrder.id, wms_purchase_order_number: purchaseOrder.number }).eq("id", receipt.id);
+        purchaseOrder = await createWmsPurchaseOrder({
+          poNumber: String(receiptNumber),
+          warehouseId: branch.wms_warehouse_id,
+          stockInwardId: receipt.id,
+          lines: [...quantities.entries()].map(([item_id, quantity_ordered]) => ({
+            item_id,
+            quantity_ordered,
+          })),
+        });
+        if (!Number.isFinite(purchaseOrder.id))
+          throw new Error("WMS did not return a Purchase Order ID");
+        const { error: linkError } = await db
+          .from("stock_inward_receipts")
+          .update({
+            wms_purchase_order_id: purchaseOrder.id,
+            wms_purchase_order_number: purchaseOrder.number,
+          })
+          .eq("id", receipt.id);
         if (linkError) throw linkError;
       } catch (error) {
-        try { if (purchaseOrder?.id) await deleteWmsPurchaseOrder(purchaseOrder.id); } catch { /* best effort compensation */ }
+        try {
+          if (purchaseOrder?.id) await deleteWmsPurchaseOrder(purchaseOrder.id);
+        } catch {
+          /* best effort compensation */
+        }
         await db.from("stock_inward_receipts").delete().eq("id", receipt.id);
         setSaving(false);
-        return toast.error(error instanceof Error ? error.message : "Could not create the WMS Purchase Order");
+        return toast.error(
+          error instanceof Error ? error.message : "Could not create the WMS Purchase Order",
+        );
       }
     }
     setSaving(false);
@@ -424,7 +501,11 @@ export function StockInward() {
       try {
         await deleteWmsPurchaseOrder(Number(row.wms_purchase_order_id));
       } catch (error) {
-        return toast.error(error instanceof Error ? error.message : "The linked WMS Purchase Order could not be deleted");
+        return toast.error(
+          error instanceof Error
+            ? error.message
+            : "The linked WMS Purchase Order could not be deleted",
+        );
       }
     }
     const { error } = await db.from("stock_inward_receipts").delete().eq("id", row.id);
@@ -567,6 +648,62 @@ export function StockInward() {
                 />
               </div>
             </div>
+            <div className="space-y-3 rounded-lg border border-sky-200 bg-sky-50/40 p-3">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <Label>Inward Document No. *</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Add one or more document numbers, then select the applicable number on every
+                    package line.
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setForm((current) => ({
+                      ...current,
+                      documentNumbers: [...current.documentNumbers, ""],
+                    }))
+                  }
+                >
+                  <Plus className="size-4" /> Add document
+                </Button>
+              </div>
+              <div className="grid gap-2 md:grid-cols-2">
+                {form.documentNumbers.map((documentNo, index) => (
+                  <div key={index} className="flex items-center gap-2">
+                    <Input
+                      value={documentNo}
+                      onChange={(event) => {
+                        const next = [...form.documentNumbers];
+                        next[index] = event.target.value;
+                        setForm((current) => ({ ...current, documentNumbers: next }));
+                      }}
+                      placeholder={`Document no. ${index + 1}`}
+                    />
+                    {form.documentNumbers.length > 1 && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        onClick={() =>
+                          setForm((current) => ({
+                            ...current,
+                            documentNumbers: current.documentNumbers.filter(
+                              (_, itemIndex) => itemIndex !== index,
+                            ),
+                          }))
+                        }
+                      >
+                        <X className="size-4" />
+                      </Button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
             <div>
               <Label>
                 Sources *{" "}
@@ -619,8 +756,28 @@ export function StockInward() {
               {packageLines.map((line, index) => (
                 <div
                   key={index}
-                  className="grid gap-2 border-t border-border pt-3 md:grid-cols-[1.2fr_1.2fr_1fr_1.2fr_1fr_1fr_auto]"
+                  className="grid gap-2 border-t border-border pt-3 md:grid-cols-[1.25fr_1.15fr_1.15fr_1fr_1fr_1.1fr_auto]"
                 >
+                  <div>
+                    <Label>Inward Document No. *</Label>
+                    <Select
+                      value={line.inwardDocumentId}
+                      onValueChange={(value) => updateLine(index, { inwardDocumentId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select document no." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {form.documentNumbers
+                          .filter((value) => value.trim())
+                          .map((documentNo) => (
+                            <SelectItem key={documentNo} value={documentNo.trim()}>
+                              {documentNo.trim()}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div>
                     <Label>Package type *</Label>
                     <Select
@@ -666,14 +823,25 @@ export function StockInward() {
                         <Label>SKU *</Label>
                         <Input
                           value={line.sku}
-                          onChange={(e) => updateLine(index, { sku: e.target.value, itemId: undefined, itemName: "" })}
+                          onChange={(e) =>
+                            updateLine(index, {
+                              sku: e.target.value,
+                              itemId: undefined,
+                              itemName: "",
+                            })
+                          }
                           onBlur={() => void validateSku(index)}
                           placeholder="WMS SKU"
                         />
                       </div>
                       <div>
                         <Label>Item name</Label>
-                        <Input value={line.itemName ?? ""} readOnly placeholder="Auto from SKU" className="bg-muted/40" />
+                        <Input
+                          value={line.itemName ?? ""}
+                          readOnly
+                          placeholder="Auto from SKU"
+                          className="bg-muted/40"
+                        />
                       </div>
                     </>
                   )}
@@ -777,12 +945,74 @@ export function StockInward() {
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-3 py-2 text-sm">
-              <span className="text-muted-foreground">
-                Calculated unloading amount from package slabs
-              </span>
-              <strong>₹ {money(calculatedUnloadingAmount)}</strong>
-            </div>
+            <section className="mt-2 space-y-3 border-t-2 border-sky-700 pt-3">
+              <div>
+                <h4 className="text-sm font-semibold text-sky-800">Live Calculation Preview</h4>
+                <p className="text-xs text-muted-foreground">
+                  Preview only — updates from package slabs and the selected additional-income
+                  option.
+                </p>
+              </div>
+              {(() => {
+                const received = Number(form.unloadingAmountReceived || 0);
+                const sourceIncome = ["source", "both"].includes(form.additionalIncomeMode)
+                  ? calculatedUnloadingAmount
+                  : 0;
+                const approvalIncome = ["approval", "both"].includes(form.additionalIncomeMode)
+                  ? Number(form.approvalAmount || 0)
+                  : 0;
+                const total = received + sourceIncome + approvalIncome;
+                const previewRows = [
+                  { label: "Unloading Amount Received", value: received, tone: "text-rose-700" },
+                  { label: "Source Income", value: sourceIncome, tone: "text-emerald-700" },
+                  { label: "Approval Income", value: approvalIncome, tone: "text-violet-700" },
+                  {
+                    label: `Live unloading amount (${
+                      packageLines
+                        .map(
+                          (line) =>
+                            packageTypes.find((type) => type.id === line.packageTypeId)?.basis,
+                        )
+                        .filter(Boolean)
+                        .join(" + ") || "basis"
+                    })`,
+                    value: calculatedUnloadingAmount,
+                    tone: "text-amber-700",
+                  },
+                  { label: "TOTAL", value: total, tone: "text-sky-800" },
+                ];
+                return (
+                  <div className="overflow-x-auto rounded-lg border border-border bg-card">
+                    <table className="w-full min-w-[760px] text-sm">
+                      <thead className="bg-muted/50 text-left text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        <tr>
+                          {previewRows.map((row) => (
+                            <th
+                              key={row.label}
+                              className="border-r border-border px-3 py-2 last:border-r-0"
+                            >
+                              {row.label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr className="divide-x divide-border">
+                          {previewRows.map((row) => (
+                            <td
+                              key={row.label}
+                              className={`px-3 py-3 text-base font-semibold tabular-nums ${row.tone}`}
+                            >
+                              ₹ {money(row.value)}
+                            </td>
+                          ))}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              })()}
+            </section>
             <div className="flex justify-end gap-2">
               <Button type="button" variant="outline" onClick={() => setShowCreate(false)}>
                 Cancel
@@ -951,7 +1181,11 @@ export function StockInward() {
                       <tr key={item.id} className="border-t border-border">
                         <td className="px-3 py-2 font-medium">{item.package_type}</td>
                         <td className="px-3 py-2">{item.source?.contract_name ?? "—"}</td>
-                        <td className="px-3 py-2"><span className="font-medium">{item.sku ?? "—"}</span><br /><span className="text-muted-foreground">{item.item_name ?? "—"}</span></td>
+                        <td className="px-3 py-2">
+                          <span className="font-medium">{item.sku ?? "—"}</span>
+                          <br />
+                          <span className="text-muted-foreground">{item.item_name ?? "—"}</span>
+                        </td>
                         <td className="px-3 py-2">{item.quantity}</td>
                         <td className="px-3 py-2">{item.weight_kg}</td>
                         <td className="px-3 py-2">{type?.basis ?? "—"}</td>
