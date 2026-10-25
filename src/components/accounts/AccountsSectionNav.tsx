@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { LtmsSidebar, type LtmsSidebarGroup } from "@/components/ltms/LtmsSidebar";
+import { useSession } from "@/lib/session";
 
 export type LedgerTab = "capital" | "create" | "list" | "view";
 type SectionMode = "masters" | "ledger" | "journal" | "auto-rules" | "depreciation";
@@ -116,7 +117,12 @@ export const accountModules = [
   { id: "final", label: "Final Accounts", to: "/accounts/final", prefix: "/accounts/final" },
   { id: "finance", label: "Finance", to: "/accounts/finance", prefix: "/accounts/finance" },
   { id: "gst", label: "GST", to: "/accounts/gst", prefix: "/accounts/gst" },
-  { id: "depreciation", label: "Depreciation", to: "/accounts/depreciation", prefix: "/accounts/depreciation" },
+  {
+    id: "depreciation",
+    label: "Depreciation",
+    to: "/accounts/depreciation",
+    prefix: "/accounts/depreciation",
+  },
 ] as const;
 
 const ACCOUNTS_PENDING_TAB_KEY = "accounts.pending-sidebar-tab";
@@ -145,14 +151,7 @@ export function consumeAccountsTabNavigation(section: string): string | null {
 }
 
 export type AccountsArea =
-  | "masters"
-  | "journal"
-  | "ledger"
-  | "final"
-  | "auto-rules"
-  | "finance"
-  | "gst"
-  | "depreciation";
+  "masters" | "journal" | "ledger" | "final" | "auto-rules" | "finance" | "gst" | "depreciation";
 
 export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
   {
@@ -215,7 +214,12 @@ export function AccountsSidebar({
   activeTabId: string;
   onSelectTab: (tabId: string) => void;
 }) {
-  const sidebarGroups = ACCOUNTS_SIDEBAR_GROUPS.map((group) => {
+  const { user } = useSession();
+  const visibleGroups =
+    user?.role === "basic"
+      ? ACCOUNTS_SIDEBAR_GROUPS.filter((group) => group.section === "finance")
+      : ACCOUNTS_SIDEBAR_GROUPS;
+  const sidebarGroups = visibleGroups.map((group) => {
     if (mode === "finance" && group.section === "finance") {
       return {
         ...group,
@@ -253,9 +257,14 @@ export function AccountsSidebar({
 }
 
 export function AccountsMobileNav({ pathname }: { pathname: string }) {
+  const { user } = useSession();
+  const visibleModules =
+    user?.role === "basic"
+      ? accountModules.filter((module) => module.id === "finance")
+      : accountModules;
   return (
     <nav className="ltms-reference-mobile-nav lg:hidden" aria-label="Accounts modules">
-      {accountModules.map(({ label, to, prefix }) => {
+      {visibleModules.map(({ label, to, prefix }) => {
         const active = pathname.startsWith(prefix);
         return (
           <Link
