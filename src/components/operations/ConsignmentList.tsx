@@ -5,7 +5,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
 import { printConsignorCopyPdf } from "@/lib/consignment-pdf";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
-import { createWmsSalesOrder, deleteWmsSalesOrder, resolveWmsSku, type WmsItem } from "@/lib/wms-stock-inward";
+import {
+  createWmsSalesOrder,
+  deleteWmsSalesOrder,
+  resolveWmsSku,
+  type WmsItem,
+} from "@/lib/wms-stock-inward";
 import { useSession } from "@/lib/session";
 import { manifestCharges, num, type ContractLite, type EntryLite } from "@/lib/trip-calc";
 import { Button } from "@/components/ui/button";
@@ -797,9 +802,7 @@ export function ConsignmentList({
           if (!active) return;
           if (result.error) toast.error(result.error.message);
           else
-            setGstSlabs(
-              (result.data ?? []).map((row) => ({ id: row.id, label: row.slab_name })),
-            );
+            setGstSlabs((result.data ?? []).map((row) => ({ id: row.id, label: row.slab_name })));
         },
       );
     return () => {
@@ -889,7 +892,9 @@ export function ConsignmentList({
           .order("eway_bill_date", { ascending: false }),
         db
           .from("consignment_package_information")
-          .select("id,package_rate_type_id,package_type,basis,quantity,weight_kg,sku,item_name,shipment:shipments(eway_bill_number)")
+          .select(
+            "id,package_rate_type_id,package_type,basis,quantity,weight_kg,sku,item_name,shipment:shipments(eway_bill_number)",
+          )
           .eq("consignment_id", row.id)
           .order("created_at"),
       ]);
@@ -1112,7 +1117,8 @@ export function ConsignmentList({
 
   async function saveEdit() {
     if (!editingId || !editingRow) return;
-    const needsOwnVehicle = type === "third_party" ? movement === "drop" : ownTransportMode === "own_vehicle";
+    const needsOwnVehicle =
+      type === "third_party" ? movement === "drop" : ownTransportMode === "own_vehicle";
     const needsRental = type === "own" && ownTransportMode === "rental";
     const needsTransporter = type === "third_party";
     if (needsRental && !rentalId) return toast.error("Select a Rental provider");
@@ -1135,8 +1141,8 @@ export function ConsignmentList({
         rental_id: needsRental ? rentalId || null : null,
         transporter_id: needsTransporter ? transporterId || null : null,
         transporter_source_id: needsTransporter ? selectedTransporterSourceId || null : null,
-        from_pin_code: needsTransporter ? fromPin : editingRow.from_pin_code ?? "",
-        to_pin_code: needsTransporter ? toPin : editingRow.to_pin_code ?? "",
+        from_pin_code: needsTransporter ? fromPin : (editingRow.from_pin_code ?? ""),
+        to_pin_code: needsTransporter ? toPin : (editingRow.to_pin_code ?? ""),
       })
       .eq("id", editingId);
     setLoading(false);
@@ -1176,7 +1182,9 @@ export function ConsignmentList({
         Boolean(entry.sku.trim()),
     );
     if (wmsEnabled && !branch?.wms_warehouse_id)
-      return toast.error("Select a WMS warehouse for this WMS-enabled branch before creating the Consignment");
+      return toast.error(
+        "Select a WMS warehouse for this WMS-enabled branch before creating the Consignment",
+      );
     if (wmsEnabled && !entriesToSave.length)
       return toast.error("Add at least one package entry for this WMS-enabled branch");
     if (
@@ -1198,11 +1206,10 @@ export function ConsignmentList({
     // quantities with a generic validation_error). Validate this before the
     // ERP consignment is inserted so a failed WMS request cannot leave the
     // operator with a misleading rollback/error flow.
-    if (
-      wmsEnabled &&
-      entriesToSave.some((entry) => !Number.isSafeInteger(Number(entry.quantity)))
-    )
-      return toast.error("WMS quantities must be whole numbers (for example, 1 or 2), not decimals");
+    if (wmsEnabled && entriesToSave.some((entry) => !Number.isSafeInteger(Number(entry.quantity))))
+      return toast.error(
+        "WMS quantities must be whole numbers (for example, 1 or 2), not decimals",
+      );
     const validatedItems: Array<WmsItem | null> = [];
     if (wmsEnabled) {
       for (const entry of entriesToSave) {
@@ -1313,11 +1320,13 @@ export function ConsignmentList({
         basis: entry.basis,
         quantity: Number(entry.quantity),
         weight_kg: Number(entry.weight_kg),
-        ...(wmsEnabled && validatedItems[index] ? {
-          wms_item_id: validatedItems[index]!.item_id,
-          sku: validatedItems[index]!.sku,
-          item_name: validatedItems[index]!.item_name,
-        } : {}),
+        ...(wmsEnabled && validatedItems[index]
+          ? {
+              wms_item_id: validatedItems[index]!.item_id,
+              sku: validatedItems[index]!.sku,
+              item_name: validatedItems[index]!.item_name,
+            }
+          : {}),
       }));
       if (packageRows.some((entry) => !entry.shipment_id))
         return toast.error("Select a valid E-Way Bill for every package entry");
@@ -1347,11 +1356,16 @@ export function ConsignmentList({
           })),
         });
         if (!Number.isFinite(salesOrder.id)) throw new Error("WMS did not return a Sales Order ID");
-        const { error: salesOrderLinkError } = await db.from("consignments").update({ wms_sales_order_id: salesOrder.id, wms_sales_order_number: salesOrder.number }).eq("id", data.id);
+        const { error: salesOrderLinkError } = await db
+          .from("consignments")
+          .update({ wms_sales_order_id: salesOrder.id, wms_sales_order_number: salesOrder.number })
+          .eq("id", data.id);
         if (salesOrderLinkError) throw salesOrderLinkError;
       } catch (error) {
         await db.from("consignments").delete().eq("id", data.id);
-        return toast.error(error instanceof Error ? error.message : "Could not create the WMS Sales Order");
+        return toast.error(
+          error instanceof Error ? error.message : "Could not create the WMS Sales Order",
+        );
       }
     }
     toast.success(
@@ -1414,7 +1428,11 @@ export function ConsignmentList({
       try {
         await deleteWmsSalesOrder(Number(row.wms_sales_order_id));
       } catch (error) {
-        return toast.error(error instanceof Error ? error.message : "The linked WMS Sales Order could not be deleted");
+        return toast.error(
+          error instanceof Error
+            ? error.message
+            : "The linked WMS Sales Order could not be deleted",
+        );
       }
     }
     const { error } = await db.from("consignments").delete().eq("id", row.id);
@@ -1461,7 +1479,8 @@ export function ConsignmentList({
         row={view}
         shipments={viewShipments}
         packages={viewPackages}
-        showLiveCalculationPreview={user?.role !== "basic"}
+        showLiveCalculationPreview
+        hideSourceIncome={user?.role === "basic"}
         onBack={() => {
           setScreen("list");
           onSidebarVisibilityChange?.(true);
@@ -1530,7 +1549,8 @@ export function ConsignmentList({
             packageTypes,
             packageEntries,
             setPackageEntries,
-            showLiveCalculationPreview: user?.role !== "basic",
+            showLiveCalculationPreview: true,
+            hideSourceIncome: user?.role === "basic",
             transportMode,
             fromPin,
             toPin,
@@ -2017,7 +2037,9 @@ function ConsignmentForm(props: any) {
       <div className="consignment-entry w-full min-w-0 space-y-0 bg-background p-3 text-foreground">
         <div className="-mx-3 -mt-3 mb-3 flex min-h-12 flex-wrap items-center justify-between gap-3 border-b border-border bg-muted/70 px-4 py-2">
           <div className="flex min-w-0 items-baseline gap-2">
-            <h2 className="shrink-0 text-base font-semibold">Consignment / {isEdit ? "Edit" : "Create"}</h2>
+            <h2 className="shrink-0 text-base font-semibold">
+              Consignment / {isEdit ? "Edit" : "Create"}
+            </h2>
             <p className="truncate text-xs text-muted-foreground">
               {isEdit
                 ? "Edit GST Slab, Type and Transport Assignment; all other fields are locked"
@@ -2480,19 +2502,49 @@ function ConsignmentForm(props: any) {
                           <Input
                             disabled={isEdit}
                             value={entry.sku}
-                            onChange={(event) => setPackageEntries(packageEntries.map((current, i) => i === index ? { ...current, sku: event.target.value, item_id: undefined, item_name: "" } : current))}
+                            onChange={(event) =>
+                              setPackageEntries(
+                                packageEntries.map((current, i) =>
+                                  i === index
+                                    ? {
+                                        ...current,
+                                        sku: event.target.value,
+                                        item_id: undefined,
+                                        item_name: "",
+                                      }
+                                    : current,
+                                ),
+                              )
+                            }
                             onBlur={async () => {
                               if (!entry.sku.trim()) return;
                               const item = await resolveWmsSku(entry.sku);
-                              if (!item) return toast.error(`SKU does not exist in WMS: ${entry.sku}`);
-                              setPackageEntries(packageEntries.map((current, i) => i === index ? { ...current, sku: item.sku, item_id: item.item_id, item_name: item.item_name } : current));
+                              if (!item)
+                                return toast.error(`SKU does not exist in WMS: ${entry.sku}`);
+                              setPackageEntries(
+                                packageEntries.map((current, i) =>
+                                  i === index
+                                    ? {
+                                        ...current,
+                                        sku: item.sku,
+                                        item_id: item.item_id,
+                                        item_name: item.item_name,
+                                      }
+                                    : current,
+                                ),
+                              );
                             }}
                             placeholder="WMS SKU"
                           />
                         </div>
                         <div className="space-y-1.5">
                           <Label>Item Name</Label>
-                          <Input value={entry.item_name ?? ""} readOnly placeholder="Auto from SKU" className="bg-muted/40" />
+                          <Input
+                            value={entry.item_name ?? ""}
+                            readOnly
+                            placeholder="Auto from SKU"
+                            className="bg-muted/40"
+                          />
                         </div>
                       </>
                     )}
@@ -2595,6 +2647,7 @@ function ConsignmentForm(props: any) {
             additionalFreight={0}
             loadingDeduction={0}
             additionalLoading={0}
+            hideSourceIncome={props.hideSourceIncome}
           />
         )}
         <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
@@ -2680,6 +2733,7 @@ function ConsignmentCalculationPreview({
   additionalFreight,
   loadingDeduction,
   additionalLoading,
+  hideSourceIncome,
 }: {
   branchId: string;
   sourceId: string;
@@ -2698,6 +2752,7 @@ function ConsignmentCalculationPreview({
   additionalFreight: number;
   loadingDeduction: number;
   additionalLoading: number;
+  hideSourceIncome: boolean;
 }) {
   const [sourceEntries, setSourceEntries] = useState<PreviewEntry[]>([]);
   const [transporterEntries, setTransporterEntries] = useState<PreviewEntry[]>([]);
@@ -2865,7 +2920,9 @@ function ConsignmentCalculationPreview({
       value: adjustedPackageLoading,
       tone: "text-amber-700",
     },
-    { label: "Source Income", value: sourceIncome, tone: "text-emerald-700" },
+    ...(hideSourceIncome
+      ? []
+      : [{ label: "Source Income", value: sourceIncome, tone: "text-emerald-700" }]),
     { label: "NET", value: net, tone: net >= 0 ? "text-emerald-700" : "text-rose-700" },
   ];
   return (
@@ -3543,19 +3600,55 @@ function EwayTable({
                     <tr className="border-t border-border bg-muted/20">
                       <td colSpan={8} className="p-3">
                         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                          <ReadonlyField dense label="E-Way Bill Date" value={draft.eway_bill_date} />
+                          <ReadonlyField
+                            dense
+                            label="E-Way Bill Date"
+                            value={draft.eway_bill_date}
+                          />
                           <ReadonlyField dense label="Valid From" value={draft.valid_from} />
                           <ReadonlyField dense label="Document Type" value={draft.document_type} />
                           <ReadonlyField dense label="Document Date" value={draft.document_date} />
                           <ReadonlyField dense label="Total Value" value={draft.total_value} />
-                          <ReadonlyField dense label="Taxable Value" value={draft.total_taxable_value} />
-                          <ReadonlyField dense label="Consignor GSTIN" value={draft.supplier_gstin} />
-                          <ReadonlyField dense label="Consignee GSTIN" value={draft.recipient_gstin} />
-                          <ReadonlyField dense label="Consignor" value={draft.supplier_trade_name} />
-                          <ReadonlyField dense label="Consignee" value={draft.recipient_trade_name} />
-                          <ReadonlyField dense label="From Pincode" value={draft.supplier_pin_code} />
-                          <ReadonlyField dense label="To Pincode" value={draft.recipient_pin_code} />
-                          <ReadonlyField dense label="From Address" value={draft.supplier_address} />
+                          <ReadonlyField
+                            dense
+                            label="Taxable Value"
+                            value={draft.total_taxable_value}
+                          />
+                          <ReadonlyField
+                            dense
+                            label="Consignor GSTIN"
+                            value={draft.supplier_gstin}
+                          />
+                          <ReadonlyField
+                            dense
+                            label="Consignee GSTIN"
+                            value={draft.recipient_gstin}
+                          />
+                          <ReadonlyField
+                            dense
+                            label="Consignor"
+                            value={draft.supplier_trade_name}
+                          />
+                          <ReadonlyField
+                            dense
+                            label="Consignee"
+                            value={draft.recipient_trade_name}
+                          />
+                          <ReadonlyField
+                            dense
+                            label="From Pincode"
+                            value={draft.supplier_pin_code}
+                          />
+                          <ReadonlyField
+                            dense
+                            label="To Pincode"
+                            value={draft.recipient_pin_code}
+                          />
+                          <ReadonlyField
+                            dense
+                            label="From Address"
+                            value={draft.supplier_address}
+                          />
                           <ReadonlyField dense label="To Address" value={draft.recipient_address} />
                         </div>
                       </td>
@@ -3833,12 +3926,14 @@ function ConsignmentView({
   shipments,
   packages,
   showLiveCalculationPreview,
+  hideSourceIncome,
   onBack,
 }: {
   row: Record<string, any>;
   shipments: Record<string, any>[];
   packages: PackageEntry[];
   showLiveCalculationPreview: boolean;
+  hideSourceIncome: boolean;
   onBack: () => void;
 }) {
   const drafts = shipments.map((shipment) => ({
@@ -4083,6 +4178,7 @@ function ConsignmentView({
           packageTypes={[]}
           packageEntries={packages}
           type={String(row.consignment_type ?? "own")}
+          hideSourceIncome={hideSourceIncome}
           movement={String(row.movement_mode ?? "pickup")}
           transporterId={String(row.transporter_id ?? "")}
           selectedTransporterSourceId={String(row.transporter_source_id ?? "")}
