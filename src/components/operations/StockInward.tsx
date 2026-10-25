@@ -961,10 +961,13 @@ export function StockInward() {
                 const approvalIncome = ["approval", "both"].includes(form.additionalIncomeMode)
                   ? Number(form.approvalAmount || 0)
                   : 0;
-                const total = received + sourceIncome + approvalIncome;
+                const canViewSourceIncome = user?.role !== "basic";
+                const total = received + approvalIncome + (canViewSourceIncome ? sourceIncome : 0);
                 const previewRows = [
                   { label: "Unloading Amount Received", value: received, tone: "text-rose-700" },
-                  { label: "Source Income", value: sourceIncome, tone: "text-emerald-700" },
+                  ...(canViewSourceIncome
+                    ? [{ label: "Source Income", value: sourceIncome, tone: "text-emerald-700" }]
+                    : []),
                   { label: "Approval Income", value: approvalIncome, tone: "text-violet-700" },
                   {
                     label: `Live unloading amount (${
