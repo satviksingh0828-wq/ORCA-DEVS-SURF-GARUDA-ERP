@@ -47,6 +47,7 @@ type PackageLine = {
   itemName?: string;
 };
 type InwardDocument = { id: string; document_no: string };
+type InwardDocumentInput = { documentNo: string; vehicleNumber: string };
 type FormState = {
   branchId: string;
   sourceIds: string[];
@@ -55,7 +56,7 @@ type FormState = {
   unloadingAmountReceived: string;
   additionalIncomeMode: AdditionalIncomeMode;
   approvalAmount: string;
-  documentNumbers: string[];
+  documents: InwardDocumentInput[];
 };
 
 type PackageType = {
@@ -85,7 +86,7 @@ const blankForm: FormState = {
   unloadingAmountReceived: "0",
   additionalIncomeMode: "none",
   approvalAmount: "",
-  documentNumbers: [""],
+  documents: [{ documentNo: "", vehicleNumber: "" }],
 };
 
 function money(value: unknown) {
@@ -185,7 +186,7 @@ export function StockInward() {
     let query = db
       .from("stock_inward_receipts")
       .select(
-        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_received_journal_entry_id,additional_income_mode,approval_amount,approval_income_journal_entry_id,wms_purchase_order_id,wms_purchase_order_number,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_documents(id,document_no),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,inward_document_id,sku,item_name,source:contracts(contract_name))",
+        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_received_journal_entry_id,additional_income_mode,approval_amount,approval_income_journal_entry_id,wms_purchase_order_id,wms_purchase_order_number,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_documents(id,document_no,vehicle_number),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,inward_document_id,sku,item_name,source:contracts(contract_name))",
       )
       .gte("receipt_date", filters.from)
       .lte("receipt_date", filters.to)
@@ -310,11 +311,13 @@ export function StockInward() {
       return toast.error(
         "Branch, at least one source, receipt date and unloading date are required",
       );
-    const documentNumbers = form.documentNumbers.map((value) => value.trim()).filter(Boolean);
-    if (!documentNumbers.length) return toast.error("Add at least one Inward Document No.");
-    if (
-      new Set(documentNumbers.map((value) => value.toLowerCase())).size !== documentNumbers.length
-    )
+    const documents = form.documents.map((item) => ({
+      document_no: item.documentNo.trim(),
+      vehicle_number: item.vehicleNumber.trim(),
+    }));
+    if (!documents.length || documents.some((item) => !item.document_no || !item.vehicle_number))
+      return toast.error("Each Inward Document No. needs a vehicle number");
+    if (new Set(documents.map((item) => item.document_no.toLowerCase())).size !== documents.length)
       return toast.error("Inward Document No. values must be unique");
     if (!packageLines.length) return toast.error("Add at least one package type");
     const branch = branches.find((item) => item.id === form.branchId);
@@ -389,7 +392,7 @@ export function StockInward() {
       .insert(form.sourceIds.map((sourceId) => ({ receipt_id: receipt.id, source_id: sourceId })));
     const { data: savedDocuments, error: documentResult } = await db
       .from("stock_inward_documents")
-      .insert(documentNumbers.map((document_no) => ({ receipt_id: receipt.id, document_no })))
+      .insert(documents.map((document) => ({ receipt_id: receipt.id, ...document })))
       .select("id,document_no");
     const documentIdByNumber = new Map(
       (savedDocuments ?? []).map((document: InwardDocument) => [
@@ -664,7 +667,7 @@ export function StockInward() {
                   onClick={() =>
                     setForm((current) => ({
                       ...current,
-                      documentNumbers: [...current.documentNumbers, ""],
+                      documents: [...current.documents, { documentNo: "", vehicleNumber: "" }],
                     }))
                   }
                 >
@@ -672,18 +675,29 @@ export function StockInward() {
                 </Button>
               </div>
               <div className="grid gap-2 md:grid-cols-2">
-                {form.documentNumbers.map((documentNo, index) => (
+                {form.documents.map((document, index) => (
                   <div key={index} className="flex items-center gap-2">
                     <Input
-                      value={documentNo}
+                      required
+                      value={document.documentNo}
                       onChange={(event) => {
-                        const next = [...form.documentNumbers];
-                        next[index] = event.target.value;
-                        setForm((current) => ({ ...current, documentNumbers: next }));
+                        const next = [...form.documents];
+                        next[index] = { ...next[index], documentNo: event.target.value };
+                        setForm((current) => ({ ...current, documents: next }));
                       }}
                       placeholder={`Document no. ${index + 1}`}
                     />
-                    {form.documentNumbers.length > 1 && (
+                    <Input
+                      required
+                      value={document.vehicleNumber}
+                      onChange={(event) => {
+                        const next = [...form.documents];
+                        next[index] = { ...next[index], vehicleNumber: event.target.value };
+                        setForm((current) => ({ ...current, documents: next }));
+                      }}
+                      placeholder={`Vehicle no. ${index + 1}`}
+                    />
+                    {form.documents.length > 1 && (
                       <Button
                         type="button"
                         variant="ghost"
@@ -691,7 +705,7 @@ export function StockInward() {
                         onClick={() =>
                           setForm((current) => ({
                             ...current,
-                            documentNumbers: current.documentNumbers.filter(
+                            documents: current.documents.filter(
                               (_, itemIndex) => itemIndex !== index,
                             ),
                           }))
@@ -768,11 +782,12 @@ export function StockInward() {
                         <SelectValue placeholder="Select document no." />
                       </SelectTrigger>
                       <SelectContent>
-                        {form.documentNumbers
-                          .filter((value) => value.trim())
-                          .map((documentNo) => (
-                            <SelectItem key={documentNo} value={documentNo.trim()}>
-                              {documentNo.trim()}
+                        {form.documents
+                          .filter((item) => item.documentNo.trim())
+                          .map((item) => (
+                            <SelectItem key={item.documentNo} value={item.documentNo.trim()}>
+                              {item.documentNo.trim()} ·{" "}
+                              {item.vehicleNumber.trim() || "Vehicle not set"}
                             </SelectItem>
                           ))}
                       </SelectContent>
@@ -1145,6 +1160,20 @@ export function StockInward() {
                   ? new Date(selectedRow.created_at).toLocaleString("en-GB")
                   : "—"}
               </p>
+            </div>
+          </div>
+          <div>
+            <h4 className="mb-2 font-semibold">Inward documents and vehicles</h4>
+            <div className="flex flex-wrap gap-2">
+              {(selectedRow.stock_inward_documents ?? []).map((document: any) => (
+                <span
+                  key={document.id}
+                  className="rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm"
+                >
+                  {document.document_no} ·{" "}
+                  {document.vehicle_number || "Vehicle number not recorded"}
+                </span>
+              ))}
             </div>
           </div>
           <div>
