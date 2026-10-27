@@ -41,7 +41,6 @@ import { ManifestList } from "@/components/operations/ManifestList";
 import { LtmsManifestList } from "@/components/operations/LtmsManifestList";
 import { OutwardPOD } from "@/components/operations/OutwardPOD";
 import { StockInward } from "@/components/operations/StockInward";
-import { StockOutward } from "@/components/operations/StockOutward";
 import { MonthlyMISReport } from "@/components/reports/MonthlyMISReport";
 import { MonthlyMIS } from "@/components/operations/MonthlyMIS";
 
@@ -131,14 +130,6 @@ const ALL_TABS = [
     id: "stock-inward",
     label: "Stock Inward",
     desc: "Receive stock and unloading details",
-    icon: PackagePlus,
-    adminOnly: false,
-    dividerBefore: false,
-  },
-  {
-    id: "stock-outward",
-    label: "Stock Outward",
-    desc: "Dispatch stock and loading details",
     icon: PackagePlus,
     adminOnly: false,
     dividerBefore: false,
@@ -395,11 +386,6 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
           {safeTab === "stock-inward" && (
             <TabErrorBoundary label="Stock Inward">
               <StockInward />
-            </TabErrorBoundary>
-          )}
-          {safeTab === "stock-outward" && (
-            <TabErrorBoundary label="Stock Outward">
-              <StockOutward />
             </TabErrorBoundary>
           )}
           {safeTab === "admin-mis" && (

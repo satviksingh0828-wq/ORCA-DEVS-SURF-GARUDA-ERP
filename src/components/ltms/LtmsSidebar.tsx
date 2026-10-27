@@ -79,7 +79,6 @@ const NAVIGATION: LtmsSidebarGroup[] = [
       { id: "ltms-manifest", label: "Manifest" },
       { id: "outward-pod", label: "Outward POD" },
       { id: "stock-inward", label: "Stock Inward" },
-      { id: "stock-outward", label: "Stock Outward" },
       { id: "admin-mis", label: "ADMIN MIS" },
       { id: "monthly-mis", label: "Monthly MIS" },
       { id: "fastag-report", label: "Fastag Balance" },
