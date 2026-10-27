@@ -171,6 +171,7 @@ export function ContractForm({
   );
   const [incomeLines, setIncomeLines] = useState<FixedIncomeLine[]>([]);
   const [unloadingSlabs, setUnloadingSlabs] = useState<UnloadingChargeSlab[]>([]);
+  const [commonLoadingSlabs, setCommonLoadingSlabs] = useState<UnloadingChargeSlab[]>([]);
 
   useEffect(() => {
     async function loadAssetLedgers() {
@@ -203,6 +204,8 @@ export function ContractForm({
     async function loadLines() {
       if (!initial.id) {
         setIncomeLines([]);
+        setUnloadingSlabs([]);
+        setCommonLoadingSlabs([]);
         return;
       }
       const db = supabase as any;
@@ -225,6 +228,19 @@ export function ContractForm({
         .order("package_type");
       setUnloadingSlabs(
         (unloadingData ?? []).map((slab: UnloadingChargeSlab) => ({
+          ...slab,
+          from_value: String(slab.from_value ?? ""),
+          to_value: slab.to_value == null ? "" : String(slab.to_value),
+          amount: String(slab.amount ?? ""),
+        })),
+      );
+      const { data: commonLoadingData } = await db
+        .from("source_common_loading_slabs")
+        .select("id,basis,from_value,to_value,charge_mode,amount")
+        .eq("contract_id", initial.id)
+        .order("from_value");
+      setCommonLoadingSlabs(
+        (commonLoadingData ?? []).map((slab: UnloadingChargeSlab) => ({
           ...slab,
           from_value: String(slab.from_value ?? ""),
           to_value: slab.to_value == null ? "" : String(slab.to_value),
@@ -281,6 +297,27 @@ export function ContractForm({
     if (linePayload.length > 0) {
       const { error: insertLinesError } = await db.from("fixed_income_lines").insert(linePayload);
       if (insertLinesError) return toast.error(insertLinesError.message);
+    }
+    const { error: deleteCommonLoadingError } = await db
+      .from("source_common_loading_slabs")
+      .delete()
+      .eq("contract_id", contractId);
+    if (deleteCommonLoadingError) return toast.error(deleteCommonLoadingError.message);
+    const commonLoadingPayload = commonLoadingSlabs
+      .filter((slab) => slab.from_value !== "" && Number(slab.amount) >= 0)
+      .map((slab) => ({
+        contract_id: contractId,
+        basis: slab.basis,
+        from_value: Number(slab.from_value),
+        to_value: slab.to_value === "" ? null : Number(slab.to_value),
+        charge_mode: slab.charge_mode,
+        amount: Number(slab.amount),
+      }));
+    if (commonLoadingPayload.length > 0) {
+      const { error: insertCommonLoadingError } = await db
+        .from("source_common_loading_slabs")
+        .insert(commonLoadingPayload);
+      if (insertCommonLoadingError) return toast.error(insertCommonLoadingError.message);
     }
     const { error: deleteUnloadingError } = await db
       .from("source_unloading_charge_slabs")
@@ -716,6 +753,128 @@ export function ContractForm({
                 ...rows,
                 {
                   basis: unloadingSlabs[0]?.basis ?? "quantity",
+                  from_value: "",
+                  to_value: "",
+                  charge_mode: "fixed",
+                  amount: "",
+                },
+              ])
+            }
+          >
+            Add slab
+          </Button>
+        </div>
+      </Section>
+
+      <Section title="Common Loading Slab">
+        <p className="mb-4 text-xs text-muted-foreground">
+          Select one measurement basis, then add slabs. These source-level rates are used to
+          calculate Stock Outward source income.
+        </p>
+        <div className="mb-4 flex max-w-sm items-center gap-2">
+          <Label className="whitespace-nowrap">Basis</Label>
+          <select
+            className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={commonLoadingSlabs[0]?.basis ?? "quantity"}
+            disabled={isInactive}
+            onChange={(e) =>
+              setCommonLoadingSlabs((rows) =>
+                rows.map((row) => ({ ...row, basis: e.target.value as "quantity" | "weight" })),
+              )
+            }
+          >
+            <option value="quantity">Quantity-wise</option>
+            <option value="weight">Weight-wise (KG)</option>
+          </select>
+        </div>
+        <div className="space-y-3">
+          {commonLoadingSlabs.map((slab, index) => (
+            <div
+              key={slab.id ?? index}
+              className="grid grid-cols-1 gap-2 rounded-lg border border-border p-3 sm:grid-cols-[1fr_1fr_1fr_1fr_auto]"
+            >
+              <Input
+                className="h-10"
+                type="number"
+                min="0"
+                step="0.001"
+                placeholder="From"
+                value={slab.from_value}
+                disabled={isInactive}
+                onChange={(e) =>
+                  setCommonLoadingSlabs((rows) =>
+                    rows.map((row, i) =>
+                      i === index ? { ...row, from_value: e.target.value } : row,
+                    ),
+                  )
+                }
+              />
+              <Input
+                className="h-10"
+                type="number"
+                min="0"
+                step="0.001"
+                placeholder="To (optional)"
+                value={slab.to_value}
+                disabled={isInactive}
+                onChange={(e) =>
+                  setCommonLoadingSlabs((rows) =>
+                    rows.map((row, i) =>
+                      i === index ? { ...row, to_value: e.target.value } : row,
+                    ),
+                  )
+                }
+              />
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={slab.charge_mode}
+                disabled={isInactive}
+                onChange={(e) =>
+                  setCommonLoadingSlabs((rows) =>
+                    rows.map((row, i) =>
+                      i === index
+                        ? { ...row, charge_mode: e.target.value as "fixed" | "rate" }
+                        : row,
+                    ),
+                  )
+                }
+              >
+                <option value="fixed">Fixed ₹</option>
+                <option value="rate">Rate × units</option>
+              </select>
+              <Input
+                className="h-10"
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Value"
+                value={slab.amount}
+                disabled={isInactive}
+                onChange={(e) =>
+                  setCommonLoadingSlabs((rows) =>
+                    rows.map((row, i) => (i === index ? { ...row, amount: e.target.value } : row)),
+                  )
+                }
+              />
+              <Button
+                type="button"
+                variant="outline"
+                disabled={isInactive}
+                onClick={() => setCommonLoadingSlabs((rows) => rows.filter((_, i) => i !== index))}
+              >
+                Remove
+              </Button>
+            </div>
+          ))}
+          <Button
+            type="button"
+            variant="outline"
+            disabled={isInactive}
+            onClick={() =>
+              setCommonLoadingSlabs((rows) => [
+                ...rows,
+                {
+                  basis: commonLoadingSlabs[0]?.basis ?? "quantity",
                   from_value: "",
                   to_value: "",
                   charge_mode: "fixed",
