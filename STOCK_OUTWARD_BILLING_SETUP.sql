@@ -5,6 +5,7 @@ BEGIN;
 
 ALTER TABLE public.stock_outward_receipts
   ADD COLUMN IF NOT EXISTS approval_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (approval_amount >= 0),
+  ADD COLUMN IF NOT EXISTS additional_income_mode TEXT NOT NULL DEFAULT 'none',
   ADD COLUMN IF NOT EXISTS approval_income_payment_ledger_id UUID REFERENCES public.ledger_accounts(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS approval_income_journal_entry_id UUID REFERENCES public.journal_entries(id) ON DELETE RESTRICT,
   ADD COLUMN IF NOT EXISTS approval_income_by UUID REFERENCES public.app_users(id) ON DELETE SET NULL,
@@ -15,6 +16,20 @@ ALTER TABLE public.stock_outward_receipts
   ADD COLUMN IF NOT EXISTS loading_received_at TIMESTAMPTZ,
   ADD COLUMN IF NOT EXISTS workmen_loading_bill_id UUID REFERENCES public.workmen_bills(id) ON DELETE SET NULL,
   ADD COLUMN IF NOT EXISTS workmen_loading_billed_at TIMESTAMPTZ;
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stock_outward_receipts_additional_income_mode_check' AND conrelid = 'public.stock_outward_receipts'::regclass) THEN
+    ALTER TABLE public.stock_outward_receipts ADD CONSTRAINT stock_outward_receipts_additional_income_mode_check CHECK (additional_income_mode IN ('approval', 'source', 'both', 'none'));
+  END IF;
+END $$;
+UPDATE public.stock_outward_receipts
+SET additional_income_mode = CASE
+  WHEN coalesce(source_income_amount, 0) > 0 AND coalesce(approval_amount, 0) > 0 THEN 'both'
+  WHEN coalesce(source_income_amount, 0) > 0 THEN 'source'
+  WHEN coalesce(approval_amount, 0) > 0 THEN 'approval'
+  ELSE 'none'
+END
+WHERE additional_income_mode = 'none';
 CREATE UNIQUE INDEX IF NOT EXISTS stock_outward_loading_received_journal_uidx ON public.stock_outward_receipts(loading_received_journal_entry_id) WHERE loading_received_journal_entry_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS stock_outward_approval_income_journal_uidx ON public.stock_outward_receipts(approval_income_journal_entry_id) WHERE approval_income_journal_entry_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS stock_outward_workmen_loading_idx ON public.stock_outward_receipts(workmen_loading_bill_id) WHERE workmen_loading_bill_id IS NOT NULL;

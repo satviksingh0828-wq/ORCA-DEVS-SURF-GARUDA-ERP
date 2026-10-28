@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/select";
 
 const db = supabase as any;
+type AdditionalIncomeMode = "approval" | "source" | "both" | "none";
 type PackageLine = {
   packageTypeId: string;
   sourceId: string;
@@ -53,6 +54,7 @@ type FormState = {
   receiptDate: string;
   loadingDate: string;
   loadingAmountReceived: string;
+  additionalIncomeMode: AdditionalIncomeMode;
   approvalAmount: string;
   documents: OutwardDocumentInput[];
 };
@@ -90,6 +92,7 @@ const blankForm: FormState = {
   receiptDate: isoToday,
   loadingDate: isoToday,
   loadingAmountReceived: "0",
+  additionalIncomeMode: "none",
   approvalAmount: "0",
   documents: [{ documentNo: "", vehicleNumber: "" }],
 };
@@ -206,7 +209,7 @@ export function StockOutward() {
     let query = db
       .from("stock_outward_receipts")
       .select(
-        "id,outward_number,outward_date,loading_date,loading_amount_received,source_income_amount,approval_amount,workmen_loading_bill_id,loading_received_journal_entry_id,approval_income_journal_entry_id,wms_sales_order_id,wms_sales_order_number,created_at,ltms_source_bill_stock_outward_items(id),branch:branches(branch_name),stock_outward_sources(source_id,source:contracts(contract_name)),stock_outward_documents(id,document_no,vehicle_number),stock_outward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,outward_document_id,wms_item_id,sku,item_name,source:contracts(contract_name))",
+        "id,outward_number,outward_date,loading_date,loading_amount_received,additional_income_mode,source_income_amount,approval_amount,workmen_loading_bill_id,loading_received_journal_entry_id,approval_income_journal_entry_id,wms_sales_order_id,wms_sales_order_number,created_at,ltms_source_bill_stock_outward_items(id),branch:branches(branch_name),stock_outward_sources(source_id,source:contracts(contract_name)),stock_outward_documents(id,document_no,vehicle_number),stock_outward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,outward_document_id,wms_item_id,sku,item_name,source:contracts(contract_name))",
       )
       .gte("outward_date", filters.from)
       .lte("outward_date", filters.to)
@@ -271,7 +274,10 @@ export function StockOutward() {
       );
     }, 0);
   }
-  const calculatedSourceIncome = calculateSourceIncome();
+  const sourceIncomeEnabled = ["source", "both"].includes(form.additionalIncomeMode);
+  const approvalIncomeEnabled = ["approval", "both"].includes(form.additionalIncomeMode);
+  const calculatedSourceIncome = sourceIncomeEnabled ? calculateSourceIncome() : 0;
+  const canViewSourceIncome = user?.role !== "basic";
   const selectedRow = rows.find((row) => row.id === viewId) ?? null;
 
   useEffect(() => {
@@ -344,25 +350,27 @@ export function StockOutward() {
     if (new Set(documents.map((item) => item.document_no.toLowerCase())).size !== documents.length)
       return toast.error("Outward Document No. values must be unique");
     if (!packageLines.length) return toast.error("Add at least one package type");
-    const missingSourceSlab = form.sourceIds.find((sourceId) => {
-      const sourceLines = packageLines.filter((line) => line.sourceId === sourceId);
-      if (!sourceLines.length) return false;
-      const sourceSlabs = commonLoadingSlabs.filter((slab) => slab.contract_id === sourceId);
-      const basis = sourceSlabs[0]?.basis;
-      const measure = sourceLines.reduce(
-        (sum, line) => sum + Number(basis === "weight" ? line.weightKg : line.quantity),
-        0,
-      );
-      return (
-        !basis ||
-        measure <= 0 ||
-        !sourceSlabs.some(
-          (slab) =>
-            Number(slab.from_value) <= measure &&
-            (slab.to_value == null || measure <= Number(slab.to_value)),
-        )
-      );
-    });
+    const missingSourceSlab =
+      sourceIncomeEnabled &&
+      form.sourceIds.find((sourceId) => {
+        const sourceLines = packageLines.filter((line) => line.sourceId === sourceId);
+        if (!sourceLines.length) return false;
+        const sourceSlabs = commonLoadingSlabs.filter((slab) => slab.contract_id === sourceId);
+        const basis = sourceSlabs[0]?.basis;
+        const measure = sourceLines.reduce(
+          (sum, line) => sum + Number(basis === "weight" ? line.weightKg : line.quantity),
+          0,
+        );
+        return (
+          !basis ||
+          measure <= 0 ||
+          !sourceSlabs.some(
+            (slab) =>
+              Number(slab.from_value) <= measure &&
+              (slab.to_value == null || measure <= Number(slab.to_value)),
+          )
+        );
+      });
     if (missingSourceSlab) {
       const source = sources.find((item) => item.id === missingSourceSlab);
       return toast.error(
@@ -425,7 +433,8 @@ export function StockOutward() {
         outward_date: form.receiptDate,
         loading_date: form.loadingDate,
         loading_amount_received: receivedAmount,
-        approval_amount: approvalAmount,
+        additional_income_mode: form.additionalIncomeMode,
+        approval_amount: approvalIncomeEnabled ? approvalAmount : 0,
       })
       .select("id")
       .single();
@@ -475,15 +484,17 @@ export function StockOutward() {
           "Could not save package lines",
       );
     }
-    const { error: sourceIncomeError } = await db.rpc("refresh_stock_outward_source_income", {
-      p_receipt_id: receipt.id,
-    });
-    if (sourceIncomeError) {
-      await db.from("stock_outward_receipts").delete().eq("id", receipt.id);
-      setSaving(false);
-      return toast.error(
-        `Could not calculate per-source loading income: ${sourceIncomeError.message}`,
-      );
+    if (sourceIncomeEnabled) {
+      const { error: sourceIncomeError } = await db.rpc("refresh_stock_outward_source_income", {
+        p_receipt_id: receipt.id,
+      });
+      if (sourceIncomeError) {
+        await db.from("stock_outward_receipts").delete().eq("id", receipt.id);
+        setSaving(false);
+        return toast.error(
+          `Could not calculate per-source loading income: ${sourceIncomeError.message}`,
+        );
+      }
     }
     if (wmsEnabled) {
       const quantities = new Map<number, number>();
@@ -980,22 +991,49 @@ export function StockOutward() {
                 />
               </div>
               <div>
-                <Label>Approval Income</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={form.approvalAmount}
-                  onChange={(e) => setForm((f) => ({ ...f, approvalAmount: e.target.value }))}
-                  placeholder="0"
-                />
+                <Label>Additional Income</Label>
+                <Select
+                  value={form.additionalIncomeMode}
+                  onValueChange={(value: AdditionalIncomeMode) =>
+                    setForm((f) => ({
+                      ...f,
+                      additionalIncomeMode: value,
+                      approvalAmount: ["approval", "both"].includes(value) ? f.approvalAmount : "0",
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">None</SelectItem>
+                    <SelectItem value="approval">Approval Income</SelectItem>
+                    <SelectItem value="source">Source Income</SelectItem>
+                    <SelectItem value="both">Both</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <div>
-                <Label>Stock Outward Source Income (Common Loading Slab)</Label>
-                <div className="flex h-10 items-center rounded-md border border-border bg-muted/40 px-3 font-medium">
-                  ₹ {money(calculatedSourceIncome)}
+              {approvalIncomeEnabled && (
+                <div>
+                  <Label>Approval Income</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.approvalAmount}
+                    onChange={(e) => setForm((f) => ({ ...f, approvalAmount: e.target.value }))}
+                    placeholder="0"
+                  />
                 </div>
-              </div>
+              )}
+              {sourceIncomeEnabled && canViewSourceIncome && (
+                <div>
+                  <Label>Stock Outward Source Income (Common Loading Slab)</Label>
+                  <div className="flex h-10 items-center rounded-md border border-border bg-muted/40 px-3 font-medium">
+                    ₹ {money(calculatedSourceIncome)}
+                  </div>
+                </div>
+              )}
             </div>
             <section className="mt-2 space-y-3 border-t-2 border-sky-700 pt-3">
               <div>
@@ -1007,14 +1045,16 @@ export function StockOutward() {
               </div>
               {(() => {
                 const received = Number(form.loadingAmountReceived || 0);
-                const sourceIncome = calculatedSourceIncome;
-                const approvalIncome = Number(form.approvalAmount || 0);
+                const sourceIncome = sourceIncomeEnabled ? calculatedSourceIncome : 0;
+                const approvalIncome = approvalIncomeEnabled ? Number(form.approvalAmount || 0) : 0;
                 const canViewSourceIncome = user?.role !== "basic";
                 const total = received + approvalIncome + (canViewSourceIncome ? sourceIncome : 0);
                 const previewRows = [
                   { label: "Loading Amount Received", value: received, tone: "text-rose-700" },
-                  { label: "Approval Income", value: approvalIncome, tone: "text-violet-700" },
-                  ...(canViewSourceIncome
+                  ...(approvalIncomeEnabled
+                    ? [{ label: "Approval Income", value: approvalIncome, tone: "text-violet-700" }]
+                    : []),
+                  ...(canViewSourceIncome && sourceIncomeEnabled
                     ? [
                         {
                           label: "Outward Source Income",
@@ -1138,9 +1178,17 @@ export function StockOutward() {
               <p className="font-medium">₹ {money(selectedRow.loading_amount_received)}</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Approval income</p>
-              <p className="font-medium">₹ {money(selectedRow.approval_amount)}</p>
+              <p className="text-muted-foreground">Additional income</p>
+              <p className="font-medium capitalize">
+                {selectedRow.additional_income_mode ?? "none"}
+              </p>
             </div>
+            {["approval", "both"].includes(selectedRow.additional_income_mode) && (
+              <div>
+                <p className="text-muted-foreground">Approval income</p>
+                <p className="font-medium">₹ {money(selectedRow.approval_amount)}</p>
+              </div>
+            )}
             <div>
               <p className="text-muted-foreground">Loading amount status</p>
               <p className="font-medium">
@@ -1149,14 +1197,19 @@ export function StockOutward() {
                   : "No amount received"}
               </p>
             </div>
-            <div>
-              <p className="text-muted-foreground">Source income method</p>
-              <p className="font-medium">Common Loading Slab</p>
-            </div>
-            <div>
-              <p className="text-muted-foreground">Source income</p>
-              <p className="font-medium">₹ {money(selectedRow.source_income_amount)}</p>
-            </div>
+            {canViewSourceIncome &&
+              ["source", "both"].includes(selectedRow.additional_income_mode) && (
+                <>
+                  <div>
+                    <p className="text-muted-foreground">Source income method</p>
+                    <p className="font-medium">Common Loading Slab</p>
+                  </div>
+                  <div>
+                    <p className="text-muted-foreground">Source income</p>
+                    <p className="font-medium">₹ {money(selectedRow.source_income_amount)}</p>
+                  </div>
+                </>
+              )}
             {selectedRow.wms_sales_order_number && (
               <div>
                 <p className="text-muted-foreground">WMS Sales Order</p>
@@ -1328,10 +1381,21 @@ export function StockOutward() {
                         <div>
                           <p className="text-muted-foreground">Loading date</p>
                           <p>{new Date(row.loading_date).toLocaleDateString("en-GB")}</p>
-                          <p className="mt-3 text-muted-foreground">Source income</p>
-                          <p>Common Loading Slab · ₹ {money(row.source_income_amount)}</p>
-                          <p className="mt-3 text-muted-foreground">Approval income</p>
-                          <p>₹ {money(row.approval_amount)}</p>
+                          <p className="mt-3 text-muted-foreground">Additional income</p>
+                          <p className="capitalize">{row.additional_income_mode ?? "none"}</p>
+                          {["approval", "both"].includes(row.additional_income_mode) && (
+                            <>
+                              <p className="mt-3 text-muted-foreground">Approval income</p>
+                              <p>₹ {money(row.approval_amount)}</p>
+                            </>
+                          )}
+                          {canViewSourceIncome &&
+                            ["source", "both"].includes(row.additional_income_mode) && (
+                              <>
+                                <p className="mt-3 text-muted-foreground">Source income</p>
+                                <p>Common Loading Slab · ₹ {money(row.source_income_amount)}</p>
+                              </>
+                            )}
                         </div>
                         <div>
                           <p className="mb-2 text-muted-foreground">Packages</p>

@@ -153,6 +153,7 @@ type StockOutwardReceipt = {
   outward_number: string;
   outward_date: string;
   branch_id: string;
+  additional_income_mode: "approval" | "source" | "both" | "none";
 };
 type StockOutwardBillItem = {
   id: string;
@@ -674,8 +675,9 @@ export function SourceBilling() {
         fetchAll<StockOutwardReceipt>(() =>
           (supabase as any)
             .from("stock_outward_receipts")
-            .select("id,outward_number,outward_date,branch_id")
+            .select("id,outward_number,outward_date,branch_id,additional_income_mode")
             .eq("branch_id", form.branch)
+            .in("additional_income_mode", ["source", "both"])
             .gte("outward_date", form.from)
             .lte("outward_date", form.to)
             .order("outward_date", { ascending: false }),

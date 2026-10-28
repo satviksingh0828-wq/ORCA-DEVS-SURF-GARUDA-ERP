@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS public.stock_outward_receipts (
   outward_date DATE NOT NULL,
   loading_date DATE NOT NULL,
   loading_amount_received NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (loading_amount_received >= 0),
+  additional_income_mode TEXT NOT NULL DEFAULT 'none' CHECK (additional_income_mode IN ('approval', 'source', 'both', 'none')),
   source_income_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (source_income_amount >= 0),
   wms_sales_order_id INTEGER,
   wms_sales_order_number TEXT,

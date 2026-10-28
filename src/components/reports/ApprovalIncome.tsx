@@ -133,9 +133,10 @@ export function ApprovalIncome() {
       let outwardQuery = db
         .from("stock_outward_receipts")
         .select(
-          "id,outward_number,loading_date,branch_id,approval_amount,approval_income_payment_ledger_id,approval_income_journal_entry_id,branch:branches(branch_name)",
+          "id,outward_number,loading_date,branch_id,additional_income_mode,approval_amount,approval_income_payment_ledger_id,approval_income_journal_entry_id,branch:branches(branch_name)",
         )
         .gt("approval_amount", 0)
+        .in("additional_income_mode", ["approval", "both"])
         .order("loading_date", { ascending: false });
       if (user?.role === "basic") {
         inwardQuery = inwardQuery.in("branch_id", allowedBranchIds);
