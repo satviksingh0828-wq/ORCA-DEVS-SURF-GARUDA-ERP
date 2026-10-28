@@ -1,6 +1,16 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
-import { Banknote, Eye, FileCheck2, FilePlus2, PackageSearch, Plus, RefreshCw, Search, Trash2 } from "lucide-react";
+import {
+  Banknote,
+  Eye,
+  FileCheck2,
+  FilePlus2,
+  PackageSearch,
+  Plus,
+  RefreshCw,
+  Search,
+  Trash2,
+} from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
@@ -138,6 +148,24 @@ type StockIncomeLine = {
   additional_source_income: number;
   source_income_amount: number;
 };
+type StockOutwardReceipt = {
+  id: string;
+  outward_number: string;
+  outward_date: string;
+  branch_id: string;
+};
+type StockOutwardBillItem = {
+  id: string;
+  bill_id: string;
+  stock_outward_receipt_id: string;
+  source_id: string;
+  outward_number: string;
+  outward_date: string;
+  calculated_source_income: number | string;
+  source_income_deduction: number | string;
+  additional_source_income: number | string;
+  source_income_amount: number | string;
+};
 type StockIncomeRateType = {
   id: string;
   basis: "quantity" | "weight";
@@ -238,6 +266,7 @@ export function SourceBilling() {
   const [viewing, setViewing] = useState<Bill | null>(null);
   const [viewItems, setViewItems] = useState<BillItem[]>([]);
   const [viewStockInwardItems, setViewStockInwardItems] = useState<StockInwardBillItem[]>([]);
+  const [viewStockOutwardItems, setViewStockOutwardItems] = useState<StockOutwardBillItem[]>([]);
   const [viewItemsLoading, setViewItemsLoading] = useState(false);
   const [consignmentViewing, setConsignmentViewing] = useState<string | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
@@ -249,6 +278,10 @@ export function SourceBilling() {
   const [stockInwardCandidates, setStockInwardCandidates] = useState<StockIncomeLine[]>([]);
   const [selectedStockInwardIds, setSelectedStockInwardIds] = useState<string[]>([]);
   const [stockInwardLines, setStockInwardLines] = useState<StockIncomeLine[]>([]);
+  const [stockOutwardPickerOpen, setStockOutwardPickerOpen] = useState(false);
+  const [stockOutwardCandidates, setStockOutwardCandidates] = useState<StockIncomeLine[]>([]);
+  const [selectedStockOutwardIds, setSelectedStockOutwardIds] = useState<string[]>([]);
+  const [stockOutwardLines, setStockOutwardLines] = useState<StockIncomeLine[]>([]);
   const [form, setForm] = useState({
     branch: "",
     source: "",
@@ -259,9 +292,15 @@ export function SourceBilling() {
   });
   const [generating, setGenerating] = useState(false);
   const [journalPreviewOpen, setJournalPreviewOpen] = useState(false);
-  const [journalPostStatus, setJournalPostStatus] = useState<"pending" | "success" | "error">("pending");
+  const [journalPostStatus, setJournalPostStatus] = useState<"pending" | "success" | "error">(
+    "pending",
+  );
   const [journalPostError, setJournalPostError] = useState<string | null>(null);
-  const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{ freight: number; loading: number; unloading: number } | null>(null);
+  const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{
+    freight: number;
+    loading: number;
+    unloading: number;
+  } | null>(null);
   const [postedJournalEntryId, setPostedJournalEntryId] = useState<string | null>(null);
   const [postedJournalLines, setPostedJournalLines] = useState<JournalPreviewLine[] | null>(null);
   const [receivingBill, setReceivingBill] = useState<Bill | null>(null);
@@ -272,7 +311,7 @@ export function SourceBilling() {
   async function loadBillItems(billId: string) {
     setViewItemsLoading(true);
     try {
-      const [rows, stockItems] = await Promise.all([
+      const [rows, stockItems, outwardItems] = await Promise.all([
         fetchAll<BillItem>(() =>
           (supabase as any)
             .from("ltms_source_bill_items")
@@ -285,16 +324,29 @@ export function SourceBilling() {
         fetchAll<StockInwardBillItem>(() =>
           (supabase as any)
             .from("ltms_source_bill_stock_inward_items")
-            .select("id,bill_id,stock_inward_receipt_id,source_id,receipt_number,receipt_date,calculated_source_income,source_income_deduction,additional_source_income,source_income_amount")
+            .select(
+              "id,bill_id,stock_inward_receipt_id,source_id,receipt_number,receipt_date,calculated_source_income,source_income_deduction,additional_source_income,source_income_amount",
+            )
             .eq("bill_id", billId)
             .order("receipt_date", { ascending: false }),
+        ),
+        fetchAll<StockOutwardBillItem>(() =>
+          (supabase as any)
+            .from("ltms_source_bill_stock_outward_items")
+            .select(
+              "id,bill_id,stock_outward_receipt_id,source_id,outward_number,outward_date,calculated_source_income,source_income_deduction,additional_source_income,source_income_amount",
+            )
+            .eq("bill_id", billId)
+            .order("outward_date", { ascending: false }),
         ),
       ]);
       setViewItems(rows);
       setViewStockInwardItems(stockItems);
+      setViewStockOutwardItems(outwardItems);
     } catch (error) {
       setViewItems([]);
       setViewStockInwardItems([]);
+      setViewStockOutwardItems([]);
       toast.error(error instanceof Error ? error.message : "Could not load billed consignments");
     } finally {
       setViewItemsLoading(false);
@@ -305,6 +357,7 @@ export function SourceBilling() {
     if (!viewing) {
       setViewItems([]);
       setViewStockInwardItems([]);
+      setViewStockOutwardItems([]);
       return;
     }
     void loadBillItems(viewing.id);
@@ -320,19 +373,30 @@ export function SourceBilling() {
     if (error) return toast.error(`Could not load sources: ${error.message}`);
     const loadedSources = (data ?? []) as Source[];
     setSources(loadedSources);
-    const ledgerIds = [...new Set(loadedSources.flatMap((source) => [
-      source.source_asset_ledger_id,
-      source.freight_income_ledger_id,
-      source.loading_income_ledger_id,
-      source.unloading_income_ledger_id,
-    ].filter((id): id is string => Boolean(id))))];
+    const ledgerIds = [
+      ...new Set(
+        loadedSources.flatMap((source) =>
+          [
+            source.source_asset_ledger_id,
+            source.freight_income_ledger_id,
+            source.loading_income_ledger_id,
+            source.unloading_income_ledger_id,
+          ].filter((id): id is string => Boolean(id)),
+        ),
+      ),
+    ];
     if (ledgerIds.length) {
       const { data: ledgerRows, error: ledgerError } = await (supabase as any)
         .from("ledger_accounts")
         .select("id,branch_id,account_name,ledger_type,account_kind")
         .in("id", ledgerIds);
-      if (ledgerError) return toast.error(`Could not load mapped source accounts: ${ledgerError.message}`);
-      setLedgerAccounts(Object.fromEntries(((ledgerRows ?? []) as LedgerAccount[]).map((ledger) => [ledger.id, ledger])));
+      if (ledgerError)
+        return toast.error(`Could not load mapped source accounts: ${ledgerError.message}`);
+      setLedgerAccounts(
+        Object.fromEntries(
+          ((ledgerRows ?? []) as LedgerAccount[]).map((ledger) => [ledger.id, ledger]),
+        ),
+      );
     } else {
       setLedgerAccounts({});
     }
@@ -342,7 +406,8 @@ export function SourceBilling() {
       .eq("is_active", true)
       .in("ledger_type", ["bank", "cash"])
       .order("account_name");
-    if (receiptError) return toast.error(`Could not load cash and bank accounts: ${receiptError.message}`);
+    if (receiptError)
+      return toast.error(`Could not load cash and bank accounts: ${receiptError.message}`);
     setReceiptAccounts((receiptRows ?? []) as LedgerAccount[]);
   }
   async function loadBills() {
@@ -569,28 +634,105 @@ export function SourceBilling() {
           }, 0);
         if (sourceIncome <= 0) return [];
         const calculatedSourceIncome = Math.round((sourceIncome + Number.EPSILON) * 100) / 100;
-        return [{
-          id: receipt.id,
-          receipt_number: receipt.receipt_number,
-          receipt_date: receipt.receipt_date,
-          calculated_source_income: calculatedSourceIncome,
-          source_income_deduction: 0,
-          additional_source_income: 0,
-          source_income_amount: calculatedSourceIncome,
-        }];
+        return [
+          {
+            id: receipt.id,
+            receipt_number: receipt.receipt_number,
+            receipt_date: receipt.receipt_date,
+            calculated_source_income: calculatedSourceIncome,
+            source_income_deduction: 0,
+            additional_source_income: 0,
+            source_income_amount: calculatedSourceIncome,
+          },
+        ];
       });
       setStockInwardCandidates(nextCandidates);
       setSelectedStockInwardIds([]);
       setStockInwardPickerOpen(true);
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Could not load Stock Inward source income");
+      toast.error(
+        error instanceof Error ? error.message : "Could not load Stock Inward source income",
+      );
     } finally {
       setPickerLoading(false);
     }
   }
+  async function loadStockOutwardCandidates() {
+    if (!form.branch || !form.source) return toast.error("Select a branch and source first");
+    if (!form.from || !form.to || form.from > form.to)
+      return toast.error("Enter a valid billing period");
+    setPickerLoading(true);
+    try {
+      const [incomeRows, receiptRows, billedRows] = await Promise.all([
+        fetchAll<{ receipt_id: string; source_id: string; source_income_amount: number | string }>(
+          () =>
+            (supabase as any)
+              .from("stock_outward_source_income")
+              .select("receipt_id,source_id,source_income_amount")
+              .eq("source_id", form.source),
+        ),
+        fetchAll<StockOutwardReceipt>(() =>
+          (supabase as any)
+            .from("stock_outward_receipts")
+            .select("id,outward_number,outward_date,branch_id")
+            .eq("branch_id", form.branch)
+            .gte("outward_date", form.from)
+            .lte("outward_date", form.to)
+            .order("outward_date", { ascending: false }),
+        ),
+        fetchAll<{ stock_outward_receipt_id: string; source_id: string }>(() =>
+          (supabase as any)
+            .from("ltms_source_bill_stock_outward_items")
+            .select("stock_outward_receipt_id,source_id")
+            .eq("source_id", form.source),
+        ),
+      ]);
+      const savedAmounts = new Map(
+        incomeRows.map((row) => [row.receipt_id, num(row.source_income_amount)]),
+      );
+      const billedIds = new Set(billedRows.map((row) => row.stock_outward_receipt_id));
+      const rows = receiptRows.flatMap((receipt) => {
+        const snapshot = savedAmounts.get(receipt.id);
+        if (snapshot == null || snapshot <= 0 || billedIds.has(receipt.id)) return [];
+        return [
+          {
+            id: receipt.id,
+            receipt_number: receipt.outward_number,
+            receipt_date: receipt.outward_date,
+            calculated_source_income: snapshot,
+            source_income_deduction: 0,
+            additional_source_income: 0,
+            source_income_amount: snapshot,
+          },
+        ];
+      });
+      setStockOutwardCandidates(rows);
+      setSelectedStockOutwardIds([]);
+      setStockOutwardPickerOpen(true);
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Could not load Stock Outward source income",
+      );
+    } finally {
+      setPickerLoading(false);
+    }
+  }
+  function addSelectedStockOutward() {
+    const selected = stockOutwardCandidates.filter(
+      (row) =>
+        selectedStockOutwardIds.includes(row.id) &&
+        !stockOutwardLines.some((line) => line.id === row.id),
+    );
+    if (!selected.length) return toast.error("Select at least one Stock Outward entry");
+    setStockOutwardLines((current) => [...current, ...selected]);
+    setSelectedStockOutwardIds([]);
+    setStockOutwardPickerOpen(false);
+  }
   function addSelectedStockInward() {
     const selected = stockInwardCandidates.filter(
-      (row) => selectedStockInwardIds.includes(row.id) && !stockInwardLines.some((line) => line.id === row.id),
+      (row) =>
+        selectedStockInwardIds.includes(row.id) &&
+        !stockInwardLines.some((line) => line.id === row.id),
     );
     if (!selected.length) return toast.error("Select at least one Stock Inward entry");
     setStockInwardLines((current) => [
@@ -635,8 +777,9 @@ export function SourceBilling() {
     id: string,
     key: "source_income_deduction" | "additional_source_income",
     value: string,
+    outward = false,
   ) {
-    setStockInwardLines((current) =>
+    (outward ? setStockOutwardLines : setStockInwardLines)((current) =>
       current.map((line) => {
         if (line.id !== id) return line;
         const adjustment = Math.max(0, Number(value) || 0);
@@ -645,7 +788,10 @@ export function SourceBilling() {
         next.source_income_amount = Math.max(
           0,
           Math.round(
-            (next.calculated_source_income - next.source_income_deduction + next.additional_source_income + Number.EPSILON) *
+            (next.calculated_source_income -
+              next.source_income_deduction +
+              next.additional_source_income +
+              Number.EPSILON) *
               100,
           ) / 100,
         );
@@ -654,53 +800,73 @@ export function SourceBilling() {
     );
   }
   async function generate() {
-    if (!form.branch || !form.source || (!lines.length && !stockInwardLines.length))
-      return toast.error("Select branch, source and at least one consignment or Stock Inward entry");
+    if (
+      !form.branch ||
+      !form.source ||
+      (!lines.length && !stockInwardLines.length && !stockOutwardLines.length)
+    )
+      return toast.error(
+        "Select branch, source and at least one consignment, Stock Inward or Stock Outward entry",
+      );
     if (form.from > form.to || form.billDate < form.from || form.dueDate < form.billDate)
       return toast.error("Check bill and billing period dates");
     if (totals.freight + totals.loading + stockIncomeTotal <= 0)
       return toast.error(
         "Source bill income total must be greater than zero before posting the journal entry",
       );
-    setJournalPreviewAmounts({ freight: totals.freight, loading: totals.loading, unloading: stockIncomeTotal });
+    setJournalPreviewAmounts({
+      freight: totals.freight,
+      loading: totals.loading,
+      unloading: stockIncomeTotal,
+    });
     setJournalPostError(null);
     setJournalPostStatus("pending");
     setPostedJournalEntryId(null);
     setPostedJournalLines(null);
     setJournalPreviewOpen(true);
     setGenerating(true);
-    const { data: generatedBillId, error } = await (supabase as any).rpc("generate_ltms_source_bill", {
-      p_branch_id: form.branch,
-      p_source_id: form.source,
-      p_bill_date: form.billDate,
-      p_due_date: form.dueDate,
-      p_period_from: form.from,
-      p_period_to: form.to,
-      p_created_by: user?.id ?? null,
-      p_items: [
-        ...lines.map((line) => ({
-          consignment_id: line.id,
-          consignment_number: line.consignment_number,
-          from_pin_code: line.from_pin_code,
-          to_pin_code: line.to_pin_code,
-          calculated_freight: line.calculated_freight,
-          freight_deduction: line.freight_deduction,
-          additional_freight: line.additional_freight,
-          final_freight: line.final_freight,
-          calculated_loading: line.calculated_loading,
-          loading_deduction: line.loading_deduction,
-          additional_loading: line.additional_loading,
-          final_loading: line.final_loading,
-        })),
-        ...stockInwardLines.map((line) => ({
-          stock_inward_receipt_id: line.id,
-          calculated_source_income: line.calculated_source_income,
-          source_income_deduction: line.source_income_deduction,
-          additional_source_income: line.additional_source_income,
-          source_income_amount: line.source_income_amount,
-        })),
-      ],
-    });
+    const { data: generatedBillId, error } = await (supabase as any).rpc(
+      "generate_ltms_source_bill",
+      {
+        p_branch_id: form.branch,
+        p_source_id: form.source,
+        p_bill_date: form.billDate,
+        p_due_date: form.dueDate,
+        p_period_from: form.from,
+        p_period_to: form.to,
+        p_created_by: user?.id ?? null,
+        p_items: [
+          ...lines.map((line) => ({
+            consignment_id: line.id,
+            consignment_number: line.consignment_number,
+            from_pin_code: line.from_pin_code,
+            to_pin_code: line.to_pin_code,
+            calculated_freight: line.calculated_freight,
+            freight_deduction: line.freight_deduction,
+            additional_freight: line.additional_freight,
+            final_freight: line.final_freight,
+            calculated_loading: line.calculated_loading,
+            loading_deduction: line.loading_deduction,
+            additional_loading: line.additional_loading,
+            final_loading: line.final_loading,
+          })),
+          ...stockOutwardLines.map((line) => ({
+            stock_outward_receipt_id: line.id,
+            calculated_source_income: line.calculated_source_income,
+            source_income_deduction: line.source_income_deduction,
+            additional_source_income: line.additional_source_income,
+            source_income_amount: line.source_income_amount,
+          })),
+          ...stockInwardLines.map((line) => ({
+            stock_inward_receipt_id: line.id,
+            calculated_source_income: line.calculated_source_income,
+            source_income_deduction: line.source_income_deduction,
+            additional_source_income: line.additional_source_income,
+            source_income_amount: line.source_income_amount,
+          })),
+        ],
+      },
+    );
     setGenerating(false);
     if (error) {
       setJournalPostStatus("error");
@@ -714,35 +880,69 @@ export function SourceBilling() {
       .maybeSingle();
     if (savedBillError || !savedBill?.journal_entry_id) {
       setJournalPostStatus("error");
-      setJournalPostError(savedBillError?.message ?? "The bill was created but no journal entry was linked to it.");
+      setJournalPostError(
+        savedBillError?.message ?? "The bill was created but no journal entry was linked to it.",
+      );
       return toast.error("Bill created, but the posted journal could not be verified");
     }
     const { data: savedLines, error: savedLinesError } = await (supabase as any)
       .from("journal_lines")
-      .select("line_no,ledger_account_id,account_kind,line_description,debit,credit,ledger_account:ledger_accounts(account_name,ledger_type,account_kind)")
+      .select(
+        "line_no,ledger_account_id,account_kind,line_description,debit,credit,ledger_account:ledger_accounts(account_name,ledger_type,account_kind)",
+      )
       .eq("journal_entry_id", savedBill.journal_entry_id)
       .order("line_no");
     if (savedLinesError || !savedLines?.length) {
       setJournalPostStatus("error");
-      setJournalPostError(savedLinesError?.message ?? "The journal entry was linked but has no saved journal lines.");
+      setJournalPostError(
+        savedLinesError?.message ?? "The journal entry was linked but has no saved journal lines.",
+      );
       return toast.error("Bill created, but saved journal lines could not be verified");
     }
     setPostedJournalEntryId(savedBill.journal_entry_id);
-    setPostedJournalLines((savedLines as Array<any>).flatMap((line) => {
-      const debit = num(line.debit);
-      const credit = num(line.credit);
-      const account = line.ledger_account
-        ? { id: line.ledger_account_id, account_name: line.ledger_account.account_name, ledger_type: line.ledger_account.ledger_type, account_kind: line.ledger_account.account_kind }
-        : undefined;
-      return [
-        debit > 0 ? { key: `posted-${line.line_no}-debit`, label: line.line_description ?? `Line ${line.line_no}`, id: line.ledger_account_id, amount: debit, side: "debit" as const, account } : null,
-        credit > 0 ? { key: `posted-${line.line_no}-credit`, label: line.line_description ?? `Line ${line.line_no}`, id: line.ledger_account_id, amount: credit, side: "credit" as const, account } : null,
-      ].filter((entry): entry is JournalPreviewLine => entry !== null);
-    }));
+    setPostedJournalLines(
+      (savedLines as Array<any>).flatMap((line) => {
+        const debit = num(line.debit);
+        const credit = num(line.credit);
+        const account = line.ledger_account
+          ? {
+              id: line.ledger_account_id,
+              account_name: line.ledger_account.account_name,
+              ledger_type: line.ledger_account.ledger_type,
+              account_kind: line.ledger_account.account_kind,
+            }
+          : undefined;
+        return [
+          debit > 0
+            ? {
+                key: `posted-${line.line_no}-debit`,
+                label: line.line_description ?? `Line ${line.line_no}`,
+                id: line.ledger_account_id,
+                amount: debit,
+                side: "debit" as const,
+                account,
+              }
+            : null,
+          credit > 0
+            ? {
+                key: `posted-${line.line_no}-credit`,
+                label: line.line_description ?? `Line ${line.line_no}`,
+                id: line.ledger_account_id,
+                amount: credit,
+                side: "credit" as const,
+                account,
+              }
+            : null,
+        ].flatMap((entry) => (entry === null ? [] : [entry]));
+      }),
+    );
     setJournalPostStatus("success");
-    toast.success("Source bill and journal posted. Selected consignments and Stock Inward entries are now locked.");
+    toast.success(
+      "Source bill and journal posted. Selected consignments, Stock Inward and Stock Outward entries are now locked.",
+    );
     setLines([]);
     setStockInwardLines([]);
+    setStockOutwardLines([]);
     setScreen("list");
     await loadBills();
   }
@@ -775,7 +975,9 @@ export function SourceBilling() {
       setReceivingAccountId("");
       await loadBills();
     } catch (error) {
-      toast.error(`Could not mark source bill received: ${error instanceof Error ? error.message : String(error)}`);
+      toast.error(
+        `Could not mark source bill received: ${error instanceof Error ? error.message : String(error)}`,
+      );
     } finally {
       setReceiving(false);
     }
@@ -792,15 +994,19 @@ export function SourceBilling() {
       : bills;
   }, [bills, search]);
   const totals = useMemo(
-    () =>
-      lines.reduce(
+    () => ({
+      ...lines.reduce(
         (result, row) => ({
           freight: result.freight + row.final_freight,
           loading: result.loading + row.final_loading,
         }),
         { freight: 0, loading: 0 },
       ),
-    [lines],
+      loading:
+        lines.reduce((sum, row) => sum + row.final_loading, 0) +
+        stockOutwardLines.reduce((sum, line) => sum + num(line.source_income_amount), 0),
+    }),
+    [lines, stockOutwardLines],
   );
   const stockIncomeTotals = useMemo(
     () =>
@@ -816,6 +1022,20 @@ export function SourceBilling() {
     [stockInwardLines],
   );
   const stockIncomeTotal = stockIncomeTotals.final;
+  const stockOutwardTotals = useMemo(
+    () =>
+      stockOutwardLines.reduce(
+        (sum, line) => ({
+          calculated: sum.calculated + num(line.calculated_source_income),
+          addition: sum.addition + num(line.additional_source_income),
+          deduction: sum.deduction + num(line.source_income_deduction),
+          final: sum.final + num(line.source_income_amount),
+        }),
+        { calculated: 0, addition: 0, deduction: 0, final: 0 },
+      ),
+    [stockOutwardLines],
+  );
+  const stockOutwardTotal = stockOutwardTotals.final;
   const selectedBillingSource = sources.find((source) => source.id === form.source);
   const previewTotals = useMemo(
     () => journalPreviewAmounts ?? { ...totals, unloading: stockIncomeTotal },
@@ -824,38 +1044,77 @@ export function SourceBilling() {
   const journalPreviewLines = useMemo<JournalPreviewLine[]>(() => {
     const source = selectedBillingSource;
     const mapped = [
-      { key: "source", label: "Source account (debit)", id: source?.source_asset_ledger_id, amount: previewTotals.freight + previewTotals.loading + previewTotals.unloading, side: "debit" },
-      { key: "freight", label: "Freight income (credit)", id: source?.freight_income_ledger_id, amount: previewTotals.freight, side: "credit" },
-      { key: "loading", label: "Loading income (credit)", id: source?.loading_income_ledger_id, amount: previewTotals.loading, side: "credit" },
-      { key: "unloading", label: "Unloading income (credit)", id: source?.unloading_income_ledger_id, amount: previewTotals.unloading, side: "credit" },
+      {
+        key: "source",
+        label: "Source account (debit)",
+        id: source?.source_asset_ledger_id,
+        amount: previewTotals.freight + previewTotals.loading + previewTotals.unloading,
+        side: "debit" as const,
+      },
+      {
+        key: "freight",
+        label: "Freight income (credit)",
+        id: source?.freight_income_ledger_id,
+        amount: previewTotals.freight,
+        side: "credit" as const,
+      },
+      {
+        key: "loading",
+        label: "Loading income (credit)",
+        id: source?.loading_income_ledger_id,
+        amount: previewTotals.loading,
+        side: "credit" as const,
+      },
+      {
+        key: "unloading",
+        label: "Unloading income (credit)",
+        id: source?.unloading_income_ledger_id,
+        amount: previewTotals.unloading,
+        side: "credit" as const,
+      },
     ];
-    return mapped.filter((line) => line.amount > 0 || line.key === "source").map((line) => ({
-      ...line,
-      account: line.id ? ledgerAccounts[line.id] : undefined,
-    }));
+    return mapped
+      .filter((line) => line.amount > 0 || line.key === "source")
+      .map((line) => ({
+        ...line,
+        account: line.id ? ledgerAccounts[line.id] : undefined,
+      }));
   }, [ledgerAccounts, previewTotals, selectedBillingSource]);
-  const journalDebit = journalPreviewLines.reduce((sum, line) => sum + (line.side === "debit" ? line.amount : 0), 0);
-  const journalCredit = journalPreviewLines.reduce((sum, line) => sum + (line.side === "credit" ? line.amount : 0), 0);
+  const journalDebit = journalPreviewLines.reduce(
+    (sum, line) => sum + (line.side === "debit" ? line.amount : 0),
+    0,
+  );
+  const journalCredit = journalPreviewLines.reduce(
+    (sum, line) => sum + (line.side === "credit" ? line.amount : 0),
+    0,
+  );
   const journalBalanced = Math.abs(journalDebit - journalCredit) < 0.005;
   const displayedJournalLines = postedJournalLines ?? journalPreviewLines;
-  const displayedJournalDebit = displayedJournalLines.reduce((sum, line) => sum + (line.side === "debit" ? line.amount : 0), 0);
-  const displayedJournalCredit = displayedJournalLines.reduce((sum, line) => sum + (line.side === "credit" ? line.amount : 0), 0);
+  const displayedJournalDebit = displayedJournalLines.reduce(
+    (sum, line) => sum + (line.side === "debit" ? line.amount : 0),
+    0,
+  );
+  const displayedJournalCredit = displayedJournalLines.reduce(
+    (sum, line) => sum + (line.side === "credit" ? line.amount : 0),
+    0,
+  );
   const displayedJournalBalanced = Math.abs(displayedJournalDebit - displayedJournalCredit) < 0.005;
 
-  const updateForm = (key: keyof typeof form, value: string) =>
-    {
-      setForm((current) => ({
-        ...current,
-        [key]: value,
-        ...(key === "branch" ? { source: "" } : {}),
-      }));
-      if (key === "branch" || key === "source") {
-        setLines([]);
-        setStockInwardLines([]);
-        setCandidates([]);
-        setStockInwardCandidates([]);
-      }
-    };
+  const updateForm = (key: keyof typeof form, value: string) => {
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "branch" ? { source: "" } : {}),
+    }));
+    if (key === "branch" || key === "source") {
+      setLines([]);
+      setStockInwardLines([]);
+      setStockOutwardLines([]);
+      setStockOutwardCandidates([]);
+      setCandidates([]);
+      setStockInwardCandidates([]);
+    }
+  };
   const sourceList = listFilters.branch === "all" ? sources : sources;
   const selectedSource = sources.find((source) => source.id === form.source);
   const selectedSourceAddress = selectedSource
@@ -1025,7 +1284,11 @@ export function SourceBilling() {
                               variant="destructive"
                               onClick={() => void deleteBill(bill)}
                               disabled={Boolean(bill.received_at)}
-                              title={bill.received_at ? "Received bills cannot be deleted" : "Delete source bill"}
+                              title={
+                                bill.received_at
+                                  ? "Received bills cannot be deleted"
+                                  : "Delete source bill"
+                              }
                             >
                               <Trash2 className="size-3.5" /> Delete
                             </Button>
@@ -1162,6 +1425,14 @@ export function SourceBilling() {
             >
               {pickerLoading ? <RefreshCw className="animate-spin" /> : <PackageSearch />} Load
               Stock Inward
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => void loadStockOutwardCandidates()}
+              disabled={pickerLoading}
+            >
+              {pickerLoading ? <RefreshCw className="animate-spin" /> : <PackageSearch />} Load
+              Stock Outward
             </Button>
           </div>
           <div className="overflow-x-auto rounded-lg border border-border">
@@ -1311,7 +1582,9 @@ export function SourceBilling() {
                       <tr key={line.id}>
                         <td className="px-3 py-3 font-medium">{line.receipt_number}</td>
                         <td className="px-3 py-3">{line.receipt_date}</td>
-                        <td className="px-3 py-3 text-right">{money(line.calculated_source_income)}</td>
+                        <td className="px-3 py-3 text-right">
+                          {money(line.calculated_source_income)}
+                        </td>
                         <td className="px-3 py-3">
                           <Input
                             className="ml-auto h-8 w-28 text-right"
@@ -1321,7 +1594,11 @@ export function SourceBilling() {
                             aria-label={`Additional source income for ${line.receipt_number}`}
                             value={line.additional_source_income || ""}
                             onChange={(event) =>
-                              updateStockIncomeLine(line.id, "additional_source_income", event.target.value)
+                              updateStockIncomeLine(
+                                line.id,
+                                "additional_source_income",
+                                event.target.value,
+                              )
                             }
                           />
                         </td>
@@ -1334,16 +1611,26 @@ export function SourceBilling() {
                             aria-label={`Source income deduction for ${line.receipt_number}`}
                             value={line.source_income_deduction || ""}
                             onChange={(event) =>
-                              updateStockIncomeLine(line.id, "source_income_deduction", event.target.value)
+                              updateStockIncomeLine(
+                                line.id,
+                                "source_income_deduction",
+                                event.target.value,
+                              )
                             }
                           />
                         </td>
-                        <td className="px-3 py-3 text-right font-medium">{money(line.source_income_amount)}</td>
+                        <td className="px-3 py-3 text-right font-medium">
+                          {money(line.source_income_amount)}
+                        </td>
                         <td className="px-3 py-3 text-center">
                           <Button
                             size="sm"
                             variant="ghost"
-                            onClick={() => setStockInwardLines((current) => current.filter((item) => item.id !== line.id))}
+                            onClick={() =>
+                              setStockInwardLines((current) =>
+                                current.filter((item) => item.id !== line.id),
+                              )
+                            }
                           >
                             Remove
                           </Button>
@@ -1364,7 +1651,9 @@ export function SourceBilling() {
                       <td colSpan={2} className="px-3 py-3">
                         Total ({stockInwardLines.length} Stock Inward entries)
                       </td>
-                      <td className="px-3 py-3 text-right">{money(stockIncomeTotals.calculated)}</td>
+                      <td className="px-3 py-3 text-right">
+                        {money(stockIncomeTotals.calculated)}
+                      </td>
                       <td className="px-3 py-3 text-right">{money(stockIncomeTotals.addition)}</td>
                       <td className="px-3 py-3 text-right">{money(stockIncomeTotals.deduction)}</td>
                       <td className="px-3 py-3 text-right">{money(stockIncomeTotal)}</td>
@@ -1375,8 +1664,129 @@ export function SourceBilling() {
               </table>
             </div>
           </section>
+          <section className="space-y-3 rounded-lg border border-border p-3">
+            <div>
+              <h3 className="text-sm font-semibold">
+                Stock Outward Source Income (Loading Income)
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Uses the saved per-source income snapshot; adjustments are included in Loading
+                Income.
+              </p>
+            </div>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full min-w-[1050px] text-sm">
+                <thead>
+                  <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                    <th className="px-3 py-3">Stock Outward Reference No.</th>
+                    <th className="px-3 py-3">Date</th>
+                    <th className="px-3 py-3 text-right">Calculated Source Income</th>
+                    <th className="px-3 py-3 text-right">Addition</th>
+                    <th className="px-3 py-3 text-right">Deduction</th>
+                    <th className="px-3 py-3 text-right">Final Source Income / Loading Income</th>
+                    <th className="px-3 py-3 text-center">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {stockOutwardLines.length ? (
+                    stockOutwardLines.map((line) => (
+                      <tr key={line.id}>
+                        <td className="px-3 py-3 font-medium">{line.receipt_number}</td>
+                        <td className="px-3 py-3">{line.receipt_date}</td>
+                        <td className="px-3 py-3 text-right">
+                          {money(line.calculated_source_income)}
+                        </td>
+                        <td className="px-3 py-3">
+                          <Input
+                            className="ml-auto h-8 w-28 text-right"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            aria-label={`Additional Stock Outward income for ${line.receipt_number}`}
+                            value={line.additional_source_income || ""}
+                            onChange={(event) =>
+                              updateStockIncomeLine(
+                                line.id,
+                                "additional_source_income",
+                                event.target.value,
+                                true,
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-3">
+                          <Input
+                            className="ml-auto h-8 w-28 text-right"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            aria-label={`Stock Outward income deduction for ${line.receipt_number}`}
+                            value={line.source_income_deduction || ""}
+                            onChange={(event) =>
+                              updateStockIncomeLine(
+                                line.id,
+                                "source_income_deduction",
+                                event.target.value,
+                                true,
+                              )
+                            }
+                          />
+                        </td>
+                        <td className="px-3 py-3 text-right font-medium">
+                          {money(line.source_income_amount)}
+                        </td>
+                        <td className="px-3 py-3 text-center">
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              setStockOutwardLines((current) =>
+                                current.filter((item) => item.id !== line.id),
+                              )
+                            }
+                          >
+                            Remove
+                          </Button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={7} className="py-6 text-center text-muted-foreground">
+                        No Stock Outward source income selected. Use Load Stock Outward.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {stockOutwardLines.length > 0 && (
+                  <tfoot>
+                    <tr className="border-t-2 bg-muted/30 font-semibold">
+                      <td colSpan={2} className="px-3 py-3">
+                        Total ({stockOutwardLines.length} Stock Outward entries)
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        {money(stockOutwardTotals.calculated)}
+                      </td>
+                      <td className="px-3 py-3 text-right">{money(stockOutwardTotals.addition)}</td>
+                      <td className="px-3 py-3 text-right">
+                        {money(stockOutwardTotals.deduction)}
+                      </td>
+                      <td className="px-3 py-3 text-right">{money(stockOutwardTotal)}</td>
+                      <td />
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </section>
           <div className="flex justify-end">
-            <Button onClick={() => void generate()} disabled={generating || (!lines.length && !stockInwardLines.length)}>
+            <Button
+              onClick={() => void generate()}
+              disabled={
+                generating ||
+                (!lines.length && !stockInwardLines.length && !stockOutwardLines.length)
+              }
+            >
               {generating ? "Generating…" : "Generate Source Bill"}
             </Button>
           </div>
@@ -1488,7 +1898,9 @@ export function SourceBilling() {
                       type="checkbox"
                       aria-label="Select all eligible Stock Inward entries"
                       checked={
-                        stockInwardCandidates.filter((row) => !stockInwardLines.some((line) => line.id === row.id)).length > 0 &&
+                        stockInwardCandidates.filter(
+                          (row) => !stockInwardLines.some((line) => line.id === row.id),
+                        ).length > 0 &&
                         stockInwardCandidates
                           .filter((row) => !stockInwardLines.some((line) => line.id === row.id))
                           .every((row) => selectedStockInwardIds.includes(row.id))
@@ -1497,7 +1909,9 @@ export function SourceBilling() {
                         setSelectedStockInwardIds(
                           event.target.checked
                             ? stockInwardCandidates
-                                .filter((row) => !stockInwardLines.some((line) => line.id === row.id))
+                                .filter(
+                                  (row) => !stockInwardLines.some((line) => line.id === row.id),
+                                )
                                 .map((row) => row.id)
                             : [],
                         )
@@ -1554,7 +1968,98 @@ export function SourceBilling() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={receivingBill !== null} onOpenChange={(open) => !receiving && !open && setReceivingBill(null)}>
+      <Dialog open={stockOutwardPickerOpen} onOpenChange={setStockOutwardPickerOpen}>
+        <DialogContent className="max-w-4xl">
+          <DialogHeader>
+            <DialogTitle>Select unbilled Stock Outward source income</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Income is loaded from the saved per-source Stock Outward snapshot, not recalculated from
+            current slabs.
+          </p>
+          <div className="max-h-[60vh] overflow-auto rounded-lg border border-border">
+            <table className="w-full min-w-[650px] text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50 text-left text-xs uppercase text-muted-foreground">
+                  <th className="px-3 py-3 text-center">
+                    <input
+                      type="checkbox"
+                      aria-label="Select all Stock Outward entries"
+                      checked={
+                        stockOutwardCandidates.filter(
+                          (row) => !stockOutwardLines.some((line) => line.id === row.id),
+                        ).length > 0 &&
+                        stockOutwardCandidates
+                          .filter((row) => !stockOutwardLines.some((line) => line.id === row.id))
+                          .every((row) => selectedStockOutwardIds.includes(row.id))
+                      }
+                      onChange={(event) =>
+                        setSelectedStockOutwardIds(
+                          event.target.checked
+                            ? stockOutwardCandidates
+                                .filter(
+                                  (row) => !stockOutwardLines.some((line) => line.id === row.id),
+                                )
+                                .map((row) => row.id)
+                            : [],
+                        )
+                      }
+                    />
+                  </th>
+                  <th className="px-3 py-3">Stock Outward Reference No.</th>
+                  <th className="px-3 py-3">Date</th>
+                  <th className="px-3 py-3 text-right">Source Income / Loading Income</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {stockOutwardCandidates
+                  .filter((row) => !stockOutwardLines.some((line) => line.id === row.id))
+                  .map((row) => (
+                    <tr key={row.id}>
+                      <td className="px-3 py-3 text-center">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select Stock Outward ${row.receipt_number}`}
+                          checked={selectedStockOutwardIds.includes(row.id)}
+                          onChange={(event) =>
+                            setSelectedStockOutwardIds((current) =>
+                              event.target.checked
+                                ? [...current, row.id]
+                                : current.filter((id) => id !== row.id),
+                            )
+                          }
+                        />
+                      </td>
+                      <td className="px-3 py-3 font-medium">{row.receipt_number}</td>
+                      <td className="px-3 py-3">{row.receipt_date}</td>
+                      <td className="px-3 py-3 text-right">{money(row.source_income_amount)}</td>
+                    </tr>
+                  ))}
+                {!stockOutwardCandidates.length && (
+                  <tr>
+                    <td colSpan={4} className="py-8 text-center text-muted-foreground">
+                      No unbilled Stock Outward entries with a positive saved source-income snapshot
+                      were found for this source and period.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setStockOutwardPickerOpen(false)}>
+              Close
+            </Button>
+            <Button onClick={addSelectedStockOutward} disabled={!selectedStockOutwardIds.length}>
+              <Plus className="size-3.5" /> Add selected ({selectedStockOutwardIds.length})
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={receivingBill !== null}
+        onOpenChange={(open) => !receiving && !open && setReceivingBill(null)}
+      >
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>Mark Source Bill Received</DialogTitle>
@@ -1564,40 +2069,59 @@ export function SourceBilling() {
               <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
                 <p className="font-semibold">{receivingBill.bill_number}</p>
                 <p className="text-muted-foreground">
-                  {receivingBill.source?.contract_name ?? "Source"} · Total {money(num(receivingBill.total_freight) + num(receivingBill.total_loading) + num(receivingBill.total_unloading_income))}
+                  {receivingBill.source?.contract_name ?? "Source"} · Total{" "}
+                  {money(
+                    num(receivingBill.total_freight) +
+                      num(receivingBill.total_loading) +
+                      num(receivingBill.total_unloading_income),
+                  )}
                 </p>
               </div>
               <label className="block space-y-1.5 text-sm">
                 <span className="font-medium">Received in cash / bank account *</span>
                 <Select value={receivingAccountId} onValueChange={setReceivingAccountId}>
-                  <SelectTrigger><SelectValue placeholder="Select cash or bank account" /></SelectTrigger>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select cash or bank account" />
+                  </SelectTrigger>
                   <SelectContent>
-                    {receiptAccounts.filter((account) => account.branch_id === receivingBill.branch_id).map((account) => (
-                      <SelectItem key={account.id} value={account.id}>
-                        {account.account_name} · {account.ledger_type}
-                      </SelectItem>
-                    ))}
+                    {receiptAccounts
+                      .filter((account) => account.branch_id === receivingBill.branch_id)
+                      .map((account) => (
+                        <SelectItem key={account.id} value={account.id}>
+                          {account.account_name} · {account.ledger_type}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </label>
               <label className="block space-y-1.5 text-sm">
                 <span className="font-medium">Receipt date *</span>
-                <Input type="date" value={receivingDate} onChange={(event) => setReceivingDate(event.target.value)} />
+                <Input
+                  type="date"
+                  value={receivingDate}
+                  onChange={(event) => setReceivingDate(event.target.value)}
+                />
               </label>
               <p className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-                This posts a journal entry debiting the selected cash/bank account and crediting the source receivable. Once received, the bill cannot be deleted.
+                This posts a journal entry debiting the selected cash/bank account and crediting the
+                source receivable. Once received, the bill cannot be deleted.
               </p>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" disabled={receiving} onClick={() => setReceivingBill(null)}>Cancel</Button>
+            <Button variant="outline" disabled={receiving} onClick={() => setReceivingBill(null)}>
+              Cancel
+            </Button>
             <Button disabled={receiving || !receivingAccountId} onClick={() => void receiveBill()}>
               <Banknote className="size-4" /> {receiving ? "Posting…" : "Mark received"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      <Dialog open={journalPreviewOpen} onOpenChange={(open) => !generating && setJournalPreviewOpen(open)}>
+      <Dialog
+        open={journalPreviewOpen}
+        onOpenChange={(open) => !generating && setJournalPreviewOpen(open)}
+      >
         <DialogContent className="max-w-3xl">
           <DialogHeader>
             <DialogTitle>Source Bill Journal Entry Preview</DialogTitle>
@@ -1605,46 +2129,104 @@ export function SourceBilling() {
           <div className="space-y-4">
             <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
               <div className="flex flex-wrap justify-between gap-2">
-                <span><strong>Basis:</strong> adjusted final freight/loading plus Stock Inward source income</span>
-                <span><strong>Total:</strong> {money(previewTotals.freight + previewTotals.loading + previewTotals.unloading)}</span>
+                <span>
+                  <strong>Basis:</strong> adjusted final freight/loading plus Stock Inward source
+                  income
+                </span>
+                <span>
+                  <strong>Total:</strong>{" "}
+                  {money(previewTotals.freight + previewTotals.loading + previewTotals.unloading)}
+                </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Freight, loading and final Source Income (calculated amount plus additions minus
-                deductions) are posted as Unloading Income; approval income and unloading amounts
-                received are not included.
+                Freight/loading and Stock Outward final Source Income are posted to Loading Income.
+                Stock Inward final Source Income remains Unloading Income; approval income and
+                unloading amounts received are excluded.
               </p>
             </div>
             <div className="overflow-x-auto rounded-lg border border-border">
               <table className="w-full text-sm">
                 <thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground">
-                  <tr><th className="px-3 py-2">Journal line</th><th className="px-3 py-2">Mapped account</th><th className="px-3 py-2">Account kind</th><th className="px-3 py-2 text-right">Debit</th><th className="px-3 py-2 text-right">Credit</th></tr>
+                  <tr>
+                    <th className="px-3 py-2">Journal line</th>
+                    <th className="px-3 py-2">Mapped account</th>
+                    <th className="px-3 py-2">Account kind</th>
+                    <th className="px-3 py-2 text-right">Debit</th>
+                    <th className="px-3 py-2 text-right">Credit</th>
+                  </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {displayedJournalLines.map((line) => (
                     <tr key={line.key}>
                       <td className="px-3 py-2">{line.label}</td>
-                      <td className="px-3 py-2 font-medium">{line.account?.account_name ?? (line.id ? `Mapped ID ${line.id}` : "NOT MAPPED")}</td>
-                      <td className="px-3 py-2">{line.account ? `${line.account.ledger_type} / ${line.account.account_kind}` : "—"}</td>
-                      <td className="px-3 py-2 text-right">{line.side === "debit" ? money(line.amount) : "—"}</td>
-                      <td className="px-3 py-2 text-right">{line.side === "credit" ? money(line.amount) : "—"}</td>
+                      <td className="px-3 py-2 font-medium">
+                        {line.account?.account_name ??
+                          (line.id ? `Mapped ID ${line.id}` : "NOT MAPPED")}
+                      </td>
+                      <td className="px-3 py-2">
+                        {line.account
+                          ? `${line.account.ledger_type} / ${line.account.account_kind}`
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {line.side === "debit" ? money(line.amount) : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {line.side === "credit" ? money(line.amount) : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <tr><td colSpan={3} className="px-3 py-2">Totals {displayedJournalBalanced ? "(balanced)" : "(NOT BALANCED)"}</td><td className="px-3 py-2 text-right">{money(displayedJournalDebit)}</td><td className="px-3 py-2 text-right">{money(displayedJournalCredit)}</td></tr>
+                  <tr>
+                    <td colSpan={3} className="px-3 py-2">
+                      Totals {displayedJournalBalanced ? "(balanced)" : "(NOT BALANCED)"}
+                    </td>
+                    <td className="px-3 py-2 text-right">{money(displayedJournalDebit)}</td>
+                    <td className="px-3 py-2 text-right">{money(displayedJournalCredit)}</td>
+                  </tr>
                 </tfoot>
               </table>
             </div>
             {journalPreviewLines.some((line) => !line.account) && (
-              <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">One or more Source Master accounts are missing or could not be loaded. The database will reject this entry unless the required mapped accounts are active in this branch.</p>
+              <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                One or more Source Master accounts are missing or could not be loaded. The database
+                will reject this entry unless the required mapped accounts are active in this
+                branch.
+              </p>
             )}
-            {postedJournalEntryId && <p className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-800">Verified from saved journal entry <strong>{postedJournalEntryId}</strong>. The lines above are the actual posted voucher, not only the preview.</p>}
-            {generating && <p className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">Posting this exact entry now… Please wait.</p>}
-            {journalPostStatus === "success" && <p className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900">Journal entry passed and the source bill was generated successfully.</p>}
-            {journalPostError && <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">Journal entry was not passed:
-{journalPostError}</pre>}
+            {postedJournalEntryId && (
+              <p className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-800">
+                Verified from saved journal entry <strong>{postedJournalEntryId}</strong>. The lines
+                above are the actual posted voucher, not only the preview.
+              </p>
+            )}
+            {generating && (
+              <p className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">
+                Posting this exact entry now… Please wait.
+              </p>
+            )}
+            {journalPostStatus === "success" && (
+              <p className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900">
+                Journal entry passed and the source bill was generated successfully.
+              </p>
+            )}
+            {journalPostError && (
+              <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">
+                Journal entry was not passed:
+                {journalPostError}
+              </pre>
+            )}
           </div>
-          <DialogFooter><Button variant="outline" disabled={generating} onClick={() => setJournalPreviewOpen(false)}>Close</Button></DialogFooter>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              disabled={generating}
+              onClick={() => setJournalPreviewOpen(false)}
+            >
+              Close
+            </Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       {screen === "view" && viewing && (
@@ -1653,7 +2235,8 @@ export function SourceBilling() {
             <div>
               <h2 className="text-lg font-semibold">Source Bill {viewing.bill_number}</h2>
               <p className="text-xs text-muted-foreground">
-                Full bill view · billed consignments and Stock Inward receipts are locked.
+                Full bill view · billed consignments, Stock Inward receipts and Stock Outward
+                receipts are locked.
               </p>
             </div>
             <Button
@@ -1723,7 +2306,8 @@ export function SourceBilling() {
             <div>
               <span className="text-muted-foreground">Bill totals</span>
               <p className="font-semibold">
-                {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading · {money(viewing.total_unloading_income)} unloading income
+                {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading ·{" "}
+                {money(viewing.total_unloading_income)} unloading income
               </p>
             </div>
           </div>
@@ -1783,9 +2367,12 @@ export function SourceBilling() {
           </div>
           <section className="space-y-2">
             <div>
-              <h3 className="text-sm font-semibold">Stock Inward Source Income (Unloading Income)</h3>
+              <h3 className="text-sm font-semibold">
+                Stock Inward Source Income (Unloading Income)
+              </h3>
               <p className="text-xs text-muted-foreground">
-                Source Income only is billed; approval amounts and unloading amounts received are excluded.
+                Source Income only is billed; approval amounts and unloading amounts received are
+                excluded.
               </p>
             </div>
             <div className="overflow-x-auto rounded-xl border border-border">
@@ -1806,9 +2393,15 @@ export function SourceBilling() {
                       <tr key={item.id}>
                         <td className="px-3 py-2 font-medium">{item.receipt_number}</td>
                         <td className="px-3 py-2">{item.receipt_date}</td>
-                        <td className="px-3 py-2 text-right">{money(item.calculated_source_income)}</td>
-                        <td className="px-3 py-2 text-right">{money(item.additional_source_income)}</td>
-                        <td className="px-3 py-2 text-right">{money(item.source_income_deduction)}</td>
+                        <td className="px-3 py-2 text-right">
+                          {money(item.calculated_source_income)}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {money(item.additional_source_income)}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {money(item.source_income_deduction)}
+                        </td>
                         <td className="px-3 py-2 text-right">{money(item.source_income_amount)}</td>
                       </tr>
                     ))
@@ -1823,17 +2416,127 @@ export function SourceBilling() {
                 {viewStockInwardItems.length > 0 && (
                   <tfoot className="border-t-2 bg-muted/30 font-semibold">
                     <tr>
-                      <td colSpan={2} className="px-3 py-2">Totals</td>
-                      <td className="px-3 py-2 text-right">
-                        {money(viewStockInwardItems.reduce((sum, item) => sum + num(item.calculated_source_income), 0))}
+                      <td colSpan={2} className="px-3 py-2">
+                        Totals
                       </td>
                       <td className="px-3 py-2 text-right">
-                        {money(viewStockInwardItems.reduce((sum, item) => sum + num(item.additional_source_income), 0))}
+                        {money(
+                          viewStockInwardItems.reduce(
+                            (sum, item) => sum + num(item.calculated_source_income),
+                            0,
+                          ),
+                        )}
                       </td>
                       <td className="px-3 py-2 text-right">
-                        {money(viewStockInwardItems.reduce((sum, item) => sum + num(item.source_income_deduction), 0))}
+                        {money(
+                          viewStockInwardItems.reduce(
+                            (sum, item) => sum + num(item.additional_source_income),
+                            0,
+                          ),
+                        )}
                       </td>
-                      <td className="px-3 py-2 text-right">{money(viewing.total_unloading_income)}</td>
+                      <td className="px-3 py-2 text-right">
+                        {money(
+                          viewStockInwardItems.reduce(
+                            (sum, item) => sum + num(item.source_income_deduction),
+                            0,
+                          ),
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {money(viewing.total_unloading_income)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          </section>
+          <section className="space-y-2">
+            <div>
+              <h3 className="text-sm font-semibold">
+                Stock Outward Source Income (Loading Income)
+              </h3>
+              <p className="text-xs text-muted-foreground">
+                Billed using the saved per-source receipt snapshot.
+              </p>
+            </div>
+            <div className="overflow-x-auto rounded-xl border border-border">
+              <table className="w-full min-w-[1000px] text-sm">
+                <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2">Stock Outward Reference No.</th>
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2 text-right">Calculated Source Income</th>
+                    <th className="px-3 py-2 text-right">Addition</th>
+                    <th className="px-3 py-2 text-right">Deduction</th>
+                    <th className="px-3 py-2 text-right">Final Source Income / Loading Income</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {viewStockOutwardItems.length ? (
+                    viewStockOutwardItems.map((item) => (
+                      <tr key={item.id}>
+                        <td className="px-3 py-2 font-medium">{item.outward_number}</td>
+                        <td className="px-3 py-2">{item.outward_date}</td>
+                        <td className="px-3 py-2 text-right">
+                          {money(item.calculated_source_income)}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {money(item.additional_source_income)}
+                        </td>
+                        <td className="px-3 py-2 text-right">
+                          {money(item.source_income_deduction)}
+                        </td>
+                        <td className="px-3 py-2 text-right">{money(item.source_income_amount)}</td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={6} className="py-6 text-center text-muted-foreground">
+                        No Stock Outward source-income lines on this bill.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+                {viewStockOutwardItems.length > 0 && (
+                  <tfoot className="border-t-2 bg-muted/30 font-semibold">
+                    <tr>
+                      <td colSpan={2} className="px-3 py-2">
+                        Totals
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {money(
+                          viewStockOutwardItems.reduce(
+                            (sum, item) => sum + num(item.calculated_source_income),
+                            0,
+                          ),
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {money(
+                          viewStockOutwardItems.reduce(
+                            (sum, item) => sum + num(item.additional_source_income),
+                            0,
+                          ),
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {money(
+                          viewStockOutwardItems.reduce(
+                            (sum, item) => sum + num(item.source_income_deduction),
+                            0,
+                          ),
+                        )}
+                      </td>
+                      <td className="px-3 py-2 text-right">
+                        {money(
+                          viewStockOutwardItems.reduce(
+                            (sum, item) => sum + num(item.source_income_amount),
+                            0,
+                          ),
+                        )}
+                      </td>
                     </tr>
                   </tfoot>
                 )}

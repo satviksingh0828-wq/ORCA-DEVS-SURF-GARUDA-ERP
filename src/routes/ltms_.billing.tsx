@@ -18,6 +18,7 @@ import { SourceBilling } from "@/components/reports/SourceBilling";
 import { TransporterBilling } from "@/components/reports/TransporterBilling";
 import { WorkmenBilling } from "@/components/reports/WorkmenBilling";
 import { UnloadingReceived } from "@/components/reports/UnloadingReceived";
+import { LoadingReceived } from "@/components/reports/LoadingReceived";
 import { ApprovalIncome } from "@/components/reports/ApprovalIncome";
 import { PendingTripApproval } from "@/components/reports/PendingTripApproval";
 import { useSession } from "@/lib/session";
@@ -45,6 +46,12 @@ const TABS = [
     id: "unloading-received",
     label: "Unloading Received",
     desc: "Post Stock Inward unloading receipts",
+    icon: Banknote,
+  },
+  {
+    id: "loading-received",
+    label: "Loading Received",
+    desc: "Post Stock Outward loading receipts",
     icon: Banknote,
   },
   {
@@ -140,6 +147,7 @@ function BillingPage() {
           {safeTab === "pending-trip-approval" && <PendingTripApproval />}
           {safeTab === "source-billing" && <SourceBilling />}
           {safeTab === "unloading-received" && <UnloadingReceived />}
+          {safeTab === "loading-received" && <LoadingReceived />}
           {safeTab === "approval-income" && <ApprovalIncome />}
           {safeTab === "transporter-billing" && <TransporterBilling />}
           {safeTab === "workmen-billing" && <WorkmenBilling />}

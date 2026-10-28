@@ -28,6 +28,7 @@ import {
 type ChargeType = "loading" | "unloading";
 type Entry = {
   id: string;
+  origin: "consignment" | "inward" | "outward";
   chargeType: ChargeType;
   referenceNumber: string;
   referenceDate: string | null;
@@ -36,6 +37,7 @@ type Entry = {
   calculated: number;
   deduction: number;
   addition: number;
+  approvalAmount?: number;
 };
 type Bill = {
   id: string;
@@ -125,6 +127,7 @@ export function WorkmenBilling() {
   const selectedLoading = selected.filter((item) => item.chargeType === "loading");
   const selectedUnloading = selected.filter((item) => item.chargeType === "unloading");
   const candidates = activeType === "loading" ? loadingCandidates : unloadingCandidates;
+  const entryKey = (item: Entry) => `${item.origin}:${item.id}`;
   const visibleCandidates = candidates.filter((item) => {
     const q = search.trim().toLowerCase();
     return (
@@ -158,49 +161,65 @@ export function WorkmenBilling() {
     if (!branchId) return;
     setPickerLoading(true);
     try {
-      const [typesResult, entriesResult, consignments, receipts] = await Promise.all([
-        db
-          .from("package_rate_types")
-          .select("id,package_type,basis,charge_mode")
-          .eq("branch_id", branchId),
-        db
-          .from("package_rate_entries")
-          .select("package_rate_type_id,from_value,to_value,amount,rate_kind")
-          .eq("branch_id", branchId),
-        fetchAll<any>(() =>
+      const [typesResult, entriesResult, consignments, receipts, outwardReceipts] =
+        await Promise.all([
           db
-            .from("consignments")
-            .select(
-              "id,consignment_number,consignment_date,branch:branches(branch_name),consignment_package_information(package_rate_type_id,package_type,quantity,weight_kg)",
-            )
-            .eq("branch_id", branchId)
-            .is("workmen_loading_bill_id", null)
-            .gte("consignment_date", periodFrom)
-            .lte("consignment_date", periodTo)
-            .order("consignment_date", { ascending: false }),
-        ),
-        fetchAll<any>(() =>
+            .from("package_rate_types")
+            .select("id,package_type,basis,charge_mode")
+            .eq("branch_id", branchId),
           db
-            .from("stock_inward_receipts")
-            .select(
-              "id,receipt_number,receipt_date,branch:branches(branch_name),stock_inward_packages(package_rate_type_id,package_type,quantity,weight_kg)",
-            )
-            .eq("branch_id", branchId)
-            .is("workmen_unloading_bill_id", null)
-            .gte("receipt_date", periodFrom)
-            .lte("receipt_date", periodTo)
-            .order("receipt_date", { ascending: false }),
-        ),
-      ]);
+            .from("package_rate_entries")
+            .select("package_rate_type_id,from_value,to_value,amount,rate_kind")
+            .eq("branch_id", branchId),
+          fetchAll<any>(() =>
+            db
+              .from("consignments")
+              .select(
+                "id,consignment_number,consignment_date,branch:branches(branch_name),consignment_package_information(package_rate_type_id,package_type,quantity,weight_kg)",
+              )
+              .eq("branch_id", branchId)
+              .is("workmen_loading_bill_id", null)
+              .gte("consignment_date", periodFrom)
+              .lte("consignment_date", periodTo)
+              .order("consignment_date", { ascending: false }),
+          ),
+          fetchAll<any>(() =>
+            db
+              .from("stock_inward_receipts")
+              .select(
+                "id,receipt_number,receipt_date,branch:branches(branch_name),stock_inward_packages(package_rate_type_id,package_type,quantity,weight_kg)",
+              )
+              .eq("branch_id", branchId)
+              .is("workmen_unloading_bill_id", null)
+              .gte("receipt_date", periodFrom)
+              .lte("receipt_date", periodTo)
+              .order("receipt_date", { ascending: false }),
+          ),
+          fetchAll<any>(() =>
+            db
+              .from("stock_outward_receipts")
+              .select(
+                "id,outward_number,outward_date,approval_amount,branch:branches(branch_name),stock_outward_packages(package_rate_type_id,package_type,quantity,weight_kg)",
+              )
+              .eq("branch_id", branchId)
+              .is("workmen_loading_bill_id", null)
+              .gte("outward_date", periodFrom)
+              .lte("outward_date", periodTo)
+              .order("outward_date", { ascending: false }),
+          ),
+        ]);
       if (typesResult.error) throw new Error(typesResult.error.message);
       if (entriesResult.error) throw new Error(entriesResult.error.message);
-      const types = new Map((typesResult.data ?? []).map((item: any) => [item.id, item]));
+      const types = new Map<string, any>(
+        (typesResult.data ?? []).map((item: any) => [item.id, item] as [string, any]),
+      );
       const entries = entriesResult.data ?? [];
-      setLoadingCandidates(
-        (consignments ?? []).map((row: any) => {
+      setLoadingCandidates([
+        ...(consignments ?? []).map((row: any) => {
           const packages = row.consignment_package_information ?? [];
           return {
             id: row.id,
+            origin: "consignment" as const,
             chargeType: "loading" as const,
             referenceNumber: row.consignment_number,
             referenceDate: row.consignment_date,
@@ -217,12 +236,35 @@ export function WorkmenBilling() {
             addition: 0,
           };
         }),
-      );
+        ...(outwardReceipts ?? []).map((row: any) => {
+          const packages = row.stock_outward_packages ?? [];
+          return {
+            id: row.id,
+            origin: "outward" as const,
+            chargeType: "loading" as const,
+            referenceNumber: row.outward_number ?? row.id,
+            referenceDate: row.outward_date,
+            branchName: row.branch?.branch_name,
+            packageType:
+              [...new Set(packages.map((item: any) => item.package_type).filter(Boolean))].join(
+                ", ",
+              ) || "—",
+            calculated: packages.reduce(
+              (sum: number, item: any) => sum + chargeForPackage(item, types, entries, "loading"),
+              0,
+            ),
+            approvalAmount: num(row.approval_amount),
+            deduction: 0,
+            addition: 0,
+          };
+        }),
+      ]);
       setUnloadingCandidates(
         (receipts ?? []).map((row: any) => {
           const packages = row.stock_inward_packages ?? [];
           return {
             id: row.id,
+            origin: "inward" as const,
             chargeType: "unloading" as const,
             referenceNumber: row.receipt_number ?? row.id,
             referenceDate: row.receipt_date,
@@ -270,7 +312,7 @@ export function WorkmenBilling() {
     const { data, error } = await db
       .from("workmen_bill_items")
       .select(
-        "id,charge_type,reference_number,reference_date,package_type,calculated_amount,final_amount",
+        "id,charge_type,reference_number,reference_date,package_type,calculated_amount,final_amount,stock_outward_receipt_id",
       )
       .eq("bill_id", bill.id)
       .order("charge_type")
@@ -280,6 +322,11 @@ export function WorkmenBilling() {
       (data ?? []).map((item: any) => ({
         ...item,
         chargeType: item.charge_type,
+        origin: item.stock_outward_receipt_id
+          ? "outward"
+          : item.charge_type === "unloading"
+            ? "inward"
+            : "consignment",
         referenceNumber: item.reference_number,
         referenceDate: item.reference_date,
         packageType: item.package_type ?? "—",
@@ -338,12 +385,14 @@ export function WorkmenBilling() {
     if (branchId) void loadCandidates();
   }
   function addSelectedCandidates() {
-    const selectedEntries = candidates.filter((item) => candidateIds.includes(item.id));
+    const selectedEntries = candidates.filter((item) => candidateIds.includes(entryKey(item)));
     setSelected((current) => [
       ...current,
       ...selectedEntries.filter(
         (entry) =>
-          !current.some((item) => item.id === entry.id && item.chargeType === entry.chargeType),
+          !current.some(
+            (item) => entryKey(item) === entryKey(entry) && item.chargeType === entry.chargeType,
+          ),
       ),
     ]);
     setPickerOpen(false);
@@ -381,8 +430,9 @@ export function WorkmenBilling() {
       p_deduction_note: deductionNote.trim() || null,
       p_items: selected.map((item) => ({
         charge_type: item.chargeType,
-        consignment_id: item.chargeType === "loading" ? item.id : null,
-        stock_inward_receipt_id: item.chargeType === "unloading" ? item.id : null,
+        consignment_id: item.origin === "consignment" ? item.id : null,
+        stock_inward_receipt_id: item.origin === "inward" ? item.id : null,
+        stock_outward_receipt_id: item.origin === "outward" ? item.id : null,
         package_type: item.packageType,
         calculated_amount: item.calculated,
         deduction: item.deduction,
@@ -630,7 +680,16 @@ export function WorkmenBilling() {
               {viewItems.map((item) => (
                 <tr key={item.id} className="border-t border-border">
                   <td className="px-3 py-3 capitalize">{item.chargeType}</td>
-                  <td className="px-3 py-3 font-semibold">{item.referenceNumber}</td>
+                  <td className="px-3 py-3 font-semibold">
+                    <span className="mr-2 text-xs font-normal text-muted-foreground">
+                      {item.origin === "outward"
+                        ? "Stock Outward"
+                        : item.origin === "inward"
+                          ? "Stock Inward"
+                          : "Consignment"}
+                    </span>
+                    {item.referenceNumber}
+                  </td>
                   <td className="px-3 py-3">{item.packageType}</td>
                   <td className="px-3 py-3">{item.referenceDate ?? "—"}</td>
                   <td className="px-3 py-3 text-right">{money(item.calculated_amount)}</td>
@@ -725,7 +784,14 @@ export function WorkmenBilling() {
                     </div>
                   </td>
                   <td className="px-3 py-2">{entry.packageType}</td>
-                  <td className="px-3 py-2 text-right">{money(entry.calculated)}</td>
+                  <td className="px-3 py-2 text-right">
+                    {money(entry.calculated)}
+                    {entry.origin === "outward" && (
+                      <div className="text-xs font-normal text-muted-foreground">
+                        Approval amount (informational): {money(entry.approvalAmount)}
+                      </div>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-right">
                     <Input
                       className="ml-auto h-8 w-28"
@@ -932,20 +998,36 @@ export function WorkmenBilling() {
                     <td className="px-3 py-3">
                       <input
                         type="checkbox"
-                        checked={candidateIds.includes(entry.id)}
+                        checked={candidateIds.includes(entryKey(entry))}
                         onChange={(e) =>
                           setCandidateIds((ids) =>
                             e.target.checked
-                              ? [...ids, entry.id]
-                              : ids.filter((id) => id !== entry.id),
+                              ? [...ids, entryKey(entry)]
+                              : ids.filter((id) => id !== entryKey(entry)),
                           )
                         }
                       />
                     </td>
-                    <td className="px-3 py-3 font-medium">{entry.referenceNumber}</td>
+                    <td className="px-3 py-3 font-medium">
+                      <span className="mr-2 text-xs font-normal text-muted-foreground">
+                        {entry.origin === "outward"
+                          ? "Stock Outward"
+                          : entry.origin === "inward"
+                            ? "Stock Inward"
+                            : "Consignment"}
+                      </span>
+                      {entry.referenceNumber}
+                    </td>
                     <td className="px-3 py-3">{entry.referenceDate ?? "—"}</td>
                     <td className="px-3 py-3">{entry.packageType}</td>
-                    <td className="px-3 py-3 text-right">{money(entry.calculated)}</td>
+                    <td className="px-3 py-3 text-right">
+                      {money(entry.calculated)}
+                      {entry.origin === "outward" && (
+                        <div className="text-xs font-normal text-muted-foreground">
+                          Approval amount (informational): {money(entry.approvalAmount)}
+                        </div>
+                      )}
+                    </td>
                   </tr>
                 ))}
                 {!visibleCandidates.length && (

@@ -52,47 +52,146 @@ const TRANSPORTER_SCHEMA = z.object({
   source_id: z.string().uuid().optional().describe("Optional transporter source UUID."),
 });
 const WMS_STOCK_SCHEMA = z.object({
-  warehouse_name: z.string().trim().max(160).optional().describe("Optional warehouse name or warehouse code. Omit to return stock from all warehouses accessible to the configured WMS token."),
-  q: z.string().trim().max(160).optional().describe("Optional search across SKU, item name, UPC, MPN, and bin code."),
+  warehouse_name: z
+    .string()
+    .trim()
+    .max(160)
+    .optional()
+    .describe(
+      "Optional warehouse name or warehouse code. Omit to return stock from all warehouses accessible to the configured WMS token.",
+    ),
+  q: z
+    .string()
+    .trim()
+    .max(160)
+    .optional()
+    .describe("Optional search across SKU, item name, UPC, MPN, and bin code."),
   bin_code: z.string().trim().max(80).optional().describe("Optional exact WMS bin code filter."),
-  limit: z.number().int().min(1).max(500).optional().describe("Rows per page; default 100, maximum 500."),
-  offset: z.number().int().min(0).max(SOURCE_ROW_CAP).optional().describe("Zero-based result offset for pagination."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe("Rows per page; default 100, maximum 500."),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .max(SOURCE_ROW_CAP)
+    .optional()
+    .describe("Zero-based result offset for pagination."),
 });
 const WMS_WAREHOUSES_SCHEMA = z.object({});
 const HR_SCHEMA = z.object({
   ...BASE_INPUT,
-  employee_number: z.string().trim().max(80).optional().describe("Optional employee number filter."),
+  employee_number: z
+    .string()
+    .trim()
+    .max(80)
+    .optional()
+    .describe("Optional employee number filter."),
 });
 const HR_ALL_SCHEMA = z.object({
-  from_date: z.string().optional().describe("Optional inclusive start date, YYYY-MM-DD. Defaults to all history."),
-  to_date: z.string().optional().describe("Optional inclusive end date, YYYY-MM-DD. Defaults to all history."),
-  limit: z.number().int().min(1).max(500).optional().describe("Rows per page; default 100, maximum 500."),
-  offset: z.number().int().min(0).max(SOURCE_ROW_CAP).optional().describe("Zero-based result offset for pagination."),
-  employee_number: z.string().trim().max(80).optional().describe("Optional employee number filter."),
+  from_date: z
+    .string()
+    .optional()
+    .describe("Optional inclusive start date, YYYY-MM-DD. Defaults to all history."),
+  to_date: z
+    .string()
+    .optional()
+    .describe("Optional inclusive end date, YYYY-MM-DD. Defaults to all history."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe("Rows per page; default 100, maximum 500."),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .max(SOURCE_ROW_CAP)
+    .optional()
+    .describe("Zero-based result offset for pagination."),
+  employee_number: z
+    .string()
+    .trim()
+    .max(80)
+    .optional()
+    .describe("Optional employee number filter."),
 });
 
 const ACCOUNTING_JOURNAL_SCHEMA = z.object({
   ...BASE_INPUT,
   branch_name: z.string().trim().max(160).optional().describe("Optional exact branch name filter."),
-  status: z.enum(["pending", "approved", "rejected"]).optional().describe("Optional journal status filter; defaults to all statuses."),
+  status: z
+    .enum(["pending", "approved", "rejected"])
+    .optional()
+    .describe("Optional journal status filter; defaults to all statuses."),
 });
 const ACCOUNT_LIST_SCHEMA = z.object({
   branch_name: z.string().trim().max(160).optional().describe("Optional exact branch name filter."),
-  include_inactive: z.boolean().optional().describe("Include inactive ledger accounts; defaults to true."),
-  limit: z.number().int().min(1).max(500).optional().describe("Rows per page; default 100, maximum 500."),
-  offset: z.number().int().min(0).max(SOURCE_ROW_CAP).optional().describe("Zero-based result offset for pagination."),
+  include_inactive: z
+    .boolean()
+    .optional()
+    .describe("Include inactive ledger accounts; defaults to true."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe("Rows per page; default 100, maximum 500."),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .max(SOURCE_ROW_CAP)
+    .optional()
+    .describe("Zero-based result offset for pagination."),
 });
 const PERIOD_LEDGER_SCHEMA = z.object({
   ...BASE_INPUT,
-  branch_name: z.string().trim().min(1).max(160).describe("Exact branch name for the account ledger."),
+  branch_name: z
+    .string()
+    .trim()
+    .min(1)
+    .max(160)
+    .describe("Exact branch name for the account ledger."),
   account_name: z.string().trim().min(1).max(200).describe("Exact ledger account name."),
 });
 const BALANCE_AS_OF_SCHEMA = z.object({
-  as_of: z.string().trim().min(10).max(40).describe("Accounting cutoff as YYYY-MM-DD or ISO-8601 timestamp with timezone, e.g. 2026-10-17T16:30:00+05:30."),
+  as_of: z
+    .string()
+    .trim()
+    .min(10)
+    .max(40)
+    .describe(
+      "Accounting cutoff as YYYY-MM-DD or ISO-8601 timestamp with timezone, e.g. 2026-10-17T16:30:00+05:30.",
+    ),
   branch_name: z.string().trim().max(160).optional().describe("Optional exact branch name filter."),
-  account_name: z.string().trim().max(200).optional().describe("Optional exact ledger account name filter."),
-  limit: z.number().int().min(1).max(500).optional().describe("Rows per page; default 100, maximum 500."),
-  offset: z.number().int().min(0).max(SOURCE_ROW_CAP).optional().describe("Zero-based result offset for pagination."),
+  account_name: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .describe("Optional exact ledger account name filter."),
+  limit: z
+    .number()
+    .int()
+    .min(1)
+    .max(500)
+    .optional()
+    .describe("Rows per page; default 100, maximum 500."),
+  offset: z
+    .number()
+    .int()
+    .min(0)
+    .max(SOURCE_ROW_CAP)
+    .optional()
+    .describe("Zero-based result offset for pagination."),
 });
 type DateRange = { from: string; to: string };
 type Paging = { limit?: number; offset?: number };
@@ -555,6 +654,194 @@ async function stockInwardUnloadingIncome(db: AnyDb, input: QueryInput): Promise
     };
   });
   return page("Unloading Income (Stock Inward)", range, input, rows);
+}
+
+async function stockOutwardIncomeRows(
+  db: AnyDb,
+  input: QueryInput,
+  kind: "source" | "loading" | "approval",
+): Promise<DataResult> {
+  const range = resolveRange(input);
+  const dateColumn = kind === "source" ? "outward_date" : "loading_date";
+  let query = db
+    .from("stock_outward_receipts")
+    .select(
+      "id,branch_id,outward_number,outward_date,loading_date,loading_amount_received,approval_amount,loading_received_journal_entry_id,approval_income_journal_entry_id,branch:branches(branch_name)",
+    )
+    .gte(dateColumn, range.from)
+    .lte(dateColumn, range.to)
+    .order(dateColumn, { ascending: false });
+  if (input.branch_id) query = query.eq("branch_id", input.branch_id);
+  const receipts = await fetchAll<any>((from, to) => query.range(from, to));
+  const receiptIds = ids(receipts, "id");
+  let postedSource = new Set<string>();
+  let sourceItems: any[] = [];
+  if (kind === "source" && receiptIds.length) {
+    const [income, items] = await Promise.all([
+      fetchAll<any>((from, to) =>
+        db
+          .from("stock_outward_source_income")
+          .select("receipt_id,source_id,source_income_amount,source:contracts(contract_name)")
+          .in("receipt_id", receiptIds)
+          .range(from, to),
+      ),
+      fetchAll<any>((from, to) =>
+        db
+          .from("ltms_source_bill_stock_outward_items")
+          .select("stock_outward_receipt_id,source_id,source_income_amount,bill_id")
+          .in("stock_outward_receipt_id", receiptIds)
+          .range(from, to),
+      ),
+    ]);
+    sourceItems = income;
+    const bills = ids(items, "bill_id");
+    const billRows = bills.length
+      ? await fetchAll<any>((from, to) =>
+          db
+            .from("ltms_source_bills")
+            .select("id,journal_entry_id")
+            .in("id", bills)
+            .is("deleted_at", null)
+            .range(from, to),
+        )
+      : [];
+    postedSource = new Set(billRows.filter((b: any) => b.journal_entry_id).map((b: any) => b.id));
+    sourceItems = sourceItems.map((x: any) => ({
+      ...x,
+      posted: items.some(
+        (it: any) =>
+          it.stock_outward_receipt_id === x.receipt_id &&
+          it.source_id === x.source_id &&
+          postedSource.has(it.bill_id),
+      ),
+    }));
+  }
+  const rows = receipts
+    .map((r: any) => {
+      const common = {
+        Date: r[dateColumn] ?? null,
+        "Stock Outward No.": r.outward_number ?? null,
+        Branch: r.branch?.branch_name ?? null,
+      };
+      if (kind === "source")
+        return (
+          sourceItems.filter((x: any) => x.receipt_id === r.id).length
+            ? sourceItems.filter((x: any) => x.receipt_id === r.id)
+            : [{ source_income_amount: 0, source: null, posted: false }]
+        ).map((x: any) => ({
+          ...common,
+          Source: x.source?.contract_name ?? null,
+          "Source Income": num(x.source_income_amount),
+          Posted: x.posted,
+        }));
+      if (kind === "loading")
+        return {
+          ...common,
+          "Loading Received": num(r.loading_amount_received),
+          Posted: Boolean(r.loading_received_journal_entry_id),
+        };
+      return {
+        ...common,
+        "Approval Income": num(r.approval_amount),
+        Posted: Boolean(r.approval_income_journal_entry_id),
+      };
+    })
+    .flat();
+  return page(
+    kind === "source"
+      ? "Stock Outward Source Income"
+      : kind === "loading"
+        ? "Stock Outward Loading Received"
+        : "Stock Outward Approval Income",
+    range,
+    input,
+    rows,
+  );
+}
+
+async function workmenOutwardLoading(db: AnyDb, input: QueryInput): Promise<DataResult> {
+  const range = resolveRange(input);
+  let query = db
+    .from("stock_outward_receipts")
+    .select(
+      "id,branch_id,outward_number,outward_date,branch:branches(branch_name),stock_outward_packages(package_rate_type_id,package_type,quantity,weight_kg)",
+    )
+    .gte("outward_date", range.from)
+    .lte("outward_date", range.to)
+    .order("outward_date", { ascending: false });
+  if (input.branch_id) query = query.eq("branch_id", input.branch_id);
+  const receipts = await fetchAll<any>((from, to) => query.range(from, to));
+  const packages = receipts.flatMap((r: any) => r.stock_outward_packages ?? []),
+    typeIds = ids(packages, "package_rate_type_id"),
+    branchIds = ids(receipts, "branch_id");
+  const [types, entries, items] = await Promise.all([
+    typeIds.length
+      ? fetchAll<any>((from, to) =>
+          db
+            .from("package_rate_types")
+            .select("id,basis,charge_mode")
+            .in("id", typeIds)
+            .range(from, to),
+        )
+      : [],
+    branchIds.length
+      ? fetchAll<any>((from, to) =>
+          db
+            .from("package_rate_entries")
+            .select("package_rate_type_id,from_value,to_value,amount")
+            .eq("rate_kind", "loading")
+            .in("branch_id", branchIds)
+            .order("from_value")
+            .range(from, to),
+        )
+      : [],
+    receipts.length
+      ? fetchAll<any>((from, to) =>
+          db
+            .from("workmen_bill_items")
+            .select("stock_outward_receipt_id,bill_id,final_amount")
+            .eq("charge_type", "loading")
+            .in("stock_outward_receipt_id", ids(receipts, "id"))
+            .range(from, to),
+        )
+      : [],
+  ]);
+  const billIds = ids(items, "bill_id"),
+    bills = billIds.length
+      ? await fetchAll<any>((from, to) =>
+          db.from("workmen_bills").select("id,journal_entry_id").in("id", billIds).range(from, to),
+        )
+      : [];
+  const posted = new Set(bills.filter((b: any) => b.journal_entry_id).map((b: any) => b.id));
+  const rows = receipts.map((r: any) => {
+    const pack = r.stock_outward_packages ?? [];
+    const calculated = pack.reduce(
+      (sum: number, it: any) =>
+        sum +
+        packageSlabCharge(
+          it,
+          new Map(types.map((t: any) => [t.id, t])).get(it.package_rate_type_id),
+          entries,
+        ),
+      0,
+    );
+    const related = items.filter((it: any) => it.stock_outward_receipt_id === r.id);
+    const postedAmount = related
+      .filter((it: any) => posted.has(it.bill_id))
+      .reduce((sum: number, it: any) => sum + num(it.final_amount), 0);
+    return {
+      "Stock Outward No.": r.outward_number ?? null,
+      Date: r.outward_date ?? null,
+      Branch: r.branch?.branch_name ?? null,
+      "Package Information":
+        [...new Set(pack.map((it: any) => it.package_type).filter(Boolean))].join(", ") || null,
+      Quantity: pack.reduce((sum: number, it: any) => sum + num(it.quantity), 0),
+      "Weight (KG)": pack.reduce((sum: number, it: any) => sum + num(it.weight_kg), 0),
+      "Loading Workmen Charges": calculated,
+      "Posted Loading Workmen Charges": postedAmount,
+    };
+  });
+  return page("Workmen Charges - Loading (Stock Outward)", range, input, rows);
 }
 
 async function workmenLoading(db: AnyDb, input: QueryInput): Promise<DataResult> {
@@ -1124,7 +1411,6 @@ async function consignmentNet(db: AnyDb, input: QueryInput): Promise<DataResult>
   return page("Consignment Net", range, input, rows);
 }
 
-
 async function ltmsFinanceEntries(
   db: AnyDb,
   kind: "income" | "expenditure",
@@ -1158,14 +1444,19 @@ async function ltmsFinanceEntries(
       Amount: num(entry.amount),
       Branch: entry.branch?.branch_name ?? null,
       "Linked To": linkedTo,
-      Status: entry[statusColumn] ? (isIncome ? "Received" : "Paid") : isIncome ? "Not received" : "Unpaid",
+      Status: entry[statusColumn]
+        ? isIncome
+          ? "Received"
+          : "Paid"
+        : isIncome
+          ? "Not received"
+          : "Unpaid",
       "Status Date": entry[statusDateColumn] || null,
       Note: entry.note || null,
     };
   });
   return page(isIncome ? "LTMS Finance Income" : "LTMS Finance Expenditure", range, input, rows);
 }
-
 
 type HrInput = {
   from_date?: string;
@@ -1196,12 +1487,18 @@ async function findEmployeeIds(db: AnyDb, employeeNumber?: string): Promise<stri
 async function hrPayrolls(db: AnyDb, input: HrInput): Promise<DataResult> {
   const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
-  let query = db.from("payrolls").select(
-    "employee_id,period_start,period_end,period_type,basic_salary,hra,travel_allowance,special_allowance,other_allowance,gross,pf_deduction,tax_deduction,loan_deduction,advance_deduction,loss_deduction,unpaid_leave_deduction,paid_leave_payout_amount,paid_leave_final_settlement_amount,paid_leave_daily_rate,extra_work_days,extra_work_pay,incentive_amount,unpaid_leave_deduction_rate,paid_leave_payout_rate,net,payment_status,payment_date,payment_amount,payment_history,present_days,working_days,paid_leaves_used,paid_leaves_left,unpaid_leaves,notes,employee:employees(employee_number,first_name,middle_name,last_name)",
-  ).order("period_start", { ascending: false });
+  let query = db
+    .from("payrolls")
+    .select(
+      "employee_id,period_start,period_end,period_type,basic_salary,hra,travel_allowance,special_allowance,other_allowance,gross,pf_deduction,tax_deduction,loan_deduction,advance_deduction,loss_deduction,unpaid_leave_deduction,paid_leave_payout_amount,paid_leave_final_settlement_amount,paid_leave_daily_rate,extra_work_days,extra_work_pay,incentive_amount,unpaid_leave_deduction_rate,paid_leave_payout_rate,net,payment_status,payment_date,payment_amount,payment_history,present_days,working_days,paid_leaves_used,paid_leaves_left,unpaid_leaves,notes,employee:employees(employee_number,first_name,middle_name,last_name)",
+    )
+    .order("period_start", { ascending: false });
   if (input.from_date) query = query.gte("period_end", range.from);
   if (input.to_date) query = query.lte("period_start", range.to);
-  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  if (employeeIds)
+    query = employeeIds.length
+      ? query.in("employee_id", employeeIds)
+      : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const rows = records.map((row: any) => {
     const status = row.payment_status ?? "paid";
@@ -1212,7 +1509,8 @@ async function hrPayrolls(db: AnyDb, input: HrInput): Promise<DataResult> {
       : status === "paid"
         ? num(row.payment_amount ?? net)
         : num(row.payment_amount);
-    const statusLabel = status === "partial_paid" ? "Partially paid" : status === "paid" ? "Paid" : "Not paid";
+    const statusLabel =
+      status === "partial_paid" ? "Partially paid" : status === "paid" ? "Paid" : "Not paid";
     return {
       "Employee Number": row.employee?.employee_number ?? null,
       Employee: employeeDisplayName(row.employee) || null,
@@ -1231,7 +1529,11 @@ async function hrPayrolls(db: AnyDb, input: HrInput): Promise<DataResult> {
       "Paid Leave Final Settlement": num(row.paid_leave_final_settlement_amount),
       "Paid Leave Daily Rate": num(row.paid_leave_daily_rate),
       Incentive: num(row.incentive_amount),
-      "Total Earnings": num(row.gross) + num(row.extra_work_pay) + num(row.paid_leave_final_settlement_amount) + num(row.incentive_amount),
+      "Total Earnings":
+        num(row.gross) +
+        num(row.extra_work_pay) +
+        num(row.paid_leave_final_settlement_amount) +
+        num(row.incentive_amount),
       "PF Deduction": num(row.pf_deduction),
       "Tax Deduction": num(row.tax_deduction),
       "Loan Deduction": num(row.loan_deduction),
@@ -1246,7 +1548,10 @@ async function hrPayrolls(db: AnyDb, input: HrInput): Promise<DataResult> {
       Outstanding: status === "paid" ? 0 : Math.max(0, net - paidToDate),
       "Payment Date": row.payment_date ?? null,
       Notes: row.notes ?? null,
-      "Payment History": history.map((payment: any) => ({ date: payment?.date ?? null, amount: num(payment?.amount) })),
+      "Payment History": history.map((payment: any) => ({
+        date: payment?.date ?? null,
+        amount: num(payment?.amount),
+      })),
       "Present Days": num(row.present_days),
       "Working Days": num(row.working_days),
       "Paid Leaves Used": num(row.paid_leaves_used),
@@ -1256,25 +1561,43 @@ async function hrPayrolls(db: AnyDb, input: HrInput): Promise<DataResult> {
   });
   return page("HR Payroll", range, input, rows);
 }
-async function hrLoansOrAdvances(db: AnyDb, kind: "loan" | "advance", input: HrInput): Promise<DataResult> {
+async function hrLoansOrAdvances(
+  db: AnyDb,
+  kind: "loan" | "advance",
+  input: HrInput,
+): Promise<DataResult> {
   const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
   const table = kind === "loan" ? "loans" : "advances";
   const relation = kind === "loan" ? "loan_installments" : "advance_installments";
   const fk = kind === "loan" ? "loan_id" : "advance_id";
-  let query = db.from(table).select(
-    "id,employee_id,principal,interest_rate,interest_method,months,emi,total_payable,start_date,paid_months,status,paid_off_date,discount_amount,notes,employee:employees(employee_number,first_name,middle_name,last_name)",
-  ).order("start_date", { ascending: false });
+  let query = db
+    .from(table)
+    .select(
+      "id,employee_id,principal,interest_rate,interest_method,months,emi,total_payable,start_date,paid_months,status,paid_off_date,discount_amount,notes,employee:employees(employee_number,first_name,middle_name,last_name)",
+    )
+    .order("start_date", { ascending: false });
   if (input.from_date) query = query.gte("start_date", range.from);
   if (input.to_date) query = query.lte("start_date", range.to);
-  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  if (employeeIds)
+    query = employeeIds.length
+      ? query.in("employee_id", employeeIds)
+      : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const parentIds = ids(records, "id");
   const installmentRows = parentIds.length
-    ? await fetchAll<any>((from, to) => db.from(relation).select(`${fk},emi_number,due_date,amount,paid_amount,status`).in(fk, parentIds).order("due_date").range(from, to))
+    ? await fetchAll<any>((from, to) =>
+        db
+          .from(relation)
+          .select(`${fk},emi_number,due_date,amount,paid_amount,status`)
+          .in(fk, parentIds)
+          .order("due_date")
+          .range(from, to),
+      )
     : [];
   const installmentsByParent = new Map<string, any[]>();
-  for (const inst of installmentRows) installmentsByParent.set(inst[fk], [...(installmentsByParent.get(inst[fk]) ?? []), inst]);
+  for (const inst of installmentRows)
+    installmentsByParent.set(inst[fk], [...(installmentsByParent.get(inst[fk]) ?? []), inst]);
   const rows = records.map((row: any) => ({
     "Employee Number": row.employee?.employee_number ?? null,
     Employee: employeeDisplayName(row.employee) || null,
@@ -1308,12 +1631,18 @@ async function hrLoansOrAdvances(db: AnyDb, kind: "loan" | "advance", input: HrI
 async function hrDeductions(db: AnyDb, input: HrInput): Promise<DataResult> {
   const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
-  let query = db.from("loss_deductions").select(
-    "employee_id,amount,reason,status,deducted_on,created_at,employee:employees(employee_number,first_name,middle_name,last_name),payroll:payrolls(period_start,period_end)",
-  ).order("created_at", { ascending: false });
+  let query = db
+    .from("loss_deductions")
+    .select(
+      "employee_id,amount,reason,status,deducted_on,created_at,employee:employees(employee_number,first_name,middle_name,last_name),payroll:payrolls(period_start,period_end)",
+    )
+    .order("created_at", { ascending: false });
   if (input.from_date) query = query.gte("created_at", `${range.from}T00:00:00.000Z`);
   if (input.to_date) query = query.lte("created_at", `${range.to}T23:59:59.999Z`);
-  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  if (employeeIds)
+    query = employeeIds.length
+      ? query.in("employee_id", employeeIds)
+      : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const rows = records.map((row: any) => ({
     "Employee Number": row.employee?.employee_number ?? null,
@@ -1330,12 +1659,18 @@ async function hrDeductions(db: AnyDb, input: HrInput): Promise<DataResult> {
 async function hrIncentives(db: AnyDb, input: HrInput): Promise<DataResult> {
   const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
-  let query = db.from("incentive_amounts").select(
-    "employee_id,amount,reason,status,added_on,created_at,payroll:payrolls(period_start,period_end),employee:employees(employee_number,first_name,middle_name,last_name)",
-  ).order("created_at", { ascending: false });
+  let query = db
+    .from("incentive_amounts")
+    .select(
+      "employee_id,amount,reason,status,added_on,created_at,payroll:payrolls(period_start,period_end),employee:employees(employee_number,first_name,middle_name,last_name)",
+    )
+    .order("created_at", { ascending: false });
   if (input.from_date) query = query.gte("created_at", `${range.from}T00:00:00.000Z`);
   if (input.to_date) query = query.lte("created_at", `${range.to}T23:59:59.999Z`);
-  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  if (employeeIds)
+    query = employeeIds.length
+      ? query.in("employee_id", employeeIds)
+      : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const rows = records.map((row: any) => ({
     "Employee Number": row.employee?.employee_number ?? null,
@@ -1352,12 +1687,18 @@ async function hrIncentives(db: AnyDb, input: HrInput): Promise<DataResult> {
 async function hrAttendance(db: AnyDb, input: HrInput): Promise<DataResult> {
   const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
-  let query = db.from("attendance").select(
-    "date,status,note,employee_id,employee:employees(employee_number,first_name,middle_name,last_name)",
-  ).order("date", { ascending: false });
+  let query = db
+    .from("attendance")
+    .select(
+      "date,status,note,employee_id,employee:employees(employee_number,first_name,middle_name,last_name)",
+    )
+    .order("date", { ascending: false });
   if (input.from_date) query = query.gte("date", range.from);
   if (input.to_date) query = query.lte("date", range.to);
-  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  if (employeeIds)
+    query = employeeIds.length
+      ? query.in("employee_id", employeeIds)
+      : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const statusLabels: Record<string, string> = {
     present: "Present",
@@ -1379,12 +1720,18 @@ async function hrAttendance(db: AnyDb, input: HrInput): Promise<DataResult> {
 async function hrAttendanceSummary(db: AnyDb, input: HrInput): Promise<DataResult> {
   const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
-  let query = db.from("attendance").select(
-    "employee_id,date,status,employee:employees(employee_number,first_name,middle_name,last_name)",
-  ).order("date", { ascending: false });
+  let query = db
+    .from("attendance")
+    .select(
+      "employee_id,date,status,employee:employees(employee_number,first_name,middle_name,last_name)",
+    )
+    .order("date", { ascending: false });
   if (input.from_date) query = query.gte("date", range.from);
   if (input.to_date) query = query.lte("date", range.to);
-  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  if (employeeIds)
+    query = employeeIds.length
+      ? query.in("employee_id", employeeIds)
+      : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const totals = new Map<string, any>();
   for (const row of records) {
@@ -1410,7 +1757,9 @@ async function hrAttendanceSummary(db: AnyDb, input: HrInput): Promise<DataResul
 }
 async function hrCheckinEvents(db: AnyDb, input: HrInput): Promise<DataResult> {
   const range = hrRange(input);
-  let query = db.from("checkin_logs").select("employee_number,employee_name,department,kind,logged_at,date")
+  let query = db
+    .from("checkin_logs")
+    .select("employee_number,employee_name,department,kind,logged_at,date")
     .order("logged_at", { ascending: false });
   if (input.from_date) query = query.gte("date", range.from);
   if (input.to_date) query = query.lte("date", range.to);
@@ -1427,16 +1776,21 @@ async function hrCheckinEvents(db: AnyDb, input: HrInput): Promise<DataResult> {
   return page("HR Check-in/Check-out Events", range, input, rows);
 }
 
-
 async function hrPaidLeaveAccruals(db: AnyDb, input: HrInput): Promise<DataResult> {
   const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
-  let query = db.from("paid_leave_accruals").select(
-    "accrual_month,earned_units,used_units,daily_pay_rate,employee_id,source_payroll_id,employee:employees(employee_number,first_name,middle_name,last_name),payroll:payrolls(period_start,period_end)",
-  ).order("accrual_month", { ascending: false });
+  let query = db
+    .from("paid_leave_accruals")
+    .select(
+      "accrual_month,earned_units,used_units,daily_pay_rate,employee_id,source_payroll_id,employee:employees(employee_number,first_name,middle_name,last_name),payroll:payrolls(period_start,period_end)",
+    )
+    .order("accrual_month", { ascending: false });
   if (input.from_date) query = query.gte("accrual_month", range.from);
   if (input.to_date) query = query.lte("accrual_month", range.to);
-  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  if (employeeIds)
+    query = employeeIds.length
+      ? query.in("employee_id", employeeIds)
+      : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const rows = records.map((row: any) => ({
     "Employee Number": row.employee?.employee_number ?? null,
@@ -1454,12 +1808,18 @@ async function hrPaidLeaveAccruals(db: AnyDb, input: HrInput): Promise<DataResul
 async function hrPaidLeaveUsage(db: AnyDb, input: HrInput): Promise<DataResult> {
   const range = hrRange(input);
   const employeeIds = await findEmployeeIds(db, input.employee_number);
-  let query = db.from("paid_leave_usage_allocations").select(
-    "employee_id,usage_type,units,amount,created_at,employee:employees(employee_number,first_name,middle_name,last_name),payroll:payrolls(period_start,period_end),accrual:paid_leave_accruals(accrual_month)",
-  ).order("created_at", { ascending: false });
+  let query = db
+    .from("paid_leave_usage_allocations")
+    .select(
+      "employee_id,usage_type,units,amount,created_at,employee:employees(employee_number,first_name,middle_name,last_name),payroll:payrolls(period_start,period_end),accrual:paid_leave_accruals(accrual_month)",
+    )
+    .order("created_at", { ascending: false });
   if (input.from_date) query = query.gte("created_at", `${range.from}T00:00:00.000Z`);
   if (input.to_date) query = query.lte("created_at", `${range.to}T23:59:59.999Z`);
-  if (employeeIds) query = employeeIds.length ? query.in("employee_id", employeeIds) : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
+  if (employeeIds)
+    query = employeeIds.length
+      ? query.in("employee_id", employeeIds)
+      : query.in("employee_id", ["00000000-0000-0000-0000-000000000000"]);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
   const rows = records.map((row: any) => ({
     "Employee Number": row.employee?.employee_number ?? null,
@@ -1475,10 +1835,12 @@ async function hrPaidLeaveUsage(db: AnyDb, input: HrInput): Promise<DataResult> 
   return page("HR Paid Leave Usage/Settlement History", range, input, rows);
 }
 
-
 function safeAccountingText(value: unknown): string | null {
   if (value == null) return null;
-  return String(value).replace(/\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi, "[system ID hidden]");
+  return String(value).replace(
+    /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/gi,
+    "[system ID hidden]",
+  );
 }
 function isAccountingOpeningReference(value: unknown) {
   const text = String(value ?? "");
@@ -1495,20 +1857,34 @@ async function getBranchByName(db: AnyDb, branchName?: string) {
   const branches = await fetchAll<any>((from, to) =>
     db.from("branches").select("id,branch_name").order("branch_name").range(from, to),
   );
-  const matches = branches.filter((row: any) => String(row.branch_name ?? "").trim().toLocaleLowerCase() === branchName.trim().toLocaleLowerCase());
+  const matches = branches.filter(
+    (row: any) =>
+      String(row.branch_name ?? "")
+        .trim()
+        .toLocaleLowerCase() === branchName.trim().toLocaleLowerCase(),
+  );
   if (!matches.length) throw new Error(`Branch not found: ${branchName}`);
   if (matches.length > 1) throw new Error(`Branch name is ambiguous: ${branchName}`);
   return matches[0];
 }
 async function loadAccountingLedgers(db: AnyDb) {
   return fetchAll<any>((from, to) =>
-    db.from("ledger_accounts").select(
-      "id,branch_id,account_name,description,ledger_type,account_kind,opening_balance,opening_balance_date,opening_balance_side,is_active,branch:branches(branch_name)",
-    ).order("account_name").range(from, to),
+    db
+      .from("ledger_accounts")
+      .select(
+        "id,branch_id,account_name,description,ledger_type,account_kind,opening_balance,opening_balance_date,opening_balance_side,is_active,branch:branches(branch_name)",
+      )
+      .order("account_name")
+      .range(from, to),
   );
 }
 function accountNameMatches(account: any, name?: string) {
-  return !name || String(account.account_name ?? "").trim().toLocaleLowerCase() === name.trim().toLocaleLowerCase();
+  return (
+    !name ||
+    String(account.account_name ?? "")
+      .trim()
+      .toLocaleLowerCase() === name.trim().toLocaleLowerCase()
+  );
 }
 function branchNameOf(row: any) {
   return row?.branch?.branch_name ?? null;
@@ -1521,11 +1897,20 @@ function parseAccountingCutoff(value: string) {
     cutoffDate = validDate(value, "as_of");
     cutoffMs = Date.parse(`${cutoffDate}T23:59:59.999+05:30`);
   } else {
-    if (!/(Z|[+-]\d{2}:\d{2})$/i.test(value)) throw new Error("as_of must be YYYY-MM-DD or an ISO-8601 timestamp with an explicit timezone.");
+    if (!/(Z|[+-]\d{2}:\d{2})$/i.test(value))
+      throw new Error(
+        "as_of must be YYYY-MM-DD or an ISO-8601 timestamp with an explicit timezone.",
+      );
     const instant = new Date(value);
-    if (Number.isNaN(instant.getTime())) throw new Error("as_of must be a valid date or ISO-8601 timestamp.");
+    if (Number.isNaN(instant.getTime()))
+      throw new Error("as_of must be a valid date or ISO-8601 timestamp.");
     cutoffMs = instant.getTime();
-    const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(instant);
+    const parts = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Kolkata",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    }).formatToParts(instant);
     const year = parts.find((part) => part.type === "year")?.value ?? "1970";
     const month = parts.find((part) => part.type === "month")?.value ?? "01";
     const day = parts.find((part) => part.type === "day")?.value ?? "01";
@@ -1536,10 +1921,15 @@ function parseAccountingCutoff(value: string) {
 async function accountingJournalEntries(db: AnyDb, input: any): Promise<DataResult> {
   const range = resolveRange(input);
   const branch = await getBranchByName(db, input.branch_name);
-  let query = db.from("journal_entries").select(
-    "voucher_number,entry_date,branch_id,description,reference,source_module,status,approved_at,created_at,branch:branches(branch_name),lines:journal_lines(line_no,debit,credit,line_description,account_kind,branch_id,branch:branches(branch_name),ledger_account:ledger_accounts(account_name,ledger_type,account_kind))",
-  ).gte("entry_date", range.from).lte("entry_date", range.to)
-    .order("entry_date", { ascending: true }).order("created_at", { ascending: true });
+  let query = db
+    .from("journal_entries")
+    .select(
+      "voucher_number,entry_date,branch_id,description,reference,source_module,status,approved_at,created_at,branch:branches(branch_name),lines:journal_lines(line_no,debit,credit,line_description,account_kind,branch_id,branch:branches(branch_name),ledger_account:ledger_accounts(account_name,ledger_type,account_kind))",
+    )
+    .gte("entry_date", range.from)
+    .lte("entry_date", range.to)
+    .order("entry_date", { ascending: true })
+    .order("created_at", { ascending: true });
   if (branch) query = query.eq("branch_id", branch.id);
   if (input.status) query = query.eq("status", input.status);
   const records = await fetchAll<any>((from, to) => query.range(from, to));
@@ -1547,7 +1937,9 @@ async function accountingJournalEntries(db: AnyDb, input: any): Promise<DataResu
     const lines = (entry.lines ?? []).map((line: any) => ({
       "Line Number": num(line.line_no),
       Branch: branchNameOf(line) ?? branchNameOf(entry) ?? null,
-      Account: safeAccountingText(line.ledger_account?.account_name) ?? (line.account_kind ? `${line.account_kind} account` : "Unmapped account"),
+      Account:
+        safeAccountingText(line.ledger_account?.account_name) ??
+        (line.account_kind ? `${line.account_kind} account` : "Unmapped account"),
       "Account Type": line.ledger_account?.ledger_type ?? line.account_kind ?? null,
       Description: safeAccountingText(line.line_description),
       Debit: num(line.debit),
@@ -1575,9 +1967,10 @@ async function accountingJournalEntries(db: AnyDb, input: any): Promise<DataResu
 async function accountingLedgerAccounts(db: AnyDb, input: any): Promise<DataResult> {
   const branch = await getBranchByName(db, input.branch_name);
   const accounts = await loadAccountingLedgers(db);
-  const filtered = accounts.filter((account: any) =>
-    (!branch || account.branch_id === branch.id) &&
-    (input.include_inactive !== false || account.is_active),
+  const filtered = accounts.filter(
+    (account: any) =>
+      (!branch || account.branch_id === branch.id) &&
+      (input.include_inactive !== false || account.is_active),
   );
   const rows = filtered.map((account: any) => ({
     Branch: branchNameOf(account),
@@ -1596,54 +1989,103 @@ async function accountingPeriodLedger(db: AnyDb, input: any): Promise<DataResult
   const range = resolveRange(input);
   const branch = await getBranchByName(db, input.branch_name);
   const ledgers = await loadAccountingLedgers(db);
-  const matches = ledgers.filter((account: any) =>
-    account.branch_id === branch.id && accountNameMatches(account, input.account_name),
+  const matches = ledgers.filter(
+    (account: any) =>
+      account.branch_id === branch.id && accountNameMatches(account, input.account_name),
   );
-  if (!matches.length) throw new Error(`Ledger account not found in ${input.branch_name}: ${input.account_name}`);
-  if (matches.length > 1) throw new Error(`Ledger account name is ambiguous in ${input.branch_name}: ${input.account_name}`);
+  if (!matches.length)
+    throw new Error(`Ledger account not found in ${input.branch_name}: ${input.account_name}`);
+  if (matches.length > 1)
+    throw new Error(
+      `Ledger account name is ambiguous in ${input.branch_name}: ${input.account_name}`,
+    );
   const account = matches[0];
-  let query = db.from("journal_lines").select(
-    "line_no,debit,credit,line_description,journal_entry:journal_entries!inner(voucher_number,entry_date,description,reference,source_module,status)",
-  ).eq("ledger_account_id", account.id).eq("journal_entry.status", "approved")
+  const query = db
+    .from("journal_lines")
+    .select(
+      "line_no,debit,credit,line_description,journal_entry:journal_entries!inner(voucher_number,entry_date,description,reference,source_module,status)",
+    )
+    .eq("ledger_account_id", account.id)
+    .eq("journal_entry.status", "approved")
     .lte("journal_entry.entry_date", range.to)
     .order("entry_date", { foreignTable: "journal_entries", ascending: true })
     .order("line_no", { ascending: true });
   const allLines = await fetchAll<any>((from, to) => query.range(from, to));
-  const ordered = allLines.slice().sort((a: any, b: any) =>
-    String(a.journal_entry?.entry_date ?? "").localeCompare(String(b.journal_entry?.entry_date ?? "")) || num(a.line_no) - num(b.line_no),
+  const ordered = allLines
+    .slice()
+    .sort(
+      (a: any, b: any) =>
+        String(a.journal_entry?.entry_date ?? "").localeCompare(
+          String(b.journal_entry?.entry_date ?? ""),
+        ) || num(a.line_no) - num(b.line_no),
+    );
+  const hasOpeningJournal = ordered.some((line: any) =>
+    isAccountingOpeningReference(line.journal_entry?.reference),
   );
-  const hasOpeningJournal = ordered.some((line: any) => isAccountingOpeningReference(line.journal_entry?.reference));
-  const before = ordered.filter((line: any) => String(line.journal_entry?.entry_date ?? "") < range.from);
-  let openingNet = before.reduce((sum: number, line: any) => sum + num(line.debit) - num(line.credit), 0);
+  const before = ordered.filter(
+    (line: any) => String(line.journal_entry?.entry_date ?? "") < range.from,
+  );
+  let openingNet = before.reduce(
+    (sum: number, line: any) => sum + num(line.debit) - num(line.credit),
+    0,
+  );
   const openingDate = String(account.opening_balance_date ?? "");
-  const manualOpeningNet = String(account.opening_balance_side ?? "dr") === "cr" ? -num(account.opening_balance) : num(account.opening_balance);
-  const fallbackOpeningApplies = !hasOpeningJournal && Boolean(openingDate) && num(account.opening_balance) !== 0;
+  const manualOpeningNet =
+    String(account.opening_balance_side ?? "dr") === "cr"
+      ? -num(account.opening_balance)
+      : num(account.opening_balance);
+  const fallbackOpeningApplies =
+    !hasOpeningJournal && Boolean(openingDate) && num(account.opening_balance) !== 0;
   if (fallbackOpeningApplies && openingDate < range.from) openingNet += manualOpeningNet;
   const periodLines = ordered.filter((line: any) => {
     const date = String(line.journal_entry?.entry_date ?? "");
     return date >= range.from && date <= range.to;
   });
-  const events: any[] = periodLines.map((line: any) => ({ kind: "journal", date: line.journal_entry.entry_date, line }));
+  const events: any[] = periodLines.map((line: any) => ({
+    kind: "journal",
+    date: line.journal_entry.entry_date,
+    line,
+  }));
   if (fallbackOpeningApplies && openingDate >= range.from && openingDate <= range.to) {
     events.push({ kind: "opening", date: openingDate, line: null });
   }
-  events.sort((a, b) => a.date.localeCompare(b.date) || (a.kind === "opening" ? -1 : b.kind === "opening" ? 1 : num(a.line?.line_no) - num(b.line?.line_no)));
+  events.sort(
+    (a, b) =>
+      a.date.localeCompare(b.date) ||
+      (a.kind === "opening"
+        ? -1
+        : b.kind === "opening"
+          ? 1
+          : num(a.line?.line_no) - num(b.line?.line_no)),
+  );
   let running = openingNet;
   let periodDebit = 0;
   let periodCredit = 0;
   const rows = events.map((event: any) => {
     const line = event.line;
-    const debit = event.kind === "opening" ? (manualOpeningNet > 0 ? manualOpeningNet : 0) : num(line.debit);
-    const credit = event.kind === "opening" ? (manualOpeningNet < 0 ? -manualOpeningNet : 0) : num(line.credit);
+    const debit =
+      event.kind === "opening" ? (manualOpeningNet > 0 ? manualOpeningNet : 0) : num(line.debit);
+    const credit =
+      event.kind === "opening" ? (manualOpeningNet < 0 ? -manualOpeningNet : 0) : num(line.credit);
     running += debit - credit;
     periodDebit += debit;
     periodCredit += credit;
     return {
       Date: event.date,
-      "Voucher Number": event.kind === "opening" ? "Opening balance" : safeAccountingText(line.journal_entry?.voucher_number),
-      Description: event.kind === "opening" ? "Ledger opening balance" : safeAccountingText(line.line_description || line.journal_entry?.description),
-      Reference: event.kind === "opening" ? "Opening balance" : safeAccountingReference(line.journal_entry?.reference),
-      "Source Module": event.kind === "opening" ? "opening_balance" : line.journal_entry?.source_module,
+      "Voucher Number":
+        event.kind === "opening"
+          ? "Opening balance"
+          : safeAccountingText(line.journal_entry?.voucher_number),
+      Description:
+        event.kind === "opening"
+          ? "Ledger opening balance"
+          : safeAccountingText(line.line_description || line.journal_entry?.description),
+      Reference:
+        event.kind === "opening"
+          ? "Opening balance"
+          : safeAccountingReference(line.journal_entry?.reference),
+      "Source Module":
+        event.kind === "opening" ? "opening_balance" : line.journal_entry?.source_module,
       "Line Number": event.kind === "opening" ? null : num(line.line_no),
       Debit: debit,
       Credit: credit,
@@ -1654,7 +2096,12 @@ async function accountingPeriodLedger(db: AnyDb, input: any): Promise<DataResult
   const result = page("Accounting Period Ledger", range, input, rows);
   return {
     ...result,
-    account: { Branch: branchNameOf(account), "Account Name": safeAccountingText(account.account_name), "Ledger Type": account.ledger_type, "Account Kind": account.account_kind },
+    account: {
+      Branch: branchNameOf(account),
+      "Account Name": safeAccountingText(account.account_name),
+      "Ledger Type": account.ledger_type,
+      "Account Kind": account.account_kind,
+    },
     summary: {
       "Opening Balance Debit": Math.max(openingNet, 0),
       "Opening Balance Credit": Math.max(-openingNet, 0),
@@ -1663,7 +2110,11 @@ async function accountingPeriodLedger(db: AnyDb, input: any): Promise<DataResult
       "Closing Balance Debit": Math.max(running, 0),
       "Closing Balance Credit": Math.max(-running, 0),
       "Included Status": "Approved journal entries only",
-      "Opening Balance Source": hasOpeningJournal ? "Opening journal entry" : fallbackOpeningApplies ? "Ledger opening-balance field" : "None recorded",
+      "Opening Balance Source": hasOpeningJournal
+        ? "Opening journal entry"
+        : fallbackOpeningApplies
+          ? "Ledger opening-balance field"
+          : "None recorded",
     },
   };
 }
@@ -1671,21 +2122,38 @@ async function accountingBalancesAsOf(db: AnyDb, input: any): Promise<DataResult
   const { cutoffDate, cutoffMs } = parseAccountingCutoff(input.as_of);
   const branch = await getBranchByName(db, input.branch_name);
   const allAccounts = await loadAccountingLedgers(db);
-  const accounts = allAccounts.filter((account: any) =>
-    (!branch || account.branch_id === branch.id) && accountNameMatches(account, input.account_name),
+  const accounts = allAccounts.filter(
+    (account: any) =>
+      (!branch || account.branch_id === branch.id) &&
+      accountNameMatches(account, input.account_name),
   );
-  if (input.account_name && accounts.length === 0) throw new Error(`Ledger account not found: ${input.account_name}`);
+  if (input.account_name && accounts.length === 0)
+    throw new Error(`Ledger account not found: ${input.account_name}`);
   const accountIds = accounts.map((account: any) => account.id);
-  const totals = new Map<string, { net: number; debits: number; credits: number; hasOpeningJournal: boolean }>();
-  for (const account of accounts) totals.set(account.id, { net: 0, debits: 0, credits: 0, hasOpeningJournal: false });
+  const totals = new Map<
+    string,
+    { net: number; debits: number; credits: number; hasOpeningJournal: boolean }
+  >();
+  for (const account of accounts)
+    totals.set(account.id, { net: 0, debits: 0, credits: 0, hasOpeningJournal: false });
   if (accountIds.length) {
-    let query = db.from("journal_lines").select(
-      "ledger_account_id,debit,credit,journal_entry:journal_entries!inner(entry_date,status,reference,approved_at,created_at)",
-    ).in("ledger_account_id", accountIds).eq("journal_entry.status", "approved").lte("journal_entry.entry_date", cutoffDate);
+    const query = db
+      .from("journal_lines")
+      .select(
+        "ledger_account_id,debit,credit,journal_entry:journal_entries!inner(entry_date,status,reference,approved_at,created_at)",
+      )
+      .in("ledger_account_id", accountIds)
+      .eq("journal_entry.status", "approved")
+      .lte("journal_entry.entry_date", cutoffDate);
     const records = await fetchAll<any>((from, to) => query.range(from, to));
     for (const line of records) {
       const entry = line.journal_entry;
-      if (!entry || (entry.created_at && Date.parse(entry.created_at) > cutoffMs) || (entry.approved_at && Date.parse(entry.approved_at) > cutoffMs)) continue;
+      if (
+        !entry ||
+        (entry.created_at && Date.parse(entry.created_at) > cutoffMs) ||
+        (entry.approved_at && Date.parse(entry.approved_at) > cutoffMs)
+      )
+        continue;
       const summary = totals.get(line.ledger_account_id);
       if (!summary) continue;
       summary.net += num(line.debit) - num(line.credit);
@@ -1697,7 +2165,12 @@ async function accountingBalancesAsOf(db: AnyDb, input: any): Promise<DataResult
   const rows = accounts.map((account: any) => {
     const total = totals.get(account.id)!;
     const openingDate = String(account.opening_balance_date ?? "");
-    if (!total.hasOpeningJournal && openingDate && openingDate <= cutoffDate && num(account.opening_balance) !== 0) {
+    if (
+      !total.hasOpeningJournal &&
+      openingDate &&
+      openingDate <= cutoffDate &&
+      num(account.opening_balance) !== 0
+    ) {
       if (String(account.opening_balance_side ?? "dr") === "cr") {
         total.net -= num(account.opening_balance);
         total.credits += num(account.opening_balance);
@@ -1719,7 +2192,12 @@ async function accountingBalancesAsOf(db: AnyDb, input: any): Promise<DataResult
       Status: account.is_active ? "Active" : "Inactive",
     };
   });
-  const result = page("Accounting Ledger Balances As Of", { from: "all", to: cutoffDate }, input, rows);
+  const result = page(
+    "Accounting Ledger Balances As Of",
+    { from: "all", to: cutoffDate },
+    input,
+    rows,
+  );
   const totalDebitBalance = rows.reduce((sum, row: any) => sum + num(row["Debit Balance"]), 0);
   const totalCreditBalance = rows.reduce((sum, row: any) => sum + num(row["Credit Balance"]), 0);
   return {
@@ -1730,7 +2208,8 @@ async function accountingBalancesAsOf(db: AnyDb, input: any): Promise<DataResult
       "Debit/Credit Difference": totalDebitBalance - totalCreditBalance,
     },
     as_of: input.as_of,
-    as_of_semantics: "Approved entries with accounting date on or before the Asia/Kolkata cutoff are included; for timestamp cutoffs, entries created or approved after that instant are excluded. Journal effective dates and opening-balance dates are stored as dates, so within-day effective-date ordering and historical revisions to opening-balance metadata cannot be reconstructed.",
+    as_of_semantics:
+      "Approved entries with accounting date on or before the Asia/Kolkata cutoff are included; for timestamp cutoffs, entries created or approved after that instant are excluded. Journal effective dates and opening-balance dates are stored as dates, so within-day effective-date ordering and historical revisions to opening-balance metadata cannot be reconstructed.",
   };
 }
 
@@ -1740,9 +2219,14 @@ async function wmsRequest(
   path: string,
   init?: RequestInit,
 ): Promise<Record<string, unknown>> {
-  const baseUrl = String(process.env.WMS_API_URL ?? process.env.VITE_WMS_API_URL ?? "").trim().replace(/\/$/, "");
-  if (!baseUrl) throw new Error("The existing WMS API URL configuration is required for WMS stock MCP access.");
-  const machineToken = String(process.env.WMS_API_KEY ?? process.env.WMS_API_TOKEN ?? process.env.WMS_TOKEN ?? "").trim();
+  const baseUrl = String(process.env.WMS_API_URL ?? process.env.VITE_WMS_API_URL ?? "")
+    .trim()
+    .replace(/\/$/, "");
+  if (!baseUrl)
+    throw new Error("The existing WMS API URL configuration is required for WMS stock MCP access.");
+  const machineToken = String(
+    process.env.WMS_API_KEY ?? process.env.WMS_API_TOKEN ?? process.env.WMS_TOKEN ?? "",
+  ).trim();
   const headers = new Headers(init?.headers);
   headers.set("Accept", "application/json");
   const { data: session, error } = await db
@@ -1758,13 +2242,20 @@ async function wmsRequest(
       signal: AbortSignal.timeout(15_000),
     });
     if (!exchange.ok) {
-      const exchangeBody = (await exchange.json().catch(() => null)) as Record<string, unknown> | null;
-      const errorText = typeof exchangeBody?.error === "string" ? exchangeBody.error : `WMS ERP session exchange failed (${exchange.status})`;
+      const exchangeBody = (await exchange.json().catch(() => null)) as Record<
+        string,
+        unknown
+      > | null;
+      const errorText =
+        typeof exchangeBody?.error === "string"
+          ? exchangeBody.error
+          : `WMS ERP session exchange failed (${exchange.status})`;
       throw new Error(errorText);
     }
     const setCookie = exchange.headers.get("set-cookie");
     const cookie = setCookie?.split(";")[0];
-    if (!cookie) throw new Error("WMS ERP session exchange did not return an authenticated session cookie.");
+    if (!cookie)
+      throw new Error("WMS ERP session exchange did not return an authenticated session cookie.");
     headers.set("Cookie", cookie);
   } else if (machineToken) {
     // Keep service-token deployments working when this actor has no ERP
@@ -1774,16 +2265,25 @@ async function wmsRequest(
   } else {
     throw new Error("No active ERP session is available for the MCP key owner to access WMS.");
   }
-  const response = await fetch(`${baseUrl}${path}`, { ...init, headers, signal: AbortSignal.timeout(15_000) });
+  const response = await fetch(`${baseUrl}${path}`, {
+    ...init,
+    headers,
+    signal: AbortSignal.timeout(15_000),
+  });
   const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
   if (!response.ok) {
-    const error = typeof body?.error === "string" ? body.error : `WMS request failed (${response.status})`;
+    const error =
+      typeof body?.error === "string" ? body.error : `WMS request failed (${response.status})`;
     throw new Error(error);
   }
   return body ?? {};
 }
 
-async function wmsStockByBin(db: AnyDb, actorId: string, input: z.infer<typeof WMS_STOCK_SCHEMA>): Promise<DataResult> {
+async function wmsStockByBin(
+  db: AnyDb,
+  actorId: string,
+  input: z.infer<typeof WMS_STOCK_SCHEMA>,
+): Promise<DataResult> {
   const params = new URLSearchParams();
   if (input.warehouse_name) params.set("warehouse_name", input.warehouse_name);
   if (input.q) params.set("q", input.q);
@@ -1800,7 +2300,10 @@ async function wmsStockByBin(db: AnyDb, actorId: string, input: z.infer<typeof W
     total_count: Number(body?.total ?? rows.length),
     limit: Number(body?.limit ?? input.limit ?? 100),
     offset: Number(body?.offset ?? input.offset ?? 0),
-    next_offset: body?.next_offset === null || body?.next_offset === undefined ? null : Number(body.next_offset),
+    next_offset:
+      body?.next_offset === null || body?.next_offset === undefined
+        ? null
+        : Number(body.next_offset),
     rows,
   };
 }
@@ -1866,7 +2369,8 @@ function registerReadTool(
             {
               type: "text",
               text:
-                error instanceof Error && /date|offset|limit|wms|warehouse|scope|token|api/i.test(error.message)
+                error instanceof Error &&
+                /date|offset|limit|wms|warehouse|scope|token|api/i.test(error.message)
                   ? error.message
                   : "Could not load this report. Try a narrower date range or a later page.",
             },
@@ -1897,98 +2401,112 @@ export function registerLtmsReportTools(server: McpServer, db: AnyDb, actorId: s
   registerReadTool(server, db, {
     name: "accounting_journal_entries",
     title: "Accounting Journal Entries",
-    description: "Read-only complete journal entries for a selected period. Includes voucher, effective date, branch, description, reference, source, status, approval time, debit/credit totals, and all display-safe account lines. Defaults to the current month; optional filters: from_date, to_date, branch_name, status, limit, offset. Pending, approved and rejected statuses are available. System UUIDs are never returned.",
+    description:
+      "Read-only complete journal entries for a selected period. Includes voucher, effective date, branch, description, reference, source, status, approval time, debit/credit totals, and all display-safe account lines. Defaults to the current month; optional filters: from_date, to_date, branch_name, status, limit, offset. Pending, approved and rejected statuses are available. System UUIDs are never returned.",
     schema: ACCOUNTING_JOURNAL_SCHEMA,
     load: (input) => accountingJournalEntries(db, input),
   });
   registerReadTool(server, db, {
     name: "accounting_ledger_accounts",
     title: "Accounting Ledger Accounts",
-    description: "Read-only list of ledger accounts with branch, name, type, opening balance/date/side and active status. Optional branch_name and include_inactive filters. Use these display names to request an account ledger. Does not return system IDs.",
+    description:
+      "Read-only list of ledger accounts with branch, name, type, opening balance/date/side and active status. Optional branch_name and include_inactive filters. Use these display names to request an account ledger. Does not return system IDs.",
     schema: ACCOUNT_LIST_SCHEMA,
     load: (input) => accountingLedgerAccounts(db, input),
   });
   registerReadTool(server, db, {
     name: "accounting_period_ledger",
     title: "Accounting Ledger for a Period",
-    description: "Read-only full account ledger for one branch and ledger account over an inclusive date period. Includes opening balance, each approved journal line, running debit/credit balance and closing balance. Defaults to the current month. Required: branch_name, account_name. Optional: from_date, to_date, limit, offset. System UUIDs are never returned.",
+    description:
+      "Read-only full account ledger for one branch and ledger account over an inclusive date period. Includes opening balance, each approved journal line, running debit/credit balance and closing balance. Defaults to the current month. Required: branch_name, account_name. Optional: from_date, to_date, limit, offset. System UUIDs are never returned.",
     schema: PERIOD_LEDGER_SCHEMA,
     load: (input) => accountingPeriodLedger(db, input),
   });
   registerReadTool(server, db, {
     name: "accounting_balances_as_of",
     title: "Accounting Ledger Balances as of a Date/Time",
-    description: "Read-only debit/credit ledger balances by account as of an Asia/Kolkata date or ISO timestamp. Optional branch_name/account_name filters. Date-only cutoff includes that full date. Timestamp cutoff excludes entries created/approved after that instant. Because effective journal and opening-balance dates are date-granular and opening-balance edits are not versioned, the report cannot reconstruct within-day date ordering or past edits to opening-balance metadata. Does not return system UUIDs.",
+    description:
+      "Read-only debit/credit ledger balances by account as of an Asia/Kolkata date or ISO timestamp. Optional branch_name/account_name filters. Date-only cutoff includes that full date. Timestamp cutoff excludes entries created/approved after that instant. Because effective journal and opening-balance dates are date-granular and opening-balance edits are not versioned, the report cannot reconstruct within-day date ordering or past edits to opening-balance metadata. Does not return system UUIDs.",
     schema: BALANCE_AS_OF_SCHEMA,
     load: (input) => accountingBalancesAsOf(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_payrolls",
     title: "HRMS Payrolls",
-    description: "Read-only complete HRMS payroll history by default. Includes employee name/number, pay-period earnings and deductions, Paid / Partially paid / Not paid status, payment history, and paid/outstanding amounts. Optional filters: from_date, to_date, employee_number, limit, offset. Legacy records without a status are treated as paid. Does not return system IDs or bank details.",
+    description:
+      "Read-only complete HRMS payroll history by default. Includes employee name/number, pay-period earnings and deductions, Paid / Partially paid / Not paid status, payment history, and paid/outstanding amounts. Optional filters: from_date, to_date, employee_number, limit, offset. Legacy records without a status are treated as paid. Does not return system IDs or bank details.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrPayrolls(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_paid_leave_accruals",
     title: "HRMS Paid Leave Accrual History",
-    description: "Read-only complete history of employee paid leave accruals with earned/used/remaining units, pay rate, source payroll period and employee display name. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    description:
+      "Read-only complete history of employee paid leave accruals with earned/used/remaining units, pay rate, source payroll period and employee display name. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrPaidLeaveAccruals(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_paid_leave_usage",
     title: "HRMS Paid Leave Usage and Settlement History",
-    description: "Read-only history of paid leave used and final-settlement allocations, with employee, accrual month, units, amount, and payroll period. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    description:
+      "Read-only history of paid leave used and final-settlement allocations, with employee, accrual month, units, amount, and payroll period. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrPaidLeaveUsage(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_loans",
     title: "HRMS Loans",
-    description: "Read-only employee loan records and installment schedule, including principal, interest, EMI, status, and payments. Defaults to all loan history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs or bank details.",
+    description:
+      "Read-only employee loan records and installment schedule, including principal, interest, EMI, status, and payments. Defaults to all loan history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs or bank details.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrLoansOrAdvances(db, "loan", input),
   });
   registerReadTool(server, db, {
     name: "hr_advances",
     title: "HRMS Advances",
-    description: "Read-only employee salary advances and installment schedule, including principal, interest, EMI, status, and payments. Defaults to all advance history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs or bank details.",
+    description:
+      "Read-only employee salary advances and installment schedule, including principal, interest, EMI, status, and payments. Defaults to all advance history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs or bank details.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrLoansOrAdvances(db, "advance", input),
   });
   registerReadTool(server, db, {
     name: "hr_deductions",
     title: "HRMS Loss Deductions",
-    description: "Read-only loss deduction records with employee, reason, amount, pending/deducted/paid status, and linked payroll period. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    description:
+      "Read-only loss deduction records with employee, reason, amount, pending/deducted/paid status, and linked payroll period. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrDeductions(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_incentives",
     title: "HRMS Incentives",
-    description: "Read-only one-time incentive records with employee, amount, reason, pending/added/paid status, and linked payroll period. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    description:
+      "Read-only one-time incentive records with employee, amount, reason, pending/added/paid status, and linked payroll period. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrIncentives(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_attendance",
     title: "HRMS Attendance",
-    description: "Read-only complete daily HRMS attendance history with employee name/number, date, status, and note. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    description:
+      "Read-only complete daily HRMS attendance history with employee name/number, date, status, and note. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrAttendance(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_attendance_summary",
     title: "HRMS Attendance Summary",
-    description: "Read-only all-history attendance counts by employee. Explicitly totals recorded dates, Present, Absent, Half day, Extra work and Half extra work. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    description:
+      "Read-only all-history attendance counts by employee. Explicitly totals recorded dates, Present, Absent, Half day, Extra work and Half extra work. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrAttendanceSummary(db, input),
   });
   registerReadTool(server, db, {
     name: "hr_checkin_events",
     title: "HRMS Check-in/Check-out Events",
-    description: "Read-only complete attendance device check-in/check-out history with employee name/number, department, event type, and timestamp. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
+    description:
+      "Read-only complete attendance device check-in/check-out history with employee name/number, department, event type, and timestamp. Defaults to all history. Optional filters: from_date, to_date, employee_number, limit, offset. Does not return system IDs.",
     schema: HR_ALL_SCHEMA,
     load: (input) => hrCheckinEvents(db, input),
   });
@@ -2031,6 +2549,38 @@ export function registerLtmsReportTools(server: McpServer, db: AnyDb, actorId: s
       "Read-only Stock Inward Unloading Income rows. Approval Charges and Source Income are null when the existing report hides those values for the row's additional-income mode. The current Unloading Income report has no branch filter. Optional filters: from_date, to_date, limit, offset. Defaults to the current month.",
     schema: BASE_SCHEMA,
     load: (input) => stockInwardUnloadingIncome(db, input),
+  });
+  registerReadTool(server, db, {
+    name: "stock_outward_source_income",
+    title: "Stock Outward — Source Income",
+    description:
+      "Read-only Stock Outward source-income rows by outward_date (inclusive). Includes source display name, branch, outward number, amount, and whether a linked source bill has a journal entry. Optional filters: from_date, to_date, branch_id, limit, offset; defaults to current month. System UUIDs are not returned.",
+    schema: BRANCH_SCHEMA,
+    load: (input) => stockOutwardIncomeRows(db, input, "source"),
+  });
+  registerReadTool(server, db, {
+    name: "stock_outward_loading_received",
+    title: "Stock Outward — Loading Received",
+    description:
+      "Read-only Stock Outward loading-received rows by loading_date (inclusive). Posted indicates a linked loading-received journal entry. Optional filters: from_date, to_date, branch_id, limit, offset; defaults to current month. System UUIDs are not returned.",
+    schema: BRANCH_SCHEMA,
+    load: (input) => stockOutwardIncomeRows(db, input, "loading"),
+  });
+  registerReadTool(server, db, {
+    name: "stock_outward_approval_income",
+    title: "Stock Outward — Approval Income",
+    description:
+      "Read-only Stock Outward approval-income rows by loading_date (inclusive). Posted indicates a linked approval-income journal entry. Optional filters: from_date, to_date, branch_id, limit, offset; defaults to current month. System UUIDs are not returned.",
+    schema: BRANCH_SCHEMA,
+    load: (input) => stockOutwardIncomeRows(db, input, "approval"),
+  });
+  registerReadTool(server, db, {
+    name: "workmen_loading_stock_outward",
+    title: "Workmen Charges — Loading (Stock Outward)",
+    description:
+      "Read-only Stock Outward package loading workmen charges by outward_date (inclusive), calculated using package loading-rate slabs; also reports amounts from workmen bills with journal entries. Optional filters: from_date, to_date, branch_id, limit, offset; defaults to current month. System UUIDs are not returned.",
+    schema: BRANCH_SCHEMA,
+    load: (input) => workmenOutwardLoading(db, input),
   });
   registerReadTool(server, db, {
     name: "workmen_loading",

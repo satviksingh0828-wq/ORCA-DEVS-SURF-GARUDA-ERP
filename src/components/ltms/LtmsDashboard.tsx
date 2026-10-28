@@ -19,6 +19,9 @@ export type LtmsDashboardAmounts = {
   unloading: number;
   financeIncome: number;
   financeExpenditure: number;
+  outwardSourceIncome: number;
+  outwardLoadingReceived: number;
+  outwardApprovalIncome: number;
 };
 export type LtmsDashboardFilters = { fromDate: string; toDate: string; branchId: string };
 export type LtmsDashboardSummary = {
@@ -35,12 +38,18 @@ const zero = (): LtmsDashboardAmounts => ({
   unloading: 0,
   financeIncome: 0,
   financeExpenditure: 0,
+  outwardSourceIncome: 0,
+  outwardLoadingReceived: 0,
+  outwardApprovalIncome: 0,
 });
 const metrics: Array<[keyof LtmsDashboardAmounts, string]> = [
   ["trip", "Trip Expenditure"],
   ["workmen", "Workmen Charges"],
   ["transporter", "Transporter Expenditure"],
   ["unloading", "Unloading Income"],
+  ["outwardSourceIncome", "Stock Outward Source Income"],
+  ["outwardLoadingReceived", "Loading Received (Stock Outward)"],
+  ["outwardApprovalIncome", "Stock Outward Approval Income"],
   ["consignment", "Consignment Income"],
   ["net", "Consignment Net"],
   ["financeIncome", "LTMS Finance Income"],
@@ -62,6 +71,11 @@ const add = (rows: ConsignmentNetReportRow[]) =>
       consignment: sum.consignment + row.income,
       net: sum.net + row.net,
       unloading: sum.unloading,
+      financeIncome: sum.financeIncome,
+      financeExpenditure: sum.financeExpenditure,
+      outwardSourceIncome: sum.outwardSourceIncome,
+      outwardLoadingReceived: sum.outwardLoadingReceived,
+      outwardApprovalIncome: sum.outwardApprovalIncome,
     }),
     zero(),
   );
@@ -79,6 +93,8 @@ export function LtmsDashboard({
   const [system, setSystem] = useState<LtmsDashboardAmounts>(zero());
   const [posted, setPosted] = useState<LtmsDashboardAmounts>(zero());
   const [systemWorkmenUnloading, setSystemWorkmenUnloading] = useState(0);
+  const [systemWorkmenOutward, setSystemWorkmenOutward] = useState(0);
+  const [postedWorkmenOutward, setPostedWorkmenOutward] = useState(0);
   const [financeTotals, setFinanceTotals] = useState({ income: 0, expenditure: 0 });
   const [financeLoading, setFinanceLoading] = useState(comparisonMode);
   const [loadingPosted, setLoadingPosted] = useState(comparisonMode);
@@ -211,7 +227,9 @@ export function LtmsDashboard({
               (sourcePostedByReceipt.get(item.stock_inward_receipt_id) ?? 0) +
                 n(item.source_income_amount),
             );
-        const typeMap = new Map((typesResult.data ?? []).map((row: any) => [row.id, row]));
+        const typeMap = new Map<string, any>(
+          (typesResult.data ?? []).map((row: any) => [row.id, row]),
+        );
         const rates = ratesResult.data ?? [];
         let all = 0;
         let postedAmount = 0;
@@ -284,11 +302,197 @@ export function LtmsDashboard({
 
   useEffect(() => {
     let cancelled = false;
+    async function loadStockOutward() {
+      try {
+        let query = db
+          .from("stock_outward_receipts")
+          .select(
+            "id,branch_id,outward_number,outward_date,loading_date,loading_amount_received,approval_amount,loading_received_journal_entry_id,approval_income_journal_entry_id,stock_outward_packages(package_rate_type_id,quantity,weight_kg)",
+          )
+          .gte("outward_date", filters.fromDate)
+          .lte("outward_date", filters.toDate);
+        if (filters.branchId !== "all") query = query.eq("branch_id", filters.branchId);
+        const { data: outwardRows, error } = await query;
+        if (error) throw error;
+        const receipts = outwardRows ?? [];
+        let loadingDateQuery = db
+          .from("stock_outward_receipts")
+          .select("id,branch_id,loading_amount_received,loading_received_journal_entry_id")
+          .gte("loading_date", filters.fromDate)
+          .lte("loading_date", filters.toDate);
+        if (filters.branchId !== "all")
+          loadingDateQuery = loadingDateQuery.eq("branch_id", filters.branchId);
+        const loadingDateResult = await loadingDateQuery;
+        if (loadingDateResult.error) throw loadingDateResult.error;
+        const loadingDateReceipts = loadingDateResult.data ?? [];
+        let approvalDateQuery = db
+          .from("stock_outward_receipts")
+          .select("id,branch_id,approval_amount,approval_income_journal_entry_id")
+          .gte("loading_date", filters.fromDate)
+          .lte("loading_date", filters.toDate);
+        if (filters.branchId !== "all")
+          approvalDateQuery = approvalDateQuery.eq("branch_id", filters.branchId);
+        const approvalDateResult = await approvalDateQuery;
+        if (approvalDateResult.error) throw approvalDateResult.error;
+        const approvalDateReceipts = approvalDateResult.data ?? [];
+        const receiptIds = receipts.map((row: any) => row.id);
+        let loadingQuery = db
+          .from("stock_outward_receipts")
+          .select(
+            "id,branch_id,outward_number,outward_date,stock_outward_packages(package_rate_type_id,quantity,weight_kg)",
+          )
+          .gte("outward_date", filters.fromDate)
+          .lte("outward_date", filters.toDate);
+        if (filters.branchId !== "all")
+          loadingQuery = loadingQuery.eq("branch_id", filters.branchId);
+        const loadingRows = await loadingQuery;
+        if (loadingRows.error) throw loadingRows.error;
+        const packages = (loadingRows.data ?? []).flatMap(
+          (r: any) => r.stock_outward_packages ?? [],
+        );
+        const typeIds = [
+          ...new Set(packages.map((p: any) => p.package_rate_type_id).filter(Boolean)),
+        ];
+        const [sourceRows, outwardItems, typesResult, ratesResult, workItems] = await Promise.all([
+          receiptIds.length
+            ? db
+                .from("stock_outward_source_income")
+                .select("receipt_id,source_income_amount")
+                .in("receipt_id", receiptIds)
+            : Promise.resolve({ data: [], error: null }),
+          receiptIds.length
+            ? db
+                .from("ltms_source_bill_stock_outward_items")
+                .select("stock_outward_receipt_id,source_income_amount,bill_id")
+                .in("stock_outward_receipt_id", receiptIds)
+            : Promise.resolve({ data: [], error: null }),
+          typeIds.length
+            ? db.from("package_rate_types").select("id,basis,charge_mode").in("id", typeIds)
+            : Promise.resolve({ data: [], error: null }),
+          typeIds.length
+            ? db
+                .from("package_rate_entries")
+                .select("package_rate_type_id,from_value,to_value,amount")
+                .eq("rate_kind", "loading")
+                .in("package_rate_type_id", typeIds)
+            : Promise.resolve({ data: [], error: null }),
+          receiptIds.length
+            ? db
+                .from("workmen_bill_items")
+                .select("stock_outward_receipt_id,bill_id,final_amount")
+                .eq("charge_type", "loading")
+                .in("stock_outward_receipt_id", receiptIds)
+            : Promise.resolve({ data: [], error: null }),
+        ]);
+        for (const result of [sourceRows, outwardItems, typesResult, ratesResult, workItems])
+          if (result.error) throw result.error;
+        const billIds = [
+          ...new Set((outwardItems.data ?? []).map((x: any) => x.bill_id).filter(Boolean)),
+        ];
+        const sourceBills = billIds.length
+          ? await db
+              .from("ltms_source_bills")
+              .select("id,journal_entry_id")
+              .in("id", billIds)
+              .is("deleted_at", null)
+          : { data: [], error: null };
+        if (sourceBills.error) throw sourceBills.error;
+        const postedBills = new Set(
+          (sourceBills.data ?? []).filter((b: any) => b.journal_entry_id).map((b: any) => b.id),
+        );
+        const sourcePosted = (outwardItems.data ?? [])
+          .filter((x: any) => postedBills.has(x.bill_id))
+          .reduce((sum: number, x: any) => sum + n(x.source_income_amount), 0);
+        const sourceSystem = (sourceRows.data ?? []).reduce(
+          (sum: number, x: any) => sum + n(x.source_income_amount),
+          0,
+        );
+        const loadingSystem = loadingDateReceipts.reduce(
+          (sum: number, r: any) => sum + n(r.loading_amount_received),
+          0,
+        );
+        const approvalSystem = approvalDateReceipts.reduce(
+          (sum: number, r: any) => sum + n(r.approval_amount),
+          0,
+        );
+        const types = new Map((typesResult.data ?? []).map((t: any) => [t.id, t]));
+        let loadingCharge = 0;
+        for (const row of loadingRows.data ?? [])
+          for (const item of row.stock_outward_packages ?? []) {
+            const type: any = types.get(item.package_rate_type_id);
+            if (!type) continue;
+            const measure = type.basis === "weight" ? n(item.weight_kg) : n(item.quantity);
+            const slab = (ratesResult.data ?? [])
+              .filter((r: any) => r.package_rate_type_id === type.id)
+              .sort((a: any, b: any) => n(b.from_value) - n(a.from_value))
+              .find(
+                (r: any) =>
+                  n(r.from_value) <= measure && (r.to_value == null || measure <= n(r.to_value)),
+              );
+            if (slab)
+              loadingCharge +=
+                type.charge_mode === "rate" ? n(slab.amount) * measure : n(slab.amount);
+          }
+        const wmItems = workItems.data ?? [];
+        const wmBillIds = [...new Set(wmItems.map((x: any) => x.bill_id).filter(Boolean))];
+        const wmBills = wmBillIds.length
+          ? await db.from("workmen_bills").select("id,journal_entry_id").in("id", wmBillIds)
+          : { data: [], error: null };
+        if (wmBills.error) throw wmBills.error;
+        const postedWm = new Set(
+          (wmBills.data ?? []).filter((b: any) => b.journal_entry_id).map((b: any) => b.id),
+        );
+        const postedWork = wmItems
+          .filter((x: any) => postedWm.has(x.bill_id))
+          .reduce((sum: number, x: any) => sum + n(x.final_amount), 0);
+        if (!cancelled) {
+          setSystem((cur) => ({
+            ...cur,
+            outwardSourceIncome: sourceSystem,
+            outwardLoadingReceived: loadingSystem,
+            outwardApprovalIncome: approvalSystem,
+          }));
+          setPosted((cur) => ({
+            ...cur,
+            outwardSourceIncome: sourcePosted,
+            outwardLoadingReceived: loadingDateReceipts
+              .filter((r: any) => r.loading_received_journal_entry_id)
+              .reduce((sum: number, r: any) => sum + n(r.loading_amount_received), 0),
+            outwardApprovalIncome: approvalDateReceipts
+              .filter((r: any) => r.approval_income_journal_entry_id)
+              .reduce((sum: number, r: any) => sum + n(r.approval_amount), 0),
+          }));
+          setSystemWorkmenOutward(loadingCharge);
+          setPostedWorkmenOutward(postedWork);
+        }
+      } catch (error) {
+        if (!cancelled)
+          toast.error(
+            error instanceof Error
+              ? error.message
+              : "Could not load Stock Outward dashboard values",
+          );
+      }
+    }
+    void loadStockOutward();
+    return () => {
+      cancelled = true;
+    };
+  }, [filters]);
+
+  useEffect(() => {
+    let cancelled = false;
     async function loadPosted() {
       setLoadingPosted(true);
       try {
         const all = add(rows);
-        setSystem((current) => ({ ...all, unloading: current.unloading }));
+        setSystem((current) => ({
+          ...all,
+          unloading: current.unloading,
+          outwardSourceIncome: current.outwardSourceIncome,
+          outwardLoadingReceived: current.outwardLoadingReceived,
+          outwardApprovalIncome: current.outwardApprovalIncome,
+        }));
         let receiptQuery = db
           .from("stock_inward_receipts")
           .select("id")
@@ -401,7 +605,7 @@ export function LtmsDashboard({
           total.net += income - transporter - workmen - trip;
           return total;
         }, zero());
-        postedRows.workmen += postedWorkmenUnloading;
+        postedRows.workmen += postedWorkmenUnloading + postedWorkmenOutward;
         if (!cancelled) setPosted((current) => ({ ...postedRows, unloading: current.unloading }));
       } catch (error) {
         if (!cancelled)
@@ -416,14 +620,14 @@ export function LtmsDashboard({
     return () => {
       cancelled = true;
     };
-  }, [rows, filters]);
+  }, [rows, filters, postedWorkmenOutward]);
 
   useEffect(() => {
     if (!onSummaryChange) return;
     onSummaryChange({
       system: {
         ...system,
-        workmen: system.workmen + systemWorkmenUnloading,
+        workmen: system.workmen + systemWorkmenUnloading + systemWorkmenOutward,
         financeIncome: financeTotals.income,
         financeExpenditure: financeTotals.expenditure,
       },
@@ -442,6 +646,7 @@ export function LtmsDashboard({
     posted,
     system,
     systemWorkmenUnloading,
+    systemWorkmenOutward,
   ]);
 
   return (
@@ -467,7 +672,7 @@ export function LtmsDashboard({
             subtitle="Final report values; Workmen Charges = loading + unloading"
             values={{
               ...system,
-              workmen: system.workmen + systemWorkmenUnloading,
+              workmen: system.workmen + systemWorkmenUnloading + systemWorkmenOutward,
               financeIncome: financeTotals.income,
               financeExpenditure: financeTotals.expenditure,
             }}

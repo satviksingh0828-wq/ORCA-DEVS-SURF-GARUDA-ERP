@@ -53,6 +53,7 @@ type FormState = {
   receiptDate: string;
   loadingDate: string;
   loadingAmountReceived: string;
+  approvalAmount: string;
   documents: OutwardDocumentInput[];
 };
 
@@ -89,6 +90,7 @@ const blankForm: FormState = {
   receiptDate: isoToday,
   loadingDate: isoToday,
   loadingAmountReceived: "0",
+  approvalAmount: "0",
   documents: [{ documentNo: "", vehicleNumber: "" }],
 };
 
@@ -204,7 +206,7 @@ export function StockOutward() {
     let query = db
       .from("stock_outward_receipts")
       .select(
-        "id,outward_number,outward_date,loading_date,loading_amount_received,source_income_amount,wms_sales_order_id,wms_sales_order_number,created_at,branch:branches(branch_name),stock_outward_sources(source_id,source:contracts(contract_name)),stock_outward_documents(id,document_no,vehicle_number),stock_outward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,outward_document_id,wms_item_id,sku,item_name,source:contracts(contract_name))",
+        "id,outward_number,outward_date,loading_date,loading_amount_received,source_income_amount,approval_amount,workmen_loading_bill_id,loading_received_journal_entry_id,approval_income_journal_entry_id,wms_sales_order_id,wms_sales_order_number,created_at,ltms_source_bill_stock_outward_items(id),branch:branches(branch_name),stock_outward_sources(source_id,source:contracts(contract_name)),stock_outward_documents(id,document_no,vehicle_number),stock_outward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,outward_document_id,wms_item_id,sku,item_name,source:contracts(contract_name))",
       )
       .gte("outward_date", filters.from)
       .lte("outward_date", filters.to)
@@ -400,6 +402,9 @@ export function StockOutward() {
     const receivedAmount = Number(form.loadingAmountReceived || calculatedLoadingAmount || 0);
     if (!Number.isFinite(receivedAmount) || receivedAmount < 0)
       return toast.error("Loading Amount Received must be zero or greater");
+    const approvalAmount = Number(form.approvalAmount || 0);
+    if (!Number.isFinite(approvalAmount) || approvalAmount < 0)
+      return toast.error("Approval Income must be zero or greater");
 
     setSaving(true);
     const { data: receiptNumber, error: numberError } = await db.rpc("next_branch_series_number", {
@@ -421,6 +426,7 @@ export function StockOutward() {
         loading_date: form.loadingDate,
         loading_amount_received: receivedAmount,
         source_income_amount: calculatedSourceIncome,
+        approval_amount: approvalAmount,
       })
       .select("id")
       .single();
@@ -468,6 +474,16 @@ export function StockOutward() {
           documentResult?.error?.message ??
           packageResult.error?.message ??
           "Could not save package lines",
+      );
+    }
+    const { error: sourceIncomeError } = await db.rpc("refresh_stock_outward_source_income", {
+      p_receipt_id: receipt.id,
+    });
+    if (sourceIncomeError) {
+      await db.from("stock_outward_receipts").delete().eq("id", receipt.id);
+      setSaving(false);
+      return toast.error(
+        `Could not calculate per-source loading income: ${sourceIncomeError.message}`,
       );
     }
     if (wmsEnabled) {
@@ -526,7 +542,18 @@ export function StockOutward() {
     await loadRows();
   }
 
+  function isReceiptLocked(row: Row) {
+    return Boolean(
+      row.workmen_loading_bill_id ||
+      row.loading_received_journal_entry_id ||
+      row.approval_income_journal_entry_id ||
+      (row.ltms_source_bill_stock_outward_items ?? []).length,
+    );
+  }
+
   async function deleteReceipt(row: Row) {
+    if (isReceiptLocked(row))
+      return toast.error("This Stock Outward is already billed or posted and cannot be deleted");
     if (
       !window.confirm(
         `Delete Stock Outward ${row.outward_number ?? ""}?${row.wms_sales_order_id ? " The linked WMS Sales Order will be deleted first." : ""}`,
@@ -954,7 +981,18 @@ export function StockOutward() {
                 />
               </div>
               <div>
-                <Label>Source Income (Common Loading Slab)</Label>
+                <Label>Approval Income</Label>
+                <Input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={form.approvalAmount}
+                  onChange={(e) => setForm((f) => ({ ...f, approvalAmount: e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label>Stock Outward Source Income (Common Loading Slab)</Label>
                 <div className="flex h-10 items-center rounded-md border border-border bg-muted/40 px-3 font-medium">
                   ₹ {money(calculatedSourceIncome)}
                 </div>
@@ -964,19 +1002,27 @@ export function StockOutward() {
               <div>
                 <h4 className="text-sm font-semibold text-sky-800">Live Calculation Preview</h4>
                 <p className="text-xs text-muted-foreground">
-                  Preview only — updates from package slabs and the selected additional-income
-                  option.
+                  Preview only — displays loading received, approval income, and the source's Common
+                  Loading Slab income separately.
                 </p>
               </div>
               {(() => {
                 const received = Number(form.loadingAmountReceived || 0);
                 const sourceIncome = calculatedSourceIncome;
+                const approvalIncome = Number(form.approvalAmount || 0);
                 const canViewSourceIncome = user?.role !== "basic";
-                const total = received + (canViewSourceIncome ? sourceIncome : 0);
+                const total = received + approvalIncome + (canViewSourceIncome ? sourceIncome : 0);
                 const previewRows = [
                   { label: "Loading Amount Received", value: received, tone: "text-rose-700" },
+                  { label: "Approval Income", value: approvalIncome, tone: "text-violet-700" },
                   ...(canViewSourceIncome
-                    ? [{ label: "Source Income", value: sourceIncome, tone: "text-emerald-700" }]
+                    ? [
+                        {
+                          label: "Outward Source Income",
+                          value: sourceIncome,
+                          tone: "text-emerald-700",
+                        },
+                      ]
                     : []),
 
                   {
@@ -1062,7 +1108,7 @@ export function StockOutward() {
               size="sm"
               className="ml-auto"
               onClick={() => void deleteReceipt(selectedRow)}
-              disabled={Boolean()}
+              disabled={isReceiptLocked(selectedRow)}
             >
               <Trash2 className="size-4" /> Delete receipt
             </Button>
@@ -1091,6 +1137,10 @@ export function StockOutward() {
             <div>
               <p className="text-muted-foreground">Loading amount received</p>
               <p className="font-medium">₹ {money(selectedRow.loading_amount_received)}</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Approval income</p>
+              <p className="font-medium">₹ {money(selectedRow.approval_amount)}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Loading amount status</p>
@@ -1269,6 +1319,7 @@ export function StockOutward() {
                         size="sm"
                         variant="destructive"
                         onClick={() => void deleteReceipt(row)}
+                        disabled={isReceiptLocked(row)}
                       >
                         <Trash2 className="size-4" /> Delete
                       </Button>
@@ -1280,6 +1331,8 @@ export function StockOutward() {
                           <p>{new Date(row.loading_date).toLocaleDateString("en-GB")}</p>
                           <p className="mt-3 text-muted-foreground">Source income</p>
                           <p>Common Loading Slab · ₹ {money(row.source_income_amount)}</p>
+                          <p className="mt-3 text-muted-foreground">Approval income</p>
+                          <p>₹ {money(row.approval_amount)}</p>
                         </div>
                         <div>
                           <p className="mb-2 text-muted-foreground">Packages</p>

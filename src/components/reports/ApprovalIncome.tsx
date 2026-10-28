@@ -14,7 +14,10 @@ import {
 } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
-import { serverPostStockInwardApprovalIncome } from "@/lib/approval-income-actions";
+import {
+  serverPostStockInwardApprovalIncome,
+  serverPostStockOutwardApprovalIncome,
+} from "@/lib/approval-income-actions";
 import { useSession } from "@/lib/session";
 import { useBranches } from "@/lib/use-branches";
 
@@ -31,6 +34,8 @@ type PaymentLedger = {
 type SourceLink = { source_id: string; source?: { contract_name?: string | null } | null };
 type ApprovalIncomeReceipt = {
   id: string;
+  receipt_type: "inward" | "outward";
+  outward_number?: string | null;
   receipt_number: string | null;
   receipt_date: string;
   unloading_date: string;
@@ -116,7 +121,7 @@ export function ApprovalIncome() {
         setVoucherNumbers({});
         return;
       }
-      let query = db
+      let inwardQuery = db
         .from("stock_inward_receipts")
         .select(
           "id,receipt_number,receipt_date,unloading_date,branch_id,additional_income_mode,approval_amount,approval_income_payment_ledger_id,approval_income_journal_entry_id,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name))",
@@ -125,15 +130,53 @@ export function ApprovalIncome() {
         .in("additional_income_mode", ["approval", "both"])
         .order("unloading_date", { ascending: false })
         .order("receipt_date", { ascending: false });
-      if (user?.role === "basic") query = query.in("branch_id", allowedBranchIds);
-      if (filters.branch !== "all") query = query.eq("branch_id", filters.branch);
-      if (filters.from) query = query.gte("unloading_date", filters.from);
-      if (filters.to) query = query.lte("unloading_date", filters.to);
-      if (filters.status === "pending") query = query.is("approval_income_journal_entry_id", null);
-      if (filters.status === "posted")
-        query = query.not("approval_income_journal_entry_id", "is", null);
+      let outwardQuery = db
+        .from("stock_outward_receipts")
+        .select(
+          "id,outward_number,loading_date,branch_id,approval_amount,approval_income_payment_ledger_id,approval_income_journal_entry_id,branch:branches(branch_name)",
+        )
+        .gt("approval_amount", 0)
+        .order("loading_date", { ascending: false });
+      if (user?.role === "basic") {
+        inwardQuery = inwardQuery.in("branch_id", allowedBranchIds);
+        outwardQuery = outwardQuery.in("branch_id", allowedBranchIds);
+      }
+      if (filters.branch !== "all") {
+        inwardQuery = inwardQuery.eq("branch_id", filters.branch);
+        outwardQuery = outwardQuery.eq("branch_id", filters.branch);
+      }
+      if (filters.from) {
+        inwardQuery = inwardQuery.gte("unloading_date", filters.from);
+        outwardQuery = outwardQuery.gte("loading_date", filters.from);
+      }
+      if (filters.to) {
+        inwardQuery = inwardQuery.lte("unloading_date", filters.to);
+        outwardQuery = outwardQuery.lte("loading_date", filters.to);
+      }
+      if (filters.status === "pending") {
+        inwardQuery = inwardQuery.is("approval_income_journal_entry_id", null);
+        outwardQuery = outwardQuery.is("approval_income_journal_entry_id", null);
+      }
+      if (filters.status === "posted") {
+        inwardQuery = inwardQuery.not("approval_income_journal_entry_id", "is", null);
+        outwardQuery = outwardQuery.not("approval_income_journal_entry_id", "is", null);
+      }
 
-      const receiptRows = await fetchAll<ApprovalIncomeReceipt>(() => query);
+      const [inwardRows, outwardRows] = await Promise.all([
+        fetchAll<any>(() => inwardQuery),
+        fetchAll<any>(() => outwardQuery),
+      ]);
+      const receiptRows: ApprovalIncomeReceipt[] = [
+        ...inwardRows.map((row) => ({ ...row, receipt_type: "inward" as const })),
+        ...outwardRows.map((row) => ({
+          ...row,
+          receipt_type: "outward" as const,
+          receipt_number: row.outward_number,
+          receipt_date: row.loading_date,
+          unloading_date: row.loading_date,
+          stock_inward_sources: [],
+        })),
+      ].sort((a, b) => (b.unloading_date || "").localeCompare(a.unloading_date || ""));
       setRows(receiptRows);
       setSelectedLedgers(
         Object.fromEntries(
@@ -211,12 +254,12 @@ export function ApprovalIncome() {
     }
     setPostingIds((current) => [...current, row.id]);
     try {
-      const journalId = await serverPostStockInwardApprovalIncome({
-        data: {
-          sessionToken: user.sessionToken,
-          receiptId: row.id,
-          paymentLedgerId,
-        },
+      const postAction =
+        row.receipt_type === "outward"
+          ? serverPostStockOutwardApprovalIncome
+          : serverPostStockInwardApprovalIncome;
+      const journalId = await postAction({
+        data: { sessionToken: user.sessionToken, receiptId: row.id, paymentLedgerId },
       });
       const account = paymentLedgers.find((item) => item.id === paymentLedgerId);
       toast.success(
@@ -241,8 +284,9 @@ export function ApprovalIncome() {
             <div>
               <h2 className="font-semibold">Approval Income</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
-                Review Stock Inward Approval Amounts, choose a branch Cash / Bank account, and post
-                each amount against the branch’s mapped Approval Charge Income ledger.
+                Review Approval Amounts on Stock Inward and Stock Outward receipts, choose a branch
+                Cash / Bank account, and post each amount against the branch’s mapped Approval
+                Charge Income ledger.
               </p>
             </div>
           </div>
@@ -337,7 +381,7 @@ export function ApprovalIncome() {
             <p className="mt-3 font-medium">No Approval Income found</p>
             <p className="mt-1 text-sm text-muted-foreground">
               {filters.status === "pending"
-                ? "Stock Inward receipts with Approval Amount will appear here until posted."
+                ? "Stock Inward or Stock Outward receipts with Approval Amount will appear here until posted."
                 : "Try changing the branch, date, or status filters."}
             </p>
           </div>
@@ -347,7 +391,7 @@ export function ApprovalIncome() {
               <thead className="bg-muted/50 text-left">
                 <tr>
                   <th className="px-3 py-3">Receipt / Date</th>
-                  <th className="px-3 py-3">Branch / Source</th>
+                  <th className="px-3 py-3">Branch / Source / Type</th>
                   <th className="px-3 py-3 text-right">Approval Amount</th>
                   <th className="px-3 py-3">Cash / Bank Account</th>
                   <th className="px-3 py-3">Status</th>
@@ -369,9 +413,14 @@ export function ApprovalIncome() {
                   return (
                     <tr key={row.id} className="border-t border-border align-top">
                       <td className="px-3 py-3">
-                        <p className="font-medium">{row.receipt_number ?? "Stock Inward"}</p>
+                        <p className="font-medium">
+                          {row.receipt_type === "outward"
+                            ? (row.outward_number ?? "Stock Outward")
+                            : (row.receipt_number ?? "Stock Inward")}
+                        </p>
                         <p className="mt-1 text-xs text-muted-foreground">
-                          Unloading {displayDate(row.unloading_date)}
+                          {row.receipt_type === "outward" ? "Loading" : "Unloading"}{" "}
+                          {displayDate(row.unloading_date)}
                         </p>
                         <p className="text-xs text-muted-foreground">
                           Receipt {displayDate(row.receipt_date)}
@@ -380,7 +429,12 @@ export function ApprovalIncome() {
                       <td className="px-3 py-3">
                         <p className="font-medium">{row.branch?.branch_name ?? "—"}</p>
                         <p className="mt-1 max-w-64 text-xs text-muted-foreground">
-                          {sourceNames.join(", ") || "No linked source"}
+                          {row.receipt_type === "outward"
+                            ? "Stock Outward"
+                            : sourceNames.join(", ") || "No linked source"}
+                          <span className="block mt-1">
+                            Stock {row.receipt_type === "outward" ? "Outward" : "Inward"}
+                          </span>
                         </p>
                       </td>
                       <td className="px-3 py-3 text-right font-semibold">
