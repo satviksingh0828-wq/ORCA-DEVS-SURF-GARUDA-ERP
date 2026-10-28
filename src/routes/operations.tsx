@@ -219,6 +219,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
       t.id === "ltms-manifest" ||
       t.id === "outward-pod" ||
       t.id === "stock-inward" ||
+      t.id === "stock-outward" ||
       t.id === "admin-mis" ||
       t.id === "monthly-mis" ||
       t.id === "fastag-report" ||

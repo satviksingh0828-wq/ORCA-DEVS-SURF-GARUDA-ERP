@@ -425,7 +425,6 @@ export function StockOutward() {
         outward_date: form.receiptDate,
         loading_date: form.loadingDate,
         loading_amount_received: receivedAmount,
-        source_income_amount: calculatedSourceIncome,
         approval_amount: approvalAmount,
       })
       .select("id")
@@ -585,7 +584,7 @@ export function StockOutward() {
         <div>
           <h2 className="font-semibold">Stock Outward</h2>
           <p className="text-sm text-muted-foreground">
-            Receive stock against one or more sources and record loading details.
+            Dispatch stock against one or more sources and record loading details.
           </p>
         </div>
         <Button

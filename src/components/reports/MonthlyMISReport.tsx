@@ -29,6 +29,15 @@ type EditorActivity = Pick<
   "id" | "activity_name" | "schedule_type" | "schedule_value" | "schedule_value_2"
 >;
 const monthNow = new Date().toISOString().slice(0, 7);
+function submittedDate(value: string | null) {
+  return value
+    ? new Date(value).toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      })
+    : "-";
+}
 
 export function MonthlyMISReport() {
   const { user } = useSession();
@@ -173,7 +182,7 @@ export function MonthlyMISReport() {
           <thead>
             <tr className="bg-muted/60 text-left">
               <th className="px-4 py-3">Depot</th>
-              <th className="px-4 py-3">Month</th>
+              <th className="px-4 py-3">Submitted Date</th>
               <th className="px-4 py-3">Status</th>
               <th className="px-4 py-3 text-right">Due</th>
               <th className="px-4 py-3 text-right">Done</th>
@@ -187,7 +196,7 @@ export function MonthlyMISReport() {
               rows.map((row) => (
                 <tr key={row.id} className="border-t border-border">
                   <td className="px-4 py-3 font-medium">{row.branch_name}</td>
-                  <td className="px-4 py-3">{row.mis_month}</td>
+                  <td className="px-4 py-3">{submittedDate(row.submitted_at)}</td>
                   <td className="px-4 py-3">
                     <span
                       className={`rounded-full px-2 py-1 text-xs font-semibold ${row.status === "submitted" ? "bg-emerald-500/10 text-emerald-600" : "bg-amber-500/10 text-amber-600"}`}

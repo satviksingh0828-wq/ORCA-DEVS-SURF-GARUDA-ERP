@@ -155,7 +155,7 @@ export async function exportMisDepotReportExcel(rows: MisReportRow[], month: str
   const summary = XLSX.utils.json_to_sheet(
     rows.map((row) => ({
       Depot: row.branch_name,
-      Month: row.mis_month,
+      "Submitted Date": row.submitted_at ?? "-",
       Status: row.status,
       Due: row.due,
       Done: row.done,
@@ -166,7 +166,7 @@ export async function exportMisDepotReportExcel(rows: MisReportRow[], month: str
   );
   summary["!cols"] = [
     { wch: 28 },
-    { wch: 12 },
+    { wch: 24 },
     { wch: 12 },
     { wch: 9 },
     { wch: 9 },

@@ -276,7 +276,7 @@ BEGIN
  PERFORM set_config('app.allow_stock_outward_income_refresh','off',true);
 END; $$;
 REVOKE ALL ON FUNCTION public.refresh_stock_outward_source_income(UUID) FROM PUBLIC, anon, authenticated;
-GRANT EXECUTE ON FUNCTION public.refresh_stock_outward_source_income(UUID) TO service_role;
+GRANT EXECUTE ON FUNCTION public.refresh_stock_outward_source_income(UUID) TO anon, authenticated, service_role;
 
 CREATE TABLE IF NOT EXISTS public.ltms_source_bill_stock_outward_items (
  id UUID PRIMARY KEY DEFAULT gen_random_uuid(), bill_id UUID NOT NULL REFERENCES public.ltms_source_bills(id) ON DELETE CASCADE,
