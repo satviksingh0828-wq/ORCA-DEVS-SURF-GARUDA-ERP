@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Database, RefreshCw } from "lucide-react";
-import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
-import { BrandFooter } from "./BrandFooter";
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Database, RefreshCw } from 'lucide-react';
+import { isSupabaseConfigured, supabase } from '@/integrations/supabase/client';
+import { BrandFooter } from './BrandFooter';
 
 const HEALTH_CHECK_INTERVAL_MS = 15_000;
 const HEALTH_CHECK_TIMEOUT_MS = 8_000;
 
 function isSupabaseAvailableError(error: unknown): boolean {
-  if (!error || typeof error !== "object") return false;
-  const status = "status" in error && typeof error.status === "number" ? error.status : undefined;
+  if (!error || typeof error !== 'object') return false;
+  const status = 'status' in error && typeof error.status === 'number' ? error.status : undefined;
   // A successful HTTP response, including an authorization or schema error,
   // proves that the Supabase service is reachable. The app may still need a
   // configuration or permission fix, but it is not a service outage.
@@ -20,14 +20,14 @@ async function checkSupabaseHealth(): Promise<boolean> {
 
   const timeout = new Promise<never>((_, reject) => {
     window.setTimeout(
-      () => reject(new Error("Supabase health check timed out")),
-      HEALTH_CHECK_TIMEOUT_MS,
+      () => reject(new Error('Supabase health check timed out')),
+      HEALTH_CHECK_TIMEOUT_MS
     );
   });
 
   try {
     const result = await Promise.race([
-      supabase.from("app_settings").select("id").limit(1).maybeSingle(),
+      supabase.from('app_settings').select('id').limit(1).maybeSingle(),
       timeout,
     ]);
 
@@ -62,7 +62,10 @@ function ServerUnavailableScreen({
       </header>
       <main className="relative z-10 flex flex-1 items-center justify-center overflow-y-auto px-4 py-8">
         <div className="surface-card w-full max-w-md animate-fade-up px-6 py-8 text-center sm:px-8">
-          <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive">
+          <div
+            className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive"
+            style={{ lineHeight: '0px', width: '0', height: '0' }}
+          >
             <Database className="h-6 w-6" aria-hidden="true" />
           </div>
           <h1 className="text-2xl font-semibold tracking-tight">Server is not live</h1>
@@ -76,8 +79,8 @@ function ServerUnavailableScreen({
             disabled={checking}
             className="mt-6 inline-flex items-center justify-center gap-2 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
           >
-            <RefreshCw className={`h-4 w-4 ${checking ? "animate-spin" : ""}`} aria-hidden="true" />
-            {checking ? "Checking server..." : "Try again"}
+            <RefreshCw className={`h-4 w-4 ${checking ? 'animate-spin' : ''}`} aria-hidden="true" />
+            {checking ? 'Checking server...' : 'Try again'}
           </button>
         </div>
       </main>
@@ -104,11 +107,11 @@ export function SupabaseStatusGate({ children }: { children: ReactNode }) {
       void runHealthCheck();
     }, HEALTH_CHECK_INTERVAL_MS);
     const handleOnline = () => void runHealthCheck();
-    window.addEventListener("online", handleOnline);
+    window.addEventListener('online', handleOnline);
 
     return () => {
       window.clearInterval(interval);
-      window.removeEventListener("online", handleOnline);
+      window.removeEventListener('online', handleOnline);
     };
   }, [runHealthCheck]);
 

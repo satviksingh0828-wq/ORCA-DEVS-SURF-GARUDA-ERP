@@ -1,4 +1,5 @@
 import { defineConfig } from "vite";
+import { vibedit } from "@vibedit/vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import tsConfigPaths from "vite-tsconfig-paths";
@@ -12,9 +13,13 @@ export default defineConfig(({ command }) => ({
       server: { entry: "server" },
     }),
     react(),
+    command === "serve" && vibedit(),
     tailwindcss(),
     tsConfigPaths(),
   ],
+  optimizeDeps: {
+    include: ["@puckeditor/core"],
+  },
   server: {
     host: "0.0.0.0",
     port: 5000,

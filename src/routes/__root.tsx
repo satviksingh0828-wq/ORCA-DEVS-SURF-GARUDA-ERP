@@ -133,6 +133,12 @@ function RootShell({ children }: { children: ReactNode }) {
     <html lang="en" data-theme="garuda">
       <head>
         <HeadContent />
+        {import.meta.env.DEV && (
+          <>
+            <script dangerouslySetInnerHTML={{ __html: "window.__VIBEDIT_PORT__ = 4242;" }} />
+            <script src="/_vibedit/overlay.js" defer />
+          </>
+        )}
         <script
           dangerouslySetInnerHTML={{
             __html: `(() => {

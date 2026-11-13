@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SplatRouteImport } from './routes/$'
 import { Route as AccountsRouteImport } from './routes/accounts'
 import { Route as AttendanceRouteImport } from './routes/attendance'
 import { Route as CashReportsRouteImport } from './routes/cash-reports'
@@ -125,6 +126,11 @@ import { Route as ApiDriverTripsCheckpointsVerifyRouteImport } from './routes/ap
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SplatRoute = SplatRouteImport.update({
+  id: '/$',
+  path: '/$',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AccountsRoute = AccountsRouteImport.update({
@@ -698,6 +704,7 @@ const ApiDriverTripsCheckpointsVerifyRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
   '/accounts': typeof AccountsRouteWithChildren
   '/attendance': typeof AttendanceRouteWithChildren
   '/cash-reports': typeof CashReportsRoute
@@ -812,6 +819,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
   '/cash-reports': typeof CashReportsRoute
   '/finance': typeof FinanceRoute
   '/home': typeof HomeRoute
@@ -919,6 +927,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/$': typeof SplatRoute
   '/accounts': typeof AccountsRouteWithChildren
   '/attendance': typeof AttendanceRouteWithChildren
   '/cash-reports': typeof CashReportsRoute
@@ -1035,6 +1044,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/$'
     | '/accounts'
     | '/attendance'
     | '/cash-reports'
@@ -1149,6 +1159,7 @@ export interface FileRouteTypes {
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/$'
     | '/cash-reports'
     | '/finance'
     | '/home'
@@ -1255,6 +1266,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/$'
     | '/accounts'
     | '/attendance'
     | '/cash-reports'
@@ -1370,6 +1382,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SplatRoute: typeof SplatRoute
   AccountsRoute: typeof AccountsRouteWithChildren
   AttendanceRoute: typeof AttendanceRouteWithChildren
   CashReportsRoute: typeof CashReportsRoute
@@ -1442,6 +1455,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/$': {
+      id: '/$'
+      path: '/$'
+      fullPath: '/$'
+      preLoaderRoute: typeof SplatRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/accounts': {
@@ -2419,6 +2439,7 @@ const SettingsRouteWithChildren = SettingsRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SplatRoute: SplatRoute,
   AccountsRoute: AccountsRouteWithChildren,
   AttendanceRoute: AttendanceRouteWithChildren,
   CashReportsRoute: CashReportsRoute,
