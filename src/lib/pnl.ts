@@ -25,6 +25,8 @@ export type PnLClosedTrip = {
   vehicle_id: string | null;
   driver_id: string | null;
   transporter_id: string | null;
+  rental_id: string | null;
+  ownership: string;
   total_income: number;
   total_expense: number;
   net_income: number;
@@ -176,6 +178,8 @@ function mapTrip(r: Record<string, unknown>): PnLClosedTrip {
     vehicle_id: (r.vehicle_id as string) ?? (snapTrip?.vehicle_id as string) ?? null,
     driver_id: (r.driver_id as string) ?? (snapTrip?.driver_id as string) ?? null,
     transporter_id: (r.transporter_id as string) ?? (snapTrip?.transporter_id as string) ?? null,
+    rental_id: (snapTrip?.rental_id as string) ?? null,
+    ownership: String(snapTrip?.ownership ?? (r.vehicle_id ? "own" : "third_party")),
     total_income: Number(r.total_income ?? 0),
     total_expense: Number(r.total_expense ?? 0),
     net_income: Number(r.net_income ?? 0),
@@ -253,7 +257,7 @@ async function fetchAllAdmin<T>(buildQuery: () => any, pageSize = 1000): Promise
 async function fetchActiveTrips(db: any, start: string, end: string): Promise<PnLClosedTrip[]> {
   const tripsRes = await db
     .from("trips")
-    .select("id,trip_code,branch_id,vehicle_id,driver_id,transporter_id,contract_id,created_at")
+    .select("id,trip_code,branch_id,vehicle_id,driver_id,transporter_id,rental_id,ownership,contract_id,created_at")
     .gte("created_at", start)
     .lt("created_at", end);
 
@@ -348,6 +352,8 @@ async function fetchActiveTrips(db: any, start: string, end: string): Promise<Pn
       vehicle_id: (t.vehicle_id as string) ?? null,
       driver_id: (t.driver_id as string) ?? null,
       transporter_id: (t.transporter_id as string) ?? null,
+      rental_id: (t.rental_id as string) ?? null,
+      ownership: String(t.ownership ?? "own"),
       total_income: totalIncome,
       total_expense: expenseTotal,
       net_income: totalIncome - expenseTotal,
