@@ -815,14 +815,16 @@ export function ConsignmentList({
         setFromPin(branch?.pin_code ?? "");
         setToPin(selectedTransporter?.pin_code ?? "");
       } else {
-        setFromPin(selectedTransporter?.pin_code ?? "");
-        setToPin(branch?.pin_code ?? "");
+        // Pickup only: transporter route runs from the selected branch to the
+        // consignment's destination (first E-Way Bill recipient PIN).
+        setFromPin(branch?.pin_code ?? "");
+        setToPin(common?.recipient_pin_code ?? "");
       }
     } else {
       setFromPin("");
       setToPin("");
     }
-  }, [type, movement, branch?.pin_code, selectedTransporter?.pin_code]);
+  }, [type, movement, branch?.pin_code, selectedTransporter?.pin_code, common?.recipient_pin_code]);
   useEffect(() => {
     if (type !== "third_party" || !branchId || !transporterId) {
       setTransporterSources([]);
@@ -2348,7 +2350,7 @@ function ConsignmentForm(props: any) {
               <Input
                 className="h-8 rounded-none border-l-2 border-l-sky-600 text-xs"
                 value={fromPin}
-                readOnly={type === "third_party" && movement === "drop"}
+                readOnly={type === "third_party"}
                 onChange={(event) => setFromPin(event.target.value.replace(/\D/g, "").slice(0, 6))}
                 placeholder={branch?.pin_code ?? "Branch pincode"}
               />
