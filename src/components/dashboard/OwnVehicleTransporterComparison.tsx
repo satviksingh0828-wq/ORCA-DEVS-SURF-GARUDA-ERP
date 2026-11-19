@@ -75,7 +75,9 @@ export function OwnVehicleTransporterComparison() {
     );
     const summarize = (own: boolean) => {
       const selected = trips.filter((trip) =>
-        own ? Boolean(trip.vehicle_id) && !trip.transporter_id : Boolean(trip.transporter_id),
+        own
+          ? trip.ownership === "own" || trip.ownership === "owned"
+          : trip.ownership === "third_party" || Boolean(trip.rental_id) || Boolean(trip.transporter_id),
       );
       const income = selected.reduce((sum, trip) => sum + trip.total_income, 0);
       const expense = selected.reduce((sum, trip) => sum + trip.total_expense, 0);
@@ -83,7 +85,7 @@ export function OwnVehicleTransporterComparison() {
     };
     return [
       { type: "Own Vehicles", ...summarize(true) },
-      { type: "Transporters", ...summarize(false) },
+      { type: "Rented / Transporters", ...summarize(false) },
     ];
   }, [branchId, data]);
 
