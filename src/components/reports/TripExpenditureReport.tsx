@@ -74,7 +74,7 @@ function monthStart(date = new Date()) {
 function monthEnd(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
 }
-function isEligibleMovement(trip: TripRow, consignment: ConsignmentRow) {
+function isEligibleMovement(trip: TripRow) {
   const ownership = String(trip.ownership ?? "").toLowerCase();
   // Rented trips are recorded as third_party. Allocate their costs to every
   // assigned consignment, not only third-party drop consignments.
@@ -205,7 +205,7 @@ export function TripExpenditureReport({
       const nextRows: ReportRow[] = [];
       for (const trip of trips) {
         const assigned = consignments.filter(
-          (consignment) => consignment.trip_id === trip.id && isEligibleMovement(trip, consignment),
+          (consignment) => consignment.trip_id === trip.id && isEligibleMovement(trip),
         );
         if (!assigned.length) continue;
         const weights = assigned.map((consignment) => ({
