@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, FileText, Pencil, Plus, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -20,6 +20,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CsvIO } from "@/components/CsvIO";
+import type { RouteRange } from "@/lib/contract-ranges";
+import { fetchAll } from "@/lib/fetch-all";
+import { ensureLocationsForPins } from "@/lib/ensure-location";
 import { ContractEntryForm, emptyEntry, type EntryRow } from "./ContractEntryForm";
 import type { ContractRow } from "./ContractForm";
 
@@ -50,6 +54,7 @@ export function TransporterEntries({
   const [sources, setSources] = useState<Source[]>([]);
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [entries, setEntries] = useState<EntryRow[]>([]);
+  const [locNames, setLocNames] = useState<Record<string, string>>({});
   const [ledgers, setLedgers] = useState<Ledger[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<EntryRow | null>(null);
@@ -68,6 +73,35 @@ export function TransporterEntries({
         contract_name: `${transporter.transporter_name} · ${selectedSource.source_name}`,
       } as ContractRow)
     : null;
+
+  const entryColumns = useMemo(() => {
+    const nF = Math.max(
+      3,
+      entries.length > 0
+        ? Math.max(...entries.map((e) => (e.freight_route_ranges ?? []).length))
+        : 0,
+    );
+    const nL = Math.max(
+      3,
+      entries.length > 0
+        ? Math.max(...entries.map((e) => (e.loading_route_ranges ?? []).length))
+        : 0,
+    );
+    const cols: string[] = [
+      "mode",
+      "from_location",
+      "from_pin_code",
+      "to_location",
+      "to_pin_code",
+      "freight_range_type",
+    ];
+    for (let i = 1; i <= nF; i++)
+      cols.push(`f_r${i}_start`, `f_r${i}_end`, `f_r${i}_working`, `f_r${i}_value`);
+    cols.push("loading_range_type");
+    for (let i = 1; i <= nL; i++)
+      cols.push(`l_r${i}_start`, `l_r${i}_end`, `l_r${i}_working`, `l_r${i}_value`);
+    return cols;
+  }, [entries]);
 
   async function loadSources() {
     setLoading(true);
@@ -122,7 +156,17 @@ export function TransporterEntries({
       .eq("source_id", sourceId)
       .order("created_at", { ascending: true });
     if (error) toast.error(`Could not load transporter entries: ${error.message}`);
-    setEntries((data ?? []) as EntryRow[]);
+    const loadedEntries = (data ?? []) as EntryRow[];
+    setEntries(loadedEntries);
+    const ids = Array.from(new Set(loadedEntries.flatMap((entry) => [entry.from_location_id, entry.to_location_id]).filter(Boolean))) as string[];
+    if (ids.length) {
+      const locations = await fetchAll<{ id: string; location_name: string }>(() =>
+        supabase.from("locations").select("id,location_name").in("id", ids),
+      );
+      setLocNames(Object.fromEntries(locations.map((location) => [location.id, location.location_name])));
+    } else {
+      setLocNames({});
+    }
     setLoading(false);
   }
 
@@ -195,6 +239,121 @@ export function TransporterEntries({
         : "Transporter source created. Add route entries under this source.",
     );
   }
+
+  async function onImport(rows: Record<string, string>[]) {
+    if (!sourceId || selectedSource?.is_active === false) return { inserted: 0, failed: rows.length };
+    const all = await fetchAll<{ id: string; location_name: string; pin_code: string | null }>(() =>
+      supabase.from("locations").select("id,location_name,pin_code"),
+    );
+    const nameToId = new Map(all.map((l) => [l.location_name.trim().toLowerCase(), l.id]));
+    let pinToId = new Map(
+      all
+        .filter((l) => (l.pin_code ?? "").trim() !== "")
+        .map((l) => [(l.pin_code ?? "").trim(), l.id]),
+    );
+    const pinById = new Map(all.map((l) => [l.id, (l.pin_code ?? "").trim()]));
+
+    // Auto-create locations for any unknown PINs in the CSV
+    const allPins = rows.flatMap((r) => [
+      (r.from_pin_code ?? "").trim(),
+      (r.to_pin_code ?? "").trim(),
+    ]);
+    pinToId = await ensureLocationsForPins(allPins, pinToId);
+
+    const resolve = (name: string, pin: string) => {
+      const n = (name ?? "").trim().toLowerCase();
+      const p = (pin ?? "").trim();
+      const id = pinToId.get(p) ?? nameToId.get(n) ?? null;
+      return { id, pin: p || (id ? (pinById.get(id) ?? "") : "") };
+    };
+
+    const payload = rows.map((r) => {
+      const freight_route_range_type =
+        (r.freight_range_type ?? "weight").trim().toLowerCase() === "quantity"
+          ? "quantity"
+          : "weight";
+      const freight_route_ranges: RouteRange[] = [];
+      for (let i = 1; i <= 20; i++) {
+        const start = (r[`f_r${i}_start`] ?? "").trim();
+        if (!start) break;
+        const working = (r[`f_r${i}_working`] ?? "rate").trim().toLowerCase();
+        freight_route_ranges.push({
+          start,
+          end: (r[`f_r${i}_end`] ?? "").trim(),
+          working: working === "fixed" ? "fixed" : "rate",
+          value: (r[`f_r${i}_value`] ?? "").trim(),
+        });
+      }
+      const loading_route_range_type =
+        (r.loading_range_type ?? "weight").trim().toLowerCase() === "quantity"
+          ? "quantity"
+          : "weight";
+      const loading_route_ranges: RouteRange[] = [];
+      for (let i = 1; i <= 20; i++) {
+        const start = (r[`l_r${i}_start`] ?? "").trim();
+        if (!start) break;
+        const working = (r[`l_r${i}_working`] ?? "rate").trim().toLowerCase();
+        loading_route_ranges.push({
+          start,
+          end: (r[`l_r${i}_end`] ?? "").trim(),
+          working: working === "fixed" ? "fixed" : "rate",
+          value: (r[`l_r${i}_value`] ?? "").trim(),
+        });
+      }
+      const from = resolve(r.from_location ?? "", r.from_pin_code ?? "");
+      const to = resolve(r.to_location ?? "", r.to_pin_code ?? "");
+      return {
+        transporter_id: transporter.id,
+        source_id: sourceId,
+        mode: ["ROAD", "RAIL", "AIR", "SHIP"].includes((r.mode ?? "ROAD").trim().toUpperCase())
+          ? (r.mode ?? "ROAD").trim().toUpperCase()
+          : "ROAD",
+        from_location_id: from.id,
+        to_location_id: to.id,
+        from_pin_code: from.pin,
+        to_pin_code: to.pin,
+        freight_route_range_type,
+        freight_route_ranges,
+        loading_route_range_type,
+        loading_route_ranges,
+      };
+    });
+    if (payload.length === 0) return { inserted: 0, failed: rows.length };
+    const { error, count } = await supabase
+      .from(TABLE)
+      .insert(payload as never, { count: "exact" });
+    if (error) {
+      toast.error(error.message);
+      return { inserted: 0, failed: payload.length };
+    }
+    await loadEntries();
+    return { inserted: count ?? payload.length, failed: rows.length - payload.length };
+  }
+
+  const exportRows = entries.map((e) => {
+    const row: Record<string, unknown> = {
+      mode: e.mode ?? "ROAD",
+      from_location: e.from_location_id ? (locNames[e.from_location_id] ?? "") : "",
+      from_pin_code: e.from_pin_code,
+      to_location: e.to_location_id ? (locNames[e.to_location_id] ?? "") : "",
+      to_pin_code: e.to_pin_code,
+      freight_range_type: e.freight_route_range_type ?? "weight",
+    };
+    (e.freight_route_ranges ?? []).forEach((r: RouteRange, i: number) => {
+      row[`f_r${i + 1}_start`] = r.start;
+      row[`f_r${i + 1}_end`] = r.end ?? "";
+      row[`f_r${i + 1}_working`] = r.working;
+      row[`f_r${i + 1}_value`] = r.value;
+    });
+    row.loading_range_type = e.loading_route_range_type ?? "weight";
+    (e.loading_route_ranges ?? []).forEach((r: RouteRange, i: number) => {
+      row[`l_r${i + 1}_start`] = r.start;
+      row[`l_r${i + 1}_end`] = r.end ?? "";
+      row[`l_r${i + 1}_working`] = r.working;
+      row[`l_r${i + 1}_value`] = r.value;
+    });
+    return row;
+  });
 
   async function remove(id: string) {
     if (!window.confirm("Delete this transporter route entry? This cannot be undone.")) return;
@@ -411,7 +570,16 @@ export function TransporterEntries({
             </p>
           </div>
         </div>
-        {selectedSource.is_active !== false && (
+        <div className="flex flex-wrap items-center gap-2">
+          <CsvIO
+            entityLabel="Transporter entries"
+            filename={`${transporter.transporter_name.replace(/\s+/g, "_")}-${selectedSource.source_name.replace(/\s+/g, "_")}-entries`}
+            columns={entryColumns}
+            rows={exportRows}
+            onImport={onImport}
+            readOnly={selectedSource.is_active === false}
+          />
+          {selectedSource.is_active !== false && (
           <Button
             onClick={() =>
               setEditing({
@@ -424,7 +592,8 @@ export function TransporterEntries({
           >
             <Plus className="size-4" /> New entry
           </Button>
-        )}
+          )}
+        </div>
       </div>
       {loading ? (
         <div className="space-y-3">
