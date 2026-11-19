@@ -76,12 +76,9 @@ function monthEnd(date = new Date()) {
 }
 function isEligibleMovement(trip: TripRow, consignment: ConsignmentRow) {
   const ownership = String(trip.ownership ?? "").toLowerCase();
-  const type = String(consignment.consignment_type ?? "").toLowerCase();
-  const mode = String(consignment.movement_mode ?? "").toLowerCase();
-  return (
-    ownership === "own" ||
-    (ownership === "third_party" && type === "third_party" && mode === "drop")
-  );
+  // Rented trips are recorded as third_party. Allocate their costs to every
+  // assigned consignment, not only third-party drop consignments.
+  return ownership === "own" || ownership === "owned" || ownership === "third_party";
 }
 function isEligibleWithoutTrip(consignment: ConsignmentRow) {
   const type = String(consignment.consignment_type ?? "").toLowerCase();
@@ -224,7 +221,7 @@ export function TripExpenditureReport({
             id: item.consignment.id,
             trip_id: trip.id,
             trip_code: trip.trip_code,
-            ownership: trip.ownership === "third_party" ? "Third Party Drop" : "Own",
+            ownership: trip.ownership === "third_party" ? "Rented" : "Own",
             branch: trip.branch?.branch_name ?? "—",
             vehicle_number:
               trip.ownership === "third_party"
