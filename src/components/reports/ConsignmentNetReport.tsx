@@ -381,9 +381,7 @@ export function ConsignmentNetReport({
         const trip = tripId ? tripMap.get(tripId) : undefined;
         const eligible =
           trip &&
-          (String(trip.ownership).toLowerCase() === "own" ||
-            (String(row.consignment_type).toLowerCase() === "third_party" &&
-              String(row.movement_mode).toLowerCase() === "drop"));
+          (["own", "owned", "third_party"].includes(String(trip.ownership).toLowerCase()));
         if (tripId && eligible) {
           tripConsignmentCounts.set(tripId, (tripConsignmentCounts.get(tripId) ?? 0) + 1);
           tripWeights.set(
@@ -463,9 +461,7 @@ export function ConsignmentNetReport({
           const trip = tripId ? tripMap.get(tripId) : undefined;
           const eligibleTrip =
             trip &&
-            (String(trip.ownership).toLowerCase() === "own" ||
-              (String(row.consignment_type).toLowerCase() === "third_party" &&
-                String(row.movement_mode).toLowerCase() === "drop"));
+            (["own", "owned", "third_party"].includes(String(trip.ownership).toLowerCase()));
           const directExpense = trip ? (expensesByTrip.get(trip.id) ?? 0) : 0;
           const otherIncome = trip ? (otherIncomeByTrip.get(trip.id) ?? 0) : 0;
           const tripTotal = trip ? directExpense - otherIncome : 0;
