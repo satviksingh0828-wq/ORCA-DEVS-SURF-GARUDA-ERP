@@ -13,6 +13,7 @@ import {
   MessageCircle,
   Mail,
   Film,
+  Palette,
   KeyRound,
   Warehouse,
 } from "lucide-react";
@@ -23,7 +24,8 @@ import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { CompanySettings } from "@/components/settings/CompanySettings";
 import { BranchSettings } from "@/components/settings/BranchSettings";
 import { AttendanceModuleSettings } from "@/components/settings/AttendanceModuleSettings";
-import { DEFAULT_BACKGROUND_VIDEO_URL, THEMES, useTheme, type ThemeId } from "@/lib/theme";
+import { DEFAULT_BACKGROUND_VIDEO_URL, useTheme } from "@/lib/theme";
+import { AppearanceStudio } from "@/components/settings/AppearanceStudio";
 import { DEFAULT_VIDEO_GLASS_APPEARANCE, type VideoGlassAppearance } from "@/lib/video-glass";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +67,7 @@ function SettingsRouteContent() {
 }
 
 const TABS = [
+  { id: "appearance", label: "Appearance & Themes", desc: "Entire workspace and WMS themes", icon: Palette },
   { id: "company", label: "Company", desc: "Profile & registration", icon: Building },
   { id: "branch", label: "Branch", desc: "Locations & managers", icon: Building2 },
   { id: "attendance", label: "Attendance Module", desc: "Device & service connection", icon: Wifi },
@@ -110,7 +113,7 @@ const MODULE_TABS = [
 
 function SettingsPage() {
   const { user, wmsAccessReady, wmsEnabled } = useSession();
-  const [tab, setTab] = useState<TabId>("company");
+  const [tab, setTab] = useState<TabId>("appearance");
   const [wmsTabId, setWmsTabId] = useState(WMS_SYSTEM_TABS[0].id);
   const [activeSection, setActiveSection] = useState<"settings" | "wms">("settings");
   if (user?.role !== "admin") return null;
@@ -204,6 +207,7 @@ function SettingsPage() {
                 />
               </div>
               <div key={tab} className="animate-fade-in min-w-0">
+                {tab === "appearance" ? <><AppearanceStudio /><div className="mt-5"><ThemePanel /></div></> : null}
                 {tab === "company" ? <CompanySettings /> : null}
                 {tab === "branch" ? <BranchSettings /> : null}
                 {tab === "attendance" ? <AttendanceModuleSettings /> : null}
@@ -282,8 +286,6 @@ function PasskeySecurityPanel() {
 
 function ThemePanel() {
   const {
-    theme,
-    setTheme,
     saving,
     loginUi,
     setLoginUi,
@@ -445,45 +447,6 @@ function ThemePanel() {
 
   return (
     <div className="animate-fade-up space-y-5">
-      <section className="surface-card p-6">
-        <h3 className="text-sm font-semibold tracking-tight">Accent theme</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Applies across the whole workspace and is saved to the cloud.
-        </p>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Video Glass is an optional frosted look that pairs especially well with the background
-          video; the video can still be used with any theme.
-        </p>
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-          {THEMES.map((t) => {
-            const isActive = t.id === theme;
-            return (
-              <button
-                key={t.id}
-                type="button"
-                disabled={saving}
-                onClick={() => setTheme(t.id as ThemeId)}
-                className={`relative flex items-center gap-3 rounded-xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 ${
-                  isActive
-                    ? "border-primary bg-primary-soft"
-                    : "border-border bg-card hover:border-primary/40"
-                }`}
-              >
-                <span
-                  className="size-9 shrink-0 rounded-lg"
-                  style={{ backgroundColor: t.swatch }}
-                />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium">{t.label}</span>
-                  <span className="block truncate text-xs text-muted-foreground">{t.hint}</span>
-                </span>
-                {isActive ? <Check className="absolute right-3 top-3 size-4 text-primary" /> : null}
-              </button>
-            );
-          })}
-        </div>
-      </section>
-
       <section className="surface-card p-6">
         <div className="flex items-start gap-3">
           <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
