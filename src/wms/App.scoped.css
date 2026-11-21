@@ -1374,3 +1374,35 @@
   background: var(--wms-chrome-card);
   color: var(--wms-chrome-text);
 }
+
+/* Opt-in Sentry/WMS video surfaces: foreground cards stay readable. */
+html[data-video-background="on"] .wms-embedded-scope,
+html[data-video-background="on"] .wms-embedded-scope .wms-embedded-layout,
+html[data-video-background="on"] .wms-embedded-scope .wms-embedded-content,
+html[data-video-background="on"] .wms-embedded-scope .content,
+html[data-video-background="on"] .wms-embedded-scope .app-layout {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+html[data-video-background="on"] .wms-embedded-scope .page-header :is(h1, h2) {
+  color: var(--video-heading, #fff);
+  text-shadow: var(--video-text-shadow, 0 1px 3px rgb(0 0 0 / 0.82));
+  font-weight: var(--video-text-weight, 600);
+}
+html[data-video-background="on"] .wms-embedded-scope .page-header :is(p, small) {
+  color: var(--video-muted-text, #e2e8f0);
+  text-shadow: var(--video-text-shadow, 0 1px 3px rgb(0 0 0 / 0.82));
+}
+/* Preserve menu readability on high-motion footage, without blur. */
+html[data-video-background="on"] .wms-embedded-scope :is(.card, .panel, .modal, .dropdown-menu) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+@media print {
+  html[data-video-background="on"] .wms-embedded-scope,
+  html[data-video-background="on"] .wms-embedded-scope .wms-embedded-layout,
+  html[data-video-background="on"] .wms-embedded-scope .wms-embedded-content {
+    background: #fff !important;
+    color: #111 !important;
+  }
+}
