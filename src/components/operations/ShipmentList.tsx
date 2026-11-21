@@ -1214,7 +1214,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
                 <Plus className="size-4" /> Create Shipment
               </Button>
             </div>
-          )
+          )}
           <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-muted/20 p-3">
             <div className="min-w-[190px] space-y-1.5">
               <Label>Branch</Label>
