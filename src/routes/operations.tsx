@@ -113,7 +113,7 @@ const ALL_TABS = [
   },
   {
     id: "ltms-manifest",
-    label: "Manifest",
+    label: "Manifest Transfer",
     desc: "Transfer consignments, update transporter details and review manifest history.",
     icon: ClipboardList,
     adminOnly: false,
