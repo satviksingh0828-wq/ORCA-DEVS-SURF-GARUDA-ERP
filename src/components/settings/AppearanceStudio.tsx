@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSProperties } from "react";
-import { Check, Download, Layers3, Loader2, Palette, RotateCcw, Upload } from "lucide-react";
+import { Check, Download, Layers3, Loader2, Palette, RotateCcw, Truck, Warehouse, Settings2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { THEMES, useTheme } from "@/lib/theme";
 import { VIDEO_TAB_GROUPS, videoEnabledForTab } from "@/lib/video-tabs";
@@ -313,6 +313,76 @@ export function AppearanceStudio() {
             </label>
           ))}
         </div>
+      </section>
+
+      <section className="surface-card p-5 sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold">Home module icon size</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Change the icon size of every Home module tile, including LTMS, HRMS,
+              Sentry/WMS and Settings. Labels keep their normal size; icon frames
+              automatically grow so larger icons are never clipped.
+            </p>
+          </div>
+          <span className="rounded-lg border border-border bg-muted/40 px-3 py-1.5 text-sm font-semibold tabular-nums">
+            {draft.homeIconSize}px
+          </span>
+        </div>
+        <label htmlFor="home-icon-size" className="mt-5 flex justify-between text-xs font-medium text-foreground">
+          <span>Smaller icons</span><span>Larger icons</span>
+        </label>
+        <input id="home-icon-size" type="range" min={16} max={64} step={2}
+          value={draft.homeIconSize}
+          onChange={(event) => setDraft((previous) => ({
+            ...previous,
+            homeIconSize: Number(event.target.value),
+          }))}
+          className="mt-2 w-full accent-primary"
+          aria-label="Home module icon size"/>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {([
+            ["Small", 20],
+            ["Default", 28],
+            ["Large", 44],
+            ["Extra large", 64],
+          ] as const).map(([name, size]) => (
+            <button type="button" key={name}
+              aria-pressed={draft.homeIconSize === size}
+              onClick={() => setDraft((previous) => ({ ...previous, homeIconSize: size }))}
+              className={`rounded-lg border px-3 py-1.5 text-xs transition-colors hover:border-primary
+                ${draft.homeIconSize === size ? "border-primary bg-primary-soft text-primary" : "border-border"}`}>
+              {name}
+            </button>
+          ))}
+          <button type="button"
+            className="ml-auto rounded-lg border border-border px-3 py-1.5 text-xs hover:bg-muted"
+            onClick={() => setDraft((previous) => ({ ...previous, homeIconSize: 28 }))}>
+            Reset size
+          </button>
+        </div>
+        <div className="mt-4 grid grid-cols-3 gap-3 rounded-xl border border-border bg-background p-4">
+          {([
+            [Truck, "LTMS"],
+            [Warehouse, "Sentry/WMS"],
+            [Settings2, "Settings"],
+          ] as const).map(([Icon, label]) => (
+            <div key={label} className="flex min-w-0 flex-col items-center gap-2 text-center">
+              <span className="flex shrink-0 items-center justify-center rounded-2xl bg-primary-soft text-primary"
+                style={{
+                  width: Math.max(52, draft.homeIconSize + 24),
+                  height: Math.max(52, draft.homeIconSize + 24),
+                }}>
+                <Icon style={{ width: draft.homeIconSize, height: draft.homeIconSize }}
+                  aria-hidden="true"/>
+              </span>
+              <span className="text-xs font-medium text-foreground">{label}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          This is a live preview. Save workspace theme below to apply the size across devices.
+        </p>
       </section>
 
       <section className="surface-card p-5 sm:p-6">
