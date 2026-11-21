@@ -6,6 +6,7 @@ import Modal from './Modal.jsx';
 import { useAuth } from '../auth.jsx';
 import { useWarehouse } from '../warehouse.jsx';
 import { AppShell } from '../../components/AppShell.tsx';
+import { useTheme } from '../../lib/theme.tsx';
 
 const PERM_POPUP_COOLDOWN_MS = 5000;
 
@@ -41,6 +42,8 @@ function WarehousePicker() {
 
 export default function Layout({ embedded = false }) {
   const { user } = useAuth();
+  const { profile, resolveModuleTheme } = useTheme();
+  const wmsTheme = resolveModuleTheme('wms');
   // Page permissions (mig 061): catch global permission-denied events from
   // api.js and surface a "Permissions Error" modal. Lives on Layout so
   // it covers every page reached through the admin shell.
@@ -85,7 +88,7 @@ export default function Layout({ embedded = false }) {
         mainClassName="overflow-hidden p-0 sm:p-0"
         headerEnd={<WarehousePicker />}
       >
-        <div className="wms-embedded-scope h-full min-h-0">
+        <div className="wms-embedded-scope h-full min-h-0" data-theme={wmsTheme} data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined}>
           <div className="wms-embedded-layout h-full min-h-0">
             {!forced && <Sidebar />}
             <main className="wms-embedded-content">
@@ -105,7 +108,7 @@ export default function Layout({ embedded = false }) {
   }
 
   return (
-    <div className={`app-layout${forced ? ' forced-change' : ''}`}>
+    <div className={`app-layout${forced ? ' forced-change' : ''}`} data-theme={wmsTheme}>
       <TopBar forced={forced} />
       {!forced && <Sidebar />}
       <main className="content">
