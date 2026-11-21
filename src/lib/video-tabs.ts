@@ -84,6 +84,13 @@ export function videoEnabledForTab(overrides: Record<string, boolean> | undefine
   if (overrides && Object.prototype.hasOwnProperty.call(overrides, key)) {
     return overrides[key] === true;
   }
+  // A section-level choice can set the default for its child tabs.
+  // Explicit child choices always take precedence.
+  const parent = key.lastIndexOf(":");
+  if (parent > 0) {
+    const ancestor = key.slice(0, parent);
+    if (overrides && Object.prototype.hasOwnProperty.call(overrides, ancestor)) return overrides[ancestor] === true;
+  }
   return DEFAULT_ENABLED.has(key);
 }
 
