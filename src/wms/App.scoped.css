@@ -107,8 +107,8 @@
   align-items: center;
   gap: 12px;
   padding: 0 16px;
-  background: #2a2520;
-  border-bottom: 2px solid #b87333;
+  background: var(--wms-chrome, #2a2520);
+  border-bottom: 2px solid var(--wms-copper, #b87333);
   z-index: 10;
 }
 
@@ -118,7 +118,7 @@
   gap: 10px;
   font-weight: 600;
   font-size: 17px;
-  color: #fdf4e3;
+  color: var(--wms-chrome-text, #fdf4e3);
   letter-spacing: 0.5px;
   white-space: nowrap;
 }
@@ -153,7 +153,7 @@
   top: calc(100% + 6px);
   left: 0;
   min-width: 220px;
-  background: #352f2a;
+  background: var(--wms-chrome-card, #352f2a);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 8px;
   box-shadow: 0 8px 24px rgba(0,0,0,0.3);
@@ -176,14 +176,14 @@
 
 .wms-embedded-scope .topbar-wh-option.active {
   background: rgba(183,115,51,0.15);
-  border-left: 3px solid #b87333;
+  border-left: 3px solid var(--wms-copper, #b87333);
 }
 
 .wms-embedded-scope .topbar-wh-code {
   font-family: var(--mono);
   font-size: 12px;
   font-weight: 500;
-  color: #fdf4e3;
+  color: var(--wms-chrome-text, #fdf4e3);
   letter-spacing: 0.3px;
 }
 
@@ -205,7 +205,7 @@
   font-family: var(--sans);
   border: 0.5px solid rgba(255,255,255,0.1);
   border-radius: 6px;
-  background: #352f2a;
+  background: var(--wms-chrome-card, #352f2a);
   color: #ffffff;
   outline: none;
   transition: border-color 0.15s;
@@ -216,15 +216,15 @@
 }
 
 .wms-embedded-scope .topbar-search input:focus {
-  border-color: #b87333;
+  border-color: var(--wms-copper, #b87333);
 }
 
 .wms-embedded-scope .topbar-avatar {
   width: 30px;
   height: 30px;
   border-radius: 6px;
-  background: #8e2716;
-  color: #fdf4e3;
+  background: var(--accent, #8e2716);
+  color: var(--wms-chrome-text, #fdf4e3);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -238,7 +238,7 @@
   position: absolute;
   top: 40px;
   right: 0;
-  background: #352f2a;
+  background: var(--wms-chrome-card, #352f2a);
   border: 1px solid rgba(255,255,255,0.1);
   border-radius: 8px;
   min-width: 180px;
@@ -248,7 +248,7 @@
 
 .wms-embedded-scope .topbar-dropdown-header {
   padding: 10px 14px;
-  color: #fdf4e3;
+  color: var(--wms-chrome-text, #fdf4e3);
 }
 
 .wms-embedded-scope .topbar-dropdown-divider {
@@ -270,19 +270,19 @@
 
 .wms-embedded-scope .topbar-dropdown-item:hover {
   background: rgba(255,255,255,0.05);
-  color: #fdf4e3;
+  color: var(--wms-chrome-text, #fdf4e3);
 }
 
 /* ── Sidebar ──────────────────────────────────── */
 
 .wms-embedded-scope .sidebar {
-  background: #2a2520;
+  background: var(--wms-chrome, #2a2520);
   overflow-y: auto;
   padding: 8px 6px;
 }
 
 .wms-embedded-scope .sidebar-card {
-  background: #352f2a;
+  background: var(--wms-chrome-card, #352f2a);
   border-radius: 8px;
   padding: 6px 0;
   margin-bottom: 6px;
@@ -295,7 +295,7 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: #fdf4e3;
+  color: var(--wms-chrome-text, #fdf4e3);
   padding: 6px 10px;
 }
 
@@ -318,9 +318,9 @@
 }
 
 .wms-embedded-scope .sidebar-link.active {
-  border-left-color: #b87333;
+  border-left-color: var(--wms-copper, #b87333);
   background: rgba(183,115,51,0.15);
-  color: #fdf4e3;
+  color: var(--wms-chrome-text, #fdf4e3);
   font-weight: 500;
 }
 
@@ -329,12 +329,12 @@
   font-size: 9px;
   padding: 1px 6px;
   border-radius: 8px;
-  background: #8e2716;
+  background: var(--accent, #8e2716);
   color: white;
 }
 
 .wms-embedded-scope .sidebar-link.active .sidebar-badge {
-  background: #8e2716;
+  background: var(--accent, #8e2716);
   color: white;
 }
 
@@ -691,7 +691,7 @@
 }
 
 .wms-embedded-scope .data-table tbody tr:hover {
-  background: #FDFCF9;
+  background: var(--wms-highlight-bg, #FDFCF9);
 }
 
 .wms-embedded-scope .data-table tbody tr.clickable {
@@ -1221,7 +1221,7 @@
 }
 
 .wms-embedded-scope .lines-table tbody tr:nth-child(even) {
-  background: #FDFCF9;
+  background: var(--wms-highlight-bg, #FDFCF9);
 }
 
 /* ── Settings ─────────────────────────────────── */
@@ -1300,4 +1300,53 @@
 .wms-embedded-scope .content::-webkit-scrollbar-thumb {
   background: var(--border-dark);
   border-radius: 3px;
+}
+
+
+/* ORCA Theme Studio: Sentry/WMS adapter for both embedded and standalone shells.
+   The original WMS palette remains untouched for the current Garuda preset. */
+.wms-embedded-scope[data-theme]:not([data-theme="garuda"]),
+.wms-embedded-scope[data-custom-theme="true"] {
+  --accent: var(--primary);
+  --accent-hover: color-mix(in oklch, var(--primary) 78%, var(--foreground) 22%);
+  --bg: var(--background);
+  --white: var(--card);
+  --surface: var(--muted);
+  --text: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-tertiary: color-mix(in oklch, var(--foreground) 55%, var(--background) 45%);
+  --border: color-mix(in oklch, var(--foreground) 16%, var(--background));
+  --border-dark: color-mix(in oklch, var(--foreground) 30%, var(--background));
+  --wms-chrome: color-mix(in oklch, var(--primary) 25%, #1d2533 75%);
+  --wms-chrome-card: color-mix(in oklch, var(--primary) 22%, #303848 78%);
+  --wms-chrome-text: #f7f8fa;
+  --wms-copper: var(--primary);
+  --wms-highlight-bg: var(--card);
+}
+.wms-standalone-scope {
+  min-height: 100dvh;
+  width: 100%;
+}
+.wms-embedded-scope[data-theme]:not([data-theme="garuda"]) :is(input, textarea, select),
+.wms-embedded-scope[data-custom-theme="true"] :is(input, textarea, select) {
+  color: var(--text);
+  border-color: var(--border);
+}
+.wms-embedded-scope[data-theme]:not([data-theme="garuda"]) :is(input, textarea, select)::placeholder,
+.wms-embedded-scope[data-custom-theme="true"] :is(input, textarea, select)::placeholder {
+  color: var(--text-secondary);
+}
+[data-density="compact"] .wms-embedded-scope .content,
+[data-density="compact"] .wms-embedded-scope .wms-embedded-content { padding: 12px; }
+@media print {
+  .wms-embedded-scope {
+    --bg: #fff;
+    --white: #fff;
+    --surface: #fff;
+    --text: #111;
+    --text-secondary: #333;
+    --border: #ddd;
+    --wms-highlight-bg: #fff;
+    print-color-adjust: exact;
+  }
 }
