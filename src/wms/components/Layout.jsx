@@ -7,8 +7,7 @@ import Modal from './Modal.jsx';
 import { useAuth } from '../auth.jsx';
 import { useWarehouse } from '../warehouse.jsx';
 import { AppShell } from '../../components/AppShell.tsx';
-import { useTheme } from '../../lib/theme.tsx';
-import { themeInlineStyles } from '../../lib/theme-studio.ts';
+import { WmsThemeScope } from '../../components/WmsThemeScope.tsx';
 
 const PERM_POPUP_COOLDOWN_MS = 5000;
 
@@ -49,8 +48,6 @@ export default function Layout({ embedded = false }) {
     // Embedded WMS changes tabs without changing the ERP route.
     return reportActiveVideoTab(videoTabFromWmsPath(location.pathname));
   }, [location.pathname]);
-  const { profile, resolveModuleTheme } = useTheme();
-  const wmsTheme = resolveModuleTheme('wms');
   // Page permissions (mig 061): catch global permission-denied events from
   // api.js and surface a "Permissions Error" modal. Lives on Layout so
   // it covers every page reached through the admin shell.
@@ -95,14 +92,13 @@ export default function Layout({ embedded = false }) {
         mainClassName="overflow-hidden p-0 sm:p-0"
         headerEnd={<WarehousePicker />}
       >
-        <div className="wms-embedded-scope h-full min-h-0" data-theme={wmsTheme} data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined} style={themeInlineStyles(profile)}>
+        <WmsThemeScope className="h-full min-h-0">
           <div className="wms-embedded-layout h-full min-h-0">
             {!forced && <Sidebar />}
             <main className="wms-embedded-content">
               <Outlet />
             </main>
           </div>
-        </div>
         {permError && (
           <Modal title="Permissions Error" onClose={dismissPermError} footer={<button className="btn btn-primary" onClick={dismissPermError}>OK</button>}>
             <p style={{ fontSize: 14, marginBottom: 12 }}>You do not have permission to access this resource.</p>
@@ -110,12 +106,13 @@ export default function Layout({ embedded = false }) {
             <p style={{ fontSize: 13 }}>Contact an administrator if you need access.</p>
           </Modal>
         )}
+        </WmsThemeScope>
       </AppShell>
     );
   }
 
   return (
-    <div className={`app-layout${forced ? ' forced-change' : ''}`} data-theme={wmsTheme}>
+    <div className={`app-layout${forced ? ' forced-change' : ''}`}>
       <TopBar forced={forced} />
       {!forced && <Sidebar />}
       <main className="content">
