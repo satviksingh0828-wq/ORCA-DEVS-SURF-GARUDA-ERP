@@ -153,6 +153,16 @@ const COLOR_TOKENS: Record<keyof ThemeColors, readonly string[]> = {
   sidebarAccentForeground: ["--sidebar-accent-foreground"],
   sidebarBorder: ["--sidebar-border"],
   wmsAccent: ["--wms-accent-override"],
+  videoHeading: ["--video-heading"],
+  videoText: ["--video-text"],
+  videoMutedText: ["--video-muted-text"],
+  videoLink: ["--video-link"],
+  videoLabel: ["--video-label"],
+  videoPanelBackground: ["--video-panel-background"],
+  videoPanelText: ["--video-panel-text"],
+  footerBackground: ["--theme-footer-bg"],
+  footerForeground: ["--theme-footer-text"],
+  footerAccent: ["--theme-footer-border"],
 };
 const ROOT_OVERRIDES = [...new Set(Object.values(COLOR_TOKENS).flat().concat([
   "--sidebar-primary", "--sidebar-primary-foreground",
