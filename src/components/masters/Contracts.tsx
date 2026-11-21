@@ -57,7 +57,7 @@ type View =
   | { kind: "new-entry"; contract: ContractRow }
   | { kind: "edit-entry"; contract: ContractRow; entry: EntryRow };
 
-export function Contracts() {
+export function Contracts({ embedded = false }: { embedded?: boolean } = {}) {
   const [view, setView] = useState<View>({ kind: "list" });
   const [contracts, setContracts] = useState<ContractRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -187,13 +187,15 @@ export function Contracts() {
 
   return (
     <div className="animate-fade-up space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">Sources</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Freight sources with weight or quantity slabs. Open a source to add route-wise entries.
-          </p>
-        </div>
+      <div className={`flex flex-wrap items-center gap-4 ${embedded ? "justify-end" : "justify-between"}`}>
+        {!embedded && (
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">Sources</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Freight sources with weight or quantity slabs. Open a source to add route-wise entries.
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           <CsvIO
             entityLabel="Contracts"
