@@ -7,7 +7,7 @@ import Modal from '../components/Modal.jsx';
 
 const STATUS_BADGE = {
   active: { label: 'active', color: 'var(--text-secondary)' },
-  paused: { label: 'paused', color: '#c49100' },
+  paused: { label: 'paused', color: 'var(--warning)' },
   revoked: { label: 'revoked', color: 'var(--danger)' },
 };
 
