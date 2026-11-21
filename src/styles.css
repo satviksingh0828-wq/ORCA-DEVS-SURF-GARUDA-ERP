@@ -754,19 +754,11 @@ table td {
 
 /* Automatically frost app surfaces whenever the video backdrop is active,
    while each selected theme continues to supply its own colors and contrast. */
-[data-video-background="on"] {
-  --foreground: var(--video-glass-text-color, #172033);
-  --card-foreground: var(--video-glass-text-color, #172033);
-  --popover-foreground: var(--video-glass-text-color, #172033);
-  --secondary-foreground: var(--video-glass-text-color, #172033);
-  --accent-foreground: var(--video-glass-text-color, #172033);
-  --muted-foreground: color-mix(
-    in oklch,
-    var(--video-glass-text-color, #172033) 78%,
-    var(--card) 22%
-  );
-  --sidebar-foreground: var(--video-glass-text-color, #172033);
-  --sidebar-accent-foreground: var(--video-glass-text-color, #172033);
+/* Video readability is derived from each active theme. Old glass-setting overrides
+   no longer force dark text onto dark themes. */
+html[data-video-background="on"] {
+  --video-glass-opacity: 88%;
+  --video-background-veil: 22%;
 }
 
 [data-video-background="on"] .video-background-veil {
@@ -992,13 +984,18 @@ table td {
 
 /* Background video is a shared DOM layer so route changes do not restart it. */
 .background-video-layer,
-.background-video-veil-layer {
+.background-video-veil-layer,
+.workspace-video-fallback {
   pointer-events: none;
   position: fixed;
   inset: 0;
 }
-.background-video-layer {
+.workspace-video-fallback {
   z-index: 0;
+  background: var(--background) url("/garuda-banner.webp") center / cover no-repeat;
+}
+.background-video-layer {
+  z-index: 1;
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -1009,8 +1006,25 @@ table td {
   opacity: 1;
 }
 .background-video-veil-layer {
-  z-index: 1;
+  z-index: 2;
 }
+/* Route content stays above the persistent video while the existing splash
+   remains the highest layer. */
+.ltms-app-shell {
+  position: relative;
+  z-index: 3;
+}
+html[data-video-background="on"] .auth-abstract-background.ltms-app-shell,
+html[data-video-background="on"] .ltms-app-shell,
+html[data-video-background="on"] .ltms-app-shell-main {
+  background: transparent !important;
+}
+html[data-video-background="on"] .auth-abstract-background::before { opacity: 0.22; }
+html[data-video-background="on"] .auth-abstract-background::after { opacity: 0.15; }
+html[data-video-background="on"] .ltms-app-shell .ltms-reference-content {
+  background: color-mix(in oklch, var(--background) 12%, transparent);
+}
+
 
 /* Use up to six fields per row when the Consignment form has enough width. */
 .consignment-entry .consignment-overview-grid,
@@ -1227,7 +1241,7 @@ table td {
   justify-content: space-between;
   padding: 6px 10px;
   border: 0;
-  background: rgba(142, 39, 22, 0.4);
+  background: var(--ltms-group-bg, rgba(142, 39, 22, 0.4));
   color: var(--ltms-chrome-text, #fdf4e3);
   cursor: pointer;
   font:
@@ -1242,7 +1256,7 @@ table td {
 }
 
 .ltms-reference-group-label:hover {
-  background: rgba(142, 39, 22, 0.55);
+  background: var(--ltms-group-hover-bg, rgba(142, 39, 22, 0.55));
 }
 
 .ltms-reference-group-description {
@@ -1277,7 +1291,7 @@ table td {
   border: 0;
   border-left: 3px solid transparent;
   background: transparent;
-  color: #fff;
+  color: var(--ltms-link-text, #fff);
   cursor: pointer;
   font:
     600 14px/1.35 "LTMS Instrument Sans",
@@ -1291,14 +1305,14 @@ table td {
 }
 
 .ltms-reference-sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--ltms-link-hover-bg, rgba(255, 255, 255, 0.08));
+  color: var(--ltms-link-text, #fff);
 }
 
 .ltms-reference-sidebar-link.active,
 .ltms-reference-sidebar-link[aria-current="page"] {
   border-left-color: var(--ltms-chrome-accent, #b87333);
-  background: rgba(183, 115, 51, 0.15);
+  background: var(--ltms-active-bg, rgba(183, 115, 51, 0.15));
   color: var(--ltms-chrome-text, #fdf4e3);
   font-weight: 500;
 }
@@ -1336,7 +1350,7 @@ table td {
 
   .ltms-reference-mobile-link:hover,
   .ltms-reference-mobile-link:focus-visible {
-    background: rgba(183, 115, 51, 0.3);
+    background: var(--ltms-link-hover-bg, rgba(183, 115, 51, 0.3));
     outline: none;
   }
 }
@@ -1407,7 +1421,7 @@ table td {
 .ltms-app-shell-icon-button:hover,
 .ltms-app-shell-header [aria-label^="Notifications"]:hover,
 .ltms-app-shell-header [aria-label^="Share screen"]:hover {
-  background: rgba(183, 115, 51, 0.2) !important;
+  background: var(--ltms-link-hover-bg, rgba(183, 115, 51, 0.2)) !important;
   color: #fff !important;
 }
 
@@ -1428,7 +1442,7 @@ table td {
 }
 
 .ltms-app-shell-signout:hover {
-  background: rgba(183, 115, 51, 0.2) !important;
+  background: var(--ltms-link-hover-bg, rgba(183, 115, 51, 0.2)) !important;
   color: #fff !important;
 }
 
@@ -1538,11 +1552,11 @@ table td {
 
 .ltms-app-shell-avatar:hover,
 .ltms-app-shell-avatar[aria-expanded="true"] {
-  background: #a83020;
+  background: var(--ltms-group-hover-bg, #a83020);
 }
 
 .ltms-app-shell-avatar:focus-visible {
-  outline: 2px solid #c4722a;
+  outline: 2px solid var(--ltms-chrome-accent, #c4722a);
   outline-offset: 2px;
 }
 
@@ -1636,7 +1650,7 @@ table td {
   border-left: 3px solid transparent;
   border-radius: 0 6px 6px 0;
   background: transparent;
-  color: #fff;
+  color: var(--ltms-link-text, #fff);
   text-align: left;
   transition:
     background 0.1s,
@@ -1644,13 +1658,13 @@ table td {
 }
 .ltms-shared-sidebar .app-sidebar-scroll button:hover,
 .ltms-shared-sidebar .app-sidebar-scroll a:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: #fff;
+  background: var(--ltms-link-hover-bg, rgba(255, 255, 255, 0.08));
+  color: var(--ltms-link-text, #fff);
 }
 .ltms-shared-sidebar .app-sidebar-scroll button[aria-current="page"],
 .ltms-shared-sidebar .app-sidebar-scroll a[aria-current="page"] {
   border-left-color: var(--ltms-chrome-accent, #b87333);
-  background: rgba(183, 115, 51, 0.15);
+  background: var(--ltms-active-bg, rgba(183, 115, 51, 0.15));
   color: var(--ltms-chrome-text, #fdf4e3);
 }
 .ltms-shared-sidebar .app-sidebar-scroll button span,
@@ -1782,6 +1796,11 @@ table td {
   --ltms-surface: var(--background);
   --ltms-content-text: var(--foreground);
   --ltms-branded: var(--primary);
+  --ltms-group-bg: color-mix(in oklch, var(--primary) 38%, var(--ltms-chrome));
+  --ltms-group-hover-bg: color-mix(in oklch, var(--primary) 53%, var(--ltms-chrome));
+  --ltms-active-bg: color-mix(in oklch, var(--ltms-chrome-accent) 22%, transparent);
+  --ltms-link-hover-bg: color-mix(in oklch, var(--ltms-chrome-text) 11%, transparent);
+  --ltms-link-text: var(--ltms-chrome-text);
 }
 [data-density="compact"] .ltms-reference-content,
 [data-density="compact"] .ltms-app-shell .ltms-reference-content {
@@ -1790,4 +1809,22 @@ table td {
 [data-density="compact"] .surface-card { --theme-card-padding: 12px; }
 @media (prefers-reduced-motion: reduce) {
   .ltms-app-shell, .ltms-reference-sidebar, .ltms-reference-sidebar * { transition-duration: 0.01ms !important; }
+}
+
+/* The same theme applies to both the main LTMS navigation and shared
+   HRMS/Accounts/Settings sidebars, including focus and active states. */
+.ltms-app-shell[data-theme]:not([data-theme="garuda"]) :is(.ltms-reference-sidebar,.ltms-shared-sidebar),
+.ltms-app-shell[data-custom-theme="true"] :is(.ltms-reference-sidebar,.ltms-shared-sidebar) {
+  background: var(--ltms-chrome) !important;
+  color: var(--ltms-chrome-text);
+  border-color: color-mix(in oklch, var(--ltms-chrome-text) 16%, transparent) !important;
+}
+.ltms-app-shell[data-theme]:not([data-theme="garuda"]) :is(.ltms-reference-sidebar,.ltms-shared-sidebar) :is(button,a):focus-visible,
+.ltms-app-shell[data-custom-theme="true"] :is(.ltms-reference-sidebar,.ltms-shared-sidebar) :is(button,a):focus-visible {
+  outline: 2px solid var(--ltms-chrome-accent);
+  outline-offset: -2px;
+}
+@media print {
+  .background-video-layer,.background-video-veil-layer,.workspace-video-fallback { display: none !important; }
+  .ltms-app-shell,.ltms-app-shell-main { background: #fff !important; color: #111 !important; }
 }
