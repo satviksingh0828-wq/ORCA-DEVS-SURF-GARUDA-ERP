@@ -6,7 +6,6 @@ import { useCurrentVideoTab, videoEnabledForTab } from "@/lib/video-tabs";
 
 const LOCAL_KEY = "garuda.background-video.playback-v3";
 const LEGACY_KEY = "garuda.background-video.user-paused";
-const TRUCK_POSTER = "/garuda-banner.webp";
 
 type DeviceChoice = { mode: "video" | "still"; base: string; url: string };
 
@@ -117,8 +116,8 @@ export function WorkspaceBackgroundVideo() {
 
   if (!showMedia) return null;
 
-  const poster = settings.showTruckPoster ? TRUCK_POSTER : undefined;
   const mediaStyle: CSSProperties = {
+    backgroundImage: "none",
     filter: `blur(${settings.blur}px) brightness(${settings.brightness}%) saturate(${settings.saturation}%)`,
     transform: settings.blur > 0 ? `scale(${1 + settings.blur / 250})` : undefined,
   };
@@ -129,19 +128,24 @@ export function WorkspaceBackgroundVideo() {
 
   return (
     <>
-      <div className="workspace-video-fallback" aria-hidden="true"
-        style={{ ...mediaStyle, backgroundImage: poster ? `url("${poster}")` : "none" }} />
+      <div className="workspace-video-fallback" aria-hidden="true" />
       <video
         ref={videoRef}
         className={`background-video-layer${frameReady && !failed ? " background-video-ready" : ""}`}
         src={backgroundVideoUrl}
-        poster={poster}
         muted
         loop={settings.loopVideo}
         playsInline
         preload="auto"
         style={mediaStyle}
         aria-hidden="true"
+        onLoadedMetadata={(event) => {
+          // Still mode must display a decoded frame of the selected video, not an image.
+          const video = event.currentTarget;
+          if (mode === "still" && Number.isFinite(video.duration) && video.duration > 0.15) {
+            try { video.currentTime = Math.min(0.15, video.duration / 2); } catch { /* Seek may be unavailable. */ }
+          }
+        }}
         onLoadedData={() => { setFrameReady(true); setFailed(false); }}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
