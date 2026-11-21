@@ -148,7 +148,7 @@ function RootShell({ children }: { children: ReactNode }) {
     const validThemes = new Set(["sky", "workspace", "glass", "emerald", "violet", "amber", "rose", "graphite", "garuda", "ocean", "blaze", "tangerine", "copper", "sakura", "arctic", "terra", "vintage", "paper", "kraft", "blueprint", "linen", "chalkboard", "vellum", "cork", "neon", "midnight", "forest", "storm"]);
     let theme = stored;
     let profile = null;
-    if (stored && stored.startsWith("orca-theme-v2:") && stored.length <= 5000) {
+    if (stored && stored.startsWith("orca-theme-v2:") && stored.length <= 12000) {
       try {
         profile = JSON.parse(stored.slice("orca-theme-v2:".length));
         theme = profile.baseTheme;
