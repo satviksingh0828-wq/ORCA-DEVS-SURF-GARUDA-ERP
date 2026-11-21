@@ -8,6 +8,7 @@ import {
   normalizeThemeProfile,
   parseThemeProfile,
   serializeThemeProfile,
+  themeInlineStyles,
 } from "../src/lib/theme-studio.ts";
 
 const allowed = new Set(["garuda", "sky", "ocean", "neon", "midnight", "forest", "storm"]);
@@ -60,4 +61,35 @@ test("rejects malformed, oversized and unsafe theme payloads", () => {
 test("dark-mode classification supports curated dark themes", () => {
   for (const id of ["neon", "midnight", "forest", "storm"]) assert.equal(isDarkTheme(id), true);
   assert.equal(isDarkTheme("garuda"), false);
+});
+
+test("customized sidebar and Sentry colours are mapped to both design systems", () => {
+  const profile = normalizeThemeProfile({
+    baseTheme: "ocean",
+    colors: {
+      sidebar: "#17263A",
+      sidebarForeground: "#FFFFFF",
+      sidebarCard: "#273A50",
+      sidebarAccent: "#55A5ED",
+      wmsAccent: "#FFB454",
+      cardForeground: "#0A0B0C",
+      mutedForeground: "#667788",
+    },
+  }, allowed);
+  const css = themeInlineStyles(profile);
+  assert.equal(css["--ltms-chrome"], "#17263A");
+  assert.equal(css["--wms-chrome"], "#17263A");
+  assert.equal(css["--ltms-chrome-text"], "#FFFFFF");
+  assert.equal(css["--wms-chrome-card"], "#273A50");
+  assert.equal(css["--ltms-chrome-accent"], "#55A5ED");
+  assert.equal(css["--wms-accent-override"], "#FFB454");
+  assert.equal(css["--card-foreground"], "#0A0B0C");
+  assert.equal(css["--muted-foreground"], "#667788");
+  assert.deepEqual(parseThemeProfile(serializeThemeProfile(profile), allowed), profile);
+});
+
+test("invalid sidebar colour values are rejected instead of becoming CSS", () => {
+  const invalid = normalizeThemeProfile({ colors: { sidebar: "red; background:url(unsafe)", wmsAccent: "#135790" } }, allowed);
+  assert.equal(themeInlineStyles(invalid)["--ltms-chrome"], undefined);
+  assert.equal(themeInlineStyles(invalid)["--wms-accent-override"], "#135790");
 });
