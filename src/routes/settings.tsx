@@ -3,7 +3,6 @@ import { useEffect, useState } from "react";
 import {
   Building,
   Building2,
-  Check,
   ChevronLeft,
   ChevronRight,
   Loader2,
@@ -26,7 +25,6 @@ import { BranchSettings } from "@/components/settings/BranchSettings";
 import { AttendanceModuleSettings } from "@/components/settings/AttendanceModuleSettings";
 import { DEFAULT_BACKGROUND_VIDEO_URL, useTheme } from "@/lib/theme";
 import { AppearanceStudio } from "@/components/settings/AppearanceStudio";
-import { DEFAULT_VIDEO_GLASS_APPEARANCE, type VideoGlassAppearance } from "@/lib/video-glass";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -285,18 +283,7 @@ function PasskeySecurityPanel() {
 }
 
 function ThemePanel() {
-  const {
-    saving,
-    loginUi,
-    setLoginUi,
-    backgroundVideoEnabled,
-    backgroundVideoUrl,
-    setBackgroundVideo,
-    videoSaving,
-    videoGlassAppearance,
-    setVideoGlassAppearance,
-    glassSaving,
-  } = useTheme();
+  const { backgroundVideoEnabled, backgroundVideoUrl, setBackgroundVideo, videoSaving } = useTheme();
   const { user } = useSession();
   const [videoUrlDraft, setVideoUrlDraft] = useState(backgroundVideoUrl);
   const [pixabayQuery, setPixabayQuery] = useState(() => {
@@ -317,17 +304,7 @@ function ThemePanel() {
   >([]);
   const [pixabayLoading, setPixabayLoading] = useState(false);
   const [pixabayError, setPixabayError] = useState("");
-  const [glassOpacityDraft, setGlassOpacityDraft] = useState(videoGlassAppearance.surfaceOpacity);
-  const [backgroundVeilDraft, setBackgroundVeilDraft] = useState(
-    videoGlassAppearance.backgroundVeil,
-  );
-  const [glassTextColorDraft, setGlassTextColorDraft] = useState(videoGlassAppearance.textColor);
   useEffect(() => setVideoUrlDraft(backgroundVideoUrl), [backgroundVideoUrl]);
-  useEffect(() => {
-    setGlassOpacityDraft(videoGlassAppearance.surfaceOpacity);
-    setBackgroundVeilDraft(videoGlassAppearance.backgroundVeil);
-    setGlassTextColorDraft(videoGlassAppearance.textColor);
-  }, [videoGlassAppearance]);
 
   async function searchPixabay(nextPage = 1) {
     const query = pixabayQuery.trim();
@@ -369,7 +346,7 @@ function ThemePanel() {
       toast.success("Pixabay video selected and saved as the workspace background.");
     } catch {
       toast.error(
-        "Could not save the selected video. Run the supplied Supabase migration, then try again.",
+        "Could not save the selected video. Cloud sync is unavailable. Your saved video is still cached on this device.",
       );
     }
   }
@@ -399,7 +376,7 @@ function ThemePanel() {
       toast.success("Background video URL saved.");
     } catch {
       toast.error(
-        "Could not sync the video URL. Run the supplied Supabase migration, then save again.",
+        "Could not sync the video URL. Check the existing video settings in Supabase, then try again.",
       );
     }
   }
@@ -410,37 +387,7 @@ function ThemePanel() {
       toast.success(`Background video ${backgroundVideoEnabled ? "disabled" : "enabled"}.`);
     } catch {
       toast.error(
-        "Could not sync video settings. Run the supplied Supabase migration, then try again.",
-      );
-    }
-  }
-
-  async function saveGlassAppearance() {
-    const appearance: VideoGlassAppearance = {
-      surfaceOpacity: glassOpacityDraft,
-      backgroundVeil: backgroundVeilDraft,
-      textColor: glassTextColorDraft,
-    };
-    try {
-      await setVideoGlassAppearance(appearance);
-      toast.success("Video glass readability settings saved for the workspace.");
-    } catch {
-      toast.error(
-        "Applied on this device, but cloud sync needs the glass-controls Supabase migration.",
-      );
-    }
-  }
-
-  async function resetGlassAppearance() {
-    setGlassOpacityDraft(DEFAULT_VIDEO_GLASS_APPEARANCE.surfaceOpacity);
-    setBackgroundVeilDraft(DEFAULT_VIDEO_GLASS_APPEARANCE.backgroundVeil);
-    setGlassTextColorDraft(DEFAULT_VIDEO_GLASS_APPEARANCE.textColor);
-    try {
-      await setVideoGlassAppearance(DEFAULT_VIDEO_GLASS_APPEARANCE);
-      toast.success("Glass readability settings reset to defaults.");
-    } catch {
-      toast.error(
-        "Defaults are applied on this device; cloud sync needs the glass-controls Supabase migration.",
+        "Could not sync video settings. Cloud sync is unavailable. Your saved video is still cached on this device.",
       );
     }
   }
@@ -455,8 +402,7 @@ function ThemePanel() {
           <div>
             <h3 className="text-sm font-semibold tracking-tight">Workspace background video</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              Choose whether the muted video appears behind workspace pages and set a direct
-              MP4/WebM URL. This preference is shared with all users.
+              A single muted background video plays behind Home, Login, passkey verification, and workspace screens. Configure its source once here; the chosen theme controls the overlay and text contrast.
             </p>
           </div>
         </div>
@@ -607,266 +553,6 @@ function ThemePanel() {
         </div>
       </section>
 
-      <section className="surface-card space-y-5 p-6">
-        <div>
-          <h3 className="text-sm font-semibold tracking-tight">Video glass readability</h3>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Tune the frosted panels and text shown while the background video is on. These controls
-            apply across every accent theme and sync to the whole workspace.
-          </p>
-        </div>
-
-        <div className="grid gap-5 md:grid-cols-2">
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="video-glass-opacity" className="text-sm font-medium">
-                Glass surface opacity
-              </label>
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {glassOpacityDraft}%
-              </span>
-            </div>
-            <input
-              id="video-glass-opacity"
-              type="range"
-              min={50}
-              max={98}
-              step={1}
-              value={glassOpacityDraft}
-              onChange={(event) => setGlassOpacityDraft(Number(event.target.value))}
-              className="w-full accent-primary"
-            />
-            <p className="text-xs text-muted-foreground">
-              Higher opacity makes detail panels brighter and easier to read; lower opacity shows
-              more of the video through them.
-            </p>
-          </div>
-
-          <div className="space-y-2">
-            <div className="flex items-center justify-between gap-3">
-              <label htmlFor="video-veil" className="text-sm font-medium">
-                Video veil
-              </label>
-              <span className="text-xs tabular-nums text-muted-foreground">
-                {backgroundVeilDraft}%
-              </span>
-            </div>
-            <input
-              id="video-veil"
-              type="range"
-              min={0}
-              max={70}
-              step={1}
-              value={backgroundVeilDraft}
-              onChange={(event) => setBackgroundVeilDraft(Number(event.target.value))}
-              className="w-full accent-primary"
-            />
-            <p className="text-xs text-muted-foreground">
-              Applied directly over the background video: increase it to soften busy footage, or
-              lower it to see more of the video.
-            </p>
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="space-y-2">
-            <label htmlFor="video-glass-text-color" className="text-sm font-medium">
-              Workspace text color
-            </label>
-            <div className="flex items-center gap-3">
-              <Input
-                id="video-glass-text-color"
-                type="color"
-                value={glassTextColorDraft}
-                onChange={(event) => setGlassTextColorDraft(event.target.value)}
-                className="h-10 w-16 cursor-pointer p-1"
-              />
-              <span className="font-mono text-xs uppercase text-muted-foreground">
-                {glassTextColorDraft}
-              </span>
-            </div>
-          </div>
-          <div
-            className="min-w-64 flex-1 rounded-xl border p-3 text-sm"
-            style={{
-              color: glassTextColorDraft,
-              backgroundColor: `color-mix(in oklch, var(--card) ${glassOpacityDraft}%, transparent)`,
-              backdropFilter: "blur(14px)",
-            }}
-          >
-            Preview: Shipment Details and field labels will use this text color.
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3">
-          <Button type="button" onClick={() => void saveGlassAppearance()} disabled={glassSaving}>
-            {glassSaving ? <Loader2 className="size-4 animate-spin" /> : null}
-            Save glass settings
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => void resetGlassAppearance()}
-            disabled={glassSaving}
-          >
-            Restore defaults
-          </Button>
-          <span className="text-xs text-muted-foreground">
-            Run the glass-controls Supabase migration once for workspace-wide sync; until then,
-            values remain saved in this browser.
-          </span>
-        </div>
-      </section>
-
-      {/* ── Login page style ─────────────────────────────────────── */}
-      <section className="surface-card p-6">
-        <h3 className="text-sm font-semibold tracking-tight">Login page style</h3>
-        <p className="mt-1 text-xs text-muted-foreground">
-          Choose the sign-in page appearance. The cloud workspace style is inspired by the supplied
-          Bitrix24 reference. Saved to the cloud and applied to all users.
-        </p>
-        <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          {/* Plain UI */}
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => setLoginUi("plain")}
-            className={`relative flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-200 hover:-translate-y-0.5 ${
-              loginUi === "plain"
-                ? "border-primary bg-primary-soft"
-                : "border-border bg-card hover:border-primary/40"
-            }`}
-          >
-            {/* Mini preview */}
-            <div
-              className="flex h-28 w-full items-center justify-center"
-              style={{ backgroundImage: "var(--gradient-brand)" }}
-            >
-              <div className="rounded-xl bg-white/20 px-5 py-2 text-[11px] font-semibold uppercase tracking-widest text-white">
-                Garuda Logistics Solutions
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-4">
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">Plain UI</span>
-                <span className="block text-xs text-muted-foreground">
-                  Original sign-in layout, gradient with logo
-                </span>
-              </span>
-              {loginUi === "plain" ? <Check className="size-4 shrink-0 text-primary" /> : null}
-            </div>
-          </button>
-
-          {/* Image UI */}
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => setLoginUi("image")}
-            className={`relative flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-200 hover:-translate-y-0.5 ${
-              loginUi === "image"
-                ? "border-primary bg-primary-soft"
-                : "border-border bg-card hover:border-primary/40"
-            }`}
-          >
-            {/* Mini preview */}
-            <div className="h-28 w-full overflow-hidden">
-              <img
-                src="/garuda-banner.jpeg"
-                alt="Garuda banner preview"
-                className="h-full w-full object-cover"
-              />
-            </div>
-            <div className="flex items-center justify-between p-4">
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">Image UI</span>
-                <span className="block text-xs text-muted-foreground">
-                  Garuda banner as background
-                </span>
-              </span>
-              {loginUi === "image" ? <Check className="size-4 shrink-0 text-primary" /> : null}
-            </div>
-          </button>
-          {/* Video UI — same banner treatment with the configured video */}
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => setLoginUi("video")}
-            className={`relative flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-200 hover:-translate-y-0.5 ${
-              loginUi === "video"
-                ? "border-primary bg-primary-soft"
-                : "border-border bg-card hover:border-primary/40"
-            }`}
-          >
-            <div className="relative h-28 w-full overflow-hidden bg-slate-900">
-              <video
-                className="h-full w-full object-cover"
-                autoPlay
-                loop
-                muted
-                playsInline
-                preload="metadata"
-                poster="/garuda-banner.webp"
-                aria-hidden="true"
-              >
-                <source src={backgroundVideoUrl} />
-              </video>
-            </div>
-            <div className="flex items-center justify-between p-4">
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">Video UI</span>
-                <span className="block text-xs text-muted-foreground">
-                  Same Garuda banner layout with the configured video
-                </span>
-              </span>
-              {loginUi === "video" ? <Check className="size-4 shrink-0 text-primary" /> : null}
-            </div>
-          </button>
-          {/* Workspace UI — clean blue auth inspiration */}
-          <button
-            type="button"
-            disabled={saving}
-            onClick={() => setLoginUi("workspace")}
-            className={`relative flex flex-col overflow-hidden rounded-xl border text-left transition-all duration-200 hover:-translate-y-0.5 ${
-              loginUi === "workspace"
-                ? "border-primary bg-primary-soft"
-                : "border-border bg-card hover:border-primary/40"
-            }`}
-          >
-            <div className="flex h-28 w-full items-center justify-center bg-gradient-to-br from-sky-50 via-white to-blue-100">
-              <div className="rounded-lg border border-sky-100 bg-white px-5 py-2.5 text-[11px] font-semibold tracking-wide text-sky-700 shadow-sm">
-                GARUDA · WORKSPACE
-              </div>
-            </div>
-            <div className="flex items-center justify-between p-4">
-              <span className="min-w-0">
-                <span className="block text-sm font-medium">Cloud Workspace</span>
-                <span className="block text-xs text-muted-foreground">
-                  Clean blue sign-in, inspired by the reference
-                </span>
-              </span>
-              {loginUi === "workspace" ? <Check className="size-4 shrink-0 text-primary" /> : null}
-            </div>
-          </button>
-        </div>
-      </section>
-
-      <section className="surface-card p-6">
-        <h3 className="text-sm font-semibold tracking-tight">Preview</h3>
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <span
-            className="rounded-xl px-5 py-2.5 text-sm font-medium text-primary-foreground"
-            style={{ backgroundImage: "var(--gradient-brand)" }}
-          >
-            Primary action
-          </span>
-          <span className="rounded-xl bg-primary-soft px-5 py-2.5 text-sm font-medium text-primary">
-            Soft accent
-          </span>
-          <span className="rounded-xl border border-border px-5 py-2.5 text-sm font-medium">
-            Outline
-          </span>
-        </div>
-      </section>
     </div>
   );
 }
