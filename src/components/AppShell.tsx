@@ -21,6 +21,7 @@ import { MobileAppDownloads } from "@/components/MobileAppDownloads";
 import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
 import { useTheme } from "@/lib/theme";
+import { useCurrentVideoTab, videoEnabledForTab } from "@/lib/video-tabs";
 import { isDarkTheme, themeInlineStyles, themeModuleForPath } from "@/lib/theme-studio";
 
 function ChangePasswordDialog({
@@ -172,6 +173,8 @@ export function AppShell({
   const { open, expanded } = useOrcaAI();
   const { profile, resolveModuleTheme, backgroundVideoEnabled } = useTheme();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const videoTab = useCurrentVideoTab(pathname);
+  const showBackgroundVideo = backgroundVideoEnabled && videoEnabledForTab(profile.videoTabs, videoTab);
   const currentModule = themeModuleForPath(pathname);
   const appearanceTheme = resolveModuleTheme(currentModule);
   // Tailwind's dark variant also checks the html class. Keep it aligned
@@ -247,7 +250,7 @@ export function AppShell({
     <div
       data-theme={appearanceTheme}
       data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined}
-      data-video-background={backgroundVideoEnabled ? "on" : "off"}
+      data-video-background={showBackgroundVideo ? "on" : "off"}
       style={
         {
           ...themeInlineStyles(profile),
@@ -256,7 +259,7 @@ export function AppShell({
       className={cn(
         "relative flex h-screen flex-col overflow-hidden transition-all duration-300",
         isDarkTheme(appearanceTheme) ? "dark" : "",
-        backgroundVideoEnabled ? "bg-transparent" : "bg-background",
+        showBackgroundVideo ? "bg-transparent" : "bg-background",
         user && open && !expanded && variant !== "ltms" ? "lg:mr-[360px]" : "",
         variant === "ltms" ? "ltms-app-shell" : "",
       )}
