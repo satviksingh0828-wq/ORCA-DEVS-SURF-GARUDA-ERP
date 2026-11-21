@@ -9,6 +9,7 @@ import {
   parseThemeProfile,
   serializeThemeProfile,
   themeInlineStyles,
+  moduleThemeInlineStyles,
   themeModuleForPath,
 } from "../src/lib/theme-studio.ts";
 
@@ -262,4 +263,60 @@ test("no poster or Garuda banner is rendered by the video backdrop", async () =>
   const backdrop = fs.readFileSync("src/components/WorkspaceBackgroundVideo.tsx", "utf8");
   assert.doesNotMatch(backdrop, /poster\\s*=/i);
   assert.match(backdrop, /onLoadedMetadata/);
+});
+
+test("Home icon size keeps the previous 28px default and round-trips across devices", () => {
+  const previous = parseThemeProfile("garuda", allowed);
+  assert.equal(previous.homeIconSize, 28);
+  assert.equal(serializeThemeProfile(previous), "garuda");
+  for (const size of [16, 20, 28, 44, 64]) {
+    const configured = normalizeThemeProfile({ baseTheme: "ocean", homeIconSize: size }, allowed);
+    assert.equal(configured.homeIconSize, size);
+    const reloaded = parseThemeProfile(serializeThemeProfile(configured), allowed);
+    assert.equal(reloaded.homeIconSize, size);
+  }
+  assert.equal(normalizeThemeProfile({ homeIconSize: 1 }, allowed).homeIconSize, 16);
+  assert.equal(normalizeThemeProfile({ homeIconSize: 999 }, allowed).homeIconSize, 64);
+  assert.equal(normalizeThemeProfile({ homeIconSize: Number.NaN }, allowed).homeIconSize, 28);
+  assert.equal(normalizeThemeProfile({ homeIconSize: "52" }, allowed).homeIconSize, 28);
+});
+
+test("WMS module override uses isolated readable light/dark surfaces", () => {
+  const light = normalizeThemeProfile({
+    baseTheme: "midnight",
+    modules: { wms: "ocean" },
+  }, allowed);
+  const lightCss = moduleThemeInlineStyles(light, "wms");
+  assert.equal(lightCss["--background"], "#fafaf7");
+  assert.equal(lightCss["--foreground"], "#1a1714");
+  assert.equal(lightCss["--card"], "#ffffff");
+  const dark = normalizeThemeProfile({
+    baseTheme: "garuda",
+    modules: { wms: "midnight" },
+    colors: { primary: "#123456", foreground: "#eeeeee" },
+  }, allowed);
+  const darkCss = moduleThemeInlineStyles(dark, "wms");
+  assert.equal(darkCss["--background"], "#121821");
+  assert.equal(darkCss["--foreground"], "#eeeeee");
+  assert.equal(darkCss["--primary"], "#123456");
+  const unchanged = moduleThemeInlineStyles(normalizeThemeProfile({baseTheme: "garuda"}, allowed), "wms");
+  assert.equal(unchanged["--background"], undefined);
+});
+
+test("every embedded WMS Settings surface uses the shared theme boundary", async () => {
+  const fs = await import("node:fs");
+  const settings = fs.readFileSync("src/components/WmsSystemSettings.tsx", "utf8");
+  const layout = fs.readFileSync("src/wms/components/Layout.jsx", "utf8");
+  const standalone = fs.readFileSync("src/components/WmsStandalone.tsx", "utf8");
+  const boundary = fs.readFileSync("src/components/WmsThemeScope.tsx", "utf8");
+  const home = fs.readFileSync("src/routes/home.tsx", "utf8");
+  const studio = fs.readFileSync("src/components/settings/AppearanceStudio.tsx", "utf8");
+  assert.match(settings, /<WmsThemeScope/);
+  assert.match(settings, /activeTabId !== "user-access"/);
+  assert.match(layout, /<WmsThemeScope/);
+  assert.match(standalone, /<WmsThemeScope/);
+  assert.match(boundary, /moduleThemeInlineStyles\(profile, "wms"\)/);
+  assert.match(boundary, /legacy \? "wms-embedded-scope" : "wms-native-theme-scope"/);
+  assert.match(home, /profile\.homeIconSize/);
+  assert.match(studio, /Home module icon size/);
 });
