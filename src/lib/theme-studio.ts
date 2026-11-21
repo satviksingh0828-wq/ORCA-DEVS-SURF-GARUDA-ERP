@@ -36,6 +36,8 @@ export type ThemeProfile = {
     startPaused: boolean;
     playbackRate: number;
     pauseWhenHidden: boolean;
+    respectReducedMotion: boolean;
+    loopVideo: boolean;
     showPauseButton: boolean;
     videoDim: number;
   };
@@ -55,6 +57,8 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
     startPaused: false,
     playbackRate: 1,
     pauseWhenHidden: true,
+    respectReducedMotion: true,
+    loopVideo: true,
     showPauseButton: true,
     videoDim: 0,
   },
@@ -116,6 +120,8 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
       startPaused: sourcePlayback.startPaused === true,
       playbackRate: Math.max(0.5, Math.min(2, Math.round(rate * 4) / 4)),
       pauseWhenHidden: sourcePlayback.pauseWhenHidden !== false,
+      respectReducedMotion: sourcePlayback.respectReducedMotion !== false,
+      loopVideo: sourcePlayback.loopVideo !== false,
       showPauseButton: sourcePlayback.showPauseButton !== false,
       videoDim: Math.max(0, Math.min(15, Math.round(dim))),
     },
@@ -149,6 +155,8 @@ export function serializeThemeProfile(profile: ThemeProfile): string {
         profile.videoPlayback.startPaused !== true &&
         (profile.videoPlayback.playbackRate ?? 1) === 1 &&
         profile.videoPlayback.pauseWhenHidden !== false &&
+        profile.videoPlayback.respectReducedMotion !== false &&
+        profile.videoPlayback.loopVideo !== false &&
         profile.videoPlayback.showPauseButton !== false &&
         (profile.videoPlayback.videoDim ?? 0) === 0
       )) &&
