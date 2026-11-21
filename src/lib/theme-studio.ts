@@ -35,6 +35,14 @@ export type ThemeProfile = {
   videoPlayback: {
     /** Workspace-wide default mode. Local Play/Pause overrides it per device. */
     backgroundMode: "video" | "still" | "blank";
+    /** Poster uses the existing Garuda banner while the selected video loads. */
+    showTruckPoster: boolean;
+    /** Universal effects apply to background media, never foreground text. */
+    blur: number;
+    tintColor: string;
+    tintOpacity: number;
+    brightness: number;
+    saturation: number;
     startPaused: boolean;
     playbackRate: number;
     pauseWhenHidden: boolean;
@@ -57,6 +65,12 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
   videoTextWeight: "medium",
   videoPlayback: {
     backgroundMode: "video",
+    showTruckPoster: true,
+    blur: 0,
+    tintColor: "#000000",
+    tintOpacity: 0,
+    brightness: 100,
+    saturation: 100,
     startPaused: false,
     playbackRate: 1,
     pauseWhenHidden: true,
@@ -109,6 +123,11 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
     ? sourcePlayback.playbackRate : 1;
   const dim = typeof sourcePlayback.videoDim === "number" && Number.isFinite(sourcePlayback.videoDim)
     ? sourcePlayback.videoDim : 0;
+  const bounded = (key: string, fallback: number, min: number, max: number) => {
+    const raw = sourcePlayback[key];
+    return typeof raw === "number" && Number.isFinite(raw)
+      ? Math.max(min, Math.min(max, Math.round(raw))) : fallback;
+  };
   return {
     version: 2,
     baseTheme,
@@ -124,6 +143,13 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
         ? sourcePlayback.backgroundMode
         : sourcePlayback.backgroundMode === "video" ? "video"
         : sourcePlayback.startPaused === true ? "still" : "video",
+      showTruckPoster: sourcePlayback.showTruckPoster !== false,
+      blur: bounded("blur", 0, 0, 24),
+      tintColor: typeof sourcePlayback.tintColor === "string" && HEX_COLOR.test(sourcePlayback.tintColor)
+        ? sourcePlayback.tintColor : "#000000",
+      tintOpacity: bounded("tintOpacity", 0, 0, 80),
+      brightness: bounded("brightness", 100, 40, 160),
+      saturation: bounded("saturation", 100, 0, 200),
       startPaused: sourcePlayback.startPaused === true,
       playbackRate: Math.max(0.5, Math.min(2, Math.round(rate * 4) / 4)),
       pauseWhenHidden: sourcePlayback.pauseWhenHidden !== false,
@@ -161,6 +187,12 @@ export function serializeThemeProfile(profile: ThemeProfile): string {
       (!profile.videoPlayback || (
         profile.videoPlayback.startPaused !== true &&
         (profile.videoPlayback.backgroundMode ?? "video") === "video" &&
+        profile.videoPlayback.showTruckPoster !== false &&
+        (profile.videoPlayback.blur ?? 0) === 0 &&
+        (profile.videoPlayback.tintColor ?? "#000000").toLowerCase() === "#000000" &&
+        (profile.videoPlayback.tintOpacity ?? 0) === 0 &&
+        (profile.videoPlayback.brightness ?? 100) === 100 &&
+        (profile.videoPlayback.saturation ?? 100) === 100 &&
         (profile.videoPlayback.playbackRate ?? 1) === 1 &&
         profile.videoPlayback.pauseWhenHidden !== false &&
         profile.videoPlayback.respectReducedMotion !== false &&
