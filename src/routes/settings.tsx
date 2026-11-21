@@ -404,7 +404,7 @@ function ThemePanel() {
           <div>
             <h3 className="text-sm font-semibold tracking-tight">Workspace background video</h3>
             <p className="mt-1 text-xs text-muted-foreground">
-              A single muted background video plays behind Home, Login, passkey verification, and workspace screens. Configure its source once here; the chosen theme controls the overlay and text contrast.
+              Configure the shared muted background video for Home, Login and passkey verification. Other ERP/LTMS and Sentry/WMS tabs are off by default and can be enabled individually in Appearance Studio. The video itself stays sharp and unblurred.
             </p>
           </div>
         </div>
