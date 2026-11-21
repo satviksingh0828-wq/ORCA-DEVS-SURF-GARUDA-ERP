@@ -373,13 +373,7 @@ export function LorryReceiptList() {
   });
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Lorry Receipts (LR)</h2>
-          <p className="text-sm text-muted-foreground">
-            Combine one or more compatible E-Way Bill shipments into one LR.
-          </p>
-        </div>
+      <div className="flex flex-wrap justify-end gap-3">
         <Button onClick={() => setView({ kind: "create" })}>
           <Plus className="mr-2 size-4" />
           Create LR
