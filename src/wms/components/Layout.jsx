@@ -7,6 +7,7 @@ import { useAuth } from '../auth.jsx';
 import { useWarehouse } from '../warehouse.jsx';
 import { AppShell } from '../../components/AppShell.tsx';
 import { useTheme } from '../../lib/theme.tsx';
+import { themeInlineStyles } from '../../lib/theme-studio.ts';
 
 const PERM_POPUP_COOLDOWN_MS = 5000;
 
@@ -88,7 +89,7 @@ export default function Layout({ embedded = false }) {
         mainClassName="overflow-hidden p-0 sm:p-0"
         headerEnd={<WarehousePicker />}
       >
-        <div className="wms-embedded-scope h-full min-h-0" data-theme={wmsTheme} data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined}>
+        <div className="wms-embedded-scope h-full min-h-0" data-theme={wmsTheme} data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined} style={themeInlineStyles(profile)}>
           <div className="wms-embedded-layout h-full min-h-0">
             {!forced && <Sidebar />}
             <main className="wms-embedded-content">
