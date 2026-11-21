@@ -1,7 +1,7 @@
 name: Validate ORCA Theme Engine
 on:
   push:
-    branches: [feature/orca-theme-studio-v2, main]
+    branches: [feature/orca-theme-studio-v2, fix/appearance-video-sidebar-v3, main]
   pull_request:
     branches: [main]
 permissions:
