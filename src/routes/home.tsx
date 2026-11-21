@@ -234,11 +234,11 @@ function HomePage() {
                   >
                     <Icon className="size-7" />
                   </span>
-                  <span className="mt-2 max-w-full text-xs font-medium leading-tight tracking-tight">
+                  <span className="video-overlay-label mt-2 max-w-full text-xs font-medium leading-tight tracking-tight">
                     {m.label}
                   </span>
                   {!enabled && (
-                    <span className="mt-1 text-[10px] font-medium text-muted-foreground">Soon</span>
+                    <span className="video-overlay-muted mt-1 text-[10px] font-medium text-muted-foreground">Soon</span>
                   )}
                 </button>
               );
