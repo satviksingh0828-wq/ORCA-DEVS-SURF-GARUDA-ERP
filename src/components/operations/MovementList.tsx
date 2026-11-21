@@ -224,7 +224,6 @@ export function MovementList() {
   return (
     <div className="space-y-5">
       <div>
-        <h2 className="text-lg font-semibold">Monthly Movements</h2>
         <p className="text-sm text-muted-foreground">
           Movements can be assigned to only one trip. Unassign a movement from its current trip
           before selecting it elsewhere.
