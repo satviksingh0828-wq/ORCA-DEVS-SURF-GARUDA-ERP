@@ -176,7 +176,7 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
 export function parseThemeProfile(raw: unknown, allowed: ReadonlySet<string>): ThemeProfile {
   if (typeof raw !== "string") return { ...DEFAULT_THEME_PROFILE };
   if (allowed.has(raw)) return { ...DEFAULT_THEME_PROFILE, baseTheme: raw };
-  if (!raw.startsWith(THEME_PROFILE_PREFIX) || raw.length > 12000) {
+  if (!raw.startsWith(THEME_PROFILE_PREFIX) || raw.length > 32000) {
     return { ...DEFAULT_THEME_PROFILE };
   }
   try {
