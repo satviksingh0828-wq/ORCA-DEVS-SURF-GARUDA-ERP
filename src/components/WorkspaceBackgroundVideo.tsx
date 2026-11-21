@@ -118,8 +118,8 @@ export function WorkspaceBackgroundVideo() {
 
   const mediaStyle: CSSProperties = {
     backgroundImage: "none",
-    filter: `blur(${settings.blur}px) brightness(${settings.brightness}%) saturate(${settings.saturation}%)`,
-    transform: settings.blur > 0 ? `scale(${1 + settings.blur / 250})` : undefined,
+    filter: `blur(${settings.blur}px) brightness(${settings.brightness}%) saturate(${settings.saturation}%) contrast(${settings.contrast}%) grayscale(${settings.grayscale}%) hue-rotate(${settings.hueRotate}deg)`,
+    transform: `scale(${Math.max(settings.zoom / 100, 1 + settings.blur / 250)})`,
   };
   const tintStyle = {
     "--video-tint-color": settings.tintColor,
