@@ -41,6 +41,10 @@ export type ThemeProfile = {
     tintOpacity: number;
     brightness: number;
     saturation: number;
+    contrast: number;
+    grayscale: number;
+    hueRotate: number;
+    zoom: number;
     startPaused: boolean;
     playbackRate: number;
     pauseWhenHidden: boolean;
@@ -68,6 +72,10 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
     tintOpacity: 0,
     brightness: 100,
     saturation: 100,
+    contrast: 100,
+    grayscale: 0,
+    hueRotate: 0,
+    zoom: 100,
     startPaused: false,
     playbackRate: 1,
     pauseWhenHidden: true,
@@ -111,7 +119,7 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
   const rawVideoTabs = source.videoTabs && typeof source.videoTabs === "object" && !Array.isArray(source.videoTabs)
     ? source.videoTabs as Record<string, unknown> : {};
   const videoTabs: Record<string, boolean> = {};
-  for (const [key, value] of Object.entries(rawVideoTabs).slice(0, 80)) {
+  for (const [key, value] of Object.entries(rawVideoTabs).slice(0, 200)) {
     if (/^[a-z0-9:/_-]{1,96}$/.test(key) && typeof value === "boolean") videoTabs[key] = value;
   }
   const sourcePlayback = source.videoPlayback && typeof source.videoPlayback === "object"
@@ -146,6 +154,10 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
       tintOpacity: bounded("tintOpacity", 0, 0, 80),
       brightness: bounded("brightness", 100, 40, 160),
       saturation: bounded("saturation", 100, 0, 200),
+      contrast: bounded("contrast", 100, 50, 160),
+      grayscale: bounded("grayscale", 0, 0, 100),
+      hueRotate: bounded("hueRotate", 0, -180, 180),
+      zoom: bounded("zoom", 100, 100, 130),
       startPaused: sourcePlayback.startPaused === true,
       playbackRate: Math.max(0.5, Math.min(2, Math.round(rate * 4) / 4)),
       pauseWhenHidden: sourcePlayback.pauseWhenHidden !== false,
@@ -188,6 +200,10 @@ export function serializeThemeProfile(profile: ThemeProfile): string {
         (profile.videoPlayback.tintOpacity ?? 0) === 0 &&
         (profile.videoPlayback.brightness ?? 100) === 100 &&
         (profile.videoPlayback.saturation ?? 100) === 100 &&
+        (profile.videoPlayback.contrast ?? 100) === 100 &&
+        (profile.videoPlayback.grayscale ?? 0) === 0 &&
+        (profile.videoPlayback.hueRotate ?? 0) === 0 &&
+        (profile.videoPlayback.zoom ?? 100) === 100 &&
         (profile.videoPlayback.playbackRate ?? 1) === 1 &&
         profile.videoPlayback.pauseWhenHidden !== false &&
         profile.videoPlayback.respectReducedMotion !== false &&
