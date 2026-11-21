@@ -9,6 +9,7 @@ import {
   parseThemeProfile,
   serializeThemeProfile,
   themeInlineStyles,
+  themeModuleForPath,
 } from "../src/lib/theme-studio.ts";
 
 const allowed = new Set(["garuda", "sky", "ocean", "neon", "midnight", "forest", "storm"]);
@@ -92,4 +93,19 @@ test("invalid sidebar colour values are rejected instead of becoming CSS", () =>
   const invalid = normalizeThemeProfile({ colors: { sidebar: "red; background:url(unsafe)", wmsAccent: "#135790" } }, allowed);
   assert.equal(themeInlineStyles(invalid)["--ltms-chrome"], undefined);
   assert.equal(themeInlineStyles(invalid)["--wms-accent-override"], "#135790");
+});
+
+test("every ERP route family gets the intended module theme", () => {
+  for (const pathname of ["/ltms", "/ltms/operations", "/tms", "/masters", "/operations", "/reports", "/report-master", "/finance", "/import-trips"]) {
+    assert.equal(themeModuleForPath(pathname), "ltms", pathname);
+  }
+  for (const pathname of ["/hrms", "/dashboard", "/hr-dashboard", "/employees", "/attendance", "/payroll"]) {
+    assert.equal(themeModuleForPath(pathname), "hrms", pathname);
+  }
+  for (const pathname of ["/accounts", "/accounts/ledger", "/cash-reports"]) {
+    assert.equal(themeModuleForPath(pathname), "accounts", pathname);
+  }
+  assert.equal(themeModuleForPath("/wms"), "wms");
+  assert.equal(themeModuleForPath("/home"), "erp");
+  assert.equal(themeModuleForPath("/settings"), "erp");
 });
