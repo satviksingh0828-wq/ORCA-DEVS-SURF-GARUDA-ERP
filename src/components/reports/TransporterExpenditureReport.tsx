@@ -503,7 +503,7 @@ export function TransporterExpenditureReport({
       <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
         <div className="flex items-center gap-2 border-b border-border px-4 py-3">
           <Package className="size-4 text-primary" />
-          <h2 className="text-sm font-semibold">Transporter Expenditure ({filtered.length})</h2>
+          <h2 className="text-sm font-semibold">Results ({filtered.length})</h2>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full min-w-[1650px] text-left text-sm">
