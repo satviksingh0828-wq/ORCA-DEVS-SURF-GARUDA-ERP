@@ -585,9 +585,11 @@ function SelectField({
 export function ConsignmentList({
   onSidebarVisibilityChange,
   onCreateModeChange,
+  onViewModeChange,
 }: {
   onSidebarVisibilityChange?: (visible: boolean) => void;
   onCreateModeChange?: (open: boolean) => void;
+  onViewModeChange?: (open: boolean) => void;
 }) {
   const branches = useBranches();
   const { user } = useSession();
@@ -1406,6 +1408,7 @@ export function ConsignmentList({
       })) as PackageEntry[],
     );
     setScreen("view");
+    onViewModeChange?.(true);
   }
 
   async function deleteRow(row: Record<string, any>) {
@@ -1487,6 +1490,7 @@ export function ConsignmentList({
           setScreen("list");
           onSidebarVisibilityChange?.(true);
           onCreateModeChange?.(false);
+          onViewModeChange?.(false);
         }}
       />
     );
