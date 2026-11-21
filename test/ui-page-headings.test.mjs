@@ -12,6 +12,9 @@ test("Consignment renders one list title with the accurate E-Way Bill explanatio
   assert.doesNotMatch(list, /<h2[^>]*>Consignment<\/h2>/);
   assert.match(list, /Create Consignment/);
   assert.match(route, /!fullBleed && !fullBleedConsignment/);
+  assert.match(route, /onViewModeChange=\{setConsignmentViewOpen\}/);
+  assert.match(list, /onViewModeChange\?\.\(true\)/);
+  assert.match(list, /onViewModeChange\?\.\(false\)/);
 });
 
 test("Operations keep page titles only once and retain functional creation actions", () => {
