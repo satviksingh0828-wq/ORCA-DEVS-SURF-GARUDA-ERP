@@ -25,6 +25,7 @@ import { BranchSettings } from "@/components/settings/BranchSettings";
 import { AttendanceModuleSettings } from "@/components/settings/AttendanceModuleSettings";
 import { DEFAULT_BACKGROUND_VIDEO_URL, useTheme } from "@/lib/theme";
 import { AppearanceStudio } from "@/components/settings/AppearanceStudio";
+import { reportActiveVideoTab } from "@/lib/video-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
@@ -114,6 +115,7 @@ function SettingsPage() {
   const [tab, setTab] = useState<TabId>("appearance");
   const [wmsTabId, setWmsTabId] = useState(WMS_SYSTEM_TABS[0].id);
   const [activeSection, setActiveSection] = useState<"settings" | "wms">("settings");
+  useEffect(() => reportActiveVideoTab(activeSection === "settings" ? `settings:${tab}` : `wms-settings:${wmsTabId}`), [activeSection, tab, wmsTabId]);
   if (user?.role !== "admin") return null;
   const visibleTabs = TABS;
   const wmsSidebarTabs = WMS_SYSTEM_TABS.map(({ id, label }) => ({
