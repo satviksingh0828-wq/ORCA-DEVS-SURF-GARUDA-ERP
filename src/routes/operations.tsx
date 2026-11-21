@@ -239,11 +239,13 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
   }, [availableTabIds, mode]);
   const [navOpen, setNavOpen] = useState(true);
   const [consignmentCreateOpen, setConsignmentCreateOpen] = useState(false);
+  const [consignmentViewOpen, setConsignmentViewOpen] = useState(false);
   const [tripFormOpen, setTripFormOpen] = useState(false);
 
   const defaultTab: TabId = mode === "ltms" ? "trip" : "lr";
   const safeTab: TabId = (TABS.find((t) => t.id === tab) ? tab : defaultTab) as TabId;
   const active = TABS.find((t) => t.id === safeTab) ?? TABS[0];
+  useEffect(() => setConsignmentViewOpen(false), [safeTab]);
   const fullBleedConsignment = safeTab === "consignment" && consignmentCreateOpen;
   const fullBleed = mode !== "ltms" && fullBleedConsignment;
   const sidebarOpen = navOpen;
@@ -338,7 +340,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
         <div
           className={`animate-fade-in min-w-0 ${mode === "ltms" ? "ltms-reference-content" : ""}`}
         >
-          {!fullBleed && !fullBleedConsignment && (
+          {!fullBleed && !fullBleedConsignment && !(safeTab === "consignment" && consignmentViewOpen) && (
             <header className={`mb-6 ${mode === "ltms" ? "ltms-reference-page-header" : ""}`}>
               <h1 className="text-2xl font-semibold tracking-tight">{active?.label}</h1>
               <p className="mt-1 text-sm text-muted-foreground">{active?.desc}</p>
@@ -366,6 +368,7 @@ export function OperationsPage({ mode = "tms" }: { mode?: OperationsMode } = {})
                   setNavOpen(visible);
                 }}
                 onCreateModeChange={setConsignmentCreateOpen}
+                onViewModeChange={setConsignmentViewOpen}
               />
             </TabErrorBoundary>
           )}
