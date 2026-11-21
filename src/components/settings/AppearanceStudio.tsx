@@ -503,6 +503,10 @@ export function AppearanceStudio() {
               ["blur", "Video blur", 0, 24, "px"],
               ["brightness", "Video brightness", 40, 160, "%"],
               ["saturation", "Colour saturation", 0, 200, "%"],
+              ["contrast", "Video contrast", 50, 160, "%"],
+              ["grayscale", "Black & white", 0, 100, "%"],
+              ["hueRotate", "Hue rotation", -180, 180, "°"],
+              ["zoom", "Video zoom / crop", 100, 130, "%"],
             ] as const).map(([key, label, min, max, unit]) => (
               <label key={key} className="flex flex-col gap-2 text-xs font-medium">
                 <span className="flex justify-between gap-2">
@@ -520,7 +524,8 @@ export function AppearanceStudio() {
               onClick={() => setDraft((prev) => ({
                 ...prev, videoPlayback: {
                   ...prev.videoPlayback, blur: 0, tintColor: "#000000",
-                  tintOpacity: 0, brightness: 100, saturation: 100, videoDim: 0,
+                  tintOpacity: 0, brightness: 100, saturation: 100,
+                  contrast: 100, grayscale: 0, hueRotate: 0, zoom: 100, videoDim: 0,
                 },
               }))}>Reset video effects</button>
           </div>
@@ -584,8 +589,8 @@ export function AppearanceStudio() {
           {draft.videoPlayback.backgroundMode !== "blank" && <video ref={previewVideoRef} src={backgroundVideoUrl} autoPlay={!previewPaused}
             muted loop={draft.videoPlayback.loopVideo} playsInline preload="metadata" aria-hidden="true"
             className="absolute inset-0 size-full object-cover"
-            style={{ filter: `blur(${draft.videoPlayback.blur}px) brightness(${draft.videoPlayback.brightness}%) saturate(${draft.videoPlayback.saturation}%)`,
-              transform: draft.videoPlayback.blur ? `scale(${1 + draft.videoPlayback.blur / 250})` : undefined }}
+            style={{ filter: `blur(${draft.videoPlayback.blur}px) brightness(${draft.videoPlayback.brightness}%) saturate(${draft.videoPlayback.saturation}%) contrast(${draft.videoPlayback.contrast}%) grayscale(${draft.videoPlayback.grayscale}%) hue-rotate(${draft.videoPlayback.hueRotate}deg)`,
+              transform: `scale(${Math.max(draft.videoPlayback.zoom / 100, 1 + draft.videoPlayback.blur / 250)})` }}
             onCanPlay={(event) => {
               event.currentTarget.playbackRate = draft.videoPlayback.playbackRate;
               if (draft.videoPlayback.backgroundMode === "still" && Number.isFinite(event.currentTarget.duration) &&
