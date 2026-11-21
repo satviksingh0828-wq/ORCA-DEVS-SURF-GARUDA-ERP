@@ -183,9 +183,15 @@ export function AppShell({
   // Tailwind's dark variant also checks the html class. Keep it aligned
   // with this route's effective module, including light-on-dark overrides.
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDarkTheme(appearanceTheme));
+    // Keep root portals (dialogs, popovers, menus) on the effective module
+    // theme, not the parent route theme. WMS Settings is nested at /settings
+    // yet can use its own light/dark palette.
+    const root = document.documentElement;
+    root.dataset.theme = appearanceTheme;
+    root.classList.toggle("dark", isDarkTheme(appearanceTheme));
     return () => {
-      document.documentElement.classList.toggle("dark", isDarkTheme(profile.baseTheme));
+      root.dataset.theme = profile.baseTheme;
+      root.classList.toggle("dark", isDarkTheme(profile.baseTheme));
     };
   }, [appearanceTheme, profile.baseTheme]);
   const isAdmin = isAdminLike(user?.role);
