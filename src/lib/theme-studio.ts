@@ -103,6 +103,17 @@ export function serializeThemeProfile(profile: ThemeProfile): string {
   return THEME_PROFILE_PREFIX + JSON.stringify(profile);
 }
 
+/** Resolve the visual module from real router paths. LTMS has several legacy
+ * top-level routes, so checking only /ltms leaves most sidebars unthemed. */
+export function themeModuleForPath(pathname: string): ThemeModule {
+  const path = pathname.toLowerCase();
+  if (/^\\/wms(?:\\/|$)/.test(path)) return "wms";
+  if (/^\\/(?:accounts|cash-reports)(?:\\/|$)/.test(path)) return "accounts";
+  if (/^\\/(?:hrms|hr-dashboard|hr-data|dashboard|employees|payroll|attendance)(?:\\/|$)/.test(path)) return "hrms";
+  if (/^\\/(?:ltms|tms|masters|operations|finance|reports|report-master|import-trips)(?:\\/|$)/.test(path)) return "ltms";
+  return "erp";
+}
+
 export function getModuleTheme(profile: ThemeProfile, module: ThemeModule): string {
   return profile.modules[module] || profile.baseTheme;
 }
