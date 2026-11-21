@@ -23,11 +23,6 @@ import { isAdminLike } from "@/lib/roles";
 import { useTheme } from "@/lib/theme";
 import { isDarkTheme, themeInlineStyles, type ThemeModule } from "@/lib/theme-studio";
 
-let sharedBackgroundVideo: HTMLVideoElement | null = null;
-let sharedBackgroundVeil: HTMLDivElement | null = null;
-let sharedBackgroundVideoUrl = "";
-let sharedBackgroundVideoReady = false;
-
 function ChangePasswordDialog({
   open,
   onOpenChange,
@@ -149,39 +144,6 @@ function ChangePasswordDialog({
   );
 }
 
-function ensureSharedBackgroundVideo() {
-  if (sharedBackgroundVideo && sharedBackgroundVeil) {
-    if (!document.body.contains(sharedBackgroundVideo))
-      document.body.appendChild(sharedBackgroundVideo);
-    if (!document.body.contains(sharedBackgroundVeil))
-      document.body.appendChild(sharedBackgroundVeil);
-    return { video: sharedBackgroundVideo, veil: sharedBackgroundVeil };
-  }
-
-  const video = document.createElement("video");
-  video.className = "background-video-layer";
-  video.autoplay = true;
-  video.loop = true;
-  video.muted = true;
-  video.playsInline = true;
-  video.preload = "auto";
-  video.poster = "/garuda-banner.webp";
-  video.setAttribute("aria-hidden", "true");
-  video.addEventListener("canplay", () => {
-    sharedBackgroundVideoReady = true;
-    video.classList.add("background-video-ready");
-  });
-
-  const veil = document.createElement("div");
-  veil.className = "video-background-veil background-video-veil-layer";
-  veil.setAttribute("aria-hidden", "true");
-
-  document.body.append(video, veil);
-  sharedBackgroundVideo = video;
-  sharedBackgroundVeil = veil;
-  return { video, veil };
-}
-
 export function AppShell({
   children,
   footer,
@@ -208,7 +170,7 @@ export function AppShell({
   const { signOut, user } = useSession();
   const navigate = useNavigate();
   const { open, expanded } = useOrcaAI();
-  const { profile, resolveModuleTheme, backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
+  const { profile, resolveModuleTheme, backgroundVideoEnabled } = useTheme();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const currentModule: ThemeModule = pathname.startsWith("/wms") ? "wms" : pathname.startsWith("/ltms") ? "ltms" : pathname.startsWith("/accounts") ? "accounts" : /^(\/hrms|\/hr-|\/employees|\/payroll|\/attendance)/.test(pathname) ? "hrms" : "erp";
   const appearanceTheme = resolveModuleTheme(currentModule);
@@ -272,60 +234,6 @@ export function AppShell({
     };
   }, [accountMenuOpen, variant]);
 
-  useEffect(() => {
-    const root = document.documentElement;
-    const previousAttribute = root.getAttribute("data-video-background");
-    const properties = [
-      "--video-glass-opacity",
-      "--video-background-veil",
-      "--video-glass-text-color",
-    ];
-    const previousStyles = properties.map((property) => ({
-      property,
-      value: root.style.getPropertyValue(property),
-      priority: root.style.getPropertyPriority(property),
-    }));
-
-    if (backgroundVideoEnabled) root.setAttribute("data-video-background", "on");
-    else root.removeAttribute("data-video-background");
-    root.style.setProperty("--video-glass-opacity", `${videoGlassAppearance.surfaceOpacity}%`);
-    root.style.setProperty("--video-background-veil", `${videoGlassAppearance.backgroundVeil}%`);
-    root.style.setProperty("--video-glass-text-color", videoGlassAppearance.textColor);
-
-    return () => {
-      if (previousAttribute === null) root.removeAttribute("data-video-background");
-      else root.setAttribute("data-video-background", previousAttribute);
-      previousStyles.forEach(({ property, value, priority }) => {
-        if (value) root.style.setProperty(property, value, priority);
-        else root.style.removeProperty(property);
-      });
-    };
-  }, [backgroundVideoEnabled, videoGlassAppearance]);
-
-  useEffect(() => {
-    const { video, veil } = ensureSharedBackgroundVideo();
-    video.style.display = backgroundVideoEnabled ? "block" : "none";
-    veil.style.display = backgroundVideoEnabled ? "block" : "none";
-
-    if (!backgroundVideoEnabled) return;
-    if (sharedBackgroundVideoUrl !== backgroundVideoUrl) {
-      sharedBackgroundVideoUrl = backgroundVideoUrl;
-      sharedBackgroundVideoReady = false;
-      video.classList.remove("background-video-ready");
-      video.src = backgroundVideoUrl;
-      video.load();
-    }
-    if (sharedBackgroundVideoReady) video.classList.add("background-video-ready");
-    if (document.body.dataset.screenControlActive !== "true")
-      void video.play().catch(() => undefined);
-  }, [backgroundVideoEnabled, backgroundVideoUrl]);
-
-  useEffect(() => {
-    return () => {
-      if (sharedBackgroundVideo) sharedBackgroundVideo.style.display = "none";
-      if (sharedBackgroundVeil) sharedBackgroundVeil.style.display = "none";
-    };
-  }, []);
 
   return (
     <div
@@ -334,9 +242,6 @@ export function AppShell({
       data-video-background={backgroundVideoEnabled ? "on" : "off"}
       style={
         {
-          "--video-glass-opacity": `${videoGlassAppearance.surfaceOpacity}%`,
-          "--video-background-veil": `${videoGlassAppearance.backgroundVeil}%`,
-          "--video-glass-text-color": videoGlassAppearance.textColor,
           ...themeInlineStyles(profile),
         } as CSSProperties
       }
