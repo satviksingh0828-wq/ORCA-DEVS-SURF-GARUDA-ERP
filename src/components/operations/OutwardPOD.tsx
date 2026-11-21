@@ -597,7 +597,6 @@ export function OutwardPOD() {
       <div className="space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-4">
           <div>
-            <h2 className="font-semibold">Outward POD List</h2>
             <p className="text-xs text-muted-foreground">
               Showing the latest 25 created PODs by default. Use filters or Load more for older
               records.
