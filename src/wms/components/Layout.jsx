@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
+import { reportActiveVideoTab, videoTabFromWmsPath } from '../../lib/video-tabs.ts';
 import TopBar from './TopBar.jsx';
 import Sidebar from './Sidebar.jsx';
 import Modal from './Modal.jsx';
@@ -43,6 +44,11 @@ function WarehousePicker() {
 
 export default function Layout({ embedded = false }) {
   const { user } = useAuth();
+  const location = useLocation();
+  useEffect(() => {
+    // Embedded WMS changes tabs without changing the ERP route.
+    return reportActiveVideoTab(videoTabFromWmsPath(location.pathname));
+  }, [location.pathname]);
   const { profile, resolveModuleTheme } = useTheme();
   const wmsTheme = resolveModuleTheme('wms');
   // Page permissions (mig 061): catch global permission-denied events from
