@@ -140,7 +140,7 @@ function SettingsPage() {
   }
 
   return (
-    <AppShell variant="ltms" shellTitle="Settings">
+    <AppShell variant="ltms" shellTitle={activeSection === "wms" ? "WMS Settings" : "Settings"} themeModule={activeSection === "wms" ? "wms" : "erp"}>
       <div className="ltms-reference-shell ltms-single-pane-reference-shell grid min-w-0 grid-cols-1 lg:grid-cols-[192px_minmax(0,1fr)]">
         <LtmsSidebar
           label="Settings navigation"
