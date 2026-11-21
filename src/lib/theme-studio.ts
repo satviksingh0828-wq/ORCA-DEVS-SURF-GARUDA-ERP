@@ -21,7 +21,7 @@ export const THEME_PRESETS = [
 ] as const;
 
 export type ThemeModule = "erp" | "ltms" | "wms" | "hrms" | "accounts";
-export type ThemeColors = Partial<Record<"primary" | "background" | "foreground" | "card" | "border", string>>;
+export type ThemeColors = Partial<Record<"primary" | "primaryForeground" | "background" | "foreground" | "card" | "cardForeground" | "secondary" | "secondaryForeground" | "muted" | "mutedForeground" | "popover" | "popoverForeground" | "border" | "input" | "ring" | "sidebar" | "sidebarForeground" | "sidebarCard" | "sidebarAccent" | "sidebarAccentForeground" | "sidebarBorder" | "wmsAccent", string>>;
 export type ThemeProfile = {
   version: 2;
   baseTheme: string;
@@ -41,7 +41,7 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
 };
 
 const MODULES: ThemeModule[] = ["erp", "ltms", "wms", "hrms", "accounts"];
-const COLOR_FIELDS = ["primary", "background", "foreground", "card", "border"] as const;
+const COLOR_FIELDS = ["primary","primaryForeground","background","foreground","card","cardForeground","secondary","secondaryForeground","muted","mutedForeground","popover","popoverForeground","border","input","ring","sidebar","sidebarForeground","sidebarCard","sidebarAccent","sidebarAccentForeground","sidebarBorder","wmsAccent"] as const;
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const DARK_THEME_IDS = new Set(["neon", "midnight", "forest", "storm"]);
 
@@ -107,36 +107,54 @@ export function getModuleTheme(profile: ThemeProfile, module: ThemeModule): stri
   return profile.modules[module] || profile.baseTheme;
 }
 
-const ROOT_OVERRIDES = [
-  "--primary", "--primary-soft", "--primary-glow", "--ring", "--sidebar-primary",
-  "--background", "--foreground", "--card", "--card-foreground",
-  "--popover", "--popover-foreground", "--border", "--input", "--radius",
-] as const;
+/** CSS custom-property map; includes both Tailwind semantic tokens and legacy Sentry/LTMS chrome. */
+const COLOR_TOKENS: Record<keyof ThemeColors, readonly string[]> = {
+  primary: ["--primary", "--primary-soft", "--primary-glow"],
+  primaryForeground: ["--primary-foreground"],
+  background: ["--background", "--ltms-surface"],
+  foreground: ["--foreground", "--ltms-content-text"],
+  card: ["--card", "--popover"],
+  cardForeground: ["--card-foreground"],
+  secondary: ["--secondary"],
+  secondaryForeground: ["--secondary-foreground"],
+  muted: ["--muted"],
+  mutedForeground: ["--muted-foreground"],
+  popover: ["--popover"],
+  popoverForeground: ["--popover-foreground"],
+  border: ["--border"],
+  input: ["--input"],
+  ring: ["--ring"],
+  sidebar: ["--sidebar", "--ltms-chrome", "--wms-chrome"],
+  sidebarForeground: ["--sidebar-foreground", "--ltms-chrome-text", "--wms-chrome-text"],
+  sidebarCard: ["--ltms-chrome-card", "--wms-chrome-card"],
+  sidebarAccent: ["--sidebar-accent", "--ltms-chrome-accent", "--wms-copper", "--ltms-branded"],
+  sidebarAccentForeground: ["--sidebar-accent-foreground"],
+  sidebarBorder: ["--sidebar-border"],
+  wmsAccent: ["--wms-accent-override"],
+};
+const ROOT_OVERRIDES = [...new Set(Object.values(COLOR_TOKENS).flat().concat([
+  "--sidebar-primary", "--sidebar-primary-foreground",
+]))];
 
 export function themeInlineStyles(profile: ThemeProfile): Record<string, string> {
   const result: Record<string, string> = {};
-  const { primary, background, foreground, card, border } = profile.colors;
-  if (primary) {
-    result["--primary"] = primary;
-    result["--primary-soft"] = `color-mix(in oklch, ${primary} 14%, var(--card))`;
-    result["--primary-glow"] = `color-mix(in oklch, ${primary} 65%, white)`;
-    result["--ring"] = primary;
-    result["--sidebar-primary"] = primary;
+  const colors = profile.colors;
+  for (const [key, value] of Object.entries(colors)) {
+    if (typeof value !== "string" || !HEX_COLOR.test(value)) continue;
+    for (const token of COLOR_TOKENS[key as keyof ThemeColors] ?? []) {
+      if (token === "--primary-soft") result[token] = `color-mix(in oklch, ${value} 14%, var(--card))`;
+      else if (token === "--primary-glow") result[token] = `color-mix(in oklch, ${value} 65%, white)`;
+      else result[token] = value;
+    }
   }
-  if (background) result["--background"] = background;
-  if (foreground) {
-    result["--foreground"] = foreground;
-    result["--card-foreground"] = foreground;
-    result["--popover-foreground"] = foreground;
+  if (colors.primary && !colors.ring) result["--ring"] = colors.primary;
+  if (colors.primary && !colors.sidebarAccent) result["--sidebar-primary"] = colors.primary;
+  if (colors.primaryForeground && !colors.sidebarAccentForeground) {
+    result["--sidebar-primary-foreground"] = colors.primaryForeground;
   }
-  if (card) {
-    result["--card"] = card;
-    result["--popover"] = card;
-  }
-  if (border) {
-    result["--border"] = border;
-    result["--input"] = border;
-  }
+  if (colors.foreground && !colors.cardForeground) result["--card-foreground"] = colors.foreground;
+  if (colors.foreground && !colors.popoverForeground) result["--popover-foreground"] = colors.foreground;
+  if (colors.border && !colors.input) result["--input"] = colors.border;
   if (profile.radius !== null) result["--radius"] = profile.radius + "px";
   return result;
 }
@@ -148,6 +166,6 @@ export function applyThemeProfile(profile: ThemeProfile): void {
   root.dataset.density = profile.density;
   root.classList.toggle("dark", isDarkTheme(profile.baseTheme));
   for (const name of ROOT_OVERRIDES) root.style.removeProperty(name);
+  root.style.removeProperty("--radius");
   for (const [key, value] of Object.entries(themeInlineStyles(profile))) root.style.setProperty(key, value);
-
 }
