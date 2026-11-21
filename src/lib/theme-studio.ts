@@ -175,7 +175,9 @@ export function applyThemeProfile(profile: ThemeProfile): void {
   const root = document.documentElement;
   root.dataset.theme = profile.baseTheme;
   root.dataset.density = profile.density;
-  root.classList.toggle("dark", isDarkTheme(profile.baseTheme));
+  const routeTheme = typeof window === "undefined" ? profile.baseTheme :
+    getModuleTheme(profile, themeModuleForPath(window.location.pathname));
+  root.classList.toggle("dark", isDarkTheme(routeTheme));
   for (const name of ROOT_OVERRIDES) root.style.removeProperty(name);
   root.style.removeProperty("--radius");
   for (const [key, value] of Object.entries(themeInlineStyles(profile))) root.style.setProperty(key, value);
