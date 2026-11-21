@@ -4,8 +4,6 @@
 import { Link, useRouterState } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { reportActiveVideoTab } from "@/lib/video-tabs";
-import { useEffect } from "react";
-import { reportActiveVideoTab } from "@/lib/video-tabs";
 import { SharedSidebar } from "@/components/SharedSidebar";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
@@ -210,10 +208,6 @@ export function LtmsSidebar({
   }, [pathname, selectedVideoTab]);
   const groups = customGroups ?? visibleGroups(user?.role);
   const isCustom = Boolean(customGroups);
-  useEffect(() => {
-    if (!section || !activeTabId) return;
-    return reportActiveVideoTab(`ltms:${section}:${activeTabId}`);
-  }, [section, activeTabId]);
   return (
     <>
       <SharedSidebar open={open} width="192px" label={label} className="ltms-reference-sidebar">
