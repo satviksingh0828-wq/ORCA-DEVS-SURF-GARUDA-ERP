@@ -1407,6 +1407,13 @@ html[data-video-background="on"] .wms-embedded-scope :is(.card, .panel, .modal, 
   }
 }
 
+/* The ERP WMS Settings page already identifies the active section; avoid
+   rendering the generic "Settings" heading twice. Embedded only: standalone
+   Sentry keeps its normal Settings heading and all section titles. */
+.wms-settings-embedded[data-hide-generic-heading="true"] .page-header {
+  display: none;
+}
+
 /* ORCA WMS Settings theme boundary: preserve native ERP layout and use
    semantic colours in every legacy WMS component. */
 .wms-native-theme-scope {
