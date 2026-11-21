@@ -22,7 +22,7 @@ import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
 import { useTheme } from "@/lib/theme";
 import { useCurrentVideoTab, videoEnabledForTab } from "@/lib/video-tabs";
-import { isDarkTheme, themeInlineStyles, themeModuleForPath } from "@/lib/theme-studio";
+import { isDarkTheme, moduleThemeInlineStyles, themeModuleForPath, type ThemeModule } from "@/lib/theme-studio";
 
 function ChangePasswordDialog({
   open,
@@ -153,6 +153,7 @@ export function AppShell({
   headerEnd,
   mainClassName,
   variant = "default",
+  themeModule,
   shellTitle = "LTMS",
   showSidebarToggle = true,
 }: {
@@ -165,6 +166,8 @@ export function AppShell({
   headerEnd?: ReactNode;
   mainClassName?: string;
   variant?: "default" | "ltms";
+  /** Explicit module for embedded views sharing a parent route. */
+  themeModule?: ThemeModule;
   shellTitle?: string;
   showSidebarToggle?: boolean;
 }) {
@@ -175,7 +178,7 @@ export function AppShell({
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const videoTab = useCurrentVideoTab(pathname);
   const showBackgroundVideo = backgroundVideoEnabled && videoEnabledForTab(profile.videoTabs, videoTab) && profile.videoPlayback.backgroundMode !== "blank";
-  const currentModule = themeModuleForPath(pathname);
+  const currentModule = themeModule ?? themeModuleForPath(pathname);
   const appearanceTheme = resolveModuleTheme(currentModule);
   // Tailwind's dark variant also checks the html class. Keep it aligned
   // with this route's effective module, including light-on-dark overrides.
@@ -253,7 +256,7 @@ export function AppShell({
       data-video-background={showBackgroundVideo ? "on" : "off"}
       style={
         {
-          ...themeInlineStyles(profile),
+          ...moduleThemeInlineStyles(profile, currentModule),
         } as CSSProperties
       }
       className={cn(
