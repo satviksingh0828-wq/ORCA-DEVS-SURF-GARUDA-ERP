@@ -441,13 +441,7 @@ export function ManifestList() {
     );
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold">Manifest</h2>
-          <p className="text-sm text-muted-foreground">
-            Create branch manifests and link each LR to one manifest or one trip.
-          </p>
-        </div>
+      <div className="flex flex-wrap justify-end gap-3">
         <Button onClick={openCreate}>
           <Plus className="mr-2 size-4" />
           Create Manifest
