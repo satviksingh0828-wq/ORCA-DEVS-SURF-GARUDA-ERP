@@ -1,7 +1,7 @@
 name: Validate ORCA Theme Engine
 on:
   push:
-    branches: [feature/orca-theme-studio-v2, fix/appearance-video-sidebar-v3, fix/video-per-tab-footer-theme, fix/universal-video-modes-no-fallback, fix/wms-settings-theme-coverage, main]
+    branches: [feature/orca-theme-studio-v2, fix/appearance-video-sidebar-v3, fix/video-per-tab-footer-theme, fix/universal-video-modes-no-fallback, fix/wms-settings-theme-coverage, fix/clean-duplicate-page-headings, main]
   pull_request:
     branches: [main]
 permissions:
@@ -20,5 +20,7 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Theme unit tests
         run: node --test --experimental-strip-types test/theme-studio.test.ts
+      - name: Page heading regression tests
+        run: node --test test/ui-page-headings.test.mjs
       - name: Build
         run: npm run build
