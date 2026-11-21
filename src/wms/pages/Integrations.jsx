@@ -155,7 +155,7 @@ export default function Integrations() {
           Connect Sentry to external ERPs and commerce platforms. Credentials are encrypted at rest and scoped per warehouse.
         </p>
         {connectors.length === 0 ? (
-          <p style={{ color: '#666', fontSize: 14 }}>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 14 }}>
             No connectors registered. Drop a connector module into{' '}
             <span className="mono">api/connectors/</span> and restart the API to make it
             available here. See the <a href="https://hightower-systems.github.io/sentry-wms/connectors/" target="_blank" rel="noopener noreferrer">connector framework guide</a>.
@@ -177,7 +177,7 @@ export default function Integrations() {
         {selectedConnector && (
           <div style={{ border: '1px solid var(--border)', borderRadius: 8, padding: 16, background: 'var(--card-bg)' }}>
             <h4 style={{ marginTop: 0 }}>{selectedConnector.name}</h4>
-            <p style={{ fontSize: 12, color: '#666' }}>
+            <p style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
               Capabilities: {selectedConnector.capabilities.join(', ')}
             </p>
 
@@ -225,9 +225,9 @@ export default function Integrations() {
                         }}
                       />
                       <strong style={{ minWidth: 90, textTransform: 'capitalize' }}>{syncType}</strong>
-                      <span style={{ color: '#666', flex: 1 }}>{label}</span>
+                      <span style={{ color: 'var(--text-secondary)', flex: 1 }}>{label}</span>
                       {state?.last_synced_at && (
-                        <span style={{ color: '#999', fontSize: 11 }}>
+                        <span style={{ color: 'var(--text-tertiary)', fontSize: 11 }}>
                           Last: {new Date(state.last_synced_at).toLocaleString()}
                         </span>
                       )}
