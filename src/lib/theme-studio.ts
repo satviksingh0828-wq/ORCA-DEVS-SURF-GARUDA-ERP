@@ -27,6 +27,8 @@ export type ThemeProfile = {
   baseTheme: string;
   modules: Partial<Record<ThemeModule, string>>;
   colors: ThemeColors;
+  /** Explicit per-tab video choices; absent keys use the secure default policy. */
+  videoTabs: Record<string, boolean>;
   density: "comfortable" | "compact";
   radius: number | null;
 };
@@ -36,6 +38,7 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
   baseTheme: "garuda",
   modules: {},
   colors: {},
+  videoTabs: {},
   density: "comfortable",
   radius: null,
 };
@@ -68,11 +71,18 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
     const value = rawColors[key];
     if (typeof value === "string" && HEX_COLOR.test(value)) colors[key] = value;
   }
+  const rawVideoTabs = source.videoTabs && typeof source.videoTabs === "object" && !Array.isArray(source.videoTabs)
+    ? source.videoTabs as Record<string, unknown> : {};
+  const videoTabs: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(rawVideoTabs).slice(0, 80)) {
+    if (/^[a-z0-9:/_-]{1,96}$/.test(key) && typeof value === "boolean") videoTabs[key] = value;
+  }
   return {
     version: 2,
     baseTheme,
     modules,
     colors,
+    videoTabs,
     density: source.density === "compact" ? "compact" : "comfortable",
     radius: typeof source.radius === "number" && Number.isFinite(source.radius)
       ? Math.max(0, Math.min(24, source.radius))
@@ -96,6 +106,7 @@ export function parseThemeProfile(raw: unknown, allowed: ReadonlySet<string>): T
 export function serializeThemeProfile(profile: ThemeProfile): string {
   if (Object.keys(profile.modules).length === 0 &&
       Object.keys(profile.colors).length === 0 &&
+      Object.keys(profile.videoTabs ?? {}).length === 0 &&
       profile.density === "comfortable" && profile.radius === null) {
     // Preserve compatibility with previous versions when no v2 customization is used.
     return profile.baseTheme;
