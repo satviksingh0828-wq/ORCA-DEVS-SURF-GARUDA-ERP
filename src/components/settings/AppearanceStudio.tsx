@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ChangeEvent, type CSSPropert
 import { Check, Download, Layers3, Loader2, Palette, RotateCcw, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { THEMES, useTheme } from "@/lib/theme";
+import { VIDEO_TAB_GROUPS, videoEnabledForTab } from "@/lib/video-tabs";
 import {
   DEFAULT_THEME_PROFILE,
   THEME_PRESETS,
@@ -54,6 +55,28 @@ const COLOR_GROUPS: Array<{
       { key: "wmsAccent", label: "WMS action accent" },
     ],
   },
+  {
+    title: "Text displayed directly over video",
+    description: "Choose readable headings, captions, buttons, labels and links without blurring the footage.",
+    fields: [
+      { key: "videoHeading", label: "Video headings" },
+      { key: "videoText", label: "Video body text" },
+      { key: "videoMutedText", label: "Video captions / secondary text" },
+      { key: "videoLink", label: "Links over footage" },
+      { key: "videoLabel", label: "Labels / icons over footage" },
+      { key: "videoPanelBackground", label: "Video form panel background" },
+      { key: "videoPanelText", label: "Text inside video form panels" },
+    ],
+  },
+  {
+    title: "Footer and credits",
+    description: "Theme the login, Home and passkey footers and the Powered by ORCA credit text.",
+    fields: [
+      { key: "footerBackground", label: "Footer background" },
+      { key: "footerForeground", label: "Footer text / links" },
+      { key: "footerAccent", label: "Footer top border" },
+    ],
+  },
 ];
 const themeNames = new Map<string, string>(THEMES.map((item) => [item.id, item.label]));
 const allowedThemes = new Set(THEMES.map((item) => item.id));
@@ -84,6 +107,10 @@ function currentColor(theme: ThemeProfile, key: keyof ThemeColors): string {
     sidebarAccent: accent, sidebarAccentForeground: "#ffffff",
     sidebarBorder: dark ? "#364355" : "#4e4841",
     wmsAccent: accent,
+    videoHeading: "#FFFFFF", videoText: "#FFFFFF", videoMutedText: "#E2E8F0",
+    videoLink: "#B8E2FF", videoLabel: "#FFFFFF",
+    videoPanelBackground: card, videoPanelText: fg,
+    footerBackground: sidebar, footerForeground: "#FDF4E3", footerAccent: accent,
   };
   return defaults[key];
 }
@@ -99,7 +126,7 @@ function contrast(first: string, second: string) {
 }
 
 export function AppearanceStudio() {
-  const { profile, updateProfile, saving, ready } = useTheme();
+  const { profile, updateProfile, saving, ready, backgroundVideoUrl, backgroundVideoEnabled } = useTheme();
   const [draft, setDraft] = useState<ThemeProfile>(profile);
   const fileRef = useRef<HTMLInputElement>(null);
   useEffect(() => setDraft(profile), [profile]);
@@ -120,6 +147,22 @@ export function AppearanceStudio() {
   const sidebarReadability = contrast(preview.sidebarForeground, preview.sidebar);
   const accessible = readability >= 4.5 && cardReadability >= 4.5 && sidebarReadability >= 4.5;
   const activeName = themeNames.get(draft.baseTheme) ?? "Current ORCA";
+  const enabledVideoTabs = VIDEO_TAB_GROUPS.flatMap((group) => group.options)
+    .filter((option) => videoEnabledForTab(draft.videoTabs, option.key)).length;
+  const getVideoColor = (key: keyof ThemeColors) => draft.colors[key] ?? currentColor(draft, key);
+  const previewVideoTextStyle = {
+    textShadow: draft.videoTextShadow === "none" ? "none"
+      : draft.videoTextShadow === "strong"
+        ? "0 2px 4px rgba(0,0,0,.92), 0 0 10px rgba(0,0,0,.56)"
+        : "0 1px 3px rgba(0,0,0,.82)",
+    fontWeight: draft.videoTextWeight === "bold" ? 700 : draft.videoTextWeight === "regular" ? 400 : 500,
+  } as const;
+  function setVideoTab(key: string, enabled: boolean) {
+    setDraft((current) => ({
+      ...current,
+      videoTabs: { ...current.videoTabs, [key]: enabled },
+    }));
+  }
 
   async function save() {
     try {
@@ -252,6 +295,59 @@ export function AppearanceStudio() {
       </section>
 
       <section className="surface-card p-5 sm:p-6">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold">Background video per tab</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Video is on only for Home, Login and passkey verification by default.
+              Every LTMS, ERP and Sentry/WMS tab is off until you enable it below.
+              The master video switch and video URL remain in Workspace background video.
+            </p>
+          </div>
+          <span className="rounded-lg border border-border px-3 py-1.5 text-xs text-muted-foreground">
+            {enabledVideoTabs} enabled · {backgroundVideoEnabled ? "Master video on" : "Master video off"}
+          </span>
+        </div>
+        <div className="mt-4 space-y-3">
+          {VIDEO_TAB_GROUPS.map((group, index) => (
+            <details key={group.title} open={index === 0 ? true : undefined} className="group rounded-xl border border-border bg-muted/10">
+              <summary className="cursor-pointer select-none px-4 py-3 text-sm font-semibold">{group.title}
+                <span className="ml-2 text-xs font-normal text-muted-foreground">
+                  {group.options.filter((item) => videoEnabledForTab(draft.videoTabs, item.key)).length}/{group.options.length} on
+                </span>
+              </summary>
+              <div className="border-t border-border p-3">
+                <div className="mb-3 flex flex-wrap gap-2">
+                  <button type="button" className="rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+                    onClick={() => setDraft((current) => ({
+                      ...current,
+                      videoTabs: { ...current.videoTabs, ...Object.fromEntries(group.options.map((item) => [item.key, true])) },
+                    }))}>Enable all in group</button>
+                  <button type="button" className="rounded-md border border-border bg-card px-3 py-1.5 text-xs hover:bg-muted"
+                    onClick={() => setDraft((current) => ({
+                      ...current,
+                      videoTabs: { ...current.videoTabs, ...Object.fromEntries(group.options.map((item) => [item.key, false])) },
+                    }))}>Disable all in group</button>
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                  {group.options.map((option) => (
+                    <label key={option.key} className="flex cursor-pointer items-center justify-between gap-2 rounded-lg border border-border bg-card px-3 py-2.5 text-xs">
+                      <span>{option.label}</span>
+                      <input type="checkbox" className="size-4 shrink-0 accent-primary"
+                        checked={videoEnabledForTab(draft.videoTabs, option.key)}
+                        onChange={(event) => setVideoTab(option.key, event.target.checked)}
+                        aria-label={`Show background video in ${option.label}`}/>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </details>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">Print pages and secure sharing screens never play background video. New tabs inherit their section setting or remain off until selected.</p>
+      </section>
+
+      <section className="surface-card p-5 sm:p-6">
         <h3 className="text-sm font-semibold">Customise your selected theme</h3>
         <p className="mb-4 mt-1 text-xs text-muted-foreground">Optional colour overrides. Unset fields inherit the preset and original semantics.</p>
         <div className="space-y-4">
@@ -311,6 +407,49 @@ export function AppearanceStudio() {
             <button type="button" onClick={() => setDraft((prev) => ({ ...prev, radius: null }))} className="self-start text-xs text-muted-foreground hover:text-foreground">Use preset rounding</button>
           </label>
         </div>
+      </section>
+
+      <section className="surface-card p-5 sm:p-6">
+        <h3 className="text-sm font-semibold">Video text and readability</h3>
+        <p className="mt-1 text-xs text-muted-foreground">These settings affect text outside of cards, direct video labels and your sign-in video panels. No backdrop blur is used.</p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <label className="flex flex-col gap-2 text-xs font-medium">Text shadow for moving footage
+            <select className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground"
+              value={draft.videoTextShadow}
+              onChange={(event) => setDraft((prev) => ({ ...prev, videoTextShadow: event.target.value as ThemeProfile["videoTextShadow"] }))}>
+              <option value="none">None (unobstructed)</option>
+              <option value="subtle">Subtle (recommended)</option>
+              <option value="strong">Strong (maximum readability)</option>
+            </select>
+          </label>
+          <label className="flex flex-col gap-2 text-xs font-medium">Text weight over video
+            <select className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground"
+              value={draft.videoTextWeight}
+              onChange={(event) => setDraft((prev) => ({ ...prev, videoTextWeight: event.target.value as ThemeProfile["videoTextWeight"] }))}>
+              <option value="regular">Regular</option>
+              <option value="medium">Medium (recommended)</option>
+              <option value="bold">Bold</option>
+            </select>
+          </label>
+        </div>
+        <div className="relative mt-4 min-h-[240px] overflow-hidden rounded-xl bg-slate-800">
+          <video src={backgroundVideoUrl} autoPlay muted loop playsInline preload="metadata" aria-hidden="true" className="absolute inset-0 size-full object-cover"/>
+          <div className="relative z-10 flex min-h-[240px] flex-col items-start justify-between gap-3 p-5">
+            <div style={previewVideoTextStyle}>
+              <p className="text-xs" style={{ color: getVideoColor("videoLabel") }}>GARUDA · VIDEO TEXT PREVIEW</p>
+              <h4 className="mt-1 text-xl" style={{ color: getVideoColor("videoHeading") }}>Logistics workspace</h4>
+              <p className="mt-2 text-sm" style={{ color: getVideoColor("videoText") }}>Direct text remains readable over moving footage.</p>
+              <p className="mt-1 text-xs" style={{ color: getVideoColor("videoMutedText") }}>Text, labels and video remain unblurred.</p>
+              <span className="mt-2 inline-block text-sm underline" style={{ color: getVideoColor("videoLink") }}>Open workspace</span>
+            </div>
+            <div className="rounded-lg border px-3 py-2 text-xs" style={{
+              background: getVideoColor("videoPanelBackground"),
+              color: getVideoColor("videoPanelText"),
+              borderColor: getVideoColor("footerAccent"),
+            }}>Readable form panel · no backdrop blur</div>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">Contrast can vary frame by frame; test against both bright and dark footage. Strong text shadow changes lettering only, not video sharpness.</p>
       </section>
 
       <section className="surface-card p-5 sm:p-6">
