@@ -82,7 +82,6 @@ type GateState =
 function Screen({ children }: { children: ReactNode }) {
   const { profile } = useTheme();
   useEffect(() => reportActiveVideoTab("passkey"), []);
-  useEffect(() => reportActiveVideoTab("passkey"), []);
   return (
     <div data-theme={profile.baseTheme} data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined} style={themeInlineStyles(profile)} className="auth-abstract-background ltms-app-shell relative isolate flex min-h-screen flex-col bg-background text-foreground">
       <header className="ltms-app-shell-header z-10 flex h-14 shrink-0 items-center border-b-2">
