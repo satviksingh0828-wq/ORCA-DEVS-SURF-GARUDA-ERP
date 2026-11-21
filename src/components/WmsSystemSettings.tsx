@@ -59,7 +59,7 @@ function WmsSystemSettingsInner({ activeTabId }: { activeTabId: string }) {
 
   return (
     <div className="min-w-0">
-      <div className="wms-settings-embedded">
+      <div className="wms-settings-embedded" data-hide-generic-heading={activeTabId === "settings" ? "true" : undefined}>
         <ActivePage />
       </div>
     </div>
