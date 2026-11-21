@@ -97,7 +97,7 @@ const ALL_TABS = [
     icon: MapPin,
     adminOnly: true,
   },
-  { id: "contract", label: "Sources", desc: "Rates & slabs", icon: FileText, adminOnly: true },
+  { id: "contract", label: "Sources", desc: "Freight sources, rate slabs and route-wise entries", icon: FileText, adminOnly: true },
   {
     id: "package-rate",
     label: "Package Rate",
@@ -108,14 +108,14 @@ const ALL_TABS = [
   {
     id: "consignor",
     label: "Consignor",
-    desc: "From-party GSTIN master",
+    desc: "GSTIN and branch-indexed consignor details for E-Way Bills and shipments",
     icon: Building2,
     adminOnly: false,
   },
   {
     id: "consignee",
     label: "Consignee",
-    desc: "To-party GSTIN master",
+    desc: "GSTIN and branch-indexed consignee details for E-Way Bills and shipments",
     icon: Building2,
     adminOnly: false,
   },
@@ -251,6 +251,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
           </header>
           {safeTab === "vehicle" ? (
             <MasterList
+              embedded
               config={VEHICLE_CONFIG}
               renderExtraEditSections={
                 isAdmin
@@ -272,8 +273,8 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
               }
             />
           ) : null}
-          {safeTab === "driver" ? <MasterList config={DRIVER_CONFIG} /> : null}
-          {safeTab === "transporter" ? <MasterList config={TRANSPORTER_CONFIG} /> : null}
+          {safeTab === "driver" ? <MasterList embedded config={DRIVER_CONFIG} /> : null}
+          {safeTab === "transporter" ? <MasterList embedded config={TRANSPORTER_CONFIG} /> : null}
           {safeTab === "ltms-transporter" ? (
             openTransporter ? (
               <TransporterEntries
@@ -282,6 +283,7 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
               />
             ) : (
               <MasterList
+                embedded
                 config={LTMS_TRANSPORTER_CONFIG}
                 renderRowActions={(row) => (
                   <Button
@@ -301,13 +303,13 @@ export function MastersPage({ ltmsMode = false }: { ltmsMode?: boolean } = {}) {
               />
             )
           ) : null}
-          {safeTab === "rental" ? <MasterList config={RENTAL_CONFIG} /> : null}
-          {safeTab === "delivery-partner" ? <MasterList config={DELIVERY_PARTNER_CONFIG} /> : null}
-          {safeTab === "location" ? <MasterList config={LOCATION_CONFIG} /> : null}
-          {safeTab === "contract" ? <Contracts /> : null}
+          {safeTab === "rental" ? <MasterList embedded config={RENTAL_CONFIG} /> : null}
+          {safeTab === "delivery-partner" ? <MasterList embedded config={DELIVERY_PARTNER_CONFIG} /> : null}
+          {safeTab === "location" ? <MasterList embedded config={LOCATION_CONFIG} /> : null}
+          {safeTab === "contract" ? <Contracts embedded /> : null}
           {safeTab === "package-rate" ? <PackageRates /> : null}
-          {safeTab === "consignor" ? <PartyMaster partyType="consignor" /> : null}
-          {safeTab === "consignee" ? <PartyMaster partyType="consignee" /> : null}
+          {safeTab === "consignor" ? <PartyMaster embedded partyType="consignor" /> : null}
+          {safeTab === "consignee" ? <PartyMaster embedded partyType="consignee" /> : null}
         </div>
       </div>
     </AppShell>
