@@ -9,7 +9,7 @@ import {
   HeadContent,
   Scripts,
 } from "@tanstack/react-router";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
 import { createIdbPersister } from "../lib/query-persist";
 import { initSecurity } from "../lib/security";
@@ -315,6 +315,8 @@ function RootComponent() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const { ready: themeReady } = useTheme();
   const [showEntrySplash, setShowEntrySplash] = useState(pathname === "/");
+  // Stable callback: theme hydration must not restart the existing splash animation.
+  const dismissSplash = useCallback(() => setShowEntrySplash(false), []);
   useEffect(() => {
     setShowEntrySplash(pathname === "/");
   }, [pathname]);
@@ -329,7 +331,7 @@ function RootComponent() {
 
   return (
     <>
-      {showEntrySplash && <SplashScreen onComplete={() => setShowEntrySplash(false)} />}
+      {showEntrySplash && <SplashScreen onComplete={dismissSplash} />}
       <PersistQueryClientProvider
         client={queryClient}
         persistOptions={{
