@@ -49,7 +49,7 @@ const empty = (): Omit<Party, "id" | "party_type"> => ({
   state: "",
 });
 
-export function PartyMaster({ partyType }: { partyType: PartyType }) {
+export function PartyMaster({ partyType, embedded = false }: { partyType: PartyType; embedded?: boolean }) {
   const { user } = useSession();
   // The repository's generated Supabase types predate the party_masters migration.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -164,14 +164,16 @@ export function PartyMaster({ partyType }: { partyType: PartyType }) {
 
   return (
     <div className="space-y-5 animate-fade-up">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">
-            GSTIN and branch-indexed {title.toLowerCase()} details used by E-Way Bills and manual
-            shipments.
-          </p>
-        </div>
+      <div className={`flex flex-wrap items-center gap-4 ${embedded ? "justify-end" : "justify-between"}`}>
+        {!embedded && (
+          <div>
+            <h2 className="text-lg font-semibold">{title}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              GSTIN and branch-indexed {title.toLowerCase()} details used by E-Way Bills and manual
+              shipments.
+            </p>
+          </div>
+        )}
         <Button
           onClick={() =>
             setEditing({ party_type: partyType, ...empty(), branch_id: branchId } as Party)
