@@ -58,8 +58,10 @@ export function WorkspaceBackgroundVideo() {
     const video = videoRef.current;
     if (!video) return;
     video.playbackRate = settings.playbackRate;
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
     const sync = () => {
-      if (paused || (settings.pauseWhenHidden && document.hidden)) {
+      const reduceMotionPause = settings.respectReducedMotion && devicePause === null && reducedMotion.matches;
+      if (paused || (settings.pauseWhenHidden && document.hidden) || reduceMotionPause) {
         video.pause();
       } else {
         void video.play().catch(() => setPlaying(false));
@@ -67,11 +69,13 @@ export function WorkspaceBackgroundVideo() {
     };
     sync();
     document.addEventListener("visibilitychange", sync);
+    reducedMotion.addEventListener?.("change", sync);
     return () => {
       document.removeEventListener("visibilitychange", sync);
+      reducedMotion.removeEventListener?.("change", sync);
       video.pause();
     };
-  }, [showVideo, paused, settings.playbackRate, settings.pauseWhenHidden, ready]);
+  }, [showVideo, paused, settings.playbackRate, settings.pauseWhenHidden, settings.respectReducedMotion, ready, devicePause]);
 
   function setPausedByUser(next: boolean) {
     setDevicePause(next);
@@ -92,13 +96,14 @@ export function WorkspaceBackgroundVideo() {
         src={backgroundVideoUrl}
         poster="/garuda-banner.webp"
         muted
-        loop
+        loop={settings.loopVideo}
         playsInline
-        preload="auto"
+        preload={paused ? "metadata" : "auto"}
         aria-hidden="true"
         onCanPlay={() => { setReady(true); setFailed(false); }}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
+        onEnded={() => setPlaying(false)}
         onError={() => { setFailed(true); setReady(false); setPlaying(false); }}
       />
       <div className="video-background-veil background-video-veil-layer" aria-hidden="true" />
@@ -107,7 +112,13 @@ export function WorkspaceBackgroundVideo() {
           <button type="button" className="workspace-video-control-button"
             aria-label={playing ? "Pause background video" : "Resume background video"}
             title={playing ? "Pause background video" : "Resume background video"}
-            onClick={() => setPausedByUser(!paused)}>
+            onClick={() => {
+              if (playing) setPausedByUser(true);
+              else {
+                setPausedByUser(false);
+                void videoRef.current?.play().catch(() => setPlaying(false));
+              }
+            }}>
             {playing ? <Pause size={16} aria-hidden="true"/> : <Play size={16} aria-hidden="true"/>}
             <span>{playing ? "Pause" : "Play"}</span>
           </button>
