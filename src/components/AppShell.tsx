@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "@tanstack/react-router";
+import { Link, useNavigate, useRouterState } from "@tanstack/react-router";
 import { LogOut, PanelLeftClose, PanelLeftOpen, Server, ShieldCheck, User } from "lucide-react";
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useSession } from "@/lib/session";
@@ -21,6 +21,7 @@ import { MobileAppDownloads } from "@/components/MobileAppDownloads";
 import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
 import { useTheme } from "@/lib/theme";
+import { isDarkTheme, type ThemeModule } from "@/lib/theme-studio";
 
 let sharedBackgroundVideo: HTMLVideoElement | null = null;
 let sharedBackgroundVeil: HTMLDivElement | null = null;
@@ -207,7 +208,10 @@ export function AppShell({
   const { signOut, user } = useSession();
   const navigate = useNavigate();
   const { open, expanded } = useOrcaAI();
-  const { theme, backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
+  const { profile, resolveModuleTheme, backgroundVideoEnabled, backgroundVideoUrl, videoGlassAppearance } = useTheme();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const currentModule: ThemeModule = pathname.startsWith("/wms") ? "wms" : pathname.startsWith("/ltms") ? "ltms" : pathname.startsWith("/accounts") ? "accounts" : /^(\/hrms|\/hr-|\/employees|\/payroll|\/attendance)/.test(pathname) ? "hrms" : "erp";
+  const appearanceTheme = resolveModuleTheme(currentModule);
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
   const displayName = user?.fullName ?? user?.username ?? "User";
@@ -325,6 +329,8 @@ export function AppShell({
 
   return (
     <div
+      data-theme={appearanceTheme}
+      data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined}
       data-video-background={backgroundVideoEnabled ? "on" : "off"}
       style={
         {
@@ -335,6 +341,7 @@ export function AppShell({
       }
       className={cn(
         "relative flex h-screen flex-col overflow-hidden transition-all duration-300",
+        isDarkTheme(appearanceTheme) ? "dark" : "",
         backgroundVideoEnabled ? "bg-transparent" : "bg-background",
         user && open && !expanded && variant !== "ltms" ? "lg:mr-[360px]" : "",
         variant === "ltms" ? "ltms-app-shell" : "",
@@ -356,10 +363,7 @@ export function AppShell({
             <img
               src={
                 variant === "ltms" ||
-                theme === "neon" ||
-                theme === "midnight" ||
-                theme === "forest" ||
-                theme === "storm"
+                isDarkTheme(appearanceTheme)
                   ? "/garuda-logo.png"
                   : "/garuda-logo-light.png"
               }
