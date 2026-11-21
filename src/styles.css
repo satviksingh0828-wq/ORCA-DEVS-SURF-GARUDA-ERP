@@ -992,7 +992,7 @@ html[data-video-background="on"] {
 }
 .workspace-video-fallback {
   z-index: 0;
-  background: var(--background) url("/garuda-banner.webp") center / cover no-repeat;
+  background: var(--background);
 }
 .background-video-layer {
   z-index: 1;
