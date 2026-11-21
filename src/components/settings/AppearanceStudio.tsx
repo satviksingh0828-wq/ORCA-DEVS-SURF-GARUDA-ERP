@@ -27,7 +27,7 @@ const COLOR_FIELDS: Array<{ key: keyof ThemeColors; label: string }> = [
   { key: "card", label: "Cards / dialogs" },
   { key: "border", label: "Borders" },
 ];
-const themeNames = new Map(THEMES.map((item) => [item.id, item.label]));
+const themeNames = new Map<string, string>(THEMES.map((item) => [item.id, item.label]));
 const allowedThemes = new Set(THEMES.map((item) => item.id));
 const presetIds = new Set<string>(THEME_PRESETS.map((item) => item.id));
 
