@@ -1874,3 +1874,111 @@ html[data-video-background="on"] .ltms-shared-sidebar {
 @media print {
   .workspace-video-fallback { display: none !important; }
 }
+
+/* ORCA 2026: clear video overlay, configurable direct-text contrast and themed credit footers. */
+.orca-brand-footer {
+  background-color: var(--theme-footer-bg, var(--ltms-chrome, #2a2520));
+  border-color: var(--theme-footer-border, var(--ltms-chrome-accent, #b87333));
+  color: var(--theme-footer-text, var(--ltms-chrome-text, #fdf4e3));
+}
+.orca-brand-footer a { color: inherit; }
+.orca-brand-footer a:hover { color: inherit; opacity: 1; }
+.orca-brand-footer-logo { filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.28)); }
+
+/* No glass blur on video pages: keep the original moving footage perfectly sharp.
+   Opacity affects panels only; never blur the video or foreground text. */
+html[data-video-background="on"] :is(
+  .surface-card, .bg-card, .bg-popover, .bg-background, .bg-muted, .bg-secondary,
+  [data-slot="card"], [data-slot="dialog-content"],
+  .auth-abstract-background main > div > .bg-card,
+  header, header.sticky, input, textarea, select, [role="combobox"],
+  main .rounded-xl.border, main .rounded-lg.border:not(.border-dashed),
+  table thead, table tbody tr
+) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+html[data-video-background="on"] .auth-abstract-background :is(.surface-card, .bg-card, [data-slot="card"]) {
+  background: var(--video-panel-background, var(--card)) !important;
+  color: var(--video-panel-text, var(--foreground)) !important;
+}
+html[data-video-background="on"] .background-video-veil-layer {
+  background: rgb(0 0 0 / var(--video-dim-opacity, 0)) !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+/* Video-overlaid text is independent of the foreground colour used inside panels. */
+html[data-video-background="on"] .video-overlay-heading {
+  color: var(--video-heading, #fff);
+  text-shadow: var(--video-text-shadow, 0 1px 3px rgb(0 0 0 / 0.82));
+  font-weight: var(--video-text-weight, 500);
+}
+html[data-video-background="on"] .video-overlay-text {
+  color: var(--video-text, #fff);
+  text-shadow: var(--video-text-shadow, 0 1px 3px rgb(0 0 0 / 0.82));
+  font-weight: var(--video-text-weight, 500);
+}
+html[data-video-background="on"] .video-overlay-muted {
+  color: var(--video-muted-text, #e2e8f0);
+  text-shadow: var(--video-text-shadow, 0 1px 3px rgb(0 0 0 / 0.82));
+}
+html[data-video-background="on"] .video-overlay-label {
+  color: var(--video-label, #fff);
+  text-shadow: var(--video-text-shadow, 0 1px 3px rgb(0 0 0 / 0.82));
+  font-weight: var(--video-text-weight, 500);
+}
+html[data-video-background="on"] .video-overlay-link {
+  color: var(--video-link, #b8e2ff);
+  text-shadow: var(--video-text-shadow, 0 1px 3px rgb(0 0 0 / 0.82));
+}
+/* Login and passkey headers are themed containers, not direct video text. */
+html[data-video-background="on"] .auth-abstract-background .ltms-app-shell-header {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Small on-page playback controls. The original ORCA splash stays above these. */
+.workspace-video-controls {
+  position: fixed;
+  z-index: 28;
+  inset: auto 18px 18px auto;
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  padding: 5px 7px;
+  border: 1px solid rgb(255 255 255 / 0.32);
+  border-radius: 12px;
+  color: #fff;
+  background: rgb(15 23 42 / 0.83);
+  box-shadow: 0 2px 9px rgb(0 0 0 / 0.23);
+  font-size: 12px;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+.workspace-video-control-button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 30px;
+  border-radius: 7px;
+  padding: 4px 7px;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.workspace-video-control-button:hover, .workspace-video-control-button:focus-visible {
+  background: rgb(255 255 255 / 0.17);
+}
+.workspace-video-control-button:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+.workspace-video-speed { opacity: .82; padding: 0 3px; font-variant-numeric: tabular-nums; }
+@media (max-width: 480px) {
+  .workspace-video-controls { right: 9px; bottom: 9px; }
+}
+@media print {
+  .workspace-video-controls { display: none !important; }
+}
