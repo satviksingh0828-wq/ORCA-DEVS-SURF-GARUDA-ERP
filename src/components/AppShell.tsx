@@ -21,7 +21,7 @@ import { MobileAppDownloads } from "@/components/MobileAppDownloads";
 import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
 import { useTheme } from "@/lib/theme";
-import { isDarkTheme, type ThemeModule } from "@/lib/theme-studio";
+import { isDarkTheme, themeInlineStyles, type ThemeModule } from "@/lib/theme-studio";
 
 let sharedBackgroundVideo: HTMLVideoElement | null = null;
 let sharedBackgroundVeil: HTMLDivElement | null = null;
@@ -337,6 +337,7 @@ export function AppShell({
           "--video-glass-opacity": `${videoGlassAppearance.surfaceOpacity}%`,
           "--video-background-veil": `${videoGlassAppearance.backgroundVeil}%`,
           "--video-glass-text-color": videoGlassAppearance.textColor,
+          ...themeInlineStyles(profile),
         } as CSSProperties
       }
       className={cn(
