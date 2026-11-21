@@ -12,6 +12,13 @@ import {
   themeModuleForPath,
 } from "../src/lib/theme-studio.ts";
 
+import {
+  videoEnabledForTab,
+  videoTabFromPath,
+  videoTabFromWmsPath,
+  VIDEO_TAB_GROUPS,
+} from "../src/lib/video-tabs.ts";
+
 const allowed = new Set(["garuda", "sky", "ocean", "neon", "midnight", "forest", "storm"]);
 
 test("preserves the current app appearance as the initial default", () => {
@@ -108,4 +115,71 @@ test("every ERP route family gets the intended module theme", () => {
   assert.equal(themeModuleForPath("/wms"), "wms");
   assert.equal(themeModuleForPath("/home"), "erp");
   assert.equal(themeModuleForPath("/settings"), "erp");
+});
+
+
+test("background video defaults on only for Login, Home, and passkey", () => {
+  const defaults = {};
+  for (const key of ["login", "home", "passkey"]) {
+    assert.equal(videoEnabledForTab(defaults, key), true, key);
+  }
+  for (const key of ["settings:appearance", "settings:wms", "ltms:operations:trip", "wms:dashboard", "wms:inventory", "route:accounts"]) {
+    assert.equal(videoEnabledForTab(defaults, key), false, key);
+  }
+  assert.equal(videoTabFromPath("/"), "login");
+  assert.equal(videoTabFromPath("/home"), "home");
+  assert.equal(videoTabFromPath("/wms"), "wms:dashboard");
+  assert.equal(videoTabFromWmsPath("/data/bins"), "wms:data/bins");
+});
+
+test("video policy honours per-tab overrides and section inheritance", () => {
+  const overrides = { "ltms:operations": true, "ltms:operations:trip": false, "wms:inventory": true, login: false };
+  assert.equal(videoEnabledForTab(overrides, "ltms:operations:shipments"), true);
+  assert.equal(videoEnabledForTab(overrides, "ltms:operations:trip"), false);
+  assert.equal(videoEnabledForTab(overrides, "wms:inventory"), true);
+  assert.equal(videoEnabledForTab(overrides, "login"), false);
+  assert.equal(videoEnabledForTab(overrides, "wms:picking-batches"), false);
+  assert.ok(VIDEO_TAB_GROUPS.flatMap((group) => group.options).some((option) => option.key === "wms:inventory"));
+});
+
+test("advanced video options round-trip in existing Supabase theme column", () => {
+  const profile = normalizeThemeProfile({
+    baseTheme: "garuda",
+    videoTabs: { "wms:inventory": true, "ltms:operations:trip": false, home: true },
+    videoTextShadow: "strong",
+    videoTextWeight: "bold",
+    videoPlayback: {
+      startPaused: true,
+      playbackRate: 1.5,
+      pauseWhenHidden: false,
+      respectReducedMotion: true,
+      loopVideo: false,
+      showPauseButton: true,
+      videoDim: 12,
+    },
+    colors: { videoHeading: "#FFFFFF", footerBackground: "#F5F5F5", footerForeground: "#111111" },
+  }, allowed);
+  const saved = serializeThemeProfile(profile);
+  assert.ok(saved.startsWith("orca-theme-v2:"));
+  assert.deepEqual(parseThemeProfile(saved, allowed), profile);
+  assert.equal(profile.videoPlayback.startPaused, true);
+  assert.equal(profile.videoPlayback.playbackRate, 1.5);
+  assert.equal(profile.videoPlayback.videoDim, 12);
+});
+
+test("unsafe video policy values are sanitized and legacy theme defaults remain unchanged", () => {
+  const sanitized = normalizeThemeProfile({
+    videoTabs: { "__proto__": true, "wms:inventory": "yes", "wms:receiving": true },
+    videoPlayback: { playbackRate: 25, videoDim: 100, loopVideo: false },
+  }, allowed);
+  assert.equal(sanitized.videoTabs["wms:inventory"], undefined);
+  assert.equal(sanitized.videoTabs["wms:receiving"], true);
+  assert.equal(sanitized.videoPlayback.playbackRate, 2);
+  assert.equal(sanitized.videoPlayback.videoDim, 15);
+  assert.equal(sanitized.videoPlayback.loopVideo, false);
+  const oldTheme = parseThemeProfile("ocean", allowed);
+  assert.equal(oldTheme.videoPlayback.startPaused, false);
+  assert.equal(oldTheme.videoPlayback.playbackRate, 1);
+  assert.equal(oldTheme.videoTabs.login, undefined);
+  assert.equal(serializeThemeProfile(oldTheme), "ocean");
 });
