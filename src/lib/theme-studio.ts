@@ -32,6 +32,13 @@ export type ThemeProfile = {
   /** Text contrast without blurring the underlying footage. */
   videoTextShadow: "none" | "subtle" | "strong";
   videoTextWeight: "regular" | "medium" | "bold";
+  videoPlayback: {
+    startPaused: boolean;
+    playbackRate: number;
+    pauseWhenHidden: boolean;
+    showPauseButton: boolean;
+    videoDim: number;
+  };
   density: "comfortable" | "compact";
   radius: number | null;
 };
@@ -44,6 +51,13 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
   videoTabs: {},
   videoTextShadow: "subtle",
   videoTextWeight: "medium",
+  videoPlayback: {
+    startPaused: false,
+    playbackRate: 1,
+    pauseWhenHidden: true,
+    showPauseButton: true,
+    videoDim: 0,
+  },
   density: "comfortable",
   radius: null,
 };
@@ -82,6 +96,12 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
   for (const [key, value] of Object.entries(rawVideoTabs).slice(0, 80)) {
     if (/^[a-z0-9:/_-]{1,96}$/.test(key) && typeof value === "boolean") videoTabs[key] = value;
   }
+  const sourcePlayback = source.videoPlayback && typeof source.videoPlayback === "object"
+    ? source.videoPlayback as Record<string, unknown> : {};
+  const rate = typeof sourcePlayback.playbackRate === "number" && Number.isFinite(sourcePlayback.playbackRate)
+    ? sourcePlayback.playbackRate : 1;
+  const dim = typeof sourcePlayback.videoDim === "number" && Number.isFinite(sourcePlayback.videoDim)
+    ? sourcePlayback.videoDim : 0;
   return {
     version: 2,
     baseTheme,
@@ -92,6 +112,13 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
       ? source.videoTextShadow : "subtle",
     videoTextWeight: source.videoTextWeight === "regular" || source.videoTextWeight === "bold"
       ? source.videoTextWeight : "medium",
+    videoPlayback: {
+      startPaused: sourcePlayback.startPaused === true,
+      playbackRate: Math.max(0.5, Math.min(2, Math.round(rate * 4) / 4)),
+      pauseWhenHidden: sourcePlayback.pauseWhenHidden !== false,
+      showPauseButton: sourcePlayback.showPauseButton !== false,
+      videoDim: Math.max(0, Math.min(15, Math.round(dim))),
+    },
     density: source.density === "compact" ? "compact" : "comfortable",
     radius: typeof source.radius === "number" && Number.isFinite(source.radius)
       ? Math.max(0, Math.min(24, source.radius))
@@ -118,6 +145,13 @@ export function serializeThemeProfile(profile: ThemeProfile): string {
       Object.keys(profile.videoTabs ?? {}).length === 0 &&
       (profile.videoTextShadow ?? "subtle") === "subtle" &&
       (profile.videoTextWeight ?? "medium") === "medium" &&
+      (!profile.videoPlayback || (
+        profile.videoPlayback.startPaused !== true &&
+        (profile.videoPlayback.playbackRate ?? 1) === 1 &&
+        profile.videoPlayback.pauseWhenHidden !== false &&
+        profile.videoPlayback.showPauseButton !== false &&
+        (profile.videoPlayback.videoDim ?? 0) === 0
+      )) &&
       profile.density === "comfortable" && profile.radius === null) {
     // Preserve compatibility with previous versions when no v2 customization is used.
     return profile.baseTheme;
@@ -202,6 +236,7 @@ export function themeInlineStyles(profile: ThemeProfile): Record<string, string>
     : profile.videoTextShadow === "strong"
       ? "0 2px 4px rgb(0 0 0 / 0.92), 0 0 10px rgb(0 0 0 / 0.56)"
       : "0 1px 3px rgb(0 0 0 / 0.82)";
+  result["--video-dim-opacity"] = String(Math.min(0.15, Math.max(0, (profile.videoPlayback?.videoDim ?? 0) / 100)));
   result["--video-text-weight"] = profile.videoTextWeight === "bold" ? "700"
     : profile.videoTextWeight === "regular" ? "400" : "500";
   if (profile.radius !== null) result["--radius"] = profile.radius + "px";
