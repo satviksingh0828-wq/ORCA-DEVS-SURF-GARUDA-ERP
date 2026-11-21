@@ -13,6 +13,7 @@ import Imports from "@/wms/pages/Imports.jsx";
 import Integrations from "@/wms/pages/Integrations.jsx";
 import Settings from "@/wms/pages/Settings.jsx";
 import { WmsUsersSettings } from "@/components/settings/WmsUsersSettings";
+import { WmsThemeScope } from "@/components/WmsThemeScope";
 import "@/wms/App.scoped.css";
 
 type WmsSystemSettingsProps = { erpSessionToken: string; activeTabId: string };
@@ -43,9 +44,9 @@ export function WmsSystemSettings({ erpSessionToken, activeTabId }: WmsSystemSet
     <MemoryRouter initialEntries={["/settings"]}>
       <AuthProvider erpSessionToken={erpSessionToken}>
         <WarehouseProvider>
-          <div className="wms-embedded-scope">
+          <WmsThemeScope legacy={activeTabId !== "user-access"} className="min-w-0">
             <WmsSystemSettingsInner activeTabId={activeTabId} />
-          </div>
+          </WmsThemeScope>
         </WarehouseProvider>
       </AuthProvider>
     </MemoryRouter>
