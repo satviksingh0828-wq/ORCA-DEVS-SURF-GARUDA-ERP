@@ -162,22 +162,47 @@ function RootShell({ children }: { children: ReactNode }) {
         const colors = profile.colors;
         const hex = /^#[0-9a-fA-F]{6}$/;
         const set = (name, value) => root.style.setProperty(name, value);
-        if (typeof colors.primary === "string" && hex.test(colors.primary)) {
-          set("--primary", colors.primary);
+        const tokens = {
+          primary: ["--primary"],
+          primaryForeground: ["--primary-foreground"],
+          background: ["--background", "--ltms-surface"],
+          foreground: ["--foreground", "--ltms-content-text"],
+          card: ["--card", "--popover"],
+          cardForeground: ["--card-foreground"],
+          secondary: ["--secondary"],
+          secondaryForeground: ["--secondary-foreground"],
+          muted: ["--muted"],
+          mutedForeground: ["--muted-foreground"],
+          popover: ["--popover"],
+          popoverForeground: ["--popover-foreground"],
+          border: ["--border"],
+          input: ["--input"],
+          ring: ["--ring"],
+          sidebar: ["--sidebar", "--ltms-chrome", "--wms-chrome"],
+          sidebarForeground: ["--sidebar-foreground", "--ltms-chrome-text", "--wms-chrome-text"],
+          sidebarCard: ["--ltms-chrome-card", "--wms-chrome-card"],
+          sidebarAccent: ["--sidebar-accent", "--ltms-chrome-accent", "--wms-copper", "--ltms-branded"],
+          sidebarAccentForeground: ["--sidebar-accent-foreground"],
+          sidebarBorder: ["--sidebar-border"],
+          wmsAccent: ["--wms-accent-override"],
+        };
+        for (const [key, names] of Object.entries(tokens)) {
+          const value = colors[key];
+          if (typeof value !== "string" || !hex.test(value)) continue;
+          for (const name of names) set(name, value);
+        }
+        if (hex.test(colors.primary || "")) {
           set("--primary-soft", "color-mix(in oklch, " + colors.primary + " 14%, var(--card))");
           set("--primary-glow", "color-mix(in oklch, " + colors.primary + " 65%, white)");
-          set("--ring", colors.primary);
-          set("--sidebar-primary", colors.primary);
+          if (!colors.ring) set("--ring", colors.primary);
+          if (!colors.sidebarAccent) set("--sidebar-primary", colors.primary);
         }
-        for (const [key, token] of [["background", "--background"], ["foreground", "--foreground"], ["card", "--card"], ["border", "--border"]]) {
-          if (typeof colors[key] === "string" && hex.test(colors[key])) set(token, colors[key]);
+        if (hex.test(colors.primaryForeground || "") && !colors.sidebarAccentForeground) {
+          set("--sidebar-primary-foreground", colors.primaryForeground);
         }
-        if (hex.test(colors.foreground || "")) {
-          set("--card-foreground", colors.foreground);
-          set("--popover-foreground", colors.foreground);
-        }
-        if (hex.test(colors.card || "")) set("--popover", colors.card);
-        if (hex.test(colors.border || "")) set("--input", colors.border);
+        if (hex.test(colors.foreground || "") && !colors.cardForeground) set("--card-foreground", colors.foreground);
+        if (hex.test(colors.foreground || "") && !colors.popoverForeground) set("--popover-foreground", colors.foreground);
+        if (hex.test(colors.border || "") && !colors.input) set("--input", colors.border);
       }
       if (profile && typeof profile.radius === "number" && profile.radius >= 0 && profile.radius <= 24) {
         root.style.setProperty("--radius", profile.radius + "px");
