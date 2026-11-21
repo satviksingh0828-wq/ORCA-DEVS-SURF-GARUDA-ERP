@@ -283,7 +283,6 @@ export function ApprovalIncome() {
               <CircleDollarSign className="size-5" />
             </span>
             <div>
-              <h2 className="font-semibold">Approval Income</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Review Approval Amounts on Stock Inward and Stock Outward receipts, choose a branch
                 Cash / Bank account, and post each amount against the branch’s mapped Approval
