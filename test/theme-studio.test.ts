@@ -183,3 +183,83 @@ test("unsafe video policy values are sanitized and legacy theme defaults remain 
   assert.equal(oldTheme.videoTabs.login, undefined);
   assert.equal(serializeThemeProfile(oldTheme), "ocean");
 });
+
+test("HRMS routes map to independently configurable video tabs", () => {
+  const cases = {
+    "/hrms": "hrms:employees",
+    "/employees": "hrms:employees",
+    "/employees/departments": "hrms:employees:departments",
+    "/attendance/holidays": "hrms:attendance:holidays",
+    "/attendance/history": "hrms:attendance:history",
+    "/payroll/loans": "hrms:payroll:loans",
+    "/dashboard/attendance": "hrms:dashboard:attendance",
+    "/hr-dashboard": "hrms:dashboard",
+    "/hr-data": "hrms:data",
+  };
+  for (const [pathname, expected] of Object.entries(cases)) {
+    assert.equal(videoTabFromPath(pathname), expected);
+  }
+  const tabGroups = VIDEO_TAB_GROUPS.find((group) => group.title.startsWith("HRMS"));
+  assert.ok(tabGroups);
+  assert.ok(tabGroups.options.length > 15);
+  const policy = { "hrms": true, "hrms:payroll": false, "hrms:payroll:loans": true };
+  assert.equal(videoEnabledForTab(policy, "hrms:attendance:holidays"), true);
+  assert.equal(videoEnabledForTab(policy, "hrms:payroll:loans"), true);
+  assert.equal(videoEnabledForTab(policy, "hrms:payroll:history"), false);
+  assert.equal(videoEnabledForTab({}, "hrms:payroll"), false);
+});
+
+test("background mode and advanced video effects survive existing text-column storage", () => {
+  for (const mode of ["video", "still", "blank"]) {
+    const saved = normalizeThemeProfile({
+      baseTheme: "ocean",
+      videoPlayback: {
+        backgroundMode: mode,
+        blur: 12, tintColor: "#3155aa", tintOpacity: 36,
+        brightness: 110, saturation: 70, contrast: 125,
+        grayscale: 20, hueRotate: -45, zoom: 115,
+      },
+      videoTabs: { hrms: true, "hrms:payroll:loans": false },
+    }, allowed);
+    assert.equal(saved.videoPlayback.backgroundMode, mode);
+    assert.equal(saved.videoPlayback.blur, 12);
+    assert.equal(saved.videoPlayback.tintColor, "#3155aa");
+    assert.equal(saved.videoPlayback.grayscale, 20);
+    assert.equal(saved.videoPlayback.hueRotate, -45);
+    assert.deepEqual(parseThemeProfile(serializeThemeProfile(saved), allowed), saved);
+  }
+});
+
+test("invalid video filter options are bounded and obsolete banner settings discarded", () => {
+  const saved = normalizeThemeProfile({
+    videoPlayback: {
+      backgroundMode: "unknown", showTruckPoster: true,
+      blur: 999, tintColor: "url(javascript:bad)", tintOpacity: 999,
+      brightness: -40, saturation: 777, contrast: 1000,
+      grayscale: -2, hueRotate: 999, zoom: 500,
+    },
+  }, allowed);
+  const p = saved.videoPlayback;
+  assert.equal(p.backgroundMode, "video");
+  assert.equal(p.blur, 24);
+  assert.equal(p.tintColor, "#000000");
+  assert.equal(p.tintOpacity, 80);
+  assert.equal(p.brightness, 40);
+  assert.equal(p.saturation, 200);
+  assert.equal(p.contrast, 160);
+  assert.equal(p.grayscale, 0);
+  assert.equal(p.hueRotate, 180);
+  assert.equal(p.zoom, 130);
+  assert.equal("showTruckPoster" in p, false);
+});
+
+test("no poster or Garuda banner is rendered by the video backdrop", async () => {
+  const fs = await import("node:fs");
+  for (const path of ["src/components/WorkspaceBackgroundVideo.tsx", "src/styles.css"]) {
+    const source = fs.readFileSync(path, "utf8");
+    assert.doesNotMatch(source, /garuda-banner\\.(?:webp|jpeg|jpg|png)/i, path);
+  }
+  const backdrop = fs.readFileSync("src/components/WorkspaceBackgroundVideo.tsx", "utf8");
+  assert.doesNotMatch(backdrop, /poster\\s*=/i);
+  assert.match(backdrop, /onLoadedMetadata/);
+});
