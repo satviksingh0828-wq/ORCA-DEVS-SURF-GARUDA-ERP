@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useRouterState } from "@tanstack/react-router";
 import { useTheme } from "@/lib/theme";
+import { useCurrentVideoTab, videoEnabledForTab } from "@/lib/video-tabs";
 
 /**
  * Single workspace backdrop for unauthenticated and authenticated screens.
@@ -8,12 +9,13 @@ import { useTheme } from "@/lib/theme";
  * The original ORCA splash screen remains completely independent.
  */
 export function WorkspaceBackgroundVideo() {
-  const { backgroundVideoEnabled, backgroundVideoUrl } = useTheme();
+  const { backgroundVideoEnabled, backgroundVideoUrl, profile } = useTheme();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const currentTab = useCurrentVideoTab(pathname);
   // Keep special host, sharing and print-only routes free from decorative video.
   const videoAllowed = !pathname.startsWith("/screen-control-host") &&
     !pathname.startsWith("/share") && !pathname.includes("/print");
-  const showVideo = backgroundVideoEnabled && videoAllowed;
+  const showVideo = backgroundVideoEnabled && videoAllowed && videoEnabledForTab(profile.videoTabs, currentTab);
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
@@ -21,11 +23,16 @@ export function WorkspaceBackgroundVideo() {
     const root = document.documentElement;
     if (showVideo) {
       root.setAttribute("data-video-background", "on");
+      root.setAttribute("data-video-screen", ["login", "passkey"].includes(currentTab) ? "auth" : "workspace");
     } else {
       root.removeAttribute("data-video-background");
+      root.removeAttribute("data-video-screen");
     }
-    return () => root.removeAttribute("data-video-background");
-  }, [showVideo]);
+    return () => {
+      root.removeAttribute("data-video-background");
+      root.removeAttribute("data-video-screen");
+    };
+  }, [showVideo, currentTab]);
 
   useEffect(() => {
     setReady(false);
