@@ -193,7 +193,7 @@ export function AppShell({
       root.dataset.theme = profile.baseTheme;
       root.classList.toggle("dark", isDarkTheme(profile.baseTheme));
     };
-  }, [appearanceTheme, profile.baseTheme]);
+  }, [appearanceTheme, profile.baseTheme, profile]);
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
   const displayName = user?.fullName ?? user?.username ?? "User";
