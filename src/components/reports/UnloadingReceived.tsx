@@ -309,7 +309,6 @@ export function UnloadingReceived() {
               <CircleDollarSign className="size-5" />
             </span>
             <div>
-              <h2 className="font-semibold">Unloading Received</h2>
               <p className="mt-1 max-w-3xl text-sm text-muted-foreground">
                 Review the calculated unloading income and amount received for each Stock Inward
                 receipt, choose its branch Cash / Bank account, and post the receipt journal.
