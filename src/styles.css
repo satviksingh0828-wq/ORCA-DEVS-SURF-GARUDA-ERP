@@ -1828,3 +1828,49 @@ html[data-video-background="on"] .ltms-app-shell .ltms-reference-content {
   .background-video-layer,.background-video-veil-layer,.workspace-video-fallback { display: none !important; }
   .ltms-app-shell,.ltms-app-shell-main { background: #fff !important; color: #111 !important; }
 }
+
+
+/* Shared ORCA video layering for authentication and workspace screens.
+   The existing splash is untouched and always remains the topmost overlay. */
+.workspace-video-fallback {
+  pointer-events: none;
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(135deg, var(--background),
+    color-mix(in oklch, var(--primary) 10%, var(--background)));
+}
+html[data-video-background="on"] .ltms-app-shell {
+  position: relative;
+  z-index: 2;
+  background-color: transparent !important;
+  background: transparent !important;
+}
+html[data-video-background="on"] :is(.ltms-app-shell-main, .auth-abstract-background.ltms-app-shell) {
+  background-color: transparent !important;
+  background: transparent !important;
+}
+html[data-video-background="on"] .auth-abstract-background::before,
+html[data-video-background="on"] .auth-abstract-background::after {
+  opacity: 0.16;
+}
+html[data-video-background="on"] .auth-abstract-background .surface-card,
+html[data-video-background="on"] .auth-abstract-background main > div > .bg-card {
+  background: color-mix(in oklch, var(--card) 95%, transparent);
+  color: var(--foreground);
+  border-color: var(--border);
+  backdrop-filter: blur(18px);
+}
+html[data-video-background="on"] .background-video-veil-layer {
+  background: color-mix(in oklch, var(--background) 22%, transparent);
+}
+html[data-video-background="on"] .ltms-app-shell-header {
+  background: var(--ltms-chrome, #2a2520) !important;
+}
+html[data-video-background="on"] .ltms-reference-sidebar,
+html[data-video-background="on"] .ltms-shared-sidebar {
+  background: var(--ltms-chrome, #2a2520);
+}
+@media print {
+  .workspace-video-fallback { display: none !important; }
+}
