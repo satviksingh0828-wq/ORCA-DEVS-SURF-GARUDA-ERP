@@ -1070,14 +1070,10 @@ async function tripExpenditure(db: AnyDb, input: QueryInput): Promise<DataResult
     drivers.map((item: any) => [item.id, item.full_name || item.driver_code || "—"]),
   );
   const branchMap = new Map(branches.map((item: any) => [item.id, item.branch_name]));
-  const eligibleAssigned = (trip: any, consignment: any) => {
+  const eligibleAssigned = (trip: any, _consignment: any) => {
     const ownership = String(trip.ownership ?? "").toLowerCase();
-    const type = String(consignment.consignment_type ?? "").toLowerCase();
-    const mode = String(consignment.movement_mode ?? "").toLowerCase();
-    return (
-      ownership === "own" ||
-      (ownership === "third_party" && type === "third_party" && mode === "drop")
-    );
+    // Match the UI: rented trips allocate costs to all assigned consignments.
+    return ownership === "own" || ownership === "owned" || ownership === "third_party";
   };
   const eligibleUnassigned = (row: any) => {
     const type = String(row.consignment_type ?? "").toLowerCase();
@@ -1297,10 +1293,7 @@ async function consignmentNet(db: AnyDb, input: QueryInput): Promise<DataResult>
   for (const row of consignments) {
     const trip = row.trip_id ? tripMap.get(row.trip_id) : undefined;
     const eligible = Boolean(
-      trip &&
-      (String(trip.ownership).toLowerCase() === "own" ||
-        (String(row.consignment_type).toLowerCase() === "third_party" &&
-          String(row.movement_mode).toLowerCase() === "drop")),
+      trip && ["own", "owned", "third_party"].includes(String(trip.ownership).toLowerCase()),
     );
     if (row.trip_id && eligible) {
       tripCounts.set(row.trip_id, (tripCounts.get(row.trip_id) ?? 0) + 1);
@@ -1374,10 +1367,7 @@ async function consignmentNet(db: AnyDb, input: QueryInput): Promise<DataResult>
     );
     const trip = row.trip_id ? tripMap.get(row.trip_id) : undefined;
     const eligibleTrip = Boolean(
-      trip &&
-      (String(trip.ownership).toLowerCase() === "own" ||
-        (String(row.consignment_type).toLowerCase() === "third_party" &&
-          String(row.movement_mode).toLowerCase() === "drop")),
+      trip && ["own", "owned", "third_party"].includes(String(trip.ownership).toLowerCase()),
     );
     const tripCost = trip ? (expenseMap.get(trip.id) ?? 0) - (otherIncomeMap.get(trip.id) ?? 0) : 0;
     const tripTotalWeight = tripWeights.get(trip?.id ?? "") ?? 0;
