@@ -35,8 +35,6 @@ export type ThemeProfile = {
   videoPlayback: {
     /** Workspace-wide default mode. Local Play/Pause overrides it per device. */
     backgroundMode: "video" | "still" | "blank";
-    /** Poster uses the existing Garuda banner while the selected video loads. */
-    showTruckPoster: boolean;
     /** Universal effects apply to background media, never foreground text. */
     blur: number;
     tintColor: string;
@@ -65,7 +63,6 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
   videoTextWeight: "medium",
   videoPlayback: {
     backgroundMode: "video",
-    showTruckPoster: true,
     blur: 0,
     tintColor: "#000000",
     tintOpacity: 0,
@@ -143,7 +140,6 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
         ? sourcePlayback.backgroundMode
         : sourcePlayback.backgroundMode === "video" ? "video"
         : sourcePlayback.startPaused === true ? "still" : "video",
-      showTruckPoster: sourcePlayback.showTruckPoster !== false,
       blur: bounded("blur", 0, 0, 24),
       tintColor: typeof sourcePlayback.tintColor === "string" && HEX_COLOR.test(sourcePlayback.tintColor)
         ? sourcePlayback.tintColor : "#000000",
@@ -187,7 +183,6 @@ export function serializeThemeProfile(profile: ThemeProfile): string {
       (!profile.videoPlayback || (
         profile.videoPlayback.startPaused !== true &&
         (profile.videoPlayback.backgroundMode ?? "video") === "video" &&
-        profile.videoPlayback.showTruckPoster !== false &&
         (profile.videoPlayback.blur ?? 0) === 0 &&
         (profile.videoPlayback.tintColor ?? "#000000").toLowerCase() === "#000000" &&
         (profile.videoPlayback.tintOpacity ?? 0) === 0 &&
