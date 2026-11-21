@@ -42,12 +42,35 @@ export const VIDEO_TAB_GROUPS: VideoTabGroup[] = [
     { key: "ltms:masters", label: "Masters (other tabs can be enabled from their header)" },
     { key: "ltms:finance", label: "Finance (other tabs can be enabled from their header)" },
   ] },
-  { title: "Other modules", options: [
+  { title: "HRMS — background video", options: [
+    { key: "hrms", label: "All HRMS pages (module default)" },
+    { key: "hrms:dashboard", label: "HR dashboard" },
+    { key: "hrms:dashboard:attendance", label: "Attendance dashboard" },
+    { key: "hrms:dashboard:employee", label: "Employee dashboard" },
+    { key: "hrms:dashboard:payroll", label: "Payroll dashboard" },
+    { key: "hrms:dashboard:hierarchy", label: "Employee hierarchy" },
+    { key: "hrms:employees", label: "Employee directory & profiles" },
+    { key: "hrms:employees:departments", label: "Departments" },
+    { key: "hrms:attendance", label: "Attendance" },
+    { key: "hrms:attendance:mark", label: "Mark attendance" },
+    { key: "hrms:attendance:history", label: "Attendance history" },
+    { key: "hrms:attendance:holidays", label: "Holidays" },
+    { key: "hrms:attendance:automarker", label: "Automatic attendance" },
+    { key: "hrms:payroll", label: "Payroll" },
+    { key: "hrms:payroll:generate", label: "Generate payroll" },
+    { key: "hrms:payroll:history", label: "Salary history" },
+    { key: "hrms:payroll:advances", label: "Salary advances" },
+    { key: "hrms:payroll:deductions", label: "Deductions" },
+    { key: "hrms:payroll:loans", label: "Employee loans" },
+    { key: "hrms:payroll:incentives", label: "Incentives" },
+    { key: "hrms:payroll:ledger", label: "Payroll ledger" },
+    { key: "hrms:payroll:pending", label: "Pending payroll" },
+    { key: "hrms:data", label: "HR data" },
+  ] },
+  { title: "Accounts & other modules", options: [
     { key: "route:accounts", label: "Accounts" },
-    { key: "route:hrms", label: "HRMS" },
-    { key: "route:employees", label: "Employees" },
-    { key: "route:payroll", label: "Payroll" },
-    { key: "route:attendance", label: "Attendance" },
+    { key: "route:cash-reports", label: "Cash reports" },
+    { key: "users", label: "Users" },
   ] },
   { title: "Sentry / WMS tabs", options: [
     { key: "wms:dashboard", label: "WMS dashboard" },
@@ -99,12 +122,21 @@ export function videoEnabledForTab(overrides: Record<string, boolean> | undefine
   if (overrides && Object.prototype.hasOwnProperty.call(overrides, key)) {
     return overrides[key] === true;
   }
-  // A section-level choice can set the default for its child tabs.
-  // Explicit child choices always take precedence.
-  const parent = key.lastIndexOf(":");
-  if (parent > 0) {
-    const ancestor = key.slice(0, parent);
-    if (overrides && Object.prototype.hasOwnProperty.call(overrides, ancestor)) return overrides[ancestor] === true;
+  // Walk all ancestors, e.g. hrms:payroll:loans -> hrms:payroll -> hrms.
+  // A specific page always overrides the broader module switch.
+  let parent = key;
+  while (parent.includes(":")) {
+    parent = parent.slice(0, parent.lastIndexOf(":"));
+    if (overrides && Object.prototype.hasOwnProperty.call(overrides, parent)) {
+      return overrides[parent] === true;
+    }
+  }
+  // Legacy preferences used route:employees and route:hrms.
+  if (key.startsWith("hrms:") && overrides) {
+    const section = key.split(":")[1];
+    for (const legacy of [`route:${section}`, "route:hrms"]) {
+      if (Object.prototype.hasOwnProperty.call(overrides, legacy)) return overrides[legacy] === true;
+    }
   }
   return DEFAULT_ENABLED.has(key);
 }
@@ -116,7 +148,16 @@ export function videoTabFromPath(pathname: string): string {
   if (clean === "/wms") return "wms:dashboard";
   if (clean === "/users") return "users";
   if (clean === "/settings") return "settings:appearance";
-  const segment = clean.split("/")[1] || "";
+  const parts = clean.split("/").filter(Boolean);
+  const segment = parts[0] || "";
+  // HRMS uses top-level TanStack routes; /hrms redirects to /employees.
+  // Keep each HRMS page independently configurable under one module switch.
+  if (["hrms", "hr-dashboard", "hr-data", "dashboard", "employees", "attendance", "payroll"].includes(segment)) {
+    const moduleSection = segment === "hr-dashboard" || segment === "dashboard" ? "dashboard"
+      : segment === "hr-data" ? "data" : segment === "hrms" ? "employees" : segment;
+    const details = parts.slice(1).filter((part) => /^[a-z0-9_-]+$/.test(part));
+    return ["hrms", moduleSection, ...details].join(":");
+  }
   if (["ltms", "tms", "masters", "operations", "reports", "billing", "finance"].includes(segment)) {
     const section = segment === "ltms" ? clean.split("/")[2] || "dashboard" : segment;
     return `ltms:${section}`;
