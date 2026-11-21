@@ -171,11 +171,11 @@
 }
 
 .wms-embedded-scope .topbar-wh-option:hover {
-  background: rgba(183,115,51,0.15);
+  background: var(--wms-active-bg, rgba(183,115,51,0.15));
 }
 
 .wms-embedded-scope .topbar-wh-option.active {
-  background: rgba(183,115,51,0.15);
+  background: var(--wms-active-bg, rgba(183,115,51,0.15));
   border-left: 3px solid var(--wms-copper, #b87333);
 }
 
@@ -290,7 +290,7 @@
 
 .wms-embedded-scope .sidebar-group-label {
   width: 100%;
-  background: rgba(142,39,22,0.4);
+  background: var(--wms-group-bg, rgba(142,39,22,0.4));
   font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
@@ -306,20 +306,20 @@
   padding: 6px 10px;
   font-size: 14px;
   font-weight: 600;
-  color: #ffffff;
+  color: var(--wms-chrome-text, #ffffff);
   border-left: 3px solid transparent;
   cursor: pointer;
   transition: background 0.1s, color 0.1s;
 }
 
 .wms-embedded-scope .sidebar-link:hover {
-  background: rgba(255,255,255,0.08);
-  color: #ffffff;
+  background: var(--wms-hover-bg, rgba(255,255,255,0.08));
+  color: var(--wms-chrome-text, #ffffff);
 }
 
 .wms-embedded-scope .sidebar-link.active {
   border-left-color: var(--wms-copper, #b87333);
-  background: rgba(183,115,51,0.15);
+  background: var(--wms-active-bg, rgba(183,115,51,0.15));
   color: var(--wms-chrome-text, #fdf4e3);
   font-weight: 500;
 }
@@ -1307,8 +1307,8 @@
    The original WMS palette remains untouched for the current Garuda preset. */
 .wms-embedded-scope[data-theme]:not([data-theme="garuda"]),
 .wms-embedded-scope[data-custom-theme="true"] {
-  --accent: var(--primary);
-  --accent-hover: color-mix(in oklch, var(--primary) 78%, var(--foreground) 22%);
+  --accent: var(--wms-accent-override, var(--primary));
+  --accent-hover: color-mix(in oklch, var(--accent) 78%, var(--foreground) 22%);
   --bg: var(--background);
   --white: var(--card);
   --surface: var(--muted);
@@ -1322,6 +1322,9 @@
   --wms-chrome-text: #f7f8fa;
   --wms-copper: var(--primary);
   --wms-highlight-bg: var(--card);
+  --wms-group-bg: color-mix(in oklch, var(--wms-copper) 35%, var(--wms-chrome));
+  --wms-active-bg: color-mix(in oklch, var(--wms-copper) 20%, transparent);
+  --wms-hover-bg: color-mix(in oklch, var(--wms-chrome-text) 10%, transparent);
 }
 .wms-standalone-scope {
   min-height: 100dvh;
@@ -1349,4 +1352,25 @@
     --wms-highlight-bg: #fff;
     print-color-adjust: exact;
   }
+}
+
+/* Keep WMS sidebars, their header groups and active links in sync with theme
+   tokens in embedded and standalone modes without changing the default look. */
+.wms-embedded-scope[data-theme]:not([data-theme="garuda"]) .sidebar-link,
+.wms-embedded-scope[data-custom-theme="true"] .sidebar-link {
+  color: var(--wms-chrome-text);
+}
+.wms-embedded-scope[data-theme]:not([data-theme="garuda"]) .sidebar-link:focus-visible,
+.wms-embedded-scope[data-custom-theme="true"] .sidebar-link:focus-visible {
+  outline: 2px solid var(--wms-copper);
+  outline-offset: -2px;
+}
+.wms-embedded-scope[data-theme]:not([data-theme="garuda"]) :is(.sidebar, .topbar),
+.wms-embedded-scope[data-custom-theme="true"] :is(.sidebar, .topbar) {
+  background: var(--wms-chrome);
+}
+.wms-embedded-scope[data-theme]:not([data-theme="garuda"]) :is(.sidebar-card, .topbar-dropdown),
+.wms-embedded-scope[data-custom-theme="true"] :is(.sidebar-card, .topbar-dropdown) {
+  background: var(--wms-chrome-card);
+  color: var(--wms-chrome-text);
 }
