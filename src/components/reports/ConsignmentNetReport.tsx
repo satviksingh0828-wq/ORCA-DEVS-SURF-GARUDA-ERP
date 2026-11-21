@@ -666,7 +666,7 @@ export function ConsignmentNetReport({
       {!dashboardCompact && (
         <div className="overflow-hidden rounded-xl border border-border bg-card shadow-sm">
           <div className="flex items-center justify-between border-b border-border px-4 py-3">
-            <h2 className="text-sm font-semibold">Consignment Net ({filtered.length})</h2>
+            <h2 className="text-sm font-semibold">Results ({filtered.length})</h2>
             <span className="text-xs text-muted-foreground">
               Expenses are negative in CSV export
             </span>
