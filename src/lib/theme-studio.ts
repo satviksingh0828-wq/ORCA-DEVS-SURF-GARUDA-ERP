@@ -54,6 +54,8 @@ export type ThemeProfile = {
     videoDim: number;
   };
   density: "comfortable" | "compact";
+  /** Home screen module icon glyph diameter, in CSS pixels. */
+  homeIconSize: number;
   radius: number | null;
 };
 
@@ -85,6 +87,7 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
     videoDim: 0,
   },
   density: "comfortable",
+  homeIconSize: 28,
   radius: null,
 };
 
@@ -167,6 +170,9 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
       videoDim: Math.max(0, Math.min(15, Math.round(dim))),
     },
     density: source.density === "compact" ? "compact" : "comfortable",
+    homeIconSize: typeof source.homeIconSize === "number" && Number.isFinite(source.homeIconSize)
+      ? Math.max(16, Math.min(64, Math.round(source.homeIconSize)))
+      : 28,
     radius: typeof source.radius === "number" && Number.isFinite(source.radius)
       ? Math.max(0, Math.min(24, source.radius))
       : null,
@@ -211,7 +217,7 @@ export function serializeThemeProfile(profile: ThemeProfile): string {
         profile.videoPlayback.showPauseButton !== false &&
         (profile.videoPlayback.videoDim ?? 0) === 0
       )) &&
-      profile.density === "comfortable" && profile.radius === null) {
+      profile.density === "comfortable" && (profile.homeIconSize ?? 28) === 28 && profile.radius === null) {
     // Preserve compatibility with previous versions when no v2 customization is used.
     return profile.baseTheme;
   }
