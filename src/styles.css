@@ -1830,15 +1830,17 @@ html[data-video-background="on"] .ltms-app-shell .ltms-reference-content {
 }
 
 
-/* Shared ORCA video layering for authentication and workspace screens.
-   The existing splash is untouched and always remains the topmost overlay. */
+/* Shared video is displayed only when explicitly enabled. The loaded video
+   owns the background; no separate gradients are rendered behind it. */
 .workspace-video-fallback {
-  pointer-events: none;
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: linear-gradient(135deg, var(--background),
-    color-mix(in oklch, var(--primary) 10%, var(--background)));
+  pointer-events: none;
+  background: var(--background);
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: cover;
 }
 html[data-video-background="on"] .ltms-app-shell {
   position: relative;
@@ -1981,4 +1983,55 @@ html[data-video-background="on"] .auth-abstract-background .ltms-app-shell-heade
 }
 @media print {
   .workspace-video-controls { display: none !important; }
+}
+
+/* ORCA Theme Studio — one background media pipeline for all enabled routes.
+   Motion, still frames and truck loading artwork receive the SAME effects.
+   This does not blur or recolour app components, labels or other content. */
+.workspace-video-fallback {
+  background: var(--background);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+}
+.background-video-layer,
+.workspace-video-fallback {
+  transform-origin: center center;
+  will-change: opacity;
+}
+html[data-video-background="on"] .background-video-veil-layer {
+  background:
+    linear-gradient(
+      rgb(0 0 0 / var(--video-dim-opacity, 0)),
+      rgb(0 0 0 / var(--video-dim-opacity, 0))
+    ),
+    color-mix(in srgb, var(--video-tint-color, #000000) var(--video-tint-opacity, 0%), transparent)
+    !important;
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
+
+/* Blank means a flat theme surface: not a poster, colour gradient, background
+   photograph or another fallback. Video/still modes hide the old auth pattern. */
+html[data-video-mode] .auth-abstract-background::before,
+html[data-video-mode] .auth-abstract-background::after {
+  display: none !important;
+  background: none !important;
+  opacity: 0 !important;
+}
+html[data-video-mode="blank"] .auth-abstract-background {
+  background: var(--background) !important;
+  background-image: none !important;
+}
+html[data-video-mode="blank"] :is(.ltms-app-shell, .ltms-app-shell-main) {
+  background-image: none !important;
+}
+
+/* Any theme-specific frosted panels remain sharp over the optional blurred
+   video: effects must be applied to the video element, never to the UI. */
+html[data-video-background="on"] :is(.auth-abstract-background .bg-card,
+  .auth-abstract-background .surface-card, .ltms-app-shell-header,
+  .ltms-reference-sidebar, .ltms-shared-sidebar, .orca-brand-footer) {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
 }
