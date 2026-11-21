@@ -157,11 +157,11 @@ function RootShell({ children }: { children: ReactNode }) {
     if (theme && validThemes.has(theme)) {
       const root = document.documentElement;
       root.setAttribute("data-theme", theme);
-      const path = window.location.pathname.toLowerCase();
-      const module = /^\\/wms(?:\\/|$)/.test(path) ? "wms"
-        : /^\\/(?:accounts|cash-reports)(?:\\/|$)/.test(path) ? "accounts"
-        : /^\\/(?:hrms|hr-dashboard|hr-data|dashboard|employees|payroll|attendance)(?:\\/|$)/.test(path) ? "hrms"
-        : /^\\/(?:ltms|tms|masters|operations|finance|reports|report-master|import-trips)(?:\\/|$)/.test(path) ? "ltms"
+      const segment = window.location.pathname.toLowerCase().split("/")[1] || "";
+      const module = segment === "wms" ? "wms"
+        : ["accounts", "cash-reports"].includes(segment) ? "accounts"
+        : ["hrms", "hr-dashboard", "hr-data", "dashboard", "employees", "payroll", "attendance"].includes(segment) ? "hrms"
+        : ["ltms", "tms", "masters", "operations", "finance", "reports", "report-master", "import-trips"].includes(segment) ? "ltms"
         : "erp";
       const routeTheme = profile && profile.modules && validThemes.has(profile.modules[module])
         ? profile.modules[module] : theme;
