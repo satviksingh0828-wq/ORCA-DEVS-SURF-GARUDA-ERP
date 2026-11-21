@@ -17,7 +17,7 @@ import { preloadLogo } from "../lib/logo";
 
 import appCss from "../styles.css?url";
 import { SessionProvider } from "@/lib/session";
-import { ThemeProvider } from "../lib/theme";
+import { ThemeProvider, useTheme } from "../lib/theme";
 import { Toaster } from "../components/ui/sonner";
 import { OrcaAIProvider } from "../lib/orca-context";
 import { MeetPanel } from "../components/MeetPanel";
@@ -143,10 +143,45 @@ function RootShell({ children }: { children: ReactNode }) {
           dangerouslySetInnerHTML={{
             __html: `(() => {
   try {
-    const cachedTheme = window.localStorage.getItem("garuda.theme");
+    const stored = window.localStorage.getItem("garuda.theme.profile-v2") || window.localStorage.getItem("garuda.theme");
     const validThemes = new Set(["sky", "workspace", "glass", "emerald", "violet", "amber", "rose", "graphite", "garuda", "ocean", "blaze", "tangerine", "copper", "sakura", "arctic", "terra", "vintage", "paper", "kraft", "blueprint", "linen", "chalkboard", "vellum", "cork", "neon", "midnight", "forest", "storm"]);
-    if (cachedTheme && validThemes.has(cachedTheme)) {
-      document.documentElement.setAttribute("data-theme", cachedTheme);
+    let theme = stored;
+    let profile = null;
+    if (stored && stored.startsWith("orca-theme-v2:") && stored.length <= 5000) {
+      try {
+        profile = JSON.parse(stored.slice("orca-theme-v2:".length));
+        theme = profile.baseTheme;
+      } catch { profile = null; theme = "garuda"; }
+    }
+    if (theme && validThemes.has(theme)) {
+      const root = document.documentElement;
+      root.setAttribute("data-theme", theme);
+      root.classList.toggle("dark", ["neon", "midnight", "forest", "storm"].includes(theme));
+      if (profile && profile.colors && typeof profile.colors === "object") {
+        const colors = profile.colors;
+        const hex = /^#[0-9a-fA-F]{6}$/;
+        const set = (name, value) => root.style.setProperty(name, value);
+        if (typeof colors.primary === "string" && hex.test(colors.primary)) {
+          set("--primary", colors.primary);
+          set("--primary-soft", "color-mix(in oklch, " + colors.primary + " 14%, var(--card))");
+          set("--primary-glow", "color-mix(in oklch, " + colors.primary + " 65%, white)");
+          set("--ring", colors.primary);
+          set("--sidebar-primary", colors.primary);
+        }
+        for (const [key, token] of [["background", "--background"], ["foreground", "--foreground"], ["card", "--card"], ["border", "--border"]]) {
+          if (typeof colors[key] === "string" && hex.test(colors[key])) set(token, colors[key]);
+        }
+        if (hex.test(colors.foreground || "")) {
+          set("--card-foreground", colors.foreground);
+          set("--popover-foreground", colors.foreground);
+        }
+        if (hex.test(colors.card || "")) set("--popover", colors.card);
+        if (hex.test(colors.border || "")) set("--input", colors.border);
+      }
+      if (profile && typeof profile.radius === "number" && profile.radius >= 0 && profile.radius <= 24) {
+        root.style.setProperty("--radius", profile.radius + "px");
+      }
+      if (profile) root.dataset.density = profile.density === "compact" ? "compact" : "comfortable";
     }
   } catch {
     // Local storage may be unavailable; the default theme remains active.
@@ -278,6 +313,7 @@ function OrcaAgentMount() {
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { ready: themeReady } = useTheme();
   const [showEntrySplash, setShowEntrySplash] = useState(pathname === "/");
   useEffect(() => {
     setShowEntrySplash(pathname === "/");
@@ -316,7 +352,7 @@ function RootComponent() {
               <SecurityInit />
               <SessionExpiredListener />
               <DynamicImportRecovery />
-              <Outlet />
+              {(pathname !== "/" || themeReady) && <Outlet />}
               <ScreenControlWidget />
               <Toaster position="top-right" />
               <MeetPanelMount />
