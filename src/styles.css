@@ -1201,7 +1201,7 @@ table td {
   border: 0;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 0;
-  background: #2a2520;
+  background: var(--ltms-chrome, #2a2520);
 }
 
 .ltms-reference-sidebar .app-sidebar-scroll {
@@ -1209,7 +1209,7 @@ table td {
   max-height: calc(100dvh - 5rem);
   padding: 8px 6px;
   border-radius: 8px;
-  background: #2a2520;
+  background: var(--ltms-chrome, #2a2520);
 }
 
 .ltms-reference-sidebar-card {
@@ -1217,7 +1217,7 @@ table td {
   margin-bottom: 6px;
   padding: 6px 0;
   border-radius: 8px;
-  background: #352f2a;
+  background: var(--ltms-chrome-card, #352f2a);
 }
 
 .ltms-reference-group-label {
@@ -1228,7 +1228,7 @@ table td {
   padding: 6px 10px;
   border: 0;
   background: rgba(142, 39, 22, 0.4);
-  color: #fdf4e3;
+  color: var(--ltms-chrome-text, #fdf4e3);
   cursor: pointer;
   font:
     700 13px/1.4 "LTMS Instrument Sans",
@@ -1297,9 +1297,9 @@ table td {
 
 .ltms-reference-sidebar-link.active,
 .ltms-reference-sidebar-link[aria-current="page"] {
-  border-left-color: #b87333;
+  border-left-color: var(--ltms-chrome-accent, #b87333);
   background: rgba(183, 115, 51, 0.15);
-  color: #fdf4e3;
+  color: var(--ltms-chrome-text, #fdf4e3);
   font-weight: 500;
 }
 
@@ -1319,14 +1319,14 @@ table td {
     margin-bottom: 12px;
     padding: 8px;
     border-radius: 8px;
-    background: #2a2520;
+    background: var(--ltms-chrome, #2a2520);
   }
 
   .ltms-reference-mobile-link {
     padding: 6px 10px;
     border-radius: 6px;
-    background: #352f2a;
-    color: #fdf4e3;
+    background: var(--ltms-chrome-card, #352f2a);
+    color: var(--ltms-chrome-text, #fdf4e3);
     font:
       600 13px/1.3 "LTMS Instrument Sans",
       "Helvetica Neue",
@@ -1343,16 +1343,16 @@ table td {
 
 /* LTMS shell follows Sentry's compact warm-dark top bar and light workspace. */
 .ltms-app-shell {
-  background: #fafaf7;
-  color: #1a1714;
+  background: var(--ltms-surface, #fafaf7);
+  color: var(--ltms-content-text, #1a1714);
   font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
 }
 
 .ltms-app-shell-header {
   height: 56px;
   border: 0;
-  border-bottom: 2px solid #b87333;
-  background: #2a2520;
+  border-bottom: 2px solid var(--ltms-chrome-accent, #b87333);
+  background: var(--ltms-chrome, #2a2520);
   -webkit-backdrop-filter: none;
   backdrop-filter: none;
 }
@@ -1375,7 +1375,7 @@ table td {
   max-width: min(320px, calc(100vw - 220px));
   flex: 0 1 auto;
   margin-left: -2px;
-  color: #fdf4e3;
+  color: var(--ltms-chrome-text, #fdf4e3);
   font-size: clamp(11px, calc(0.55vw + 10px), 16px);
   font-weight: 600;
   letter-spacing: 0.1px;
@@ -1385,7 +1385,7 @@ table td {
 
 .ltms-app-shell-breadcrumb,
 .ltms-app-shell-breadcrumb * {
-  color: #fdf4e3 !important;
+  color: var(--ltms-chrome-text, #fdf4e3) !important;
   font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
   font-size: 14px;
 }
@@ -1400,8 +1400,8 @@ table td {
   height: 32px;
   border-color: rgba(255, 255, 255, 0.16) !important;
   border-radius: 6px !important;
-  background: #352f2a !important;
-  color: #fdf4e3 !important;
+  background: var(--ltms-chrome-card, #352f2a) !important;
+  color: var(--ltms-chrome-text, #fdf4e3) !important;
 }
 
 .ltms-app-shell-icon-button:hover,
@@ -1413,18 +1413,18 @@ table td {
 
 .ltms-app-shell-user,
 .ltms-app-shell-user .text-foreground {
-  color: #fdf4e3 !important;
+  color: var(--ltms-chrome-text, #fdf4e3) !important;
 }
 
 .ltms-app-shell-user .bg-muted {
-  background: #352f2a;
-  color: #fdf4e3;
+  background: var(--ltms-chrome-card, #352f2a);
+  color: var(--ltms-chrome-text, #fdf4e3);
 }
 
 .ltms-app-shell-signout {
   border-color: rgba(255, 255, 255, 0.16) !important;
-  background: #352f2a !important;
-  color: #fdf4e3 !important;
+  background: var(--ltms-chrome-card, #352f2a) !important;
+  color: var(--ltms-chrome-text, #fdf4e3) !important;
 }
 
 .ltms-app-shell-signout:hover {
@@ -1435,7 +1435,7 @@ table td {
 .ltms-app-shell-main {
   min-height: 0 !important;
   overflow: hidden !important;
-  background: #fafaf7 !important;
+  background: var(--ltms-surface, #fafaf7) !important;
   padding: 0 !important;
   font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
 }
@@ -1452,7 +1452,7 @@ table td {
   overflow-x: hidden;
   overflow-y: auto !important;
   padding: 8px 6px;
-  background: #2a2520;
+  background: var(--ltms-chrome, #2a2520);
 }
 
 .ltms-reference-sidebar .app-sidebar-scroll button.ltms-reference-sidebar-link {
@@ -1487,7 +1487,7 @@ table td {
   .ltms-reference-sidebar .app-sidebar-scroll:focus-within {
     width: 100% !important;
     border-radius: 0;
-    background: #2a2520;
+    background: var(--ltms-chrome, #2a2520);
     box-shadow: none;
   }
 
@@ -1528,8 +1528,8 @@ table td {
   padding: 0;
   border: 0;
   border-radius: 6px;
-  background: #8e2716;
-  color: #fdf4e3;
+  background: var(--ltms-branded, #8e2716);
+  color: var(--ltms-chrome-text, #fdf4e3);
   cursor: pointer;
   font-family: "LTMS Instrument Sans", "Helvetica Neue", sans-serif;
   font-size: 12px;
@@ -1555,13 +1555,13 @@ table td {
   overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 8px;
-  background: #352f2a;
+  background: var(--ltms-chrome-card, #352f2a);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
 }
 
 .ltms-app-shell-account-header {
   padding: 10px 14px;
-  color: #fdf4e3;
+  color: var(--ltms-chrome-text, #fdf4e3);
 }
 
 .ltms-app-shell-account-name {
@@ -1599,7 +1599,7 @@ table td {
 
 .ltms-app-shell-account-signout:hover {
   background: rgba(255, 255, 255, 0.06);
-  color: #fdf4e3;
+  color: var(--ltms-chrome-text, #fdf4e3);
 }
 
 /* Shared LTMS sidebar treatment for non-LTMS modules. The navigation data and
@@ -1609,7 +1609,7 @@ table td {
   flex: 0 0 192px !important;
   border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
   border-radius: 0 !important;
-  background: #2a2520 !important;
+  background: var(--ltms-chrome, #2a2520) !important;
 }
 .ltms-shared-sidebar .app-sidebar-scroll {
   width: 100% !important;
@@ -1617,7 +1617,7 @@ table td {
   max-height: calc(100dvh - 5rem) !important;
   padding: 8px 6px !important;
   border-radius: 0 !important;
-  background: #2a2520 !important;
+  background: var(--ltms-chrome, #2a2520) !important;
 }
 .ltms-shared-sidebar .app-sidebar-scroll > ul,
 .ltms-shared-sidebar .app-sidebar-scroll > div {
@@ -1649,9 +1649,9 @@ table td {
 }
 .ltms-shared-sidebar .app-sidebar-scroll button[aria-current="page"],
 .ltms-shared-sidebar .app-sidebar-scroll a[aria-current="page"] {
-  border-left-color: #b87333;
+  border-left-color: var(--ltms-chrome-accent, #b87333);
   background: rgba(183, 115, 51, 0.15);
-  color: #fdf4e3;
+  color: var(--ltms-chrome-text, #fdf4e3);
 }
 .ltms-shared-sidebar .app-sidebar-scroll button span,
 .ltms-shared-sidebar .app-sidebar-scroll a span {
@@ -1659,7 +1659,7 @@ table td {
 }
 .ltms-shared-sidebar .app-sidebar-scroll p,
 .ltms-shared-sidebar .app-sidebar-scroll h2 {
-  color: #fdf4e3 !important;
+  color: var(--ltms-chrome-text, #fdf4e3) !important;
 }
 @media (min-width: 1024px) {
   .ltms-app-shell-main:has(.ltms-shared-sidebar) {
@@ -1768,4 +1768,26 @@ table td {
 .auth-abstract-background > main {
   position: relative;
   z-index: 1;
+}
+
+
+/* ORCA Theme Studio: the current Garuda/Sentry appearance remains byte-for-byte
+   equivalent when this adapter is inactive. Other themes remap LTMS chrome. */
+.ltms-app-shell[data-theme]:not([data-theme="garuda"]),
+.ltms-app-shell[data-custom-theme="true"] {
+  --ltms-chrome: color-mix(in oklch, var(--primary) 25%, #1d2533 75%);
+  --ltms-chrome-card: color-mix(in oklch, var(--primary) 22%, #303848 78%);
+  --ltms-chrome-text: #f7f8fa;
+  --ltms-chrome-accent: var(--primary);
+  --ltms-surface: var(--background);
+  --ltms-content-text: var(--foreground);
+  --ltms-branded: var(--primary);
+}
+[data-density="compact"] .ltms-reference-content,
+[data-density="compact"] .ltms-app-shell .ltms-reference-content {
+  padding: 14px;
+}
+[data-density="compact"] .surface-card { --theme-card-padding: 12px; }
+@media (prefers-reduced-motion: reduce) {
+  .ltms-app-shell, .ltms-reference-sidebar, .ltms-reference-sidebar * { transition-duration: 0.01ms !important; }
 }
