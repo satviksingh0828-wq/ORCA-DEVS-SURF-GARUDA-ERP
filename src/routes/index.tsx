@@ -27,6 +27,8 @@ import { logAction } from "@/lib/log-actions";
 import { serverRequestUnpauseOtp, serverSubmitUnpauseOtp } from "@/lib/user-auth";
 import { usePasskeyContext } from "@/components/PasskeyGate";
 import type { AppRole } from "@/lib/roles";
+import { useTheme } from "@/lib/theme";
+import { themeInlineStyles } from "@/lib/theme-studio";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -43,6 +45,7 @@ export const Route = createFileRoute("/")({
 
 function LoginPage() {
   const { signIn, user, ready } = useSession();
+  const { profile } = useTheme();
   const { credentialId } = usePasskeyContext();
   const navigate = useNavigate();
 
@@ -397,8 +400,8 @@ function LoginPage() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <div className="auth-abstract-background ltms-app-shell relative isolate flex min-h-[100dvh] flex-col bg-background text-foreground">
-        <header className="ltms-app-shell-header z-10 flex h-14 shrink-0 items-center border-b-2 border-[#b87333] bg-[#2a2520]">
+      <div data-theme={profile.baseTheme} data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined} style={themeInlineStyles(profile)} className="auth-abstract-background ltms-app-shell relative isolate flex min-h-[100dvh] flex-col bg-background text-foreground">
+        <header className="ltms-app-shell-header z-10 flex h-14 shrink-0 items-center border-b-2">
           <div className="ltms-app-shell-header-inner flex h-full w-full items-center gap-3 px-4">
             <img
               src="/garuda-logo.png"
