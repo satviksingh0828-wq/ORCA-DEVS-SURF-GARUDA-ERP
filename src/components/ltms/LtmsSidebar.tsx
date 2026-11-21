@@ -1,7 +1,9 @@
 // Adapted from the grouped Sidebar component in satviksingh0828-wq/sentry-wms-vercel-admin
 // (Apache-2.0, package version 1.37.0). Visual grouping and active-row treatment follow
 // that source; routes use this ERP's TanStack Router and existing SharedSidebar.
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { reportActiveVideoTab } from "@/lib/video-tabs";
 import { useEffect } from "react";
 import { reportActiveVideoTab } from "@/lib/video-tabs";
 import { SharedSidebar } from "@/components/SharedSidebar";
@@ -198,6 +200,14 @@ export function LtmsSidebar({
   onCrossGroupNavigate?: (section: string, tabId: string) => void;
 }) {
   const { user } = useSession();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const selectedVideoTab = section
+    ? `ltms:${section}:${activeTabId}`
+    : activeItems?.settings || (activeItems?.wms ? `settings:${activeItems.wms}` : "");
+  useEffect(() => {
+    if (!selectedVideoTab) return;
+    return reportActiveVideoTab(selectedVideoTab, pathname);
+  }, [pathname, selectedVideoTab]);
   const groups = customGroups ?? visibleGroups(user?.role);
   const isCustom = Boolean(customGroups);
   useEffect(() => {
