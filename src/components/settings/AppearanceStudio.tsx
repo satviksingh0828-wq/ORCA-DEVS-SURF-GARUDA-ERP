@@ -228,7 +228,7 @@ export function AppearanceStudio() {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!file) return;
-    if (file.size > 20_000) return toast.error("Theme files must be under 20 KB.");
+    if (file.size > 30_000) return toast.error("Theme files must be under 30 KB.");
     try {
       const value = JSON.parse(await file.text());
       if (!value || typeof value !== "object" || !("baseTheme" in value)) throw new Error("Invalid theme file");
@@ -587,11 +587,11 @@ export function AppearanceStudio() {
         <div className="relative mt-4 min-h-[240px] overflow-hidden rounded-xl"
           style={{ background: preview.background }}>
           {draft.videoPlayback.backgroundMode !== "blank" && <video ref={previewVideoRef} src={backgroundVideoUrl} autoPlay={!previewPaused}
-            muted loop={draft.videoPlayback.loopVideo} playsInline preload="metadata" aria-hidden="true"
+            muted loop={draft.videoPlayback.loopVideo} playsInline preload="auto" aria-hidden="true"
             className="absolute inset-0 size-full object-cover"
             style={{ filter: `blur(${draft.videoPlayback.blur}px) brightness(${draft.videoPlayback.brightness}%) saturate(${draft.videoPlayback.saturation}%) contrast(${draft.videoPlayback.contrast}%) grayscale(${draft.videoPlayback.grayscale}%) hue-rotate(${draft.videoPlayback.hueRotate}deg)`,
               transform: `scale(${Math.max(draft.videoPlayback.zoom / 100, 1 + draft.videoPlayback.blur / 250)})` }}
-            onCanPlay={(event) => {
+            onLoadedMetadata={(event) => {
               event.currentTarget.playbackRate = draft.videoPlayback.playbackRate;
               if (draft.videoPlayback.backgroundMode === "still" && Number.isFinite(event.currentTarget.duration) &&
                   event.currentTarget.duration > 0.15) event.currentTarget.currentTime = 0.15;
