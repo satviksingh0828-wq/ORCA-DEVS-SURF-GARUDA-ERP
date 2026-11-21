@@ -591,13 +591,7 @@ export function StockOutward() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-muted/20 p-4">
-        <div>
-          <h2 className="font-semibold">Stock Outward</h2>
-          <p className="text-sm text-muted-foreground">
-            Dispatch stock against one or more sources and record loading details.
-          </p>
-        </div>
+      <div className="flex flex-wrap justify-end gap-3">
         <Button
           onClick={() => {
             resetForm();
