@@ -82,7 +82,7 @@ const ALL_TABS = [
   {
     id: "shipments",
     label: "Shipments",
-    desc: "E-Way Bills and Part A goods",
+    desc: "Each shipment represents one E-Way Bill, with Part A details and goods items.",
     icon: FileText,
     adminOnly: false,
     dividerBefore: false,
@@ -90,7 +90,7 @@ const ALL_TABS = [
   {
     id: "consignment",
     label: "Consignment",
-    desc: "Create shipments from E-Way Bills",
+    desc: "One Consignment contains one or more matching E-Way Bills and view-only Shipments.",
     icon: FileText,
     adminOnly: false,
     dividerBefore: false,
@@ -98,7 +98,7 @@ const ALL_TABS = [
   {
     id: "lr",
     label: "LR",
-    desc: "Combine shipments into Lorry Receipts",
+    desc: "Combine compatible E-Way Bill shipments into one Lorry Receipt.",
     icon: Truck,
     adminOnly: false,
     dividerBefore: false,
@@ -106,7 +106,7 @@ const ALL_TABS = [
   {
     id: "manifest",
     label: "Manifest",
-    desc: "Delivery manifests and LR links",
+    desc: "Create branch manifests and link Lorry Receipts to a manifest or trip.",
     icon: ClipboardList,
     adminOnly: false,
     dividerBefore: false,
@@ -114,7 +114,7 @@ const ALL_TABS = [
   {
     id: "ltms-manifest",
     label: "Manifest",
-    desc: "Update transporter on consignment E-Way Bills",
+    desc: "Transfer consignments, update transporter details and review manifest history.",
     icon: ClipboardList,
     adminOnly: false,
     dividerBefore: false,
@@ -122,7 +122,7 @@ const ALL_TABS = [
   {
     id: "outward-pod",
     label: "Outward POD",
-    desc: "Create and view outward proof of delivery",
+    desc: "Create and review outward proof-of-delivery records.",
     icon: FilePenLine,
     adminOnly: false,
     dividerBefore: false,
@@ -130,7 +130,7 @@ const ALL_TABS = [
   {
     id: "stock-inward",
     label: "Stock Inward",
-    desc: "Receive stock and unloading details",
+    desc: "Receive stock against sources and record unloading details.",
     icon: PackagePlus,
     adminOnly: false,
     dividerBefore: false,
@@ -138,7 +138,7 @@ const ALL_TABS = [
   {
     id: "stock-outward",
     label: "Stock Outward",
-    desc: "Dispatch stock and loading details",
+    desc: "Dispatch stock against sources and record loading details.",
     icon: PackagePlus,
     adminOnly: false,
     dividerBefore: false,
