@@ -1208,13 +1208,13 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     <div className="space-y-5">
       {!showCreate && (
         <>
-          <div className="flex flex-wrap justify-end gap-3">
-            {canCreate && (
+          {canCreate && (
+            <div className="flex flex-wrap justify-end gap-3">
               <Button onClick={openCreate} className="gap-1.5">
                 <Plus className="size-4" /> Create Shipment
               </Button>
-            )}
-          </div>
+            </div>
+          )
           <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border bg-muted/20 p-3">
             <div className="min-w-[190px] space-y-1.5">
               <Label>Branch</Label>
