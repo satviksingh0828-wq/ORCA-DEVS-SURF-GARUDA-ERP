@@ -174,7 +174,7 @@ export function AppShell({
   const { profile, resolveModuleTheme, backgroundVideoEnabled } = useTheme();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const videoTab = useCurrentVideoTab(pathname);
-  const showBackgroundVideo = backgroundVideoEnabled && videoEnabledForTab(profile.videoTabs, videoTab);
+  const showBackgroundVideo = backgroundVideoEnabled && videoEnabledForTab(profile.videoTabs, videoTab) && profile.videoPlayback.backgroundMode !== "blank";
   const currentModule = themeModuleForPath(pathname);
   const appearanceTheme = resolveModuleTheme(currentModule);
   // Tailwind's dark variant also checks the html class. Keep it aligned
