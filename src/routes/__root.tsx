@@ -157,7 +157,15 @@ function RootShell({ children }: { children: ReactNode }) {
     if (theme && validThemes.has(theme)) {
       const root = document.documentElement;
       root.setAttribute("data-theme", theme);
-      root.classList.toggle("dark", ["neon", "midnight", "forest", "storm"].includes(theme));
+      const path = window.location.pathname.toLowerCase();
+      const module = /^\\/wms(?:\\/|$)/.test(path) ? "wms"
+        : /^\\/(?:accounts|cash-reports)(?:\\/|$)/.test(path) ? "accounts"
+        : /^\\/(?:hrms|hr-dashboard|hr-data|dashboard|employees|payroll|attendance)(?:\\/|$)/.test(path) ? "hrms"
+        : /^\\/(?:ltms|tms|masters|operations|finance|reports|report-master|import-trips)(?:\\/|$)/.test(path) ? "ltms"
+        : "erp";
+      const routeTheme = profile && profile.modules && validThemes.has(profile.modules[module])
+        ? profile.modules[module] : theme;
+      root.classList.toggle("dark", ["neon", "midnight", "forest", "storm"].includes(routeTheme));
       if (profile && profile.colors && typeof profile.colors === "object") {
         const colors = profile.colors;
         const hex = /^#[0-9a-fA-F]{6}$/;
