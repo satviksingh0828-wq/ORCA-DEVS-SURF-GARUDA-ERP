@@ -1586,13 +1586,7 @@ export function ConsignmentList({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h2 className="text-lg font-semibold">Consignment</h2>
-          <p className="text-sm text-muted-foreground">
-            One Consignment contains one or more matching E-Way Bills and view-only Shipments.
-          </p>
-        </div>
+      <div className="flex flex-wrap justify-end gap-2">
         <Button onClick={openCreate}>
           <Plus className="mr-1 size-4" /> Create Consignment
         </Button>
