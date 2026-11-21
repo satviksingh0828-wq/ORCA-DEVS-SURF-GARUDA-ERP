@@ -44,7 +44,7 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
 };
 
 const MODULES: ThemeModule[] = ["erp", "ltms", "wms", "hrms", "accounts"];
-const COLOR_FIELDS = ["primary","primaryForeground","background","foreground","card","cardForeground","secondary","secondaryForeground","muted","mutedForeground","popover","popoverForeground","border","input","ring","sidebar","sidebarForeground","sidebarCard","sidebarAccent","sidebarAccentForeground","sidebarBorder","wmsAccent"] as const;
+const COLOR_FIELDS = ["primary","primaryForeground","background","foreground","card","cardForeground","secondary","secondaryForeground","muted","mutedForeground","popover","popoverForeground","border","input","ring","sidebar","sidebarForeground","sidebarCard","sidebarAccent","sidebarAccentForeground","sidebarBorder","wmsAccent","videoHeading","videoText","videoMutedText","videoLink","videoLabel","videoPanelBackground","videoPanelText","footerBackground","footerForeground","footerAccent"] as const;
 const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
 const DARK_THEME_IDS = new Set(["neon", "midnight", "forest", "storm"]);
 
