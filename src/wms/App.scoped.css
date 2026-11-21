@@ -1418,35 +1418,35 @@ html[data-video-background="on"] .wms-embedded-scope :is(.card, .panel, .modal, 
   min-width: 0;
   color: var(--text);
 }
-.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+.wms-embedded-scope[data-wms-theme-scope="true"] .wms-settings-embedded :is(
   .page-header, .settings-section, .settings-card, .card, .modal, .panel,
   .data-table, .lines-table
 ) {
   color: var(--text);
 }
-.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+.wms-embedded-scope[data-wms-theme-scope="true"] .wms-settings-embedded :is(
   .card, .settings-section, .settings-card, .modal, .panel
 ) {
   border-color: var(--border);
 }
-.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+.wms-embedded-scope[data-wms-theme-scope="true"] .wms-settings-embedded :is(
   input:not([type="checkbox"]):not([type="radio"]), select, textarea
 ) {
   color: var(--text);
   background-color: var(--white);
   border-color: var(--border-dark);
 }
-.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+.wms-embedded-scope[data-wms-theme-scope="true"] .wms-settings-embedded :is(
   input, select, textarea
 ):focus-visible {
   outline-color: var(--accent);
 }
-.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+.wms-embedded-scope[data-wms-theme-scope="true"] .wms-settings-embedded :is(
   input, textarea
 )::placeholder {
   color: var(--text-secondary);
 }
-.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+.wms-embedded-scope[data-wms-theme-scope="true"] .wms-settings-embedded :is(
   .data-table tbody tr:hover, .lines-table tbody tr:hover
 ) {
   background: var(--wms-highlight-bg, var(--surface));
