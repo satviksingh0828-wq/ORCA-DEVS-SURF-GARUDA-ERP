@@ -157,7 +157,16 @@ export function AppearanceStudio() {
   const readability = contrast(preview.foreground, preview.background);
   const cardReadability = contrast(preview.cardForeground, preview.card);
   const sidebarReadability = contrast(preview.sidebarForeground, preview.sidebar);
-  const accessible = readability >= 4.5 && cardReadability >= 4.5 && sidebarReadability >= 4.5;
+  const footerReadability = contrast(
+    draft.colors.footerForeground || currentColor(draft, "footerForeground"),
+    draft.colors.footerBackground || currentColor(draft, "footerBackground"),
+  );
+  const videoPanelReadability = contrast(
+    draft.colors.videoPanelText || currentColor(draft, "videoPanelText"),
+    draft.colors.videoPanelBackground || currentColor(draft, "videoPanelBackground"),
+  );
+  const accessible = readability >= 4.5 && cardReadability >= 4.5 &&
+    sidebarReadability >= 4.5 && footerReadability >= 4.5 && videoPanelReadability >= 4.5;
   const activeName = themeNames.get(draft.baseTheme) ?? "Current ORCA";
   const enabledVideoTabs = VIDEO_TAB_GROUPS.flatMap((group) => group.options)
     .filter((option) => videoEnabledForTab(draft.videoTabs, option.key)).length;
@@ -575,12 +584,23 @@ export function AppearanceStudio() {
               </div>
             </div>
           </div>
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t-2 px-3 py-2 text-xs"
+            style={{
+              background: draft.colors.footerBackground || currentColor(draft, "footerBackground"),
+              color: draft.colors.footerForeground || currentColor(draft, "footerForeground"),
+              borderColor: draft.colors.footerAccent || currentColor(draft, "footerAccent"),
+            }}>
+            <span>Powered by ORCA DEVS SURF</span>
+            <span>orca.devs.surf</span>
+          </div>
         </div>
         <div className="mt-3 grid gap-2 text-xs sm:grid-cols-3">
           {[
             ["Workspace text", readability],
             ["Card text", cardReadability],
             ["Sidebar text", sidebarReadability],
+            ["Footer text", footerReadability],
+            ["Video panel text", videoPanelReadability],
           ].map(([name, ratio]) => (
             <div key={String(name)} className="rounded-lg border border-border bg-muted/20 p-2.5">
               <span className="text-muted-foreground">{name}</span>
