@@ -132,15 +132,15 @@ export function AppearanceStudio() {
   const previewVideoRef = useRef<HTMLVideoElement>(null);
   const [previewPaused, setPreviewPaused] = useState(false);
   useEffect(() => {
-    setPreviewPaused(draft.videoPlayback.startPaused);
-  }, [draft.videoPlayback.startPaused]);
+    setPreviewPaused(draft.videoPlayback.backgroundMode !== "video");
+  }, [draft.videoPlayback.backgroundMode]);
   useEffect(() => {
     const video = previewVideoRef.current;
     if (!video) return;
     video.playbackRate = draft.videoPlayback.playbackRate;
-    if (previewPaused) video.pause();
+    if (previewPaused || draft.videoPlayback.backgroundMode === "blank") video.pause();
     else void video.play().catch(() => undefined);
-  }, [previewPaused, draft.videoPlayback.playbackRate, backgroundVideoUrl]);
+  }, [previewPaused, draft.videoPlayback.playbackRate, draft.videoPlayback.backgroundMode, backgroundVideoUrl]);
   useEffect(() => setDraft(profile), [profile]);
   const dirty = JSON.stringify(draft) !== JSON.stringify(profile);
   const preview = useMemo(() => {
@@ -321,7 +321,7 @@ export function AppearanceStudio() {
             <h3 className="text-sm font-semibold">Background video per tab</h3>
             <p className="mt-1 text-xs text-muted-foreground">
               Video is on only for Home, Login and passkey verification by default.
-              Every LTMS, ERP and Sentry/WMS tab is off until you enable it below.
+              Every LTMS, HRMS, ERP and Sentry/WMS tab is off until you enable it below.
               The master video switch and video URL remain in Workspace background video.
             </p>
           </div>
@@ -436,9 +436,31 @@ export function AppearanceStudio() {
           Configure how background video starts and runs on the tabs where you enable it.
           Users can pause or resume on their own device without changing anyone else's playback.
         </p>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          {([
+            ["video", "Moving video", "Play the selected video as the background."],
+            ["still", "Video as image", "Freeze a decoded frame from that video, with no other image."],
+            ["blank", "Blank background", "No video, banner, gradients, poster or background photograph."],
+          ] as const).map(([mode, title, desc]) => (
+            <button type="button" key={mode} aria-pressed={draft.videoPlayback.backgroundMode === mode}
+              className={draft.videoPlayback.backgroundMode === mode
+                ? "rounded-xl border-2 border-primary bg-primary-soft p-3 text-left"
+                : "rounded-xl border border-border bg-card p-3 text-left hover:border-primary"}
+              onClick={() => setDraft((prev) => ({
+                ...prev,
+                videoPlayback: { ...prev.videoPlayback, backgroundMode: mode, startPaused: false },
+              }))}>
+              <span className="block text-sm font-semibold">{title}</span>
+              <span className="mt-1 block text-xs text-muted-foreground">{desc}</span>
+            </button>
+          ))}
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          These modes apply universally wherever video is enabled. Play/Pause on a page changes
+          the current device only. The Garuda banner is never used as a fallback.
+        </p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           {([
-            ["startPaused", "Start video paused", "Pause on first load, until someone presses Play."],
             ["showPauseButton", "Show on-page Play / Pause / Restart", "Allow playback control directly from Home, Login, passkey and enabled module tabs."],
             ["pauseWhenHidden", "Pause when switching browser tabs", "Save device resources and automatically resume if playback was not manually paused."],
             ["respectReducedMotion", "Respect reduced-motion preference", "Start paused for users requesting reduced motion; they can manually resume."],
@@ -457,6 +479,51 @@ export function AppearanceStudio() {
                 }))}/>
             </label>
           ))}
+          <div className="space-y-3 rounded-lg border border-border bg-card p-3 sm:col-span-2">
+            <div>
+              <span className="text-sm font-semibold">Universal video effects</span>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Blur and colour tint apply to the video or frozen video frame on every enabled page.
+                Forms, headers, navigation and text are never blurred.
+              </p>
+            </div>
+            <label className="flex flex-wrap items-center justify-between gap-3 text-xs font-medium">
+              Video colour tint
+              <span className="flex items-center gap-2">
+                <input type="color" value={draft.videoPlayback.tintColor}
+                  className="h-9 w-12 cursor-pointer rounded-md border border-border bg-background p-1"
+                  onChange={(event) => setDraft((prev) => ({
+                    ...prev, videoPlayback: { ...prev.videoPlayback, tintColor: event.target.value },
+                  }))}/>
+                <span className="font-mono">{draft.videoPlayback.tintColor}</span>
+              </span>
+            </label>
+            {([
+              ["tintOpacity", "Colour tint strength", 0, 80, "%"],
+              ["blur", "Video blur", 0, 24, "px"],
+              ["brightness", "Video brightness", 40, 160, "%"],
+              ["saturation", "Colour saturation", 0, 200, "%"],
+            ] as const).map(([key, label, min, max, unit]) => (
+              <label key={key} className="flex flex-col gap-2 text-xs font-medium">
+                <span className="flex justify-between gap-2">
+                  <span>{label}</span>
+                  <span className="tabular-nums">{draft.videoPlayback[key]}{unit}</span>
+                </span>
+                <input type="range" min={min} max={max} step={1}
+                  value={draft.videoPlayback[key]} className="w-full accent-primary"
+                  onChange={(event) => setDraft((prev) => ({
+                    ...prev, videoPlayback: { ...prev.videoPlayback, [key]: Number(event.target.value) },
+                  }))}/>
+              </label>
+            ))}
+            <button type="button" className="rounded-md border border-border bg-background px-3 py-2 text-xs hover:bg-muted"
+              onClick={() => setDraft((prev) => ({
+                ...prev, videoPlayback: {
+                  ...prev.videoPlayback, blur: 0, tintColor: "#000000",
+                  tintOpacity: 0, brightness: 100, saturation: 100, videoDim: 0,
+                },
+              }))}>Reset video effects</button>
+          </div>
           <label className="flex flex-col gap-2 rounded-lg border border-border bg-card p-3">
             <span className="text-sm font-medium">Playback speed</span>
             <span className="text-xs text-muted-foreground">Play slower for calm footage, or faster for motion.</span>
@@ -491,7 +558,7 @@ export function AppearanceStudio() {
 
       <section className="surface-card p-5 sm:p-6">
         <h3 className="text-sm font-semibold">Video text and readability</h3>
-        <p className="mt-1 text-xs text-muted-foreground">These settings affect text outside of cards, direct video labels and your sign-in video panels. No backdrop blur is used.</p>
+        <p className="mt-1 text-xs text-muted-foreground">Style text and form panels independently of blur/tint on the video footage. The foreground UI remains sharp and readable.</p>
         <div className="mt-4 grid gap-3 sm:grid-cols-2">
           <label className="flex flex-col gap-2 text-xs font-medium">Text shadow for moving footage
             <select className="rounded-lg border border-input bg-background px-3 py-2.5 text-sm text-foreground"
@@ -512,16 +579,25 @@ export function AppearanceStudio() {
             </select>
           </label>
         </div>
-        <div className="relative mt-4 min-h-[240px] overflow-hidden rounded-xl bg-slate-800">
-          <video ref={previewVideoRef} src={backgroundVideoUrl} autoPlay={!previewPaused}
+        <div className="relative mt-4 min-h-[240px] overflow-hidden rounded-xl"
+          style={{ background: preview.background }}>
+          {draft.videoPlayback.backgroundMode !== "blank" && <video ref={previewVideoRef} src={backgroundVideoUrl} autoPlay={!previewPaused}
             muted loop={draft.videoPlayback.loopVideo} playsInline preload="metadata" aria-hidden="true"
             className="absolute inset-0 size-full object-cover"
-            style={{ filter: "none" }}
+            style={{ filter: `blur(${draft.videoPlayback.blur}px) brightness(${draft.videoPlayback.brightness}%) saturate(${draft.videoPlayback.saturation}%)`,
+              transform: draft.videoPlayback.blur ? `scale(${1 + draft.videoPlayback.blur / 250})` : undefined }}
             onCanPlay={(event) => {
               event.currentTarget.playbackRate = draft.videoPlayback.playbackRate;
+              if (draft.videoPlayback.backgroundMode === "still" && Number.isFinite(event.currentTarget.duration) &&
+                  event.currentTarget.duration > 0.15) event.currentTarget.currentTime = 0.15;
               if (previewPaused) event.currentTarget.pause();
-            }}/>
-          <div className="absolute inset-0 z-[1] pointer-events-none" style={{ background: `rgb(0 0 0 / ${draft.videoPlayback.videoDim / 100})` }}/>
+            }}/>} 
+          {draft.videoPlayback.backgroundMode !== "blank" && <>
+            <div className="pointer-events-none absolute inset-0 z-[1]"
+              style={{ backgroundColor: draft.videoPlayback.tintColor, opacity: draft.videoPlayback.tintOpacity / 100 }} />
+            <div className="pointer-events-none absolute inset-0 z-[1]"
+              style={{ background: `rgb(0 0 0 / ${draft.videoPlayback.videoDim / 100})` }} />
+          </>}
           <div className="relative z-10 flex min-h-[240px] flex-col items-start justify-between gap-3 p-5">
             <div style={previewVideoTextStyle}>
               <p className="text-xs" style={{ color: getVideoColor("videoLabel") }}>GARUDA · VIDEO TEXT PREVIEW</p>
@@ -529,10 +605,11 @@ export function AppearanceStudio() {
               <p className="mt-2 text-sm" style={{ color: getVideoColor("videoText") }}>Direct text remains readable over moving footage.</p>
               <p className="mt-1 text-xs" style={{ color: getVideoColor("videoMutedText") }}>Text, labels and video remain unblurred.</p>
               <span className="mt-2 inline-block text-sm underline" style={{ color: getVideoColor("videoLink") }}>Open workspace</span>
-              <button type="button" className="ml-3 rounded-md bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white"
+              {draft.videoPlayback.backgroundMode !== "blank" && <button type="button"
+                className="ml-3 rounded-md bg-slate-900/80 px-3 py-1 text-xs font-semibold text-white"
                 onClick={() => setPreviewPaused((current) => !current)}>
                 {previewPaused ? "Play preview" : "Pause preview"}
-              </button>
+              </button>}
             </div>
             <div className="rounded-lg border px-3 py-2 text-xs" style={{
               background: getVideoColor("videoPanelBackground"),
@@ -541,7 +618,7 @@ export function AppearanceStudio() {
             }}>Readable form panel · no backdrop blur</div>
           </div>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Contrast can vary frame by frame; test against both bright and dark footage. Strong text shadow changes lettering only, not video sharpness.</p>
+        <p className="mt-3 text-xs text-muted-foreground">Preview matches the selected video mode and visual effects. Still mode uses a frame from the video; Blank shows only your theme background. Contrast can vary between video frames.</p>
       </section>
 
       <section className="surface-card p-5 sm:p-6">
