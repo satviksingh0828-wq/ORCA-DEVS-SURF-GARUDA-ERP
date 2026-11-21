@@ -18,6 +18,7 @@ import { preloadLogo } from "../lib/logo";
 import appCss from "../styles.css?url";
 import { SessionProvider } from "@/lib/session";
 import { ThemeProvider, useTheme } from "../lib/theme";
+import { WorkspaceBackgroundVideo } from "../components/WorkspaceBackgroundVideo";
 import { Toaster } from "../components/ui/sonner";
 import { OrcaAIProvider } from "../lib/orca-context";
 import { MeetPanel } from "../components/MeetPanel";
@@ -193,6 +194,7 @@ function RootShell({ children }: { children: ReactNode }) {
       <body>
         <SessionProvider>
           <ThemeProvider>
+            <WorkspaceBackgroundVideo />
             <OrcaAIProvider>{children}</OrcaAIProvider>
           </ThemeProvider>
         </SessionProvider>
