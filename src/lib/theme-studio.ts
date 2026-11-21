@@ -21,7 +21,7 @@ export const THEME_PRESETS = [
 ] as const;
 
 export type ThemeModule = "erp" | "ltms" | "wms" | "hrms" | "accounts";
-export type ThemeColors = Partial<Record<"primary" | "primaryForeground" | "background" | "foreground" | "card" | "cardForeground" | "secondary" | "secondaryForeground" | "muted" | "mutedForeground" | "popover" | "popoverForeground" | "border" | "input" | "ring" | "sidebar" | "sidebarForeground" | "sidebarCard" | "sidebarAccent" | "sidebarAccentForeground" | "sidebarBorder" | "wmsAccent", string>>;
+export type ThemeColors = Partial<Record<"primary" | "primaryForeground" | "background" | "foreground" | "card" | "cardForeground" | "secondary" | "secondaryForeground" | "muted" | "mutedForeground" | "popover" | "popoverForeground" | "border" | "input" | "ring" | "sidebar" | "sidebarForeground" | "sidebarCard" | "sidebarAccent" | "sidebarAccentForeground" | "sidebarBorder" | "wmsAccent" | "videoHeading" | "videoText" | "videoMutedText" | "videoLink" | "videoLabel" | "videoPanelBackground" | "videoPanelText" | "footerBackground" | "footerForeground" | "footerAccent", string>>;
 export type ThemeProfile = {
   version: 2;
   baseTheme: string;
