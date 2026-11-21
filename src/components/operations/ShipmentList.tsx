@@ -1208,13 +1208,7 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
     <div className="space-y-5">
       {!showCreate && (
         <>
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Shipments</h2>
-              <p className="text-sm text-muted-foreground">
-                One shipment is one E-Way Bill. Part A details are stored with nested goods items.
-              </p>
-            </div>
+          <div className="flex flex-wrap justify-end gap-3">
             {canCreate && (
               <Button onClick={openCreate} className="gap-1.5">
                 <Plus className="size-4" /> Create Shipment
