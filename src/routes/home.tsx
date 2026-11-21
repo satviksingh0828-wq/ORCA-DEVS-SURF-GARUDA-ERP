@@ -19,6 +19,7 @@ import { AppShell } from "@/components/AppShell";
 import { BrandFooter } from "@/components/BrandFooter";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useSession } from "@/lib/session";
+import { useTheme } from "@/lib/theme";
 
 export const Route = createFileRoute("/home")({
   head: () => ({
@@ -180,6 +181,10 @@ const ADMIN_VIEWER_MODULES = [
 function HomePage() {
   const navigate = useNavigate();
   const { ready, user, wmsAccessReady, wmsEnabled } = useSession();
+  const { profile } = useTheme();
+  const iconSize = profile.homeIconSize;
+  const iconFrameSize = Math.max(52, iconSize + 24);
+  const tileMinHeight = Math.max(106, iconFrameSize + 55);
   // Keep every module icon (including the linked-only WMS tile) in skeleton
   // form until the ERP session and Supabase access check have both completed.
   const loading = !ready || !user || !wmsAccessReady;
@@ -205,8 +210,8 @@ function HomePage() {
         {loading && <span className="sr-only">Checking WMS access before showing modules…</span>}
         {loading
           ? Array.from({ length: roleModules.length }).map((_, i) => (
-              <div key={i} className="flex min-h-[106px] flex-col items-center gap-2 p-2">
-                <Skeleton className="size-[3.25rem] rounded-2xl" />
+              <div key={i} className="flex flex-col items-center gap-2 p-2" style={{ minHeight: tileMinHeight }}>
+                <Skeleton className="rounded-2xl" style={{ width: iconFrameSize, height: iconFrameSize }} />
                 <Skeleton className="h-3 w-16 rounded-full" />
               </div>
             ))
@@ -223,16 +228,18 @@ function HomePage() {
                       ? navigate({ to: m.to })
                       : toast.info(`${m.label} module is coming soon`)
                   }
-                  className="group animate-fade-up flex min-h-[106px] flex-col items-center justify-start rounded-xl p-2 text-center transition-colors duration-200 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="group animate-fade-up flex flex-col items-center justify-start rounded-xl p-2 text-center transition-colors duration-200 hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  style={{ minHeight: tileMinHeight }}
                 >
                   <span
-                    className={`flex size-[3.25rem] items-center justify-center rounded-2xl transition-colors ${
+                    className={`flex shrink-0 items-center justify-center rounded-2xl transition-colors ${
                       enabled
                         ? "bg-primary-soft text-primary group-hover:bg-primary group-hover:text-primary-foreground"
                         : "bg-muted text-muted-foreground"
                     }`}
+                    style={{ width: iconFrameSize, height: iconFrameSize }}
                   >
-                    <Icon className="size-7" />
+                    <Icon aria-hidden="true" style={{ width: iconSize, height: iconSize }} />
                   </span>
                   <span className="video-overlay-label mt-2 max-w-full text-xs font-medium leading-tight tracking-tight">
                     {m.label}
