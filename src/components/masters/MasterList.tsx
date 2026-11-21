@@ -156,8 +156,10 @@ export function MasterList({
   config,
   renderExtraEditSections,
   renderRowActions,
+  embedded = false,
 }: {
   config: MasterConfig;
+  embedded?: boolean;
   renderExtraEditSections?: (id: string, row: Row) => React.ReactNode;
   renderRowActions?: (row: Row) => React.ReactNode;
 }) {
@@ -624,11 +626,13 @@ export function MasterList({
 
   return (
     <div className="animate-fade-up space-y-5">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight">{config.entityLabel}</h2>
-          <p className="mt-1 text-sm text-muted-foreground">{config.emptyMsg}</p>
-        </div>
+      <div className={`flex flex-wrap items-center gap-4 ${embedded ? "justify-end" : "justify-between"}`}>
+        {!embedded && (
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight">{config.entityLabel}</h2>
+            <p className="mt-1 text-sm text-muted-foreground">{config.emptyMsg}</p>
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-2">
           {!isViewer ? (
             <CsvIO
