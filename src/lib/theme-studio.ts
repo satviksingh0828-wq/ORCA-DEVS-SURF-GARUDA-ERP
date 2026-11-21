@@ -113,6 +113,34 @@ const ROOT_OVERRIDES = [
   "--popover", "--popover-foreground", "--border", "--input", "--radius",
 ] as const;
 
+export function themeInlineStyles(profile: ThemeProfile): Record<string, string> {
+  const result: Record<string, string> = {};
+  const { primary, background, foreground, card, border } = profile.colors;
+  if (primary) {
+    result["--primary"] = primary;
+    result["--primary-soft"] = `color-mix(in oklch, ${primary} 14%, var(--card))`;
+    result["--primary-glow"] = `color-mix(in oklch, ${primary} 65%, white)`;
+    result["--ring"] = primary;
+    result["--sidebar-primary"] = primary;
+  }
+  if (background) result["--background"] = background;
+  if (foreground) {
+    result["--foreground"] = foreground;
+    result["--card-foreground"] = foreground;
+    result["--popover-foreground"] = foreground;
+  }
+  if (card) {
+    result["--card"] = card;
+    result["--popover"] = card;
+  }
+  if (border) {
+    result["--border"] = border;
+    result["--input"] = border;
+  }
+  if (profile.radius !== null) result["--radius"] = profile.radius + "px";
+  return result;
+}
+
 export function applyThemeProfile(profile: ThemeProfile): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
@@ -120,27 +148,6 @@ export function applyThemeProfile(profile: ThemeProfile): void {
   root.dataset.density = profile.density;
   root.classList.toggle("dark", isDarkTheme(profile.baseTheme));
   for (const name of ROOT_OVERRIDES) root.style.removeProperty(name);
-  const { primary, background, foreground, card, border } = profile.colors;
-  if (primary) {
-    root.style.setProperty("--primary", primary);
-    root.style.setProperty("--primary-soft", `color-mix(in oklch, ${primary} 14%, var(--card))`);
-    root.style.setProperty("--primary-glow", `color-mix(in oklch, ${primary} 65%, white)`);
-    root.style.setProperty("--ring", primary);
-    root.style.setProperty("--sidebar-primary", primary);
-  }
-  if (background) root.style.setProperty("--background", background);
-  if (foreground) root.style.setProperty("--foreground", foreground);
-  if (card) {
-    root.style.setProperty("--card", card);
-    root.style.setProperty("--popover", card);
-  }
-  if (foreground) {
-    root.style.setProperty("--card-foreground", foreground);
-    root.style.setProperty("--popover-foreground", foreground);
-  }
-  if (border) {
-    root.style.setProperty("--border", border);
-    root.style.setProperty("--input", border);
-  }
-  if (profile.radius !== null) root.style.setProperty("--radius", profile.radius + "px");
+  for (const [key, value] of Object.entries(themeInlineStyles(profile))) root.style.setProperty(key, value);
+
 }
