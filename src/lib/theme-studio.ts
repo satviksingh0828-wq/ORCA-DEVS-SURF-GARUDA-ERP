@@ -302,13 +302,64 @@ export function themeInlineStyles(profile: ThemeProfile): Record<string, string>
   return result;
 }
 
+/**
+ * A module can use a light theme while the workspace default is dark (and
+ * vice versa). Light accent-only presets do not reset surface tokens on their
+ * own, so give an explicitly overridden module a complete readable baseline.
+ * User-chosen custom colours always win.
+ */
+const MODULE_LIGHT_SURFACES: Record<string, string> = {
+  "--background": "#fafaf7",
+  "--foreground": "#1a1714",
+  "--card": "#ffffff",
+  "--card-foreground": "#1a1714",
+  "--popover": "#ffffff",
+  "--popover-foreground": "#1a1714",
+  "--secondary": "#f2f3f5",
+  "--secondary-foreground": "#263443",
+  "--muted": "#f5f3ee",
+  "--muted-foreground": "#6b5f50",
+  "--border": "#e8e2d8",
+  "--input": "#e8e2d8",
+  "--sidebar": "#2a2520",
+  "--sidebar-foreground": "#fdf4e3",
+  "--sidebar-border": "#554b40",
+};
+const MODULE_DARK_SURFACES: Record<string, string> = {
+  "--background": "#121821",
+  "--foreground": "#f1f5f9",
+  "--card": "#202a36",
+  "--card-foreground": "#f1f5f9",
+  "--popover": "#202a36",
+  "--popover-foreground": "#f1f5f9",
+  "--secondary": "#293444",
+  "--secondary-foreground": "#eef2fa",
+  "--muted": "#28313e",
+  "--muted-foreground": "#afbdcb",
+  "--border": "#3c4b5c",
+  "--input": "#3c4b5c",
+  "--sidebar": "#172130",
+  "--sidebar-foreground": "#f1f5f9",
+  "--sidebar-border": "#415066",
+};
+
+export function moduleThemeInlineStyles(profile: ThemeProfile, module: ThemeModule): Record<string, string> {
+  const moduleTheme = getModuleTheme(profile, module);
+  return {
+    ...(moduleTheme === profile.baseTheme
+      ? {}
+      : isDarkTheme(moduleTheme) ? MODULE_DARK_SURFACES : MODULE_LIGHT_SURFACES),
+    ...themeInlineStyles(profile),
+  };
+}
+
 export function applyThemeProfile(profile: ThemeProfile): void {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  root.dataset.theme = profile.baseTheme;
   root.dataset.density = profile.density;
   const routeTheme = typeof window === "undefined" ? profile.baseTheme :
     getModuleTheme(profile, themeModuleForPath(window.location.pathname));
+  root.dataset.theme = routeTheme;
   root.classList.toggle("dark", isDarkTheme(routeTheme));
   for (const name of ROOT_OVERRIDES) root.style.removeProperty(name);
   root.style.removeProperty("--radius");
