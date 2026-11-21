@@ -7,7 +7,7 @@ import Modal from '../components/Modal.jsx';
 // Rotation badges computed server-side, rendered client-side.
 const ROTATION_BADGE = {
   none: null,
-  recommended: { label: 'rotation recommended', color: '#c49100' },
+  recommended: { label: 'rotation recommended', color: 'var(--warning)' },
   overdue: { label: 'rotation overdue', color: 'var(--danger)' },
 };
 
