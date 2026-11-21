@@ -21,7 +21,7 @@ import { MobileAppDownloads } from "@/components/MobileAppDownloads";
 import { cn } from "@/lib/utils";
 import { isAdminLike } from "@/lib/roles";
 import { useTheme } from "@/lib/theme";
-import { isDarkTheme, themeInlineStyles, type ThemeModule } from "@/lib/theme-studio";
+import { isDarkTheme, themeInlineStyles, themeModuleForPath } from "@/lib/theme-studio";
 
 function ChangePasswordDialog({
   open,
@@ -172,8 +172,16 @@ export function AppShell({
   const { open, expanded } = useOrcaAI();
   const { profile, resolveModuleTheme, backgroundVideoEnabled } = useTheme();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
-  const currentModule: ThemeModule = pathname.startsWith("/wms") ? "wms" : pathname.startsWith("/ltms") ? "ltms" : pathname.startsWith("/accounts") ? "accounts" : /^(\/hrms|\/hr-|\/employees|\/payroll|\/attendance)/.test(pathname) ? "hrms" : "erp";
+  const currentModule = themeModuleForPath(pathname);
   const appearanceTheme = resolveModuleTheme(currentModule);
+  // Tailwind's dark variant also checks the html class. Keep it aligned
+  // with this route's effective module, including light-on-dark overrides.
+  useEffect(() => {
+    document.documentElement.classList.toggle("dark", isDarkTheme(appearanceTheme));
+    return () => {
+      document.documentElement.classList.toggle("dark", isDarkTheme(profile.baseTheme));
+    };
+  }, [appearanceTheme, profile.baseTheme]);
   const isAdmin = isAdminLike(user?.role);
   const isViewer = user?.role === "viewer";
   const displayName = user?.fullName ?? user?.username ?? "User";
