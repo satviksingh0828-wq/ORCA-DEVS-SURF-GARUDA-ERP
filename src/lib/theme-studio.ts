@@ -29,6 +29,9 @@ export type ThemeProfile = {
   colors: ThemeColors;
   /** Explicit per-tab video choices; absent keys use the secure default policy. */
   videoTabs: Record<string, boolean>;
+  /** Text contrast without blurring the underlying footage. */
+  videoTextShadow: "none" | "subtle" | "strong";
+  videoTextWeight: "regular" | "medium" | "bold";
   density: "comfortable" | "compact";
   radius: number | null;
 };
@@ -39,6 +42,8 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
   modules: {},
   colors: {},
   videoTabs: {},
+  videoTextShadow: "subtle",
+  videoTextWeight: "medium",
   density: "comfortable",
   radius: null,
 };
@@ -83,6 +88,10 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
     modules,
     colors,
     videoTabs,
+    videoTextShadow: source.videoTextShadow === "none" || source.videoTextShadow === "strong"
+      ? source.videoTextShadow : "subtle",
+    videoTextWeight: source.videoTextWeight === "regular" || source.videoTextWeight === "bold"
+      ? source.videoTextWeight : "medium",
     density: source.density === "compact" ? "compact" : "comfortable",
     radius: typeof source.radius === "number" && Number.isFinite(source.radius)
       ? Math.max(0, Math.min(24, source.radius))
@@ -107,6 +116,8 @@ export function serializeThemeProfile(profile: ThemeProfile): string {
   if (Object.keys(profile.modules).length === 0 &&
       Object.keys(profile.colors).length === 0 &&
       Object.keys(profile.videoTabs ?? {}).length === 0 &&
+      (profile.videoTextShadow ?? "subtle") === "subtle" &&
+      (profile.videoTextWeight ?? "medium") === "medium" &&
       profile.density === "comfortable" && profile.radius === null) {
     // Preserve compatibility with previous versions when no v2 customization is used.
     return profile.baseTheme;
@@ -187,6 +198,12 @@ export function themeInlineStyles(profile: ThemeProfile): Record<string, string>
   if (colors.foreground && !colors.cardForeground) result["--card-foreground"] = colors.foreground;
   if (colors.foreground && !colors.popoverForeground) result["--popover-foreground"] = colors.foreground;
   if (colors.border && !colors.input) result["--input"] = colors.border;
+  result["--video-text-shadow"] = profile.videoTextShadow === "none" ? "none"
+    : profile.videoTextShadow === "strong"
+      ? "0 2px 4px rgb(0 0 0 / 0.92), 0 0 10px rgb(0 0 0 / 0.56)"
+      : "0 1px 3px rgb(0 0 0 / 0.82)";
+  result["--video-text-weight"] = profile.videoTextWeight === "bold" ? "700"
+    : profile.videoTextWeight === "regular" ? "400" : "500";
   if (profile.radius !== null) result["--radius"] = profile.radius + "px";
   return result;
 }
