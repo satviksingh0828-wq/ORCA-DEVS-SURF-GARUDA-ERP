@@ -390,7 +390,7 @@
 .wms-skeleton-line {
   height: 10px;
   border-radius: 999px;
-  background: linear-gradient(90deg, #e8e2d8 25%, #f5f3ee 50%, #e8e2d8 75%);
+  background: linear-gradient(90deg, var(--border) 25%, var(--surface) 50%, var(--border) 75%);
   background-size: 220% 100%;
   animation: wms-skeleton-shimmer 1.35s ease-in-out infinite;
 }
@@ -1405,4 +1405,52 @@ html[data-video-background="on"] .wms-embedded-scope :is(.card, .panel, .modal, 
     background: #fff !important;
     color: #111 !important;
   }
+}
+
+/* ORCA WMS Settings theme boundary: preserve native ERP layout and use
+   semantic colours in every legacy WMS component. */
+.wms-native-theme-scope {
+  min-width: 0;
+  color: var(--foreground);
+  background-color: var(--background);
+}
+.wms-embedded-scope[data-wms-theme-scope="true"] {
+  min-width: 0;
+  color: var(--text);
+}
+.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+  .page-header, .settings-section, .settings-card, .card, .modal, .panel,
+  .data-table, .lines-table
+) {
+  color: var(--text);
+}
+.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+  .card, .settings-section, .settings-card, .modal, .panel
+) {
+  border-color: var(--border);
+}
+.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+  input:not([type="checkbox"]):not([type="radio"]), select, textarea
+) {
+  color: var(--text);
+  background-color: var(--white);
+  border-color: var(--border-dark);
+}
+.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+  input, select, textarea
+):focus-visible {
+  outline-color: var(--accent);
+}
+.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+  input, textarea
+)::placeholder {
+  color: var(--text-secondary);
+}
+.wms-embedded-scope[data-wms-theme-scope="true"] :is(
+  .data-table tbody tr:hover, .lines-table tbody tr:hover
+) {
+  background: var(--wms-highlight-bg, var(--surface));
+}
+@media print {
+  .wms-native-theme-scope { color: #111; background: #fff; }
 }
