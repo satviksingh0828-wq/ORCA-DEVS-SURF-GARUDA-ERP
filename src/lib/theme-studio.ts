@@ -33,6 +33,8 @@ export type ThemeProfile = {
   videoTextShadow: "none" | "subtle" | "strong";
   videoTextWeight: "regular" | "medium" | "bold";
   videoPlayback: {
+    /** Workspace-wide default mode. Local Play/Pause overrides it per device. */
+    backgroundMode: "video" | "still" | "blank";
     startPaused: boolean;
     playbackRate: number;
     pauseWhenHidden: boolean;
@@ -54,6 +56,7 @@ export const DEFAULT_THEME_PROFILE: ThemeProfile = {
   videoTextShadow: "subtle",
   videoTextWeight: "medium",
   videoPlayback: {
+    backgroundMode: "video",
     startPaused: false,
     playbackRate: 1,
     pauseWhenHidden: true,
@@ -117,6 +120,10 @@ export function normalizeThemeProfile(raw: unknown, allowed: ReadonlySet<string>
     videoTextWeight: source.videoTextWeight === "regular" || source.videoTextWeight === "bold"
       ? source.videoTextWeight : "medium",
     videoPlayback: {
+      backgroundMode: sourcePlayback.backgroundMode === "still" || sourcePlayback.backgroundMode === "blank"
+        ? sourcePlayback.backgroundMode
+        : sourcePlayback.backgroundMode === "video" ? "video"
+        : sourcePlayback.startPaused === true ? "still" : "video",
       startPaused: sourcePlayback.startPaused === true,
       playbackRate: Math.max(0.5, Math.min(2, Math.round(rate * 4) / 4)),
       pauseWhenHidden: sourcePlayback.pauseWhenHidden !== false,
@@ -153,6 +160,7 @@ export function serializeThemeProfile(profile: ThemeProfile): string {
       (profile.videoTextWeight ?? "medium") === "medium" &&
       (!profile.videoPlayback || (
         profile.videoPlayback.startPaused !== true &&
+        (profile.videoPlayback.backgroundMode ?? "video") === "video" &&
         (profile.videoPlayback.playbackRate ?? 1) === 1 &&
         profile.videoPlayback.pauseWhenHidden !== false &&
         profile.videoPlayback.respectReducedMotion !== false &&
