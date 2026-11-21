@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { BrandFooter } from "@/components/BrandFooter";
 import { useTheme } from "@/lib/theme";
 import { themeInlineStyles } from "@/lib/theme-studio";
+import { reportActiveVideoTab } from "@/lib/video-tabs";
 import { secureStorage, secureSession } from "@/lib/storage";
 import {
   serverStartRegistration,
@@ -80,6 +81,7 @@ type GateState =
 
 function Screen({ children }: { children: ReactNode }) {
   const { profile } = useTheme();
+  useEffect(() => reportActiveVideoTab("passkey"), []);
   return (
     <div data-theme={profile.baseTheme} data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined} style={themeInlineStyles(profile)} className="auth-abstract-background ltms-app-shell relative isolate flex min-h-screen flex-col bg-background text-foreground">
       <header className="ltms-app-shell-header z-10 flex h-14 shrink-0 items-center border-b-2">
