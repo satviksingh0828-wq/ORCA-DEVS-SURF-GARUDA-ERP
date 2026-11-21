@@ -30,7 +30,6 @@ import { BrandFooter } from "@/components/BrandFooter";
 import { useTheme } from "@/lib/theme";
 import { themeInlineStyles } from "@/lib/theme-studio";
 import { reportActiveVideoTab } from "@/lib/video-tabs";
-import { reportActiveVideoTab } from "@/lib/video-tabs";
 import { secureStorage, secureSession } from "@/lib/storage";
 import {
   serverStartRegistration,
