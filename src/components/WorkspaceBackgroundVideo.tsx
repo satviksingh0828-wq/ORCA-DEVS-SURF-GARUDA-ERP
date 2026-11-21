@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useRouterState } from "@tanstack/react-router";
 import { useTheme } from "@/lib/theme";
 
 /**
@@ -8,25 +9,30 @@ import { useTheme } from "@/lib/theme";
  */
 export function WorkspaceBackgroundVideo() {
   const { backgroundVideoEnabled, backgroundVideoUrl } = useTheme();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  // Keep special host, sharing and print-only routes free from decorative video.
+  const videoAllowed = !pathname.startsWith("/screen-control-host") &&
+    !pathname.startsWith("/share") && !pathname.includes("/print");
+  const showVideo = backgroundVideoEnabled && videoAllowed;
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
 
   useEffect(() => {
     const root = document.documentElement;
-    if (backgroundVideoEnabled) {
+    if (showVideo) {
       root.setAttribute("data-video-background", "on");
     } else {
       root.removeAttribute("data-video-background");
     }
     return () => root.removeAttribute("data-video-background");
-  }, [backgroundVideoEnabled]);
+  }, [showVideo]);
 
   useEffect(() => {
     setReady(false);
     setFailed(false);
   }, [backgroundVideoUrl]);
 
-  if (!backgroundVideoEnabled) return null;
+  if (!showVideo) return null;
   return (
     <>
       <div className="workspace-video-fallback" aria-hidden="true" />
