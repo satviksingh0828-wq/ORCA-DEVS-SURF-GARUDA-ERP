@@ -27,6 +27,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { BrandFooter } from "@/components/BrandFooter";
+import { useTheme } from "@/lib/theme";
+import { themeInlineStyles } from "@/lib/theme-studio";
 import { secureStorage, secureSession } from "@/lib/storage";
 import {
   serverStartRegistration,
@@ -77,9 +79,10 @@ type GateState =
 // ── Full-screen wrapper ───────────────────────────────────────────────────────
 
 function Screen({ children }: { children: ReactNode }) {
+  const { profile } = useTheme();
   return (
-    <div className="auth-abstract-background ltms-app-shell relative isolate flex min-h-screen flex-col bg-background text-foreground">
-      <header className="ltms-app-shell-header z-10 flex h-14 shrink-0 items-center border-b-2 border-[#b87333] bg-[#2a2520]">
+    <div data-theme={profile.baseTheme} data-custom-theme={Object.keys(profile.colors).length ? "true" : undefined} style={themeInlineStyles(profile)} className="auth-abstract-background ltms-app-shell relative isolate flex min-h-screen flex-col bg-background text-foreground">
+      <header className="ltms-app-shell-header z-10 flex h-14 shrink-0 items-center border-b-2">
         <div className="ltms-app-shell-header-inner flex h-full w-full items-center gap-3 px-4">
           <img
             src="/garuda-logo.png"
