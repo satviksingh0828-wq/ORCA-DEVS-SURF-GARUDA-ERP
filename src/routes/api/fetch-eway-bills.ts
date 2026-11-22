@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { perioneError } from "@/lib/ewaybill-fetch";
+import { perioneError, perioneFailed, transporterReportParams } from "@/lib/ewaybill-fetch";
 
 function indiaDateKey(date: Date): string {
   const parts = new Intl.DateTimeFormat("en-CA", {
@@ -16,11 +16,6 @@ function shiftDate(dateKey: string, days: number): string {
   const date = new Date(`${dateKey}T00:00:00Z`);
   date.setUTCDate(date.getUTCDate() + days);
   return date.toISOString().slice(0, 10);
-}
-
-function apiDate(dateKey: string): string {
-  const [year, month, day] = dateKey.split("-");
-  return `${day}/${month}/${year}`;
 }
 
 function extractRows(body: Record<string, unknown> | null): Array<Record<string, unknown>> {
@@ -104,8 +99,7 @@ export const Route = createFileRoute("/api/fetch-eway-bills")({
             const url = new URL(
               `${baseUrl}/v1/branches/${encodeURIComponent(branch.id)}/ewaybills/transporter/report-by-date`,
             );
-            url.searchParams.set("date", apiDate(snapshotDate));
-            if (branch.state_code) url.searchParams.set("stateCode", branch.state_code);
+            url.search = transporterReportParams(snapshotDate, branch.state_code, branch.gstin).toString();
             const response = await fetch(url, {
               headers: { Accept: "application/json", "X-API-Key": apiKey },
             });
@@ -113,17 +107,7 @@ export const Route = createFileRoute("/api/fetch-eway-bills")({
               string,
               unknown
             > | null;
-            const upstream =
-              body?.data && typeof body.data === "object"
-                ? (body.data as Record<string, unknown>)
-                : body;
-            if (
-              !response.ok ||
-              body?.ok === false ||
-              upstream?.status_cd === "0" ||
-              upstream?.status === "0"
-            )
-              throw perioneError(body, response.status);
+            if (!response.ok || perioneFailed(body)) throw perioneError(body, response.status);
             const rows = extractRows(body);
             const snapshots = rows
               .map((row) => ({

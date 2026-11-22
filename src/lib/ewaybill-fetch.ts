@@ -22,28 +22,44 @@ function extractRows(body: Record<string, unknown> | null): Array<Record<string,
   return [];
 }
 
+// The assigned-date API requires stateCode before date. State code is the
+// generator's state; use the configured branch state (GSTIN prefix as fallback).
+export function transporterReportParams(dateKey: string, stateCode?: string, gstin?: string): URLSearchParams {
+  const state = String(stateCode || gstin?.slice(0, 2) || "").trim();
+  if (!/^\d{1,2}$/.test(state) || Number(state) === 0)
+    throw new Error("Configure a valid generator state code for this E-Way Bill branch.");
+  return new URLSearchParams({ stateCode: state.padStart(2, "0"), date: apiDate(dateKey) });
+}
+
+export function perioneFailed(body: Record<string, unknown> | null): boolean {
+  const visit = (value: unknown, depth = 0): boolean => {
+    if (!value || typeof value !== "object" || Array.isArray(value) || depth > 5) return false;
+    const record = value as Record<string, unknown>;
+    return record.ok === false || record.success === false ||
+      [record.status_cd, record.status].some((status) => status === 0 || status === "0") ||
+      ["data", "response_data", "response", "result"].some((key) => visit(record[key], depth + 1));
+  };
+  return !body || visit(body);
+}
+
 export function perioneError(body: Record<string, unknown> | null, responseStatus: number): Error {
-  const upstream =
-    body?.data && typeof body.data === "object" && !Array.isArray(body.data)
-      ? (body.data as Record<string, unknown>)
-      : (body ?? {});
-  const nested = body?.error;
-  const errorObject =
-    nested && typeof nested === "object" ? (nested as Record<string, unknown>) : {};
-  const detail = [
-    errorObject.message,
-    errorObject.error,
-    errorObject.errorMessage,
-    errorObject.errorCodes,
-    upstream.status_desc,
-    upstream.statusDesc,
-    upstream.message,
-    body?.message,
-  ].find((value) => value !== undefined && value !== null && String(value).trim() !== "");
-  const raw = body ? JSON.stringify(body).slice(0, 700) : "No response body";
-  return new Error(
-    `PeriOne request failed (HTTP ${responseStatus}): ${detail ? String(detail) : raw}`,
-  );
+  const details: string[] = [];
+  const visit = (value: unknown, depth = 0): void => {
+    if (!value || typeof value !== "object" || depth > 6) return;
+    if (Array.isArray(value)) { value.slice(0, 10).forEach((item) => visit(item, depth + 1)); return; }
+    const record = value as Record<string, unknown>;
+    for (const key of ["details", "error", "errors", "data", "response_data", "response", "result"])
+      if (typeof record[key] === "object") visit(record[key], depth + 1);
+    for (const [key, item] of Object.entries(record)) {
+      if (!/^(error_?codes?|error_?message|error_?description|status_?desc|status_?description|message|description|detail|error|code|category)$/i.test(key)) continue;
+      if (typeof item !== "string" && typeof item !== "number") continue;
+      const msg = String(item).trim();
+      if (msg && !details.includes(msg)) details.push(msg.slice(0, 300));
+    }
+  };
+  visit(body);
+  const requestId = typeof body?.request_id === "string" ? ` [request: ${body.request_id}]` : "";
+  return new Error(`PeriOne request failed (HTTP ${responseStatus}): ${details.join(" | ").slice(0, 850) || "No usable error details returned"}${requestId}`);
 }
 
 export const serverFetchEwayBills = createServerFn({ method: "POST" })
@@ -108,23 +124,12 @@ export const serverFetchEwayBills = createServerFn({ method: "POST" })
         const url = new URL(
           `${baseUrl}/v1/branches/${encodeURIComponent(branch.id)}/ewaybills/transporter/report-by-date`,
         );
-        url.searchParams.set("date", apiDate(data.snapshotDate));
-        if (branch.state_code) url.searchParams.set("stateCode", branch.state_code);
+        url.search = transporterReportParams(data.snapshotDate, branch.state_code, branch.gstin).toString();
         const response = await fetch(url, {
           headers: { Accept: "application/json", "X-API-Key": apiKey },
         });
         const body = (await response.json().catch(() => null)) as Record<string, unknown> | null;
-        const upstream =
-          body?.data && typeof body.data === "object"
-            ? (body.data as Record<string, unknown>)
-            : body;
-        if (
-          !response.ok ||
-          body?.ok === false ||
-          upstream?.status_cd === "0" ||
-          upstream?.status === "0"
-        )
-          throw perioneError(body, response.status);
+        if (!response.ok || perioneFailed(body)) throw perioneError(body, response.status);
         const snapshots = extractRows(body)
           .map((row) => ({
             branch_id: branch.id,
