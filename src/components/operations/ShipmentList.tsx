@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
+import { ExtendShipmentValidity } from "./ExtendShipmentValidity";
 import { serverUpdateShipmentTransporter } from "@/lib/manifest-transfer";
 import { fetchAll } from "@/lib/fetch-all";
 import { Button } from "@/components/ui/button";
@@ -389,6 +390,8 @@ function ShipmentView({
   onBack,
   onFetchPartB,
   fetchingPartB,
+  token,
+  onExtended,
 }: {
   shipment: Shipment;
   items: Item[];
@@ -398,6 +401,8 @@ function ShipmentView({
   onBack: () => void;
   onFetchPartB: () => void;
   fetchingPartB: boolean;
+  token?: string;
+  onExtended: (validUntil: string, status: string) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -413,6 +418,7 @@ function ShipmentView({
           <h2 className="text-xl font-semibold">Shipment Details — {shipment.eway_bill_number}</h2>
           <p className="text-sm text-muted-foreground">E-Way Bill and shipment details</p>
         </div>
+        <ExtendShipmentValidity shipment={shipment} token={token} transport={[...history].sort((a,b) => b.updated_at.localeCompare(a.updated_at))[0]} onExtended={onExtended} />
       </div>
       <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-3">
         <Field
@@ -428,6 +434,7 @@ function ShipmentView({
           readOnly
         />
         <Field label="Status" value={shipment.eway_bill_status} onChange={() => {}} readOnly />
+        <Field label="Valid Until (IST)" value={shipment.valid_until ? new Date(shipment.valid_until).toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }) : ""} onChange={() => {}} readOnly />
         <Field label="Supply Type" value={shipment.supply_type} onChange={() => {}} readOnly />
         <Field label="Sub-Supply Type" value={shipment.sub_type} onChange={() => {}} readOnly />
         <Field
@@ -1127,6 +1134,12 @@ export function ShipmentList({ canCreate = true }: { canCreate?: boolean } = {})
         onBack={() => setViewingShipment(null)}
         onFetchPartB={() => void fetchPartBFromApi(viewingShipment)}
         fetchingPartB={fetchingPartB}
+        token={user?.sessionToken}
+        onExtended={(valid_until, eway_bill_status) => {
+          const id = viewingShipment.id;
+          setViewingShipment((current) => current?.id === id ? { ...current, valid_until, eway_bill_status } : current);
+          setShipments((current) => current.map((row) => row.id === id ? { ...row, valid_until, eway_bill_status } : row));
+        }}
       />
     );
   const setItem = (index: number, key: keyof Item, value: string) =>
