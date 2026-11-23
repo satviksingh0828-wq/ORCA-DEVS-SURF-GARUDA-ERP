@@ -22,5 +22,7 @@ jobs:
         run: node --test --experimental-strip-types test/theme-studio.test.ts
       - name: Page heading regression tests
         run: node --test test/ui-page-headings.test.mjs
+      - name: Consignment report role and Excel-column tests
+        run: node --test --experimental-strip-types test/consignment-report-model.test.ts
       - name: Build
         run: npm run build
