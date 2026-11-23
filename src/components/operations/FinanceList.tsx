@@ -31,7 +31,7 @@ import {
 import { financialYearOptions, financialYearRange, dateInFinancialYear } from "@/lib/financial-year";
 import { ItemLogsButton } from "@/components/shared/ItemLogsDrawer";
 import { isDriverActive } from "@/lib/drivers";
-import { openBrandedTablePdf } from "@/lib/branded-pdf";
+import { printFinancialDocumentPdf } from "@/lib/financial-document-pdf";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   emptyFinanceRow,
@@ -835,19 +835,56 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                         variant="ghost"
                         size="sm"
                         title={`Open ${cfg.single} PDF`}
-                        onClick={() => openBrandedTablePdf({
-                          title: kind === "income" ? "Income Receipt" : "Expense Voucher",
-                          subtitle: `${r.entry_date || "No date"} · ${r.name}`,
-                          filename: `${cfg.filename}-${r.id ?? r.entry_date}.pdf`,
-                          columns: ["Field", "Details"],
-                          rows: [
-                            [cfg.nameLabel, r.name], ["Date", r.entry_date || "—"],
-                            ["Branch", nameOf(branchOpts, r.branch_id) || "—"], ["Linked to", linked],
-                            ["Status", r.settled ? cfg.doneLabel : cfg.pendingLabel],
-                            [`${cfg.doneLabel} date`, r.settled_date || "—"], ["Note", r.note || "—"],
+                        onClick={() => void printFinancialDocumentPdf({
+                          title: kind === "income"
+                            ? r.settled ? "INCOME RECEIPT" : "INCOME VOUCHER"
+                            : "EXPENDITURE VOUCHER",
+                          branchId: r.branch_id,
+                          documentNumber: r.id || r.entry_date,
+                          documentDate: r.entry_date,
+                          status: r.verification_id
+                            ? "Awaiting Approval"
+                            : r.settled ? cfg.doneLabel : cfg.pendingLabel,
+                          statusNote: r.verification_id
+                            ? "Awaiting approval. This document is not evidence of payment."
+                            : !r.settled
+                              ? "Unsettled transaction. No payment or receipt is confirmed."
+                              : undefined,
+                          filename: `${cfg.filename}-${r.id || r.entry_date}.pdf`,
+                          amountLabel: r.is_payroll
+                            ? "GROSS PAYROLL EXPENDITURE"
+                            : kind === "income" ? "INCOME AMOUNT" : "EXPENDITURE AMOUNT",
+                          amount: num(r.amount),
+                          sections: [
+                            { title: "Transaction details", fields: [
+                              [cfg.nameLabel, r.name],
+                              ["Entry Date", r.entry_date],
+                              ["Branch", nameOf(branchOpts, r.branch_id) || "—"],
+                              ["Linked To", linked],
+                              ["Type", r.is_payroll ? "Driver Payroll" :
+                                r.is_emi ? "Vehicle EMI" : r.is_fixed_income ? "Fixed Income" : cfg.single],
+                              [`${cfg.doneLabel} Date`, r.settled ? r.settled_date || "Not recorded" : "Not settled"],
+                            ]},
+                            { title: "Accounts and references", fields: [
+                              ["Transaction ID", r.id || "Pending"],
+                              ["Payment / Receipt Account",
+                                paymentLedgers.find((ledger) => ledger.id === r.payment_ledger_id)?.account_name || "Not recorded"],
+                              [kind === "income" ? "Income Account" : "Expenditure Account",
+                                branchLedgers.find((ledger) => ledger.id ===
+                                  (kind === "income" ? r.income_ledger_id : r.expenditure_ledger_id))?.account_name || "Not recorded"],
+                              [kind === "income" ? "Receivable Account" : "Payable Account",
+                                branchLedgers.find((ledger) => ledger.id ===
+                                  (kind === "income" ? r.income_receivable_ledger_id : r.expenditure_payable_ledger_id))?.account_name || "Not recorded"],
+                              ...(r.is_payroll && r.payroll_id
+                                ? [["Payroll Reference", r.payroll_id] as [string, string]] : []),
+                              ...(r.is_fixed_income && r.fixed_income_period
+                                ? [["Fixed Income Period", r.fixed_income_period] as [string, string]] : []),
+                            ]},
                           ],
-                          summary: [[kind === "income" ? "INCOME AMOUNT" : "EXPENSE AMOUNT", inr(num(r.amount))]],
-                        })}
+                          remarks: r.note,
+                        }).catch((error) =>
+                          toast.error(error instanceof Error ? error.message : "Could not create finance PDF"),
+                        )}
                       >
                         <Download className="size-4" /> PDF
                       </Button>

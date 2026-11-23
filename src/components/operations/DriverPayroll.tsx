@@ -1015,15 +1015,20 @@ export function DriverPayroll() {
                               title="Download salary receipt PDF"
                               onClick={() =>
                                 selectedDriver &&
-                                downloadDriverPaymentReceipt(selectedDriver, {
+                                void downloadDriverPaymentReceipt(selectedDriver, {
                                   kind: "Salary",
                                   amount: p.net_amount,
                                   salaryAmount: p.salary_amount,
                                   date: p.paid_date || p.created_at.slice(0, 10),
                                   month: monthLabel(p.month),
+                                  branchId: p.branch_id,
+                                  reference: p.id,
+                                  isPaid: p.is_paid,
                                   advanceDeduction: p.advance_deduction,
                                   note: p.note,
-                                })
+                                }).catch((error) => toast.error(
+                                  error instanceof Error ? error.message : "Could not create salary slip PDF",
+                                ))
                               }
                             >
                               <Download className="size-3" /> PDF
@@ -1166,14 +1171,25 @@ export function DriverPayroll() {
                             className="h-7 shrink-0 gap-1.5 text-xs"
                             onClick={() =>
                               selectedDriver &&
-                              downloadDriverPaymentReceipt(selectedDriver, {
+                              void downloadDriverPaymentReceipt(selectedDriver, {
                                 kind: "Advance",
                                 amount: adv.amount,
                                 date: adv.payment_date,
+                                branchId: adv.branch_id,
+                                reference: adv.id,
                                 monthlyDeduction: adv.monthly_deduction,
                                 remainingBalance: adv.remaining_balance,
                                 note: adv.note,
-                              })
+                                deductions: deductions
+                                  .filter((entry) => entry.advance_id === adv.id)
+                                  .map((entry) => ({
+                                    month: entry.month,
+                                    amount: entry.deduction_amount,
+                                    applied: entry.is_applied,
+                                  })),
+                              }).catch((error) => toast.error(
+                                error instanceof Error ? error.message : "Could not create advance PDF",
+                              ))
                             }
                           >
                             <Download className="size-3" /> PDF
