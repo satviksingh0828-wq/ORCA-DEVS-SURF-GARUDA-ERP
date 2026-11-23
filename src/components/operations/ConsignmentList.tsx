@@ -3982,23 +3982,50 @@ function ConsignmentView({
             View-only Consignment and generated Shipments
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Button
             type="button"
             variant="outline"
-            onClick={() =>
-              void printConsignorCopyPdf({
-                consignment: row,
-                shipments,
-                packages,
-              })
-            }
+            onClick={() => void printConsignorCopyPdf({
+              consignment: row,
+              shipments,
+              packages,
+              mode: "gr-only",
+            }).catch((error) => toast.error(
+              error instanceof Error ? error.message : "Could not print the GR",
+            ))}
           >
-            <Printer className="mr-1 size-3.5" /> Print PDF
+            <Printer className="mr-1 size-3.5" /> GR Only (PDF)
           </Button>
-          <Button variant="outline" onClick={onBack}>
-            Back
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void printConsignorCopyPdf({
+              consignment: row,
+              shipments,
+              packages,
+              mode: "additional-only",
+            }).catch((error) => toast.error(
+              error instanceof Error ? error.message : "Could not print additional details",
+            ))}
+          >
+            Additional Details (PDF)
           </Button>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => void printConsignorCopyPdf({
+              consignment: row,
+              shipments,
+              packages,
+              mode: "with-additional",
+            }).catch((error) => toast.error(
+              error instanceof Error ? error.message : "Could not download GR and details",
+            ))}
+          >
+            GR + Details (2 PDFs in ZIP)
+          </Button>
+          <Button variant="outline" onClick={onBack}>Back</Button>
         </div>
       </div>
       <div className="grid gap-3 rounded-xl border border-border p-4 md:grid-cols-4">

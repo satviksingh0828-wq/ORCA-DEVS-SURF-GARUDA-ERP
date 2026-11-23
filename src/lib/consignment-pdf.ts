@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import { supabase } from "@/integrations/supabase/client";
 import { formatConsignmentGst } from "./consignment-pdf-format";
+import { createPdfZip } from "./pdf-bundle";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -10,6 +11,8 @@ type ConsignmentPdfOptions = {
   packages: AnyRecord[];
   /** LR uses the identical first-page reference; only filename differs. */
   filenamePrefix?: "LR";
+  /** The GR is always one page. Extra details are a separate PDF in the ZIP. */
+  mode?: "gr-only" | "with-additional" | "additional-only";
 };
 
 const A4_WIDTH = 595;
@@ -139,15 +142,15 @@ function field(doc: jsPDF, label: string, value: string, x: number, y: number, w
 }
 
 function checkbox(doc: jsPDF, x: number, y: number, label: string, checked: boolean) {
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(6.6);
-  doc.text(label, x - doc.getTextWidth(label) - 3, y - 0.5);
-  doc.rect(x, y - 8, 10, 8);
+  doc.text(label, x - doc.getTextWidth(label) - 4, y - 1);
+  doc.rect(x, y - 8.8, 15.5, 9.5);
   if (checked) {
     doc.setFont("helvetica", "bold");
     doc.setLineWidth(1.1);
-    doc.line(x + 2, y - 4, x + 4.5, y - 1.8);
-    doc.line(x + 4.5, y - 1.8, x + 8.5, y - 7);
+    doc.line(x + 3, y - 4.5, x + 6.5, y - 1.8);
+    doc.line(x + 6.5, y - 1.8, x + 12, y - 7.8);
     doc.setLineWidth(0.55);
   }
 }
@@ -171,17 +174,20 @@ function appendConsignmentDetails(
   const bottom = A4_HEIGHT - 28;
   const grNo = text(consignment.consignment_number);
 
-  const newPage = () => {
-    pdf.addPage();
+  const detailsHeader = () => {
     y = 45;
     pdf.setTextColor(...BLACK);
     pdf.setDrawColor(...BLACK);
     pdf.setFont("helvetica", "bold");
     pdf.setFontSize(9);
-    pdf.text("CONSIGNOR COPY - CONTINUATION", left + 4, 28);
+    pdf.text("ADDITIONAL TRANSPORT / CONSIGNMENT DETAILS", left + 4, 28);
     pdf.setFont("helvetica", "normal");
     pdf.text("GR No.: " + grNo, left + width - 4, 28, { align: "right" });
     pdf.line(left, 34, left + width, 34);
+  };
+  const newPage = () => {
+    pdf.addPage();
+    detailsHeader();
   };
   const ensure = (height: number) => {
     if (y + height > bottom) newPage();
@@ -281,9 +287,8 @@ function appendConsignmentDetails(
     }
   };
 
-  // The reference receipt must occupy page 1 on its own. Every optional
-  // detail section starts on a dedicated continuation page.
-  newPage();
+  // This is a NEW PDF, not a page appended to the GR.
+  detailsHeader();
 
   const first = shipments[0] ?? {};
   const fromName = partyName(first, "supplier");
@@ -502,11 +507,96 @@ function fittedParagraph(
   wrapped.slice(0, maxLines).forEach((line, i) => pdf.text(line, x, y + i * leading));
 }
 
+
+// Fixed column geometry is taken from the user's 595 x 841 pt GR reference.
+// Separate label/value positions are necessary; estimating x from label width
+// shifted fields and made them overlap the neighboring border.
+function referenceField(
+  doc: jsPDF,
+  label: string,
+  value: string,
+  labelX: number,
+  valueX: number,
+  y: number,
+  rightX: number,
+  boldValue = false,
+  fontSize = 6.6,
+) {
+  doc.setFont("helvetica", "bold");
+  singleLine(doc, label, labelX, y, Math.max(1, valueX - labelX - 3), fontSize, true);
+  if (value) {
+    doc.setFont("helvetica", boldValue ? "bold" : "normal");
+    singleLine(doc, value, valueX, y, Math.max(1, rightX - valueX - 3), fontSize, boldValue);
+  }
+}
+
+function centeredReferenceLine(
+  doc: jsPDF,
+  value: string,
+  center: number,
+  y: number,
+  width: number,
+  size: number,
+  bold = false,
+) {
+  if (!value) return;
+  doc.setFont("helvetica", bold ? "bold" : "normal");
+  doc.setFontSize(size);
+  let currentSize = size;
+  while (currentSize > 5.2 && doc.getTextWidth(value) > width) {
+    currentSize -= 0.2;
+    doc.setFontSize(currentSize);
+  }
+  let visible = value;
+  if (doc.getTextWidth(visible) > width) {
+    while (visible.length > 1 && doc.getTextWidth(visible + "...") > width)
+      visible = visible.slice(0, -1);
+    visible += "...";
+  }
+  if (doc.getTextWidth(visible) <= width) doc.text(visible, center, y, { align: "center" });
+}
+
+function issuingBranchAddress(doc: jsPDF, branch: AnyRecord) {
+  const main = join(branch.address_line1, branch.address_line2, branch.area_locality);
+  const location = [text(branch.city), text(branch.state), text(branch.pin_code)]
+    .filter(Boolean).join(" - ");
+  doc.setFont("helvetica", "normal");
+  let fontSize = 6.6;
+  doc.setFontSize(fontSize);
+  let addressLines = doc.splitTextToSize(main, 250) as string[];
+  while (addressLines.length > 2 && fontSize > 5.2) {
+    fontSize -= 0.2;
+    doc.setFontSize(fontSize);
+    addressLines = doc.splitTextToSize(main, 250) as string[];
+  }
+  if (addressLines.length > 2) {
+    const limit = addressLines.slice(0, 2).join(" ");
+    centeredReferenceLine(doc, limit, 232, 85.7, 255, fontSize);
+  } else {
+    addressLines.slice(0, 2).forEach((line, i) =>
+      centeredReferenceLine(doc, line, 232, 85.7 + i * 10.3, 255, fontSize));
+  }
+  const locationY = addressLines.length < 2 ? 95.8 : 106.4;
+  centeredReferenceLine(doc, location, 232, locationY, 255, 6.6);
+  if (locationY < 106.4) {
+    centeredReferenceLine(doc, "GSTIN : " + text(branch.gstin), 232, 106.4, 255, 6.6);
+  } else {
+    // If the address takes two lines, prioritize the tax identity over an
+    // additional location line; the full location is on the details PDF.
+    centeredReferenceLine(doc, "GSTIN : " + text(branch.gstin), 232, 117.0, 255, 6.4);
+  }
+}
+
+function pdfSafeFilename(raw: string) {
+  return raw.replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
 export async function printConsignorCopyPdf({
   consignment,
   shipments,
   packages,
   filenamePrefix,
+  mode = "gr-only",
 }: ConsignmentPdfOptions) {
   const [companyResult, branchResult, logo] = await Promise.all([
     supabase.from("company").select("company_name").limit(1).maybeSingle(),
@@ -526,12 +616,6 @@ export async function printConsignorCopyPdf({
     ...((consignment.branch ?? {}) as AnyRecord),
     ...((branchResult.data ?? {}) as AnyRecord),
   };
-  const branchAddressLine1 = text(branch.address_line1);
-  const branchAddressLine2 = join(branch.address_line2, branch.area_locality);
-  const branchAddressLine3 = [text(branch.city), text(branch.state)]
-    .filter(Boolean)
-    .join(" , ")
-    .concat(text(branch.pin_code) ? ` - ${text(branch.pin_code)}` : "");
   const shipment = shipments[0] ?? {};
   const items = shipments.flatMap((entry) => (entry.shipment_items ?? []) as AnyRecord[]);
   const packageRows = packages as AnyRecord[];
@@ -569,7 +653,7 @@ export async function printConsignorCopyPdf({
   const pdf = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
   pdf.setTextColor(...BLACK);
   pdf.setDrawColor(...BLACK);
-  pdf.setLineWidth(0.55);
+  pdf.setLineWidth(1.0);
   pdf.setFont("helvetica", "normal");
   pdf.setFontSize(6.3);
 
@@ -577,14 +661,14 @@ export async function printConsignorCopyPdf({
   pdf.rect(FORM_X, FORM_Y, FORM_W, FORM_H);
   pdf.line(375.2, FORM_Y, 375.2, 220.6);
   pdf.line(474, FORM_Y, 474, 77.5);
-  pdf.line(375, 63, 474, 63);
-  pdf.line(375, 77, FORM_X + FORM_W, 77);
+  pdf.line(375, 63.1, 473.5, 63.1);
+  pdf.line(375, 77.1, FORM_X + FORM_W, 77.1);
   pdf.line(375, 90.5, FORM_X + FORM_W, 90.5);
   pdf.line(375, 104, FORM_X + FORM_W, 104);
   pdf.line(FORM_X, 130, FORM_X + FORM_W, 130);
   pdf.line(FORM_X, 175.3, 375.2, 175.3);
   pdf.line(375, 172, FORM_X + FORM_W, 172);
-  pdf.line(438.2, 172.3, 438.2, 284.1);
+  pdf.line(438.25, 184.6, 438.25, 284.1);
   pdf.line(518, 172.3, 518, 272.9);
   pdf.line(FORM_X, 220.3, 438.2, 220.3);
   pdf.line(FORM_X, 234.8, 438.8, 234.8);
@@ -601,7 +685,7 @@ export async function printConsignorCopyPdf({
   pdf.line(375.2, 157.8, FORM_X + FORM_W, 157.8);
   pdf.line(375.2, 172.3, FORM_X + FORM_W, 172.3);
   pdf.line(375.2, 197.3, 438.2, 197.3);
-  pdf.setFillColor(229, 229, 229);
+  pdf.setFillColor(192, 192, 192);
   pdf.rect(438.8, 172.6, FORM_X + FORM_W - 438.8, 14.5, "F");
   pdf.line(438.8, 172.6, FORM_X + FORM_W, 172.6);
   pdf.line(438.8, 187.1, FORM_X + FORM_W, 187.1);
@@ -609,165 +693,132 @@ export async function printConsignorCopyPdf({
 
   if (logo) {
     try { pdf.addImage(logo, "PNG", 18.5, 62.3, 70, 61); }
-    catch { singleLine(pdf, "GARUDA LOGISTICS", 20, 97, 68, 10, true); }
+    catch { centeredReferenceLine(pdf, "GARUDA", 54, 96, 65, 12, true); }
+  } else {
+    centeredReferenceLine(pdf, "GARUDA", 54, 96, 65, 12, true);
   }
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(6.5);
-  field(pdf, "SAC Code :", "9965", 20, 57, 78);
-  field(pdf, "GST No. :", text(branch.gstin), 112, 57, 100);
-  field(pdf, "PAN No. :", text(branch.pan), 238, 57, 120);
-  pdf.setFontSize(10);
-  singleLine(pdf, companyName, 93, 73, 274, 10, true);
-  pdf.setFont("helvetica", "normal");
-  pdf.setFontSize(6);
-  singleLine(pdf, branchAddressLine1, 119, 86, 248, 6.2);
-  singleLine(pdf, branchAddressLine2, 120, 96, 247, 6.2);
-  singleLine(pdf, branchAddressLine3, 119, 106, 248, 6.2);
-  singleLine(pdf, `GSTIN : ${text(branch.gstin)}`, 119, 116, 248, 6.2);
-  singleLine(pdf, `Contact No. : ${text(branch.mobile_number || branch.telephone_number)}`,
-    119, 126, 248, 6);
+  // Header: fixed label/value positions and baselines measured from the
+  // supplied Crystal Reports GR (not positions inferred from the text length).
+  referenceField(pdf, "SAC Code :", "9965", 20, 71.8, 59.4, 110, false);
+  referenceField(pdf, "GST No. :", text(branch.gstin), 113, 154.8, 59.4, 243, false);
+  referenceField(pdf, "PAN No. :", text(branch.pan), 247, 298.2, 59.4, 372, false);
+  centeredReferenceLine(pdf, companyName, 232, 74.0, 280, 9.9, true);
+  issuingBranchAddress(pdf, branch);
 
-  pdf.setFont("helvetica", "bold");
-  pdf.setFontSize(6.7);
-  pdf.text("CONSIGNOR COPY", 391, 58);
-  pdf.text("GR", 476, 58);
-  pdf.text("No. :", 476, 64);
-  singleLine(pdf, text(consignment.consignment_number), 499, 58, 76, 7.1, true);
-  field(
-    pdf,
-    "DATE :",
-    date(consignment.consignment_date || consignment.created_at),
-    408,
-    71.5,
-    160,
-  );
-  field(
-    pdf,
-    "Truck/Flight No. :",
+  referenceField(pdf, "CONSIGNOR COPY", "", 390.7, 460, 59.4, 473);
+  referenceField(pdf, "GR", text(consignment.consignment_number), 476.8, 498.0, 59.4, 578.4, true);
+  centeredReferenceLine(pdf, "No. :", 486.4, 69.5, 29, 6.6, true);
+  referenceField(pdf, "DATE :", date(consignment.consignment_date || consignment.created_at),
+    378.8, 408.2, 73.4, 578.4);
+  referenceField(pdf, "Truck/Flight No. :",
     text(consignment.part_b_vehicle_no || vehicle?.registration_number),
-    378,
-    84.8,
-    196,
-  );
-  field(pdf, "Mode of Movement :", text(consignment.transport_mode).toUpperCase(), 378, 98, 196);
-  field(
-    pdf,
-    "From :",
+    378.8, 465.5, 87.2, 578.4);
+  referenceField(pdf, "Mode of Movement :", text(consignment.transport_mode).toUpperCase(),
+    378.8, 477.5, 100.3, 578.4);
+  referenceField(pdf, "From :",
     text(shipment.dispatch_from_place) || text(shipment.supplier_place),
-    378,
-    111.5,
-    196,
-  );
+    378.8, 408, 113.6, 578.4);
 
-  pdf.setFontSize(7);
-  field(pdf, "Consignor :", fromName, 20, 137, 348);
-  limitedLines(pdf, fromAddress.join(", "), 20, 148, 347, 2, 8, 7);
-  field(pdf, "GST No. :", text(shipment.supplier_gstin), 20, 169, 226);
-  field(pdf, "M :", text(shipment.supplier_phone), 256, 169, 111);
-  field(pdf, "Consignee :", toName, 20, 182, 348);
-  // Leave enough clearance for the GSTIN row at y=214.
-  limitedLines(pdf, toAddress.join(", "), 20, 193, 347, 2, 9, 7);
-  field(pdf, "GST No. :", text(shipment.recipient_gstin), 20, 214, 226);
-  field(pdf, "M :", text(shipment.recipient_phone), 256, 214, 111);
+  referenceField(pdf, "Consignor :", fromName, 20, 75.2, 139.5, 371, true);
+  limitedLines(pdf, fromAddress.join(", "), 20, 151, 347, 2, 9, 6.6);
+  referenceField(pdf, "GST No. :", text(shipment.supplier_gstin), 20, 75.2, 171.3, 252, true);
+  referenceField(pdf, "M :", text(shipment.supplier_phone), 256, 268.5, 171.3, 370, true);
+  referenceField(pdf, "Consignee :", toName, 20, 75.2, 185.2, 371, true);
+  limitedLines(pdf, toAddress.join(", "), 20, 196, 347, 2, 9.5, 6.6);
+  referenceField(pdf, "GST No. :", text(shipment.recipient_gstin), 20, 75.2, 215.7, 252, true);
+  referenceField(pdf, "M :", text(shipment.recipient_phone), 256, 268.5, 215.7, 370, true);
 
-  field(pdf, "To :", text(shipment.recipient_place), 378, 137, 196);
-  field(pdf, "Packing Type :", packageType, 378, 151, 196);
-  field(pdf, "Article :", articleCount ? String(articleCount) : "", 378, 165, 98);
-  checkbox(pdf, 480, 166, "To Pay", billing.toPay);
-  checkbox(pdf, 523, 166, "Paid", billing.paid);
-  checkbox(pdf, 562, 166, "TBB", billing.tbb);
-  pdf.setFont("helvetica", "bold");
-  singleLine(pdf, "Actual Wt.", 379, 186, 56, 6.5, true);
-  singleLine(pdf, "Particulars", 443, 182.5, 71, 6.5, true);
-  singleLine(pdf, "Amount", 523, 182.5, 52, 6.5, true);
-  pdf.setFont("helvetica", "normal");
-  singleLine(pdf, actualWeight ? numberString(actualWeight) : "", 393, 193, 41, 6.5);
-  singleLine(pdf, "FREIGHT", 442, 197, 72, 6.5);
-  singleLine(pdf, "Charged Wt.", 379, 211, 56, 6.5, true);
-  singleLine(pdf, chargedWeight ? numberString(chargedWeight) : "", 393, 217, 41, 6.5);
-  pdf.text("", 523, 224);
+  referenceField(pdf, "To :", text(shipment.recipient_place), 378.8, 408, 139.5, 578.4);
+  referenceField(pdf, "Packing Type :", packageType, 378.8, 449, 153.5, 578.4);
+  referenceField(pdf, "Article :", articleCount ? String(articleCount) : "",
+    378.8, 415.2, 167.5, 439, false);
+  checkbox(pdf, 481, 169.0, "To Pay", billing.toPay);
+  checkbox(pdf, 523.5, 168.7, "Paid", billing.paid);
+  checkbox(pdf, 561.75, 169.0, "TBB", billing.tbb);
 
-  field(pdf, "Goods Description :", goodsDescription, 20, 230, 340);
-  field(
-    pdf,
-    "Invoice No. :",
-    shipments
-      .map((entry) => text(entry.document_number))
-      .filter(Boolean)
-      .join(", "),
-    20,
-    245,
-    240,
-  );
-  field(pdf, "PO No. :", "", 271, 245, 135);
-  field(
-    pdf,
-    "Value :",
-    shipments
-      .map((entry) => money(entry.total_invoice_value))
-      .filter(Boolean)
-      .join(", "),
-    20,
-    256,
-    240,
-  );
-  field(pdf, "Challan No. :", "", 271, 256, 135);
-  field(pdf, "Date :", date(shipment.document_date), 20, 269, 240);
-  field(pdf, "GST", gstLabel, 442, 269, 72);
-  field(
-    pdf,
-    "E-Way Bill No. :",
-    shipments
-      .map((entry) => text(entry.eway_bill_number))
-      .filter(Boolean)
-      .join(", "),
-    20,
-    280,
-    491,
-  );
-  field(pdf, "TOTAL", "", 518, 280, 58);
-  field(pdf, "Remarks :", text(consignment.remarks), 20, 294, 550);
-  field(pdf, "Rs in Words :", "", 20, 304, 550);
+  centeredReferenceLine(pdf, "Actual Wt.", 407, 183.2, 59, 6.6, true);
+  centeredReferenceLine(pdf, "Particulars", 478.3, 183.2, 76, 6.6, true);
+  centeredReferenceLine(pdf, "Amount", 548, 183.2, 60, 6.6, true);
+  centeredReferenceLine(pdf, actualWeight ? numberString(actualWeight) : "",
+    407, 194.0, 59, 6.6);
+  referenceField(pdf, "", "FREIGHT", 442, 442, 198.2, 514);
+  centeredReferenceLine(pdf, "Charged Wt.", 407, 208, 59, 6.6, true);
+  centeredReferenceLine(pdf, chargedWeight ? numberString(chargedWeight) : "",
+    407, 218, 59, 6.6);
+
+  referenceField(pdf, "Goods Description :", goodsDescription, 20, 116.2, 230, 433);
+  referenceField(pdf, "Invoice No. :",
+    shipments.map((entry) => text(entry.document_number)).filter(Boolean).join(", "),
+    20, 80.8, 245, 264);
+  referenceField(pdf, "PO No. :", "", 271.2, 322, 245, 437);
+  referenceField(pdf, "Value :",
+    shipments.map((entry) => money(entry.total_invoice_value)).filter(Boolean).join(", "),
+    20, 80.8, 256, 264);
+  referenceField(pdf, "Challan No. :", "", 271.2, 324, 256, 437);
+  referenceField(pdf, "Date :", date(shipment.document_date), 20, 80.8, 269, 264);
+  referenceField(pdf, "GST", gstLabel, 442, 459, 269, 514, true);
+  referenceField(pdf, "E-Way Bill No. :",
+    shipments.map((entry) => text(entry.eway_bill_number)).filter(Boolean).join(", "),
+    20, 94.8, 281.3, 437);
+  referenceField(pdf, "TOTAL", "", 442, 480, 281.3, 579);
+  referenceField(pdf, "Remarks :", text(consignment.remarks), 20, 78, 294, 575);
+  referenceField(pdf, "Rs in Words :", "", 20, 86, 305, 575);
+
   const fullDeliveryAddress =
     text(shipment.ship_to_address) || text(shipment.ship_to_address_line_1) ||
     join(shipment.recipient_address_line_1, shipment.recipient_address_line_2) ||
     text(shipment.recipient_place);
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Delivery At :", 20, 318);
-  pdf.setFont("helvetica", "normal");
-  limitedLines(pdf, fullDeliveryAddress, 80, 318, 148, 2, 9, 7);
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Acknowledgement :", 239, 318);
-  pdf.setFont("helvetica", "normal");
-  singleLine(pdf, "Goods received in good condition", 239, 329, 120, 6.2);
-  field(pdf, "IGST Paid By :", "", 366, 318, 210);
+  referenceField(pdf, "Delivery At :", "", 20, 79.5, 318.5, 234, true, 7.4);
+  limitedLines(pdf, fullDeliveryAddress, 79.5, 318.5, 149, 2, 10.6, 7.4);
+  referenceField(pdf, "Acknowledgement :", "", 238.8, 325, 317.5, 363);
+  centeredReferenceLine(pdf, "Goods received in good condition", 300.5, 329, 121, 6.6, true);
+  referenceField(pdf, "IGST Paid By :", "", 368.8, 429, 317.5, 576);
 
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Terms & Conditions :", 20, 337);
-  pdf.setFont("helvetica", "normal");
+  referenceField(pdf, "Terms & Conditions :", "", 20, 100, 341.3, 235);
   fittedParagraph(
     pdf,
     "I/We hereby agree to the terms & conditions set out on the reverse of this consignor's copy & declare that the contents on the waybill are true and correct. The To-pay freight has my/our consent and will be paid by the consignee along with the applicable service charges at the time of delivery.",
-    20, 351, 206, 6, 7,
+    20.2, 353.5, 206, 5, 8.55,
   );
-  pdf.setFont("helvetica", "bold");
   pdf.setTextColor(...RED);
-  singleLine(pdf, `FOR ${companyName}`, 371, 342, 201, 7.2, true);
+  centeredReferenceLine(pdf, "FOR " + companyName, 472.5, 341.7, 206, 6.6, true);
   pdf.setTextColor(...BLACK);
-  singleLine(pdf, "Signature with Stamp", 264, 385, 92, 6.5);
-  singleLine(pdf, "Booking Clerk", 496, 385, 77, 6.5);
-  pdf.setFontSize(6.5);
-  pdf.setFont("helvetica", "bold");
-  pdf.text("Smart People Great Solution", A4_WIDTH / 2, 402, { align: "center" });
-  pdf.setFontSize(7);
-  // Page 1 is deliberately identical in structure to the supplied Crystal
-  // Reports GR: the large blank lower half stays blank. Attribution and page
-  // numbers appear only in the continuation sheets.
+  centeredReferenceLine(pdf, "Signature with Stamp", 301.5, 389, 122, 6.6);
+  centeredReferenceLine(pdf, "Booking Clerk", 472, 389, 82, 6.6);
+  centeredReferenceLine(pdf, "Smart People Great Solution", A4_WIDTH / 2, 403, 205, 6.6, true);
 
-  appendConsignmentDetails(pdf, { ...consignment, branch }, shipments, packages, items);
+  // The GR is exactly one A4 page like the uploaded sample. Optional
+  // supplementary ERP data always belongs to its own distinct PDF.
+  const number = pdfSafeFilename(text(consignment.consignment_number) || "consignment");
+  const mainName = filenamePrefix === "LR"
+    ? "LR-" + number + ".pdf"
+    : "Consignor-Copy-" + number + ".pdf";
+  if (mode === "gr-only") {
+    pdf.save(mainName);
+    return;
+  }
 
-  const filename = filenamePrefix === "LR"
-    ? `LR-${text(consignment.consignment_number) || "receipt"}.pdf`
-    : `Consignor-Copy-${text(consignment.consignment_number) || "consignment"}.pdf`;
-  pdf.save(filename);
+  const details = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
+  details.setDrawColor(...BLACK);
+  details.setTextColor(...BLACK);
+  details.setLineWidth(0.55);
+  appendConsignmentDetails(details, { ...consignment, branch }, shipments, packages, items);
+  const detailsName = "Additional-Details-" + number + ".pdf";
+  if (mode === "additional-only") {
+    details.save(detailsName);
+    return;
+  }
+  const zipped = createPdfZip([
+    { name: mainName, bytes: new Uint8Array(pdf.output("arraybuffer")) },
+    { name: detailsName, bytes: new Uint8Array(details.output("arraybuffer")) },
+  ]);
+  const zipBlob = new Blob([zipped.buffer as ArrayBuffer], { type: "application/zip" });
+  const url = URL.createObjectURL(zipBlob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "GR-and-Additional-Details-" + number + ".zip";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
 }
