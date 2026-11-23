@@ -163,7 +163,7 @@ function appendConsignmentDetails(
     if (y + height > bottom) newPage();
   };
   const heading = (title: string) => {
-    ensure(27);
+    ensure(40);
     pdf.setFillColor(238, 238, 238);
     pdf.rect(left, y, width, 17, "FD");
     pdf.setFont("helvetica", "bold");
@@ -181,20 +181,35 @@ function appendConsignmentDetails(
     for (let index = 0; index < fields.length; index += 2) {
       const pair = [fields[index], fields[index + 1]];
       const measured = pair.map((entry) =>
-        entry ? wrapped(entry[1], half - 94) : [" "]);
-      const height = Math.max(17, Math.max(...measured.map((v) => v.length)) * 8.1 + 7);
-      ensure(height);
-      pair.forEach((entry, col) => {
-        pdf.rect(left + col * half, y, half, height);
-        if (!entry) return;
-        pdf.setFont("helvetica", "bold");
-        pdf.setFontSize(6.8);
-        pdf.text(entry[0] + ":", left + col * half + 4, y + 10);
-        pdf.setFont("helvetica", "normal");
-        pdf.setFontSize(7);
-        pdf.text(measured[col], left + col * half + 91, y + 10);
-      });
-      y += height;
+        entry ? wrapped(entry[1], half - 96) : [" "]);
+      const totalLines = Math.max(1, ...measured.map((lines) => lines.length));
+      let offset = 0;
+      while (offset < totalLines) {
+        const available = Math.floor((bottom - y - 12) / 8.1);
+        if (available < 2) {
+          newPage();
+          continue;
+        }
+        const take = Math.min(totalLines - offset, available);
+        const height = Math.max(17, take * 8.1 + 7);
+        ensure(height);
+        pair.forEach((entry, col) => {
+          pdf.rect(left + col * half, y, half, height);
+          if (!entry) return;
+          pdf.setFont("helvetica", "bold");
+          pdf.setFontSize(6.8);
+          const label = entry[0] + (offset ? " cont." : "") + ":";
+          pdf.text(label, left + col * half + 4, y + 10, {
+            maxWidth: 83,
+          });
+          pdf.setFont("helvetica", "normal");
+          pdf.setFontSize(7);
+          const segment = measured[col].slice(offset, offset + take);
+          if (segment.length) pdf.text(segment, left + col * half + 91, y + 10);
+        });
+        y += height;
+        offset += take;
+      }
     }
   };
   const grid = (title: string, headers: string[], widths: number[], rows: string[][]) => {
@@ -261,6 +276,17 @@ function appendConsignmentDetails(
 
   const extras: Array<[string, string]> = [
     ["Issuing Branch", text(((consignment.branch ?? {}) as AnyRecord).branch_name)],
+    ["Branch Address", join(
+      ((consignment.branch ?? {}) as AnyRecord).address_line1,
+      ((consignment.branch ?? {}) as AnyRecord).address_line2,
+      ((consignment.branch ?? {}) as AnyRecord).area_locality,
+      ((consignment.branch ?? {}) as AnyRecord).city,
+      ((consignment.branch ?? {}) as AnyRecord).state,
+      ((consignment.branch ?? {}) as AnyRecord).pin_code,
+    )],
+    ["Branch GSTIN", text(((consignment.branch ?? {}) as AnyRecord).gstin)],
+    ["Branch PAN", text(((consignment.branch ?? {}) as AnyRecord).pan)],
+    ["Branch Contact", text(((consignment.branch ?? {}) as AnyRecord).mobile_number)],
     ["Source / Contract", text(source.contract_name)],
     ["Consignment Type", text(consignment.consignment_type)],
     ["Movement Mode", text(consignment.movement_mode)],
@@ -495,11 +521,16 @@ export async function printConsignorCopyPdf({
     .map((item) => text(item.product_name) || text(item.description))
     .filter(Boolean)
     .join(", ");
-  const gstRate = items.reduce(
-    (sum, item) =>
-      sum + num(item.gst_rate || item.cgst_rate) + num(item.sgst_rate) + num(item.igst_rate),
-    0,
-  );
+  // GST is the rate on a goods line, not the sum of every line's rates.
+  // Prefer explicit GST, else IGST, else CGST + SGST.
+  const gstRates = items.map((item) =>
+    num(item.gst_rate) || num(item.igst_rate) ||
+    (num(item.cgst_rate) + num(item.sgst_rate)),
+  ).filter((rate) => rate > 0);
+  const gstRate = gstRates[0] ?? 0;
+  const gstLabel = new Set(gstRates.map((rate) => rate.toFixed(2))).size > 1
+    ? "Mixed rates"
+    : formatConsignmentGst(gstRate);
   const billing = billingCheckboxes(consignment.billing_status);
   const vehicle = consignment.vehicle as AnyRecord | null | undefined;
   const fromName = partyName(shipment, "supplier");
@@ -649,7 +680,7 @@ export async function printConsignorCopyPdf({
   );
   field(pdf, "Challan No. :", "", 271, 256, 135);
   field(pdf, "Date :", date(shipment.document_date), 20, 269, 240);
-  field(pdf, "GST", formatConsignmentGst(gstRate), 442, 269, 120);
+  field(pdf, "GST", gstLabel, 442, 269, 120);
   field(
     pdf,
     "E-Way Bill No. :",
