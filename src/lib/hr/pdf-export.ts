@@ -40,19 +40,33 @@ function header(doc: jsPDF, settings: AppSettings | null | undefined, title: str
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(15);
+  // Keep long legal names within the first-page bordered letterhead.
+  let companySize = 15;
+  while (companySize > 7 && doc.getTextWidth(company) > 559 - textX - 6) {
+    companySize -= 0.4;
+    doc.setFontSize(companySize);
+  }
   doc.text(company, textX, 32);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
-  if (address) doc.text(address, textX, 44);
-  doc.setDrawColor(155, 28, 28);
-  doc.setLineWidth(1.2);
+  if (address) {
+    let addrSize = 9;
+    doc.setFontSize(addrSize);
+    while (addrSize > 6 && doc.getTextWidth(address) > 559 - textX - 5) {
+      addrSize -= 0.25;
+      doc.setFontSize(addrSize);
+    }
+    doc.text(address, textX, 44);
+  }
+  doc.setDrawColor(40, 40, 40);
+  doc.setLineWidth(0.65);
   doc.line(36, 56, 559, 56);
   doc.setLineWidth(0.2);
   doc.setDrawColor(200);
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.setTextColor(155, 28, 28);
+  doc.setTextColor(28, 28, 28);
   doc.text(title, 36, 74);
   doc.setTextColor(0);
   doc.setFont('helvetica', 'normal');
@@ -122,6 +136,7 @@ export function exportEmployeeAttendancePdf(opts: {
   const leaves = computeLeavesBalance(employee, allAttendance ?? attendance, to);
 
   autoTable(doc, {
+    theme: 'grid',
     startY: 182,
     head: [['Metric', 'Value']],
     body: [
@@ -135,7 +150,7 @@ export function exportEmployeeAttendancePdf(opts: {
       ['Paid leaves left', String(leaves.left)],
     ],
     styles: { fontSize: 9 },
-    headStyles: { fillColor: [155, 28, 28] },
+    headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 },
     margin: { left: 36, right: 36 },
   });
 
@@ -162,11 +177,12 @@ export function exportEmployeeAttendancePdf(opts: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const finalY = (doc as any).lastAutoTable?.finalY ?? 240;
   autoTable(doc, {
+    theme: 'grid',
     startY: finalY + 20,
     head: [['Date', 'Day', 'Status']],
     body: rows,
     styles: { fontSize: 8 },
-    headStyles: { fillColor: [155, 28, 28] },
+    headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 },
     margin: { left: 36, right: 36 },
   });
 
@@ -199,6 +215,7 @@ export function exportLoanDetailPdf(opts: {
   header(doc, settings, `${title} — ${fullName(employee)}`);
 
   autoTable(doc, {
+    theme: 'grid',
     startY: 108,
     head: [['Field', 'Value']],
     body: [
@@ -222,7 +239,7 @@ export function exportLoanDetailPdf(opts: {
       ['Notes', loan.notes ?? '—'],
     ],
     styles: { fontSize: 10 },
-    headStyles: { fillColor: [155, 28, 28] },
+    headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 },
     margin: { left: 36, right: 36 },
   });
 
@@ -272,11 +289,12 @@ export function exportLoanDetailPdf(opts: {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const y1 = (doc as any).lastAutoTable?.finalY ?? 400;
   autoTable(doc, {
+    theme: 'grid',
     startY: y1 + 16,
     head: [['EMI #', 'Due date', 'Amount', 'Status']],
     body: schedule,
     styles: { fontSize: 9 },
-    headStyles: { fillColor: [155, 28, 28] },
+    headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 },
     margin: { left: 36, right: 36 },
   });
 
@@ -320,12 +338,13 @@ export function exportLoansSummaryPdf(opts: {
   const totalRemaining = loans.reduce((s, l) => s + loanRemaining(l), 0);
 
   autoTable(doc, {
+    theme: 'grid',
     startY: 108,
     head: [['Employee', 'Principal', 'EMI', 'Paid', 'Remaining', 'Status', 'Start']],
     body,
     foot: [['Totals', money(totalPrincipal), '', '', money(totalRemaining), '', '']],
     styles: { fontSize: 9 },
-    headStyles: { fillColor: [155, 28, 28] },
+    headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 },
     footStyles: { fillColor: [245, 238, 238], textColor: 20, fontStyle: 'bold' },
     margin: { left: 36, right: 36 },
   });
@@ -361,12 +380,13 @@ export function exportLossDeductionsPdf(opts: {
   const pending = deductions.filter(d => d.status === 'pending').reduce((s, d) => s + Number(d.amount), 0);
 
   autoTable(doc, {
+    theme: 'grid',
     startY: 108,
     head: [['Employee', 'Amount', 'Reason', 'Status', 'Deducted on', 'Created']],
     body,
     foot: [['Totals', money(total), `Pending: ${money(pending)}`, '', '', '']],
     styles: { fontSize: 9 },
-    headStyles: { fillColor: [155, 28, 28] },
+    headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 },
     footStyles: { fillColor: [245, 238, 238], textColor: 20, fontStyle: 'bold' },
     margin: { left: 36, right: 36 },
   });
@@ -417,12 +437,17 @@ export function exportLedgerPdf(opts: {
   const textX = logo ? 80 : 36;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(14);
+  let titleSize = 14;
+  while (titleSize > 7 && doc.getTextWidth(company) > pageW - textX - 40) {
+    titleSize -= 0.35;
+    doc.setFontSize(titleSize);
+  }
   doc.text(company, textX, 27);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(8.5);
   if (address) doc.text(address, textX, 38);
 
-  doc.setDrawColor(155, 28, 28);
+  doc.setDrawColor(40, 40, 40);
   doc.setLineWidth(1);
   doc.line(36, 48, pageW - 36, 48);
   doc.setLineWidth(0.2);
@@ -431,7 +456,7 @@ export function exportLedgerPdf(opts: {
   // Title
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(12);
-  doc.setTextColor(155, 28, 28);
+  doc.setTextColor(28, 28, 28);
   doc.text('Employee Ledger', pageW / 2, 64, { align: 'center' });
   doc.setTextColor(0);
 
@@ -490,6 +515,7 @@ export function exportLedgerPdf(opts: {
   ];
 
   autoTable(doc, {
+    theme: 'grid',
     startY: summaryY + 10,
     head: [['Date', 'Narration', 'DR (Rs.)', 'CR (Rs.)', 'Amount Due (Rs.)', 'Balance']],
     body: tableBody,

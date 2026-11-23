@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import QRCode from "qrcode";
 import { fetchCompany } from "@/lib/trip-note-pdf";
+import { supabase } from "@/integrations/supabase/client";
 
 export type OutwardPODPdfData = {
   consignmentNumber: string;
@@ -8,6 +9,7 @@ export type OutwardPODPdfData = {
   consignor?: string | null;
   consignee?: string | null;
   destination?: string | null;
+  branchId?: string | null;
   branchName?: string | null;
   branchAddress?: string | null;
   consignmentType?: string | null;
@@ -18,7 +20,7 @@ export type OutwardPODPdfData = {
   viewQrUrl: string;
 };
 
-const RED: [number, number, number] = [139, 26, 44];
+const RED: [number, number, number] = [28, 28, 28];
 const GREY: [number, number, number] = [110, 110, 110];
 
 async function toDataUri(url: string): Promise<string> {
@@ -46,6 +48,7 @@ function drawHeader(
   address: string,
   title: string,
   logoDataUri?: string,
+  taxLine = "",
 ) {
   if (logoDataUri) {
     try {
@@ -61,7 +64,12 @@ function drawHeader(
   doc.setFontSize(9);
   const addressLines = address ? (doc.splitTextToSize(address, 420) as string[]) : [];
   if (addressLines.length) doc.text(addressLines, 88, 45);
-  const lineY = addressLines.length ? 45 + addressLines.length * 12 + 5 : 58;
+  if (taxLine) {
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "bold");
+    doc.text(taxLine, 88, 45 + addressLines.length * 12);
+  }
+  const lineY = Math.max(58, 45 + addressLines.length * 12 + (taxLine ? 13 : 5));
   doc.setDrawColor(...RED);
   doc.setLineWidth(1.2);
   doc.line(36, lineY, 559, lineY);
@@ -133,31 +141,40 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
   }
 
   try {
-    const [company, qrDataUrl, logoDataUri] = await Promise.all([
+    const [company, branchResult, qrDataUrl, logoDataUri] = await Promise.all([
       fetchCompany(),
+      data.branchId
+        ? supabase.from("branches")
+            .select("branch_name,address_line1,address_line2,area_locality,city,state,pin_code,gstin,pan,mobile_number")
+            .eq("id", data.branchId)
+            .maybeSingle()
+        : Promise.resolve({ data: null, error: null }),
       QRCode.toDataURL(data.viewQrUrl, { width: 360, margin: 2, errorCorrectionLevel: "M" }),
       toDataUri(`${window.location.origin}/garuda-logo.png`),
     ]);
+    if (branchResult.error) throw new Error("Could not load POD issuing branch: " + branchResult.error.message);
     const doc = new jsPDF({ unit: "pt", format: "a4" });
-    const companyAddress = [
-      company?.address_line1,
-      company?.address_line2,
-      company?.city,
-      company?.state,
-      company?.pin_code,
-    ]
-      .filter(Boolean)
-      .join(", ");
-    const branchAddress = data.branchAddress?.trim() || companyAddress;
-    const headerAddress = data.branchName
-      ? `${data.branchName}${branchAddress ? `, ${branchAddress}` : ""}`
-      : branchAddress;
+    const branch = branchResult.data;
+    const verifiedAddress = [
+      branch?.address_line1,
+      branch?.address_line2,
+      branch?.area_locality,
+      branch?.city,
+      branch?.state,
+      branch?.pin_code,
+    ].filter(Boolean).join(", ");
+    const branchAddress = verifiedAddress || data.branchAddress?.trim() || "";
+    const branchName = branch?.branch_name || data.branchName || "";
+    const headerAddress = [branchName, branchAddress].filter(Boolean).join(", ");
+    const taxLine = ["GSTIN: " + (branch?.gstin || "—"), "PAN: " + (branch?.pan || "—")]
+      .join("    ");
     const contentStartY = drawHeader(
       doc,
       company?.company_name ?? "ORCA DEVS SURF",
       headerAddress,
       "Outward POD",
       logoDataUri,
+      taxLine,
     );
 
     doc.setFont("helvetica", "bold");
@@ -168,7 +185,7 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
     doc.setDrawColor(200, 200, 200);
     doc.setLineWidth(0.6);
     const detailsY = contentStartY + 12;
-    doc.roundedRect(36, detailsY, 523, 180, 4, 4);
+    doc.rect(36, detailsY, 523, 180);
 
     let y = detailsY + 24;
     y += drawField(doc, "Consignment No.", data.consignmentNumber, 52, y, 235);
@@ -208,7 +225,7 @@ export async function printOutwardPOD(data: OutwardPODPdfData): Promise<void> {
     doc.setTextColor(0, 0, 0);
     doc.setDrawColor(200, 200, 200);
     const qrBoxY = qrTitleY + 12;
-    doc.roundedRect(36, qrBoxY, 523, 180, 4, 4);
+    doc.rect(36, qrBoxY, 523, 180);
     doc.addImage(qrDataUrl, "PNG", 54, qrBoxY + 18, 144, 144);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(11);

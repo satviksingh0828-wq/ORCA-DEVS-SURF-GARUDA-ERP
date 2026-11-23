@@ -55,12 +55,17 @@ function drawHeader(doc: jsPDF, company: string, address: string): number {
   const textX = logo ? 88 : 40;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(16);
+  let companySize = 16;
+  while (companySize > 7 && doc.getTextWidth(company) > 559 - textX - 5) {
+    companySize -= 0.4;
+    doc.setFontSize(companySize);
+  }
   doc.text(company, textX, 34);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
   if (address) doc.text(address, textX, 46);
-  doc.setDrawColor(155, 28, 28);
-  doc.setLineWidth(1.2);
+  doc.setDrawColor(40, 40, 40);
+  doc.setLineWidth(0.65);
   doc.line(36, 58, 559, 58);
   doc.setLineWidth(0.2);
   doc.setDrawColor(200);
@@ -188,7 +193,7 @@ export function exportPayrollPdf(opts: {
   // ── "Payslip" heading — centered ──────────────────────────────────────────
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
-  doc.setTextColor(155, 28, 28);
+  doc.setTextColor(28, 28, 28);
   doc.text('Payslip', pageW / 2, 82, { align: 'center' });
   doc.setTextColor(0);
 
@@ -236,11 +241,12 @@ export function exportPayrollPdf(opts: {
   earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + paidLeavePayout)]);
 
   autoTable(doc, {
+    theme: 'grid',
     startY: bannerY,
     head: [['Earnings', 'Amount']],
     body: earningsRows,
     styles: { fontSize: 10 },
-    headStyles: { fillColor: [155, 28, 28] },
+    headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 },
     margin: { left: 36, right: 36 },
   });
 
@@ -265,11 +271,12 @@ export function exportPayrollPdf(opts: {
   }
 
   autoTable(doc, {
+    theme: 'grid',
     startY: y1 + 16,
     head: [['Deductions', 'Amount']],
     body: deductionRows,
     styles: { fontSize: 10 },
-    headStyles: { fillColor: [155, 28, 28] },
+    headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 },
     margin: { left: 36, right: 36 },
   });
 
@@ -309,6 +316,7 @@ export function exportPayrollPdf(opts: {
     });
 
     autoTable(doc, {
+    theme: 'grid',
       startY: y2 + 16,
       head: [['Type', 'Principal', 'EMI / month', 'Balance remaining']],
       body: loanRows,
@@ -378,7 +386,7 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
 
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(13);
-  doc.setTextColor(155, 28, 28);
+  doc.setTextColor(28, 28, 28);
   doc.text('Payslip', pageW / 2, 82, { align: 'center' });
   doc.setTextColor(0);
 
@@ -426,7 +434,8 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
   if (incentiveAmount > 0) earningsRows.push(['One-time incentive', money(incentiveAmount)]);
   earningsRows.push(['Gross', money(Number(payroll.gross) + extraWorkPay + incentiveAmount + paidLeavePayout)]);
 
-  autoTable(doc, { startY: bannerY, head: [['Earnings', 'Amount']], body: earningsRows, styles: { fontSize: 10 }, headStyles: { fillColor: [155, 28, 28] }, margin: { left: 36, right: 36 } });
+  autoTable(doc, {
+    theme: 'grid', startY: bannerY, head: [['Earnings', 'Amount']], body: earningsRows, styles: { fontSize: 10 }, headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 }, margin: { left: 36, right: 36 } });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const y1 = (doc as any).lastAutoTable?.finalY ?? 420;
 
@@ -442,7 +451,8 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
   } else if (Number(payroll.loss_deduction) > 0) {
     deductionRows.push(['Loss deduction', money(payroll.loss_deduction)]);
   }
-  autoTable(doc, { startY: y1 + 16, head: [['Deductions', 'Amount']], body: deductionRows, styles: { fontSize: 10 }, headStyles: { fillColor: [155, 28, 28] }, margin: { left: 36, right: 36 } });
+  autoTable(doc, {
+    theme: 'grid', startY: y1 + 16, head: [['Deductions', 'Amount']], body: deductionRows, styles: { fontSize: 10 }, headStyles: { fillColor: [222, 222, 222], textColor: [25, 25, 25], lineColor: [40, 40, 40], lineWidth: 0.45 }, margin: { left: 36, right: 36 } });
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const y2 = (doc as any).lastAutoTable?.finalY ?? 540;
 
@@ -459,7 +469,8 @@ export function getPayrollPdfBase64(opts: Parameters<typeof exportPayrollPdf>[0]
       const insts = (advanceInstallments ?? []).filter(i => i.advance_id === a.id);
       loanRows.push(['Advance', money(a.principal), money(a.emi), money(insts.length > 0 ? loanRemainingFromInstallments(insts) : loanRemaining(a))]);
     });
-    autoTable(doc, { startY: y2 + 16, head: [['Type', 'Principal', 'EMI / month', 'Balance remaining']], body: loanRows, styles: { fontSize: 9 }, headStyles: { fillColor: [100, 60, 160] }, margin: { left: 36, right: 36 } });
+    autoTable(doc, {
+    theme: 'grid', startY: y2 + 16, head: [['Type', 'Principal', 'EMI / month', 'Balance remaining']], body: loanRows, styles: { fontSize: 9 }, headStyles: { fillColor: [100, 60, 160] }, margin: { left: 36, right: 36 } });
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     y3 = (doc as any).lastAutoTable?.finalY ?? y2 + 40;
   }

@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { FilePlus2, Paperclip, Plus, Search, Trash2 } from "lucide-react";
+import { FileDown, FilePlus2, Paperclip, Plus, Search, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
 import { RequireAuth } from "@/components/RequireAuth";
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { supabase } from "@/integrations/supabase/client";
+import { openBrandedTablePdf } from "@/lib/branded-pdf";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 
@@ -337,6 +338,33 @@ export function AccountsFinancePage() {
                         <td className="px-3 py-3">{currency(r.amount)}</td>
                         <td className="px-3 py-3 text-xs">{r.journal_entry_id}</td>
                         <td className="px-3 py-3">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => void openBrandedTablePdf({
+                                title: r.voucher_type === "receipt" ? "Cash Receipt Voucher" : "Cash Payment Voucher",
+                                subtitle: (r.branch?.branch_name ?? "Branch") + " | " + r.voucher_date,
+                                filename: r.voucher_number + ".pdf",
+                                branchId: r.branch_id,
+                                columns: ["Field", "Details"],
+                                rows: [
+                                  ["Voucher No.", r.voucher_number],
+                                  ["Voucher Date", r.voucher_date],
+                                  ["Branch", r.branch?.branch_name ?? "—"],
+                                  ["Party / Payee", r.name],
+                                  ["Description", r.description ?? ""],
+                                  ["Amount (INR)", currency(r.amount)],
+                                  ["Journal Entry", r.journal_entry_id],
+                                  ["Supporting document", r.supporting_document || "Not attached"],
+                                ],
+                                summary: [["POSTED AMOUNT", currency(r.amount)]],
+                              }).catch((error) => toast.error(
+                                error instanceof Error ? error.message : "Could not create voucher PDF",
+                              ))}
+                            >
+                              <FileDown className="mr-1 size-3" /> PDF
+                            </Button>
                           {r.supporting_document ? (
                             <Button
                               size="sm"
@@ -346,9 +374,8 @@ export function AccountsFinancePage() {
                               <Paperclip className="mr-1 size-3" />
                               Open
                             </Button>
-                          ) : (
-                            "—"
-                          )}
+                          ) : null}
+                          </div>
                         </td>
                       </tr>
                     ))}

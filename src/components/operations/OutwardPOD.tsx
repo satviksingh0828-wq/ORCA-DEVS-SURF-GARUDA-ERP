@@ -515,6 +515,7 @@ export function OutwardPOD() {
         consignor: party(selected, "consignor"),
         consignee: party(selected, "consignee"),
         destination: destination(selected),
+        branchId: selected.branch_id,
         branchName: selected.branch?.branch_name,
         branchAddress: [
           selected.branch?.address_line1,

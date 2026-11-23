@@ -353,8 +353,9 @@ function buildBodyHtml(
 ): string {
   const { company, branch, trip, vehicle, driver, transporter, movements } = data;
 
-  // Address — prefer branch address (trip's own branch), fall back to company
-  const addr = branch ?? company;
+  // A trip document's issuing identity must be the actual trip branch.
+  // Never borrow company-level address/PAN/GSTIN when the branch is missing.
+  const addr = (branch ?? {}) as TripNoteBranch;
   const addrParts = [
     sv((addr as Record<string, unknown>).address_line1),
     sv((addr as Record<string, unknown>).address_line2),
@@ -364,7 +365,9 @@ function buildBodyHtml(
       .join(", "),
     sv((addr as Record<string, unknown>).pin_code),
   ].filter(Boolean);
-  const addressHtml = addrParts.join(",&nbsp; ");
+  const addressHtml = addrParts.length
+    ? addrParts.join(",&nbsp; ")
+    : "Issuing branch address not recorded";
 
   // From / To
   const fromLoc =
@@ -492,11 +495,9 @@ function buildBodyHtml(
       <div class="tn-company-name">${company.company_name}</div>
       <div class="tn-company-addr">${addressHtml}</div>
       ${(() => {
-        // Prefer branch GSTIN/PAN (trip's own branch) over company-level values
-        const gstin =
-          sv((branch as Record<string, unknown> | null | undefined)?.gstin) || sv(company.gstin);
-        const pan =
-          sv((branch as Record<string, unknown> | null | undefined)?.pan) || sv(company.pan);
+        // Issuing branch GSTIN and PAN, without company fallbacks.
+        const gstin = sv(branch?.gstin);
+        const pan = sv(branch?.pan);
         return gstin || pan
           ? `<div class="tn-company-reg">${[
               gstin ? `GSTIN: ${gstin}` : "",
@@ -524,8 +525,8 @@ function buildBodyHtml(
     </thead>
     <tbody>
       <tr>
-        <td><div style="display:flex;align-items:center;justify-content:center;min-height:22px;">${sv((addr as Record<string, unknown>).pan) || sv(company.pan) || "—"}</div></td>
-        <td><div style="display:flex;align-items:center;justify-content:center;min-height:22px;">${sv((addr as Record<string, unknown>).gstin) || sv(company.gstin) || "—"}</div></td>
+        <td><div style="display:flex;align-items:center;justify-content:center;min-height:22px;">${sv(addr.pan) || "—"}</div></td>
+        <td><div style="display:flex;align-items:center;justify-content:center;min-height:22px;">${sv(addr.gstin) || "—"}</div></td>
         <td><div style="display:flex;align-items:center;justify-content:center;min-height:22px;">${trip.trip_code}</div></td>
         <td><div style="display:flex;align-items:center;justify-content:center;min-height:22px;">${sv(trip.start_date) || "—"}</div></td>
         <td><div style="display:flex;align-items:center;justify-content:center;min-height:22px;">${fromLoc || "—"}</div></td>
