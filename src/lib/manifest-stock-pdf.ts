@@ -2,6 +2,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import jsPDF from "jspdf";
 import { supabase } from "@/integrations/supabase/client";
+import { manifestPackageTotals, mostCommonManifestVehicle, type ManifestPackageLine } from "@/lib/manifest-pdf-data";
 
 type Row = Record<string, any>;
 type StockKind = "inward" | "outward";
@@ -241,6 +242,27 @@ function finish(doc: jsPDF, companyName: string) {
   }
 }
 
+
+async function loadPackageTotals(consignmentIds: string[]) {
+  const ids = [...new Set(consignmentIds.filter(Boolean))];
+  const rows: ManifestPackageLine[] = [];
+  const db = supabase as any;
+  for (let index = 0; index < ids.length; index += 80) {
+    const { data, error } = await db
+      .from("consignment_package_information")
+      .select("consignment_id,shipment_id,quantity,weight_kg")
+      .in("consignment_id", ids.slice(index, index + 80));
+    if (error) throw new Error("Could not load consignment package weights: " + error.message);
+    rows.push(...((data ?? []) as ManifestPackageLine[]));
+  }
+  return manifestPackageTotals(rows);
+}
+
+function linkedConsignmentVehicle(consignment: Row) {
+  return text(consignment.part_b_vehicle_no) ||
+    text(record(consignment.vehicle).registration_number);
+}
+
 export async function printLtmsManifestPdf(manifest: Row) {
   const number = text(manifest.manifest_number);
   const data = await loadHeader(text(manifest.branch_id), record(manifest.branch));
@@ -248,63 +270,100 @@ export async function printLtmsManifestPdf(manifest: Row) {
   doc.setTextColor(...ink);
   heading(doc, "MANIFEST AUTO", number, data);
   const items = Array.isArray(manifest.items) ? manifest.items as Row[] : [];
+  const getConsignment = (item: Row) => record(item.consignment);
   const first = items[0] || {};
-  const firstConsignment = record(first.consignment);
-  const firstShipment = record(first.shipment);
-  const firstFrom = record(firstConsignment.from_details);
-  const firstTo = record(firstConsignment.to_details);
+  const firstConsignment = getConsignment(first);
+  const chosenVehicle = mostCommonManifestVehicle(items.map((item) => {
+    const cn = getConsignment(item);
+    return {
+      consignmentId: text(item.consignment_id || cn.id || item.consignment_number),
+      vehicleNumber: linkedConsignmentVehicle(cn),
+    };
+  }));
+  // Use the driver/location that belongs to the selected vehicle, instead of
+  // taking a driver's name from an unrelated first manifest row.
+  const representative = items.find((item) =>
+    linkedConsignmentVehicle(getConsignment(item)).replace(/[\s-]/g, "").toUpperCase() ===
+      chosenVehicle.replace(/[\s-]/g, "").toUpperCase(),
+  ) || first;
+  const consignment = getConsignment(representative);
+  const shipment = record(representative.shipment);
+  const from = record(consignment.from_details);
+  const to = record(consignment.to_details);
   const transporter = record(manifest.transporter);
-  const firstDriver = record(firstConsignment.driver);
-  const firstVehicle = record(firstConsignment.vehicle);
+  const driver = record(consignment.driver);
+  const packageTotals = await loadPackageTotals(
+    items.map((item) => text(item.consignment_id || getConsignment(item).id)),
+  );
   const manifestDate = date(manifest.manifest_date || manifest.created_at);
   const time = text(manifest.created_at)
     ? new Date(manifest.created_at).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
     : "";
   fit(doc, manifestDate + "  " + time, X + 442, 145, 87, 7.2);
+  const billNumbers = unique(items.map((item) =>
+    text(item.eway_bill_number || record(item.shipment).eway_bill_number)));
+  const headerBill = billNumbers.length > 1 ? billNumbers.length + " bills" : (billNumbers[0] || "");
+  const validUntil = items
+    .map((item) => text(record(item.shipment).valid_until))
+    .filter(Boolean).sort()[0] || "";
   let y = infoRow(doc, 152,
     ["PAN No.", "GSTIN", "CIN", "E-way Bill No.", "E-way Bill Date"],
-    [text(data.branch.pan), text(data.branch.gstin), "", text(firstShipment.eway_bill_number), date(firstShipment.eway_bill_date)],
+    [text(data.branch.pan), text(data.branch.gstin), "",
+      headerBill, billNumbers.length === 1 ? date(shipment.eway_bill_date) : ""],
     [87, 132, 124, 94, 95]);
   y = infoRow(doc, y,
     ["From", "Vehicle No.", "Load Type", "E-way Bill Valid", "Mode"],
-    [text(firstFrom.place || firstShipment.dispatch_from_place || data.branch.city),
-      text(firstVehicle.registration_number || firstConsignment.part_b_vehicle_no),
-      text(manifest.load_type), date(firstShipment.valid_until), text(firstConsignment.transport_mode)],
+    [text(from.place || shipment.dispatch_from_place || data.branch.city),
+      chosenVehicle,
+      text(manifest.load_type || consignment.load_type), date(validUntil),
+      text(consignment.transport_mode)],
     [87, 132, 124, 94, 95]);
   y = infoRow(doc, y,
     ["To", "Transporter", "Driver's Name", "Driver's Contact No."],
-    [text(firstTo.place || firstShipment.recipient_place),
+    [text(to.place || shipment.recipient_place),
       text(manifest.transporter_name || transporter.transporter_name),
-      text(firstDriver.full_name), text(firstDriver.mobile_number)],
+      text(driver.full_name), text(driver.mobile_number)],
     [87, 162, 155, 128]);
 
+  let totalPieces = 0;
+  let totalWeight = 0;
   const rows = items.map((item, index) => {
-    const cn = record(item.consignment);
-    const shipment = record(item.shipment);
-    const from = record(cn.from_details);
-    const to = record(cn.to_details);
-    const goods = Array.isArray(shipment.shipment_items) ? shipment.shipment_items as Row[] : [];
-    const pkgs = goods.reduce((sum, part) => sum + num(part.quantity), 0);
-    const weight = goods.reduce((sum, part) => sum + num(part.weight_kg), 0);
+    const cn = getConsignment(item);
+    const linkedShipment = record(item.shipment);
+    const source = record(cn.from_details);
+    const destination = record(cn.to_details);
+    const id = text(item.consignment_id || cn.id);
+    const shipId = text(item.shipment_id || linkedShipment.id);
+    const saved = packageTotals.get(id + ":" + shipId);
+    const goods = Array.isArray(linkedShipment.shipment_items)
+      ? linkedShipment.shipment_items as Row[] : [];
+    // Consignment package lines are the authority for manifest package and
+    // weight totals; only fall back to shipment items if no package line exists.
+    const pkgs = saved
+      ? saved.quantity
+      : goods.reduce((sum, part) => sum + num(part.quantity), 0);
+    const weight = saved
+      ? saved.weightKg
+      : goods.reduce((sum, part) => sum + num(part.weight_kg), 0);
+    totalPieces += pkgs;
+    totalWeight += weight;
     const billing = text(cn.billing_status);
     return [
       String(index + 1),
       text(item.consignment_number || cn.consignment_number),
-      text(from.place || shipment.dispatch_from_place || shipment.supplier_place),
-      text(to.place || shipment.recipient_place),
+      text(source.place || linkedShipment.dispatch_from_place || linkedShipment.supplier_place),
+      text(destination.place || linkedShipment.recipient_place),
       pkgs ? money(pkgs) : "",
       weight ? money(weight) : "",
       billing === "billed" ? "TO PAY" : billing === "billed_and_paid" ? "PAID" : "TO B BILL",
-      text(shipment.supplier_trade_name || shipment.supplier_legal_name),
-      text(shipment.recipient_trade_name || shipment.recipient_legal_name),
+      text(linkedShipment.supplier_trade_name || linkedShipment.supplier_legal_name),
+      text(linkedShipment.recipient_trade_name || linkedShipment.recipient_legal_name),
     ];
   });
   const widths = [26, 77, 59, 58, 33, 55, 50, 86, 88];
   const tab = table(doc, "MANIFEST AUTO", number,
     ["S. No.", "CN No.", "From", "To", "Pkgs", "Weight", "To Pay", "Consignor", "Consignee"],
     widths, rows, y);
-  const totalPieces = rows.reduce((n, r) => n + num(r[4]), 0);
-  const totalWeight = rows.reduce((n, r) => n + num(r[5].replace(/,/g, "")), 0);
   totals(doc, "Total / No. of CN: " + rows.length, tab.y,
     [["Pkgs", money(totalPieces)], ["Weight (KG)", money(totalWeight)]]);
   // Transfer metadata that is not part of the source's nine-column table is
@@ -315,14 +374,15 @@ export async function printLtmsManifestPdf(manifest: Row) {
     doc.setFontSize(10);
     doc.text("MANIFEST TRANSFER DETAILS - " + number, X, 35);
     const appendix = items.map((item) => [
-      text(item.consignment_number || record(item.consignment).consignment_number),
+      text(item.consignment_number || getConsignment(item).consignment_number),
       text(item.eway_bill_number || record(item.shipment).eway_bill_number),
+      linkedConsignmentVehicle(getConsignment(item)),
       text(item.transfer_status),
       text(item.transfer_error),
     ]);
     table(doc, "MANIFEST TRANSFER DETAILS", number,
-      ["Consignment", "E-Way Bill", "Transfer Status", "Error / Remarks"],
-      [112, 120, 110, 190], appendix, 48);
+      ["Consignment", "E-Way Bill", "Consignment Vehicle", "Transfer Status", "Error / Remarks"],
+      [97, 107, 98, 84, 146], appendix, 48);
   }
   finish(doc, data.name);
   doc.save("Manifest-" + (number || "manifest") + ".pdf");
@@ -425,41 +485,88 @@ export async function printDeliveryManifestPdf(
   const data = await loadHeader(text(manifest.branch_id), record(manifest.branch));
   const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
   doc.setTextColor(...ink);
-  heading(doc, "MANIFEST AUTO", number, data);
   const partner = record(manifest.partner);
+  const links: Row[] = Array.isArray(manifest.lr_links) ? manifest.lr_links : [];
+  const linkedShipments = links.flatMap((link) => {
+    const lr = record(link.lr);
+    return ((lr.lr_shipments ?? []) as Row[])
+      .map((entry) => record(entry.shipment))
+      .filter((shipment) => Boolean(Object.keys(shipment).length));
+  });
+  const consignmentIds = unique(linkedShipments.map((shipment) =>
+    text(shipment.consignment_id)));
+  const db = supabase as any;
+  const consignments: Row[] = [];
+  for (let index = 0; index < consignmentIds.length; index += 80) {
+    const { data: rows, error } = await db
+      .from("consignments")
+      .select(
+        "id,part_b_vehicle_no,transport_mode,vehicle:vehicles(registration_number),driver:drivers(full_name,mobile_number)",
+      )
+      .in("id", consignmentIds.slice(index, index + 80));
+    if (error) throw new Error("Could not load linked consignment vehicles: " + error.message);
+    consignments.push(...((rows ?? []) as Row[]));
+  }
+  const consignmentById = new Map(consignments.map((cn) => [text(cn.id), cn]));
+  const chosenVehicle = mostCommonManifestVehicle(consignments.map((cn) => ({
+    consignmentId: text(cn.id),
+    vehicleNumber: linkedConsignmentVehicle(cn),
+  }))) || text(manifest.vehicle_no);
+  const representative = consignments.find((cn) =>
+    linkedConsignmentVehicle(cn).replace(/[\s-]/g, "").toUpperCase() ===
+    chosenVehicle.replace(/[\s-]/g, "").toUpperCase(),
+  ) || {};
+  const driver = record(representative.driver);
+  const packageTotals = await loadPackageTotals(consignmentIds);
+  heading(doc, "MANIFEST AUTO", number, data);
   fit(doc, date(manifest.manifest_date), X + 442, 145, 88, 7.8);
   let y = infoRow(doc, 152,
     ["PAN No.", "GSTIN", "CIN", "E-way Bill No.", "E-way Bill Date"],
-    [text(data.branch.pan), text(data.branch.gstin), "", "", ""],
+    [text(data.branch.pan), text(data.branch.gstin), "",
+      linkedShipments.length === 1 ? text(linkedShipments[0].eway_bill_number)
+        : linkedShipments.length > 1 ? linkedShipments.length + " bills" : "",
+      linkedShipments.length === 1 ? date(linkedShipments[0].eway_bill_date) : ""],
     [87, 132, 124, 94, 95]);
   y = infoRow(doc, y,
     ["From", "Vehicle No.", "Load Type", "E-way Bill Valid", "Mode"],
-    [locations.from, text(manifest.vehicle_no), text(manifest.load_type),
-      "", text(manifest.transport_mode)],
+    [locations.from, chosenVehicle, text(manifest.load_type), "",
+      text(representative.transport_mode || manifest.transport_mode)],
     [87, 132, 124, 94, 95]);
   y = infoRow(doc, y,
     ["To", "Transporter / Partner", "Driver's Name", "Driver's Contact No."],
-    [locations.to, text(partner.delivery_partner_name), text(manifest.driver_name),
-      text(manifest.driver_contact_number)],
+    [locations.to, text(partner.delivery_partner_name),
+      text(driver.full_name || manifest.driver_name),
+      text(driver.mobile_number || manifest.driver_contact_number)],
     [87, 162, 155, 128]);
-  const links: Row[] = Array.isArray(manifest.lr_links) ? manifest.lr_links : [];
+
+  let totalPieces = 0;
+  let totalWeight = 0;
   const rows = links.map((link, index) => {
     const lr = record(link.lr);
-    const shipments: Row[] = (lr.lr_shipments ?? [])
-      .map((entry: unknown) => record(record(entry).shipment))
-      .filter((row: Row) => Boolean(Object.keys(row).length));
+    const shipments: Row[] = ((lr.lr_shipments ?? []) as Row[])
+      .map((entry) => record(entry.shipment))
+      .filter((shipment) => Boolean(Object.keys(shipment).length));
     const first = shipments[0] || {};
-    const items = shipments.flatMap((shipment) =>
-      Array.isArray(shipment.shipment_items) ? shipment.shipment_items as Row[] : []);
-    const weight = items.reduce((sum, item) => sum + num(item.weight_kg), 0);
-    const count = items.reduce((sum, item) => sum + num(item.quantity), 0);
+    const totals = shipments.reduce((sum, shipment) => {
+      const cnId = text(shipment.consignment_id);
+      const matching = packageTotals.get(cnId + ":" + text(shipment.id));
+      const items = Array.isArray(shipment.shipment_items)
+        ? shipment.shipment_items as Row[] : [];
+      sum.pkgs += matching ? matching.quantity
+        : items.reduce((n, item) => n + num(item.quantity), 0);
+      sum.weight += matching ? matching.weightKg
+        : items.reduce((n, item) => n + num(item.weight_kg), 0);
+      return sum;
+    }, { pkgs: 0, weight: 0 });
+    totalPieces += totals.pkgs;
+    totalWeight += totals.weight;
     return [
       String(index + 1),
       text(lr.lr_number),
       text(first.supplier_place || locations.from),
       text(first.recipient_place || locations.to),
-      count ? money(count) : "",
-      weight ? money(weight) : "",
+      totals.pkgs ? money(totals.pkgs) : "",
+      totals.weight ? money(totals.weight) : "",
       text(link.transfer_status),
       text(first.supplier_trade_name),
       text(first.recipient_trade_name),
@@ -470,9 +577,8 @@ export async function printDeliveryManifestPdf(
     ["S. No.", "LR No.", "From", "To", "Pkgs", "Weight", "Status", "Consignor", "Consignee"],
     widths, rows, y);
   totals(doc, "Total / No. of LR: " + links.length, result.y,
-    [["Pkgs", money(rows.reduce((n, row) => n + num(row[4].replace(/,/g, "")), 0))],
-      ["Weight (KG)", money(rows.reduce((n, row) => n + num(row[5].replace(/,/g, "")), 0))]]);
-  if (links.some((link) => record(link.lr).lr_shipments?.length || text(link.transfer_error))) {
+    [["Pkgs", money(totalPieces)], ["Weight (KG)", money(totalWeight)]]);
+  if (linkedShipments.length || links.some((link) => text(link.transfer_error))) {
     doc.addPage();
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
@@ -481,17 +587,22 @@ export async function printDeliveryManifestPdf(
       const lr = record(link.lr);
       const shipments: Row[] = Array.isArray(lr.lr_shipments) ? lr.lr_shipments : [];
       return shipments.length
-        ? shipments.map((entry) => [
-            text(lr.lr_number),
-            text(record(entry.shipment).eway_bill_number),
-            text(link.transfer_status),
-            text(link.transfer_error),
-          ])
-        : [[text(lr.lr_number), "", text(link.transfer_status), text(link.transfer_error)]];
+        ? shipments.map((entry) => {
+            const shipment = record(entry.shipment);
+            const cn = consignmentById.get(text(shipment.consignment_id)) || {};
+            return [
+              text(lr.lr_number),
+              text(shipment.eway_bill_number),
+              linkedConsignmentVehicle(cn),
+              text(link.transfer_status),
+              text(link.transfer_error),
+            ];
+          })
+        : [[text(lr.lr_number), "", "", text(link.transfer_status), text(link.transfer_error)]];
     });
     table(doc, "MANIFEST LR DETAILS", number,
-      ["LR No.", "E-Way Bill No.", "Transfer Status", "Error / Remarks"],
-      [112, 120, 110, 190], appendix, 48);
+      ["LR No.", "E-Way Bill No.", "Consignment Vehicle", "Transfer Status", "Error / Remarks"],
+      [97, 107, 98, 84, 146], appendix, 48);
   }
   finish(doc, data.name);
   doc.save("Manifest-" + (number || "manifest") + ".pdf");

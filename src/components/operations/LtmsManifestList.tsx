@@ -706,7 +706,7 @@ export function LtmsManifestList({
     let manifestQuery = db
       .from("ltms_manifest_transfers")
       .select(
-        "id,branch_id,manifest_number,manifest_date,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(*),items:ltms_manifest_transfer_items(id,consignment_id,consignment_number,shipment_id,eway_bill_number,transfer_status,transfer_error,consignment:consignments(id,consignment_number,consignment_type,movement_mode,transport_mode,billing_status,part_b_vehicle_no,from_pin_code,to_pin_code,from_details,to_details,transporter_update_status,created_at,branch:branches(branch_name),vehicle:vehicles(registration_number),driver:drivers(full_name)),shipment:shipments(id,eway_bill_number,eway_bill_date,eway_bill_status,generation_mode,supplier_trade_name,supplier_legal_name,supplier_place,recipient_trade_name,recipient_legal_name,recipient_gstin,recipient_place,recipient_pin_code,dispatch_from_place,dispatch_from_pin_code,ship_to_place,ship_to_pin_code,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)))",
+        "id,branch_id,manifest_number,manifest_date,transporter_id,transporter_name,transporter_gstin,transfer_status,eway_bill_count,created_at,branch:branches(branch_name),transporter:ltms_transporters(*),items:ltms_manifest_transfer_items(id,consignment_id,consignment_number,shipment_id,eway_bill_number,transfer_status,transfer_error,consignment:consignments(id,consignment_number,consignment_type,movement_mode,transport_mode,billing_status,part_b_vehicle_no,from_pin_code,to_pin_code,from_details,to_details,transporter_update_status,created_at,branch:branches(branch_name),vehicle:vehicles(registration_number),driver:drivers(full_name,mobile_number)),shipment:shipments(id,eway_bill_number,eway_bill_date,eway_bill_status,generation_mode,supplier_trade_name,supplier_legal_name,supplier_place,recipient_trade_name,recipient_legal_name,recipient_gstin,recipient_place,recipient_pin_code,dispatch_from_place,dispatch_from_pin_code,ship_to_place,ship_to_pin_code,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,weight_kg,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)))",
       )
       .order("created_at", { ascending: false });
     if (allowedBranches !== null) {
@@ -759,7 +759,7 @@ export function LtmsManifestList({
       ? await db
           .from("shipments")
           .select(
-            "id,consignment_id,eway_bill_number,eway_bill_status,generation_mode,recipient_trade_name,recipient_gstin,recipient_place,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)",
+            "id,consignment_id,eway_bill_number,eway_bill_status,generation_mode,recipient_trade_name,recipient_gstin,recipient_place,valid_until,transporter_update_status,transporter_update_error,shipment_items(id,product_name,description,hsn_code,quantity,weight_kg,unit,taxable_value,cgst_rate,sgst_rate,igst_rate,cess_rate,cess_nonadvol,total_invoice_value)",
           )
           .in("consignment_id", ids)
       : { data: [], error: null };

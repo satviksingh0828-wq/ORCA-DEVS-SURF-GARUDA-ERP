@@ -159,7 +159,7 @@ export function ManifestList() {
     let manifestQuery = db
       .from("delivery_manifests")
       .select(
-        "*, partner:delivery_partners(*), lr_links:delivery_manifest_lorry_receipts(*, lr:lorry_receipts(id,lr_number,lr_shipments(shipment:shipments(eway_bill_number,supplier_trade_name,supplier_place,recipient_trade_name,recipient_place,shipment_items(quantity,weight_kg)))))",
+        "*, partner:delivery_partners(*), lr_links:delivery_manifest_lorry_receipts(*, lr:lorry_receipts(id,lr_number,lr_shipments(shipment:shipments(id,consignment_id,eway_bill_number,eway_bill_date,supplier_trade_name,supplier_place,recipient_trade_name,recipient_place,shipment_items(quantity,weight_kg)))))",
       )
       .order("created_at", { ascending: false });
     let lrQuery = db
