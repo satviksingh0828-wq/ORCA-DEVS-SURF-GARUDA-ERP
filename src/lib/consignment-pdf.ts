@@ -255,17 +255,23 @@ function appendConsignmentDetails(
   const rental = (consignment.rental ?? {}) as AnyRecord;
 
   // Show every value that can wrap or be abbreviated in the compact reference.
-  const fullText: Array<[string, string]> = [
-    ["Consignor", fromName],
-    ["Consignor address", fromAddress],
-    ["Consignee", toName],
-    ["Consignee address", toAddress],
-    ["Goods description", goods],
-    ["Delivery address", text(first.ship_to_address) || text(first.ship_to_address_line_1) ||
-      toAddress || text(first.recipient_place)],
-    ["E-Way Bill numbers", shipments.map((entry) => text(entry.eway_bill_number))
-      .filter(Boolean).join(", ")],
-  ].filter((entry) => Boolean(entry[1])) as Array<[string, string]>;
+  const overflow = (content: string, maxWidth: number, maxLines = 1) =>
+    (wrapped(content, maxWidth) as string[]).length > maxLines;
+  const delivery = text(first.ship_to_address) ||
+    text(first.ship_to_address_line_1) || toAddress || text(first.recipient_place);
+  const ewayNumbers = shipments.map((entry) => text(entry.eway_bill_number))
+    .filter(Boolean).join(", ");
+  const fullText = ([
+    ["Consignor", fromName, overflow(fromName, 290)],
+    ["Consignor address", fromAddress, overflow(fromAddress, 340, 2)],
+    ["Consignee", toName, overflow(toName, 290)],
+    ["Consignee address", toAddress, overflow(toAddress, 340, 2)],
+    ["Goods description", goods, overflow(goods, 275)],
+    ["Delivery address", delivery, overflow(delivery, 144, 2)],
+    ["E-Way Bill numbers", ewayNumbers, overflow(ewayNumbers, 475)],
+  ] as Array<[string, string, boolean]>)
+    .filter((entry) => Boolean(entry[1]) && entry[2])
+    .map(([label, content]) => [label, content] as [string, string]);
   if (fullText.length) {
     heading("COMPLETE PARTY / GOODS DETAILS");
     detail(fullText);
@@ -296,7 +302,7 @@ function appendConsignmentDetails(
     detail(extras);
   }
 
-  grid(
+  if (shipments.length > 1) grid(
     "INVOICE / E-WAY BILL BREAKUP",
     ["Invoice Date", "Document / Invoice No.", "E-Way Bill No.", "Package Type", "Invoice Value"],
     [75, 139, 139, 105, 107],
@@ -318,7 +324,7 @@ function appendConsignmentDetails(
     }),
   );
 
-  grid(
+  if (packages.length > 1 || packages.some((pkg) => text(pkg.sku) || text(pkg.item_name))) grid(
     "PACKAGE INFORMATION",
     ["Package Type", "E-Way Bill No.", "Method", "Quantity", "Weight (KG)", "SKU / Item"],
     [98, 105, 76, 62, 75, 149],
@@ -335,7 +341,7 @@ function appendConsignmentDetails(
 
   // Preserve item-level numbers and descriptions rather than squeezing them
   // into the single Goods Description line in the Crystal-style receipt.
-  grid(
+  if (items.length > 1) grid(
     "GOODS / ITEM INFORMATION",
     ["Description", "Qty", "Weight (KG)", "GST Rate", "Taxable Value", "Invoice Value"],
     [174, 52, 73, 64, 101, 101],
@@ -454,6 +460,11 @@ export async function printConsignorCopyPdf({
   pdf.line(235.8, 306.5, 235.8, FORM_Y + FORM_H);
   pdf.line(365, 306.5, 365, FORM_Y + FORM_H);
   pdf.line(FORM_X, 331.5, 580, 331.5);
+  pdf.setFillColor(229, 229, 229);
+  pdf.rect(439, 173, 141, 14, "F");
+  pdf.line(439, 173, 580, 173);
+  pdf.line(439, 187, 580, 187);
+  pdf.line(518, 173, 518, 187);
 
   if (logo) pdf.addImage(logo, "PNG", 18.5, 62.3, 70, 61);
   pdf.setFont("helvetica", "bold");
@@ -577,15 +588,18 @@ export async function printConsignorCopyPdf({
   field(pdf, "TOTAL", "", 518, 280, 58);
   field(pdf, "Remarks :", text(consignment.remarks), 20, 294, 550);
   field(pdf, "Rs in Words :", "", 20, 304, 550);
-  field(
-    pdf,
-    "Delivery At :",
+  const fullDeliveryAddress =
     text(shipment.ship_to_address) || text(shipment.ship_to_address_line_1) ||
-      join(shipment.recipient_address_line_1, shipment.recipient_address_line_2) ||
-      text(shipment.recipient_place),
-    20,
+    join(shipment.recipient_address_line_1, shipment.recipient_address_line_2) ||
+    text(shipment.recipient_place);
+  pdf.setFont("helvetica", "bold");
+  pdf.text("Delivery At :", 20, 318);
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(7);
+  pdf.text(
+    (pdf.splitTextToSize(fullDeliveryAddress, 144) as string[]).slice(0, 2),
+    80,
     318,
-    210,
   );
   pdf.setFont("helvetica", "bold");
   pdf.text("Acknowledgement :", 239, 318);
