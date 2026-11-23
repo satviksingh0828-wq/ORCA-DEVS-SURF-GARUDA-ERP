@@ -15,11 +15,20 @@ type PdfOptions = {
   branchId?: string | null;
 };
 const PT_BLACK: [number, number, number] = [28, 28, 28];
-const PALE: [number, number, number] = [228, 228, 228];
+const PALE: [number, number, number] = [245, 245, 245];
+const LINE: [number, number, number] = [169, 169, 169];
 
 function display(value: unknown) {
   const result = String(value ?? "—").trim();
-  return (result || "—").replace(/₹/g, "Rs. ");
+  // Helvetica does not contain Indian rupee, long-dash and several typographic
+  // glyphs. These previously appeared as dark blocks in account table headings.
+  return (result || "-").replace(/₹/g, "Rs. ")
+    .replace(/[\u2010-\u2015]/g, "-")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201c\u201d]/g, '"')
+    .replace(/\u2022/g, "*")
+    .replace(/[\u00a0\u200b-\u200d\ufeff]/g, " ")
+    .replace(/\u00b7/g, " | ");
 }
 function htmlSafe(value: unknown) {
   return String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;")
@@ -87,7 +96,8 @@ export async function openBrandedTablePdf(options: PdfOptions) {
   if (cols < 1) throw new Error("A PDF report needs at least one column.");
   const colWidths = widths(options.columns, width);
   const fontSize = cols >= 10 ? 5.9 : cols >= 8 ? 6.5 : cols >= 6 ? 7.0 : 7.6;
-  const lineHeight = fontSize * 0.40 + 0.65;
+  // All geometry is in mm while jsPDF's font-size is in points.
+  const lineHeight = fontSize * 0.41 + 0.8;
   let y = 0;
   pdf.setDrawColor(...PT_BLACK);
   pdf.setLineWidth(0.16);
@@ -138,7 +148,10 @@ export async function openBrandedTablePdf(options: PdfOptions) {
     }
     y += 31;
     pdf.setFillColor(...PALE);
-    pdf.rect(left, y, width, 9, "FD");
+    pdf.rect(left, y, width, 9, "F");
+    pdf.setDrawColor(...LINE);
+    pdf.rect(left, y, width, 9, "S");
+    pdf.setTextColor(...PT_BLACK);
     fit(display(options.title), left + 2, y + 6.2, width - 4, 10, true);
     y += 11;
     if (options.subtitle) {
@@ -150,22 +163,54 @@ export async function openBrandedTablePdf(options: PdfOptions) {
     }
     y += 2;
   };
+  // Wrap by measured PDF width, including very long unbroken voucher numbers.
+  const wrappedCell = (raw: unknown, available: number, bold = false) => {
+    pdf.setFont("helvetica", bold ? "bold" : "normal");
+    pdf.setFontSize(fontSize);
+    const parts = pdf.splitTextToSize(display(raw), Math.max(1.6, available)) as string[];
+    const result: string[] = [];
+    for (const part of parts) {
+      if (pdf.getTextWidth(part) <= available) {
+        result.push(part);
+        continue;
+      }
+      let chunk = "";
+      for (const ch of part) {
+        if (chunk && pdf.getTextWidth(chunk + ch) > available) {
+          result.push(chunk);
+          chunk = "";
+        }
+        chunk += ch;
+      }
+      if (chunk) result.push(chunk);
+    }
+    return result.length ? result : ["-"];
+  };
   const columnHeader = () => {
-    const lines = options.columns.map((column, i) => {
-      pdf.setFont("helvetica", "bold");
-      pdf.setFontSize(fontSize);
-      return (pdf.splitTextToSize(display(column), colWidths[i] - 2.6) as string[]);
-    });
-    const longest = Math.max(1, ...lines.map((parts) => parts.length));
-    const height = Math.max(9.5, longest * lineHeight + 3);
-    let x = left;
-    pdf.setDrawColor(...PT_BLACK);
+    const parts = options.columns.map((label, i) =>
+      wrappedCell(label, colWidths[i] - 2.8, true));
+    const longest = Math.max(1, ...parts.map((lines) => lines.length));
+    const height = Math.max(8.5, 3.5 + longest * lineHeight);
+    if (y + height > endY) {
+      pdf.addPage();
+      header();
+    }
+    // Draw pale fill only once. Borders are strokes, not filled blocks, so
+    // the table header never develops dark strips at the cell boundaries.
     pdf.setFillColor(...PALE);
-    lines.forEach((pieces, i) => {
-      pdf.rect(x, y, colWidths[i], height, "FD");
+    pdf.rect(left, y, width, height, "F");
+    pdf.setDrawColor(...LINE);
+    pdf.setLineWidth(0.14);
+    pdf.rect(left, y, width, height, "S");
+    let x = left;
+    parts.forEach((lines, i) => {
+      if (i > 0) pdf.line(x, y, x, y + height);
+      pdf.setTextColor(...PT_BLACK);
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(fontSize);
-      pdf.text(pieces, x + 1.3, y + 3.4);
+      lines.forEach((line, lineIndex) => {
+        pdf.text(line, x + 1.3, y + 3.5 + lineIndex * lineHeight);
+      });
       x += colWidths[i];
     });
     y += height;
@@ -175,28 +220,27 @@ export async function openBrandedTablePdf(options: PdfOptions) {
   header();
   columnHeader();
   rawRows.forEach((row) => {
-    const contents = options.columns.map((_, i) => {
-      pdf.setFont("helvetica", "normal");
-      pdf.setFontSize(fontSize);
-      return pdf.splitTextToSize(display(row[i]), colWidths[i] - 2.6) as string[];
-    });
+    const contents = options.columns.map((_, i) =>
+      wrappedCell(row[i], colWidths[i] - 2.8));
     const lineCount = Math.max(1, ...contents.map((v) => v.length));
     let lineOffset = 0;
     while (lineOffset < lineCount) {
-      const capacity = Math.floor((endY - y - 3) / lineHeight);
+      const capacity = Math.floor((endY - y - 4) / lineHeight);
       if (capacity < 1 || endY - y < 7) { nextPage(); continue; }
       const take = Math.min(lineCount - lineOffset, capacity);
-      const rowHeight = Math.max(6.6, take * lineHeight + 2.5);
+      const rowHeight = Math.max(6.6, take * lineHeight + 2.8);
       if (y + rowHeight > endY) { nextPage(); continue; }
       let x = left;
       contents.forEach((pieces, i) => {
-        pdf.setDrawColor(...PT_BLACK);
-        pdf.rect(x, y, colWidths[i], rowHeight);
+        pdf.setDrawColor(...LINE);
+        pdf.setLineWidth(0.12);
+        pdf.rect(x, y, colWidths[i], rowHeight, "S");
         pdf.setTextColor(...PT_BLACK);
         pdf.setFont("helvetica", "normal");
         pdf.setFontSize(fontSize);
         const fragment = pieces.slice(lineOffset, lineOffset + take);
-        if (fragment.length) pdf.text(fragment, x + 1.3, y + 3.4);
+        fragment.forEach((line, lineIndex) =>
+          pdf.text(line, x + 1.3, y + 3.5 + lineIndex * lineHeight));
         x += colWidths[i];
       });
       y += rowHeight;
@@ -209,7 +253,10 @@ export async function openBrandedTablePdf(options: PdfOptions) {
     for (const [label, amount] of options.summary) {
       if (y + 7 > endY) nextPage();
       pdf.setFillColor(...PALE);
-      pdf.rect(left, y, width, 7, "FD");
+      pdf.rect(left, y, width, 7, "F");
+      pdf.setDrawColor(...LINE);
+      pdf.rect(left, y, width, 7, "S");
+      pdf.setTextColor(...PT_BLACK);
       fit(display(label), left + 2, y + 4.8, width * 0.58, 7.7, true);
       fit(display(amount), left + width * 0.59, y + 4.8, width * 0.39, 7.7, true);
       y += 7;

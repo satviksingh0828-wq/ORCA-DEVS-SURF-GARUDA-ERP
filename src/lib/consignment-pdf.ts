@@ -93,30 +93,49 @@ function drawWrapped(
   return lines.length * lineHeight;
 }
 
+/**
+ * Fit a field's label and value entirely inside its measured rectangle.
+ * Full values are retained on the continuation sheet if abbreviated here.
+ */
 function field(doc: jsPDF, label: string, value: string, x: number, y: number, width: number) {
-  const originalSize = doc.getFontSize();
+  const initialSize = doc.getFontSize();
+  const safeWidth = Math.max(1, Math.min(width, FORM_X + FORM_W - x - 3));
+  const cleanLabel = label.replace(/[\u2013\u2014]/g, "-");
+  const cleanValue = value.replace(/[\u2013\u2014]/g, "-").replace(/₹/g, "Rs. ");
+  let font = Math.min(7, Math.max(5.4, initialSize));
   doc.setFont("helvetica", "bold");
-  doc.text(label, x, y);
-  const valueX = x + doc.getTextWidth(label) + 3;
-  doc.setFont("helvetica", "normal");
-  // Keep the reference form's single-line cells from overflowing into the
-  // next framed cell. Full values are repeated in the detail continuation.
-  const allowed = Math.max(12, width - (valueX - x) - 2);
-  let size = originalSize;
-  while (size > 5.1 && doc.getTextWidth(value) > allowed) {
-    size -= 0.25;
-    doc.setFontSize(size);
+  doc.setFontSize(font);
+  while (font > 5.1 && doc.getTextWidth(cleanLabel) + 4 > safeWidth) {
+    font -= 0.2;
+    doc.setFontSize(font);
   }
-  if (doc.getTextWidth(value) <= allowed) {
-    doc.text(value, valueX, y);
-  } else {
-    let visible = value;
-    while (visible.length > 1 && doc.getTextWidth(visible + "...") > allowed) {
-      visible = visible.slice(0, -1);
+  const labelMax = Math.max(1, safeWidth - 3);
+  let shownLabel = cleanLabel;
+  while (shownLabel.length > 1 && doc.getTextWidth(shownLabel) > labelMax) {
+    shownLabel = shownLabel.slice(0, -1);
+  }
+  doc.text(shownLabel, x, y);
+  const labelWidth = doc.getTextWidth(shownLabel);
+  const valueX = x + labelWidth + 3;
+  const valueWidth = Math.max(0, safeWidth - labelWidth - 5);
+  if (valueWidth > 2 && cleanValue) {
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(font);
+    let size = font;
+    while (size > 5.1 && doc.getTextWidth(cleanValue) > valueWidth) {
+      size -= 0.2;
+      doc.setFontSize(size);
     }
-    doc.text(visible + "...", valueX, y);
+    let shown = cleanValue;
+    if (doc.getTextWidth(shown) > valueWidth) {
+      while (shown.length > 1 && doc.getTextWidth(shown + "...") > valueWidth) {
+        shown = shown.slice(0, -1);
+      }
+      shown += "...";
+    }
+    if (doc.getTextWidth(shown) <= valueWidth) doc.text(shown, valueX, y);
   }
-  doc.setFontSize(originalSize);
+  doc.setFontSize(initialSize);
 }
 
 function checkbox(doc: jsPDF, x: number, y: number, label: string, checked: boolean) {
@@ -643,10 +662,11 @@ export async function printConsignorCopyPdf({
   pdf.setFontSize(7);
   field(pdf, "Consignor :", fromName, 20, 137, 348);
   limitedLines(pdf, fromAddress.join(", "), 20, 148, 347, 2, 8, 7);
-  field(pdf, "GST No. :", text(shipment.supplier_gstin), 20, 169, 270);
+  field(pdf, "GST No. :", text(shipment.supplier_gstin), 20, 169, 226);
   field(pdf, "M :", text(shipment.supplier_phone), 256, 169, 111);
   field(pdf, "Consignee :", toName, 20, 182, 348);
-  limitedLines(pdf, toAddress.join(", "), 20, 193, 347, 3, 8, 7);
+  // Leave enough clearance for the GSTIN row at y=214.
+  limitedLines(pdf, toAddress.join(", "), 20, 193, 347, 2, 9, 7);
   field(pdf, "GST No. :", text(shipment.recipient_gstin), 20, 214, 226);
   field(pdf, "M :", text(shipment.recipient_phone), 256, 214, 111);
 
@@ -657,14 +677,14 @@ export async function printConsignorCopyPdf({
   checkbox(pdf, 523, 166, "Paid", billing.paid);
   checkbox(pdf, 562, 166, "TBB", billing.tbb);
   pdf.setFont("helvetica", "bold");
-  pdf.text("Actual Wt.", 379, 186);
-  pdf.text("Particulars", 443, 186);
-  pdf.text("Amount", 523, 186);
+  singleLine(pdf, "Actual Wt.", 379, 186, 56, 6.5, true);
+  singleLine(pdf, "Particulars", 443, 182.5, 71, 6.5, true);
+  singleLine(pdf, "Amount", 523, 182.5, 52, 6.5, true);
   pdf.setFont("helvetica", "normal");
-  pdf.text(actualWeight ? numberString(actualWeight) : "", 393, 193);
-  pdf.text("FREIGHT", 442, 197);
-  pdf.text("Charged Wt.", 379, 211);
-  pdf.text(chargedWeight ? numberString(chargedWeight) : "", 393, 217);
+  singleLine(pdf, actualWeight ? numberString(actualWeight) : "", 393, 193, 41, 6.5);
+  singleLine(pdf, "FREIGHT", 442, 197, 72, 6.5);
+  singleLine(pdf, "Charged Wt.", 379, 211, 56, 6.5, true);
+  singleLine(pdf, chargedWeight ? numberString(chargedWeight) : "", 393, 217, 41, 6.5);
   pdf.text("", 523, 224);
 
   field(pdf, "Goods Description :", goodsDescription, 20, 230, 340);
@@ -693,7 +713,7 @@ export async function printConsignorCopyPdf({
   );
   field(pdf, "Challan No. :", "", 271, 256, 135);
   field(pdf, "Date :", date(shipment.document_date), 20, 269, 240);
-  field(pdf, "GST", gstLabel, 442, 269, 120);
+  field(pdf, "GST", gstLabel, 442, 269, 72);
   field(
     pdf,
     "E-Way Bill No. :",
@@ -703,7 +723,7 @@ export async function printConsignorCopyPdf({
       .join(", "),
     20,
     280,
-    550,
+    491,
   );
   field(pdf, "TOTAL", "", 518, 280, 58);
   field(pdf, "Remarks :", text(consignment.remarks), 20, 294, 550);
@@ -719,7 +739,7 @@ export async function printConsignorCopyPdf({
   pdf.setFont("helvetica", "bold");
   pdf.text("Acknowledgement :", 239, 318);
   pdf.setFont("helvetica", "normal");
-  pdf.text("Goods received in good condition", 239, 329);
+  singleLine(pdf, "Goods received in good condition", 239, 329, 120, 6.2);
   field(pdf, "IGST Paid By :", "", 366, 318, 210);
 
   pdf.setFont("helvetica", "bold");
@@ -734,9 +754,10 @@ export async function printConsignorCopyPdf({
   pdf.setTextColor(...RED);
   singleLine(pdf, `FOR ${companyName}`, 371, 342, 201, 7.2, true);
   pdf.setTextColor(...BLACK);
-  pdf.text("Signature with Stamp", 264, 385);
-  pdf.text("Booking Clerk", 496, 385);
+  singleLine(pdf, "Signature with Stamp", 264, 385, 92, 6.5);
+  singleLine(pdf, "Booking Clerk", 496, 385, 77, 6.5);
   pdf.setFontSize(6.5);
+  pdf.setFont("helvetica", "bold");
   pdf.text("Smart People Great Solution", A4_WIDTH / 2, 402, { align: "center" });
   pdf.setFontSize(7);
   // Page 1 is deliberately identical in structure to the supplied Crystal
