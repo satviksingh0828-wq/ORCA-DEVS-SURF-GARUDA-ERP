@@ -221,6 +221,7 @@ export function AccountsLedgerPage() {
   );
   const [tab, setTab] = useState<LedgerTab>(() => {
     const pending = consumeAccountsTabNavigation("ledger");
+    if (user?.role === "basic") return pending === "view" ? "view" : "list";
     return pending === "capital" || pending === "create" || pending === "list" || pending === "view"
       ? pending
       : "create";
@@ -228,6 +229,7 @@ export function AccountsLedgerPage() {
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [ledgers, setLedgers] = useState<LedgerRow[]>([]);
   const [assignedLedgerIds, setAssignedLedgerIds] = useState<Set<string>>(() => new Set());
+  const [assignedBranchNames, setAssignedBranchNames] = useState<Record<string, string>>({});
   const [basicUsers, setBasicUsers] = useState<BasicUser[]>([]);
   const [ledgerAssignments, setLedgerAssignments] = useState<Record<string, string[]>>({});
   const [assignmentLedgerId, setAssignmentLedgerId] = useState<string | null>(null);
@@ -268,14 +270,20 @@ export function AccountsLedgerPage() {
           (accessRows ?? []).map((row: { ledger_account_id: string }) => row.ledger_account_id),
         );
         setAssignedLedgerIds(accessibleLedgerIds);
+        if (accessibleLedgerIds.size === 0) {
+          setLedgers([]);
+          return;
+        }
       }
-      const { data, error } = await db
+      let query = db
         .from("ledger_accounts")
         .select(
           "id,branch_id,account_name,description,ledger_type,account_kind,opening_balance,opening_balance_date,opening_balance_side,is_system,is_active,created_at",
         )
         .eq("is_active", true)
         .order("account_name", { ascending: true });
+      if (accessibleLedgerIds) query = query.in("id", [...accessibleLedgerIds]);
+      const { data, error } = await query;
       if (error) throw new Error(error.message);
       const loadedLedgers = (data as LedgerRow[]) ?? [];
       setLedgers(
@@ -324,14 +332,59 @@ export function AccountsLedgerPage() {
   }, [user?.role]);
 
   useEffect(() => {
-    if (user?.role === "basic" && !assignedLedgerIds.size && (tab === "list" || tab === "view"))
-      setTab("create");
-  }, [assignedLedgerIds, tab, user?.role]);
+    if (user?.role === "basic" && tab !== "list" && tab !== "view") setTab("list");
+  }, [tab, user?.role]);
 
   useEffect(() => {
-    if (!viewBranch && branches[0]) setViewBranch(branches[0].id);
+    if (user?.role === "basic") {
+      const assignedBranch = ledgers.some((ledger) => ledger.branch_id === viewBranch)
+        ? viewBranch
+        : (ledgers[0]?.branch_id ?? "");
+      if (viewBranch !== assignedBranch) {
+        setViewBranch(assignedBranch);
+        setViewLedgerId("");
+        setViewRows([]);
+        setViewOpeningNet(0);
+      }
+    } else if (!viewBranch && branches[0]) {
+      setViewBranch(branches[0].id);
+    }
     if (!capitalBranch && branches[0]) setCapitalBranch(branches[0].id);
-  }, [branches, viewBranch, capitalBranch]);
+  }, [branches, viewBranch, capitalBranch, ledgers, user?.role]);
+
+  useEffect(() => {
+    if (user?.role !== "basic" || !ledgers.length) {
+      setAssignedBranchNames({});
+      return;
+    }
+    let cancelled = false;
+    const branchIds = [...new Set(ledgers.map((ledger) => ledger.branch_id))];
+    void db.from("branches").select("id,branch_name").in("id", branchIds).then(
+      ({ data, error }: { data: { id: string; branch_name: string }[] | null; error: { message: string } | null }) => {
+        if (cancelled) return;
+        if (error) {
+          console.warn("Could not resolve assigned ledger branches:", error.message);
+          return;
+        }
+        setAssignedBranchNames(Object.fromEntries((data ?? []).map((branch) => [branch.id, branch.branch_name])));
+      },
+    );
+    return () => { cancelled = true; };
+  }, [ledgers, user?.role]);
+
+  const ledgerBranchOptions = useMemo(
+    () => user?.role === "basic"
+      ? [...new Set(ledgers.map((ledger) => ledger.branch_id))].map((id) => ({
+          id,
+          branch_name: assignedBranchNames[id] ?? branchById.get(id)?.branch_name ?? id,
+        }))
+      : branches,
+    [user?.role, ledgers, branches, assignedBranchNames, branchById],
+  );
+  const ledgerBranchById = useMemo(
+    () => new Map(ledgerBranchOptions.map((branch) => [branch.id, branch])),
+    [ledgerBranchOptions],
+  );
 
   const filteredList = useMemo(() => {
     const search = listSearch.trim().toLowerCase();
@@ -360,7 +413,7 @@ export function AccountsLedgerPage() {
   );
   const selectedLedger = ledgers.find((ledger) => ledger.id === viewLedgerId) ?? null;
   const isAdmin = isAdminLike(user?.role);
-  const showLedgerListView = user?.role !== "basic" || assignedLedgerIds.size > 0;
+  const showLedgerListView = true;
 
   function openAssignment(ledgerId: string) {
     setAssignmentLedgerId(ledgerId);
@@ -416,6 +469,7 @@ export function AccountsLedgerPage() {
 
   async function createLedger(event: React.FormEvent) {
     event.preventDefault();
+    if (user?.role === "basic") return;
     if (!form.branch_id || !form.description.trim()) {
       toast.error("Select a branch and complete the ledger description.");
       return;
@@ -449,6 +503,7 @@ export function AccountsLedgerPage() {
 
   async function saveCapitalOpening(event: React.FormEvent) {
     event.preventDefault();
+    if (user?.role === "basic") return;
     const amount = parseNumber(capitalOpening);
     if (!capitalBranch || amount < 0 || (amount > 0 && !capitalDate)) {
       toast.error("Select a branch and provide a valid capital opening balance and date.");
@@ -476,6 +531,7 @@ export function AccountsLedgerPage() {
   }
 
   async function importLedgers(file: File) {
+    if (user?.role === "basic") return;
     try {
       const workbook = XLSX.read(await file.arrayBuffer(), { type: "array", cellDates: true });
       const sheet = workbook.Sheets.Ledgers ?? workbook.Sheets[workbook.SheetNames[0]];
@@ -514,7 +570,7 @@ export function AccountsLedgerPage() {
 
   function exportList() {
     const rows = filteredList.map((ledger) => ({
-      Branch: branchById.get(ledger.branch_id)?.branch_name ?? "—",
+      Branch: ledgerBranchById.get(ledger.branch_id)?.branch_name ?? "—",
       Ledger: ledger.account_name,
       Description: ledger.description ?? "",
       Type: labelForType(ledger.ledger_type),
@@ -612,7 +668,7 @@ export function AccountsLedgerPage() {
       closing,
       rows,
       ledger: selectedLedger,
-      branch: selectedLedger ? branchById.get(selectedLedger.branch_id) : undefined,
+      branch: selectedLedger ? ledgerBranchById.get(selectedLedger.branch_id) : undefined,
     };
   }
 
@@ -779,7 +835,7 @@ export function AccountsLedgerPage() {
             onLedgerTabChange={setTab}
             showLedgerListView={showLedgerListView}
           />
-          {tab === "capital" && (
+          {user?.role !== "basic" && tab === "capital" && (
             <form onSubmit={saveCapitalOpening} className="animate-fade-up space-y-5">
               <section className="surface-card p-6">
                 <div className="flex items-start gap-3">
@@ -854,7 +910,7 @@ export function AccountsLedgerPage() {
             </form>
           )}
 
-          {tab === "create" && (
+          {user?.role !== "basic" && tab === "create" && (
             <form onSubmit={createLedger} className="animate-fade-up space-y-5">
               <section className="surface-card p-6">
                 <div className="flex items-start gap-3">
@@ -977,7 +1033,7 @@ export function AccountsLedgerPage() {
                       className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     >
                       <option value="all">All branches</option>
-                      {branches.map((branch) => (
+                      {ledgerBranchOptions.map((branch) => (
                         <option key={branch.id} value={branch.id}>
                           {branch.branch_name}
                         </option>
@@ -1014,6 +1070,8 @@ export function AccountsLedgerPage() {
                     </div>
                   </label>
                   <div className="flex flex-wrap gap-2">
+                    {user?.role !== "basic" && (
+                      <>
                     <Button
                       type="button"
                       variant="outline"
@@ -1037,6 +1095,8 @@ export function AccountsLedgerPage() {
                         }}
                       />
                     </label>
+                      </>
+                    )}
                     <Button
                       type="button"
                       variant="outline"
@@ -1054,10 +1114,12 @@ export function AccountsLedgerPage() {
                 <p className="text-sm text-muted-foreground">
                   {filteredList.length} active ledger{filteredList.length === 1 ? "" : "s"}
                 </p>
-                <Button type="button" size="sm" onClick={() => setTab("create")} className="gap-2">
-                  <Plus className="size-4" />
-                  Create ledger
-                </Button>
+                {user?.role !== "basic" && (
+                  <Button type="button" size="sm" onClick={() => setTab("create")} className="gap-2">
+                    <Plus className="size-4" />
+                    Create ledger
+                  </Button>
+                )}
               </div>
               <section className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="overflow-x-auto">
@@ -1090,7 +1152,9 @@ export function AccountsLedgerPage() {
                             className="py-12 text-center text-muted-foreground"
                           >
                             <WalletCards className="mx-auto mb-2 size-6 opacity-50" />
-                            No active ledgers match these filters.
+                            {user?.role === "basic" && ledgers.length === 0
+                              ? "No ledgers have been assigned to your account."
+                              : "No active ledgers match these filters."}
                           </td>
                         </tr>
                       ) : (
@@ -1103,7 +1167,7 @@ export function AccountsLedgerPage() {
                               </p>
                             </td>
                             <td className="px-4 py-3">
-                              {branchById.get(ledger.branch_id)?.branch_name ?? "—"}
+                              {ledgerBranchById.get(ledger.branch_id)?.branch_name ?? "—"}
                             </td>
                             <td className="px-4 py-3">
                               <LedgerTypeBadge type={ledger.ledger_type} />
@@ -1200,7 +1264,7 @@ export function AccountsLedgerPage() {
                     required
                   >
                     <option value="">Select branch</option>
-                    {branches.map((branch) => (
+                    {ledgerBranchOptions.map((branch) => (
                       <option key={branch.id} value={branch.id}>
                         {branch.branch_name}
                       </option>
@@ -1339,7 +1403,7 @@ export function AccountsLedgerPage() {
               )}
               <LedgerStatement
                 ledger={selectedLedger}
-                branch={selectedLedger ? branchById.get(selectedLedger.branch_id) : undefined}
+                branch={selectedLedger ? ledgerBranchById.get(selectedLedger.branch_id) : undefined}
                 rows={viewRows}
                 openingNet={viewOpeningNet}
                 start={viewStart}
@@ -1362,7 +1426,7 @@ function LedgerStatement({
   end,
 }: {
   ledger: LedgerRow | null;
-  branch: BranchOption | undefined;
+  branch: { branch_name: string } | undefined;
   rows: JournalLine[];
   openingNet: number;
   start: string;

@@ -221,10 +221,13 @@ export function AccountsSidebar({
     user?.role === "basic"
       ? ACCOUNTS_SIDEBAR_GROUPS.filter(
           (group) =>
-            group.section === "finance" || (mode === "ledger" && group.section === "ledger"),
+            group.section === "finance" || group.section === "ledger",
         )
       : ACCOUNTS_SIDEBAR_GROUPS;
   const sidebarGroups = visibleGroups.map((group) => {
+    if (group.section === "ledger" && user?.role === "basic") {
+      return { ...group, items: group.items.filter((item) => item.id === "list" || item.id === "view") };
+    }
     if (mode === "ledger" && group.section === "ledger" && !showLedgerListView) {
       return {
         ...group,
@@ -314,6 +317,7 @@ export function AccountsSectionNav({
   showLedgerListView?: boolean;
 }) {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { user } = useSession();
   const selectedMaster = masterLinks.find((item) => activeFor(pathname, item.to));
   if (desktop)
     return (
@@ -383,9 +387,11 @@ export function AccountsSectionNav({
       <AccountsMobileNav pathname={pathname} />
       <MobileTabDropdown
         tabs={
-          showLedgerListView
-            ? ledgerMobileTabs
-            : ledgerMobileTabs.filter((tab) => !["list", "view"].includes(tab.id))
+          user?.role === "basic"
+            ? ledgerMobileTabs.filter((tab) => tab.id === "list" || tab.id === "view")
+            : showLedgerListView
+              ? ledgerMobileTabs
+              : ledgerMobileTabs.filter((tab) => !["list", "view"].includes(tab.id))
         }
         activeId={ledgerTab}
         label="Ledger tabs"
