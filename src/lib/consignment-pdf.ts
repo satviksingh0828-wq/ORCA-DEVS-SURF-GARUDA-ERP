@@ -644,11 +644,11 @@ export async function printConsignorCopyPdf({
   field(pdf, "Consignor :", fromName, 20, 137, 348);
   limitedLines(pdf, fromAddress.join(", "), 20, 148, 347, 2, 8, 7);
   field(pdf, "GST No. :", text(shipment.supplier_gstin), 20, 169, 270);
-  field(pdf, "M :", text(shipment.supplier_phone), 315, 169, 55);
+  field(pdf, "M :", text(shipment.supplier_phone), 256, 169, 111);
   field(pdf, "Consignee :", toName, 20, 182, 348);
   limitedLines(pdf, toAddress.join(", "), 20, 193, 347, 3, 8, 7);
-  field(pdf, "GST No. :", text(shipment.recipient_gstin), 20, 221, 270);
-  field(pdf, "M :", text(shipment.recipient_phone), 315, 221, 55);
+  field(pdf, "GST No. :", text(shipment.recipient_gstin), 20, 214, 226);
+  field(pdf, "M :", text(shipment.recipient_phone), 256, 214, 111);
 
   field(pdf, "To :", text(shipment.recipient_place), 378, 137, 196);
   field(pdf, "Packing Type :", packageType, 378, 151, 196);
@@ -661,10 +661,10 @@ export async function printConsignorCopyPdf({
   pdf.text("Particulars", 443, 186);
   pdf.text("Amount", 523, 186);
   pdf.setFont("helvetica", "normal");
-  pdf.text(actualWeight ? numberString(actualWeight) : "", 395, 198);
-  pdf.text("FREIGHT", 442, 200);
+  pdf.text(actualWeight ? numberString(actualWeight) : "", 393, 193);
+  pdf.text("FREIGHT", 442, 197);
   pdf.text("Charged Wt.", 379, 211);
-  pdf.text(chargedWeight ? numberString(chargedWeight) : "", 395, 224);
+  pdf.text(chargedWeight ? numberString(chargedWeight) : "", 393, 217);
   pdf.text("", 523, 224);
 
   field(pdf, "Goods Description :", goodsDescription, 20, 230, 340);
@@ -739,7 +739,9 @@ export async function printConsignorCopyPdf({
   pdf.setFontSize(6.5);
   pdf.text("Smart People Great Solution", A4_WIDTH / 2, 402, { align: "center" });
   pdf.setFontSize(7);
-  pdf.text("POWERED BY ORCA DEVS SURF", A4_WIDTH / 2, A4_HEIGHT - 10, { align: "center" });
+  // Page 1 is deliberately identical in structure to the supplied Crystal
+  // Reports GR: the large blank lower half stays blank. Attribution and page
+  // numbers appear only in the continuation sheets.
 
   appendConsignmentDetails(pdf, { ...consignment, branch }, shipments, packages, items);
 
