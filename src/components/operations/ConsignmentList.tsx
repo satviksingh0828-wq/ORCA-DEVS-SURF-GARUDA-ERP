@@ -4020,10 +4020,10 @@ function ConsignmentView({
               packages,
               mode: "with-additional",
             }).catch((error) => toast.error(
-              error instanceof Error ? error.message : "Could not download GR and details",
+              error instanceof Error ? error.message : "Could not create combined PDF",
             ))}
           >
-            GR + Details (2 PDFs in ZIP)
+            GR + Additional Details (PDF)
           </Button>
           <Button variant="outline" onClick={onBack}>Back</Button>
         </div>

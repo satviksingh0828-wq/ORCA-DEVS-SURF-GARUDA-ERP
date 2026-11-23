@@ -1,7 +1,6 @@
 import jsPDF from "jspdf";
 import { supabase } from "@/integrations/supabase/client";
 import { formatConsignmentGst } from "./consignment-pdf-format";
-import { createPdfZip } from "./pdf-bundle";
 
 type AnyRecord = Record<string, unknown>;
 
@@ -11,7 +10,7 @@ type ConsignmentPdfOptions = {
   packages: AnyRecord[];
   /** LR uses the identical first-page reference; only filename differs. */
   filenamePrefix?: "LR";
-  /** The GR is always one page. Extra details are a separate PDF in the ZIP. */
+  /** The GR is page one; optional extra details follow on subsequent pages. */
   mode?: "gr-only" | "with-additional" | "additional-only";
 };
 
@@ -157,9 +156,9 @@ function checkbox(doc: jsPDF, x: number, y: number, label: string, checked: bool
 
 
 /**
- * Keep the reference's original 565 x 358 pt receipt block at the same A4
- * coordinates. Extra ERP fields and multi-shipment details flow below it,
- * spilling to additional A4 portrait pages only when needed.
+ * Preserve the reference's original 565 x 358 pt GR geometry.
+ * Additional details start on a new A4 sheet, below the single-page GR
+ * in combined mode or alone in details-only mode.
  */
 function appendConsignmentDetails(
   pdf: jsPDF,
@@ -169,6 +168,7 @@ function appendConsignmentDetails(
   items: AnyRecord[],
 ) {
   let y = 45;
+  const firstDetailPage = pdf.getNumberOfPages();
   const left = FORM_X;
   const width = FORM_W;
   const bottom = A4_HEIGHT - 28;
@@ -435,15 +435,16 @@ function appendConsignmentDetails(
     detail(adjustments);
   }
 
-  if (pdf.getNumberOfPages() > 1) {
-    const pages = pdf.getNumberOfPages();
-    for (let p = 1; p <= pages; p += 1) {
+  // Do not add page numbering to the reference GR on page one.
+  const lastPage = pdf.getNumberOfPages();
+  const detailPages = lastPage - firstDetailPage + 1;
+  if (detailPages > 1) {
+    for (let p = firstDetailPage; p <= lastPage; p += 1) {
       pdf.setPage(p);
       pdf.setFont("helvetica", "normal");
       pdf.setFontSize(7);
-      pdf.text(String(p) + " / " + String(pages), A4_WIDTH - 18, A4_HEIGHT - 10, {
-        align: "right",
-      });
+      pdf.text((p - firstDetailPage + 1) + " / " + detailPages,
+        A4_WIDTH - 18, A4_HEIGHT - 10, { align: "right" });
     }
   }
 }
@@ -667,9 +668,9 @@ export async function printConsignorCopyPdf({
   pdf.line(375, 104, FORM_X + FORM_W, 104);
   pdf.line(FORM_X, 130, FORM_X + FORM_W, 130);
   pdf.line(FORM_X, 175.3, 375.2, 175.3);
-  pdf.line(375, 172, FORM_X + FORM_W, 172);
-  pdf.line(438.25, 184.6, 438.25, 284.1);
-  pdf.line(518, 172.3, 518, 272.9);
+  // Align each freight-table border flush to the grey header below.
+  pdf.line(438.25, 187.1, 438.25, 284.6);
+  pdf.line(518, 187.1, 518, 272.1);
   pdf.line(FORM_X, 220.3, 438.2, 220.3);
   pdf.line(FORM_X, 234.8, 438.8, 234.8);
   pdf.line(267.5, 234.5, 267.5, 272);
@@ -685,11 +686,11 @@ export async function printConsignorCopyPdf({
   pdf.line(375.2, 157.8, FORM_X + FORM_W, 157.8);
   pdf.line(375.2, 172.3, FORM_X + FORM_W, 172.3);
   pdf.line(375.2, 197.3, 438.2, 197.3);
+  // Complete grey Particulars and Amount cells. Borders are drawn AFTER
+  // the fill so no line disappears under the shading or crosses the text.
   pdf.setFillColor(192, 192, 192);
-  pdf.rect(438.8, 172.6, FORM_X + FORM_W - 438.8, 14.5, "F");
-  pdf.line(438.8, 172.6, FORM_X + FORM_W, 172.6);
-  pdf.line(438.8, 187.1, FORM_X + FORM_W, 187.1);
-  pdf.line(518, 172.6, 518, 187.1);
+  pdf.rect(438.25, 172.6, 79.75, 14.5, "FD");
+  pdf.rect(518, 172.6, FORM_X + FORM_W - 518, 14.5, "FD");
 
   if (logo) {
     try { pdf.addImage(logo, "PNG", 18.5, 62.3, 70, 61); }
@@ -705,9 +706,9 @@ export async function printConsignorCopyPdf({
   centeredReferenceLine(pdf, companyName, 232, 74.0, 280, 9.9, true);
   issuingBranchAddress(pdf, branch);
 
-  referenceField(pdf, "CONSIGNOR COPY", "", 390.7, 460, 59.4, 473);
+  centeredReferenceLine(pdf, "CONSIGNOR COPY", 424.5, 59.4, 96, 6.6, true);
   referenceField(pdf, "GR", text(consignment.consignment_number), 476.8, 498.0, 59.4, 578.4, true);
-  centeredReferenceLine(pdf, "No. :", 486.4, 69.5, 29, 6.6, true);
+  singleLine(pdf, "No. :", 476.8, 69.5, 20, 6.6, true);
   referenceField(pdf, "DATE :", date(consignment.consignment_date || consignment.created_at),
     378.8, 408.2, 73.4, 578.4);
   referenceField(pdf, "Truck/Flight No. :",
@@ -798,27 +799,20 @@ export async function printConsignorCopyPdf({
     return;
   }
 
+  if (mode === "with-additional") {
+    // Keep the GR as page 1, then append all supplementary sections to the
+    // SAME PDF, beginning on page 2. Never create or download a ZIP.
+    pdf.addPage();
+    appendConsignmentDetails(pdf, { ...consignment, branch }, shipments, packages, items);
+    pdf.save("GR-with-Additional-Details-" + number + ".pdf");
+    return;
+  }
+
+  // The optional standalone details PDF remains available.
   const details = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
   details.setDrawColor(...BLACK);
   details.setTextColor(...BLACK);
   details.setLineWidth(0.55);
   appendConsignmentDetails(details, { ...consignment, branch }, shipments, packages, items);
-  const detailsName = "Additional-Details-" + number + ".pdf";
-  if (mode === "additional-only") {
-    details.save(detailsName);
-    return;
-  }
-  const zipped = createPdfZip([
-    { name: mainName, bytes: new Uint8Array(pdf.output("arraybuffer")) },
-    { name: detailsName, bytes: new Uint8Array(details.output("arraybuffer")) },
-  ]);
-  const zipBlob = new Blob([zipped.buffer as ArrayBuffer], { type: "application/zip" });
-  const url = URL.createObjectURL(zipBlob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "GR-and-Additional-Details-" + number + ".zip";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  window.setTimeout(() => URL.revokeObjectURL(url), 30000);
+  details.save("Additional-Details-" + number + ".pdf");
 }
