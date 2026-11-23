@@ -414,3 +414,85 @@ export async function printStockMovementPdf(row: Row, kind: StockKind, canViewSo
   finish(doc, data.name);
   doc.save((outward ? "Stock-Outward-" : "Stock-Inward-") + (number || "receipt") + ".pdf");
 }
+
+
+/** Delivery manifest (LR-based) variant of the same Manifest Auto print template. */
+export async function printDeliveryManifestPdf(
+  manifest: Row,
+  locations: { from: string; to: string },
+) {
+  const number = text(manifest.manifest_number);
+  const data = await loadHeader(text(manifest.branch_id), record(manifest.branch));
+  const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
+  doc.setTextColor(...ink);
+  heading(doc, "MANIFEST AUTO", number, data);
+  const partner = record(manifest.partner);
+  fit(doc, date(manifest.manifest_date), X + 442, 145, 88, 7.8);
+  let y = infoRow(doc, 152,
+    ["PAN No.", "GSTIN", "CIN", "E-way Bill No.", "E-way Bill Date"],
+    [text(data.branch.pan), text(data.branch.gstin), "", "", ""],
+    [87, 132, 124, 94, 95]);
+  y = infoRow(doc, y,
+    ["From", "Vehicle No.", "Load Type", "E-way Bill Valid", "Mode"],
+    [locations.from, text(manifest.vehicle_no), text(manifest.load_type),
+      "", text(manifest.transport_mode)],
+    [87, 132, 124, 94, 95]);
+  y = infoRow(doc, y,
+    ["To", "Transporter / Partner", "Driver's Name", "Driver's Contact No."],
+    [locations.to, text(partner.delivery_partner_name), text(manifest.driver_name),
+      text(manifest.driver_contact_number)],
+    [87, 162, 155, 128]);
+  const links: Row[] = Array.isArray(manifest.lr_links) ? manifest.lr_links : [];
+  const rows = links.map((link, index) => {
+    const lr = record(link.lr);
+    const shipments: Row[] = (lr.lr_shipments ?? [])
+      .map((entry: unknown) => record(record(entry).shipment))
+      .filter((row: Row) => Boolean(Object.keys(row).length));
+    const first = shipments[0] || {};
+    const items = shipments.flatMap((shipment) =>
+      Array.isArray(shipment.shipment_items) ? shipment.shipment_items as Row[] : []);
+    const weight = items.reduce((sum, item) => sum + num(item.weight_kg), 0);
+    const count = items.reduce((sum, item) => sum + num(item.quantity), 0);
+    return [
+      String(index + 1),
+      text(lr.lr_number),
+      text(first.supplier_place || locations.from),
+      text(first.recipient_place || locations.to),
+      count ? money(count) : "",
+      weight ? money(weight) : "",
+      text(link.transfer_status),
+      text(first.supplier_trade_name),
+      text(first.recipient_trade_name),
+    ];
+  });
+  const widths = [26, 77, 59, 58, 33, 55, 50, 86, 88];
+  const result = table(doc, "MANIFEST AUTO", number,
+    ["S. No.", "LR No.", "From", "To", "Pkgs", "Weight", "Status", "Consignor", "Consignee"],
+    widths, rows, y);
+  totals(doc, "Total / No. of LR: " + links.length, result.y,
+    [["Pkgs", money(rows.reduce((n, row) => n + num(row[4].replace(/,/g, "")), 0))],
+      ["Weight (KG)", money(rows.reduce((n, row) => n + num(row[5].replace(/,/g, "")), 0))]]);
+  if (links.some((link) => record(link.lr).lr_shipments?.length || text(link.transfer_error))) {
+    doc.addPage();
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("MANIFEST LR / E-WAY BILL DETAILS - " + number, X, 35);
+    const appendix = links.flatMap((link) => {
+      const lr = record(link.lr);
+      const shipments: Row[] = Array.isArray(lr.lr_shipments) ? lr.lr_shipments : [];
+      return shipments.length
+        ? shipments.map((entry) => [
+            text(lr.lr_number),
+            text(record(entry.shipment).eway_bill_number),
+            text(link.transfer_status),
+            text(link.transfer_error),
+          ])
+        : [[text(lr.lr_number), "", text(link.transfer_status), text(link.transfer_error)]];
+    });
+    table(doc, "MANIFEST LR DETAILS", number,
+      ["LR No.", "E-Way Bill No.", "Transfer Status", "Error / Remarks"],
+      [112, 120, 110, 190], appendix, 48);
+  }
+  finish(doc, data.name);
+  doc.save("Manifest-" + (number || "manifest") + ".pdf");
+}

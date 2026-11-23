@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState, type ReactNode } from "react";
-import { ArrowLeft, Eye, Link2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, Eye, Link2, Pencil, Plus, Printer, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { printDeliveryManifestPdf } from "@/lib/manifest-stock-pdf";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -158,7 +159,7 @@ export function ManifestList() {
     let manifestQuery = db
       .from("delivery_manifests")
       .select(
-        "*, partner:delivery_partners(*), lr_links:delivery_manifest_lorry_receipts(*, lr:lorry_receipts(id,lr_number,lr_shipments(shipment:shipments(eway_bill_number))))",
+        "*, partner:delivery_partners(*), lr_links:delivery_manifest_lorry_receipts(*, lr:lorry_receipts(id,lr_number,lr_shipments(shipment:shipments(eway_bill_number,supplier_trade_name,supplier_place,recipient_trade_name,recipient_place,shipment_items(quantity,weight_kg)))))",
       )
       .order("created_at", { ascending: false });
     let lrQuery = db
@@ -839,6 +840,15 @@ function ManifestView({
         </div>
         <Button
           className="ml-auto"
+          variant="outline"
+          onClick={() => void printDeliveryManifestPdf(row, {
+            from: locationName(row.from_location_id),
+            to: locationName(row.to_location_id),
+          }).catch((error) => toast.error(error instanceof Error ? error.message : "Manifest PDF failed"))}
+        >
+          <Printer className="mr-2 size-4" /> Print PDF
+        </Button>
+        <Button
           onClick={onTransfer}
           disabled={manifestStatus(row) === "transferred"}
         >
