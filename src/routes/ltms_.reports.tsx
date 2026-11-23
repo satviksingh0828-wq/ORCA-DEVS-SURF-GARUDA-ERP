@@ -8,6 +8,8 @@ import {
   ReceiptText,
   Truck,
   Scale,
+  FileSpreadsheet,
+  Images,
 } from "lucide-react";
 import { RequireAuth } from "@/components/RequireAuth";
 import { AppShell } from "@/components/AppShell";
@@ -15,6 +17,8 @@ import { consumeLtmsTabNavigation, LtmsSidebar } from "@/components/ltms/LtmsSid
 import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { UpdateConsignmentReport } from "@/components/reports/UpdateConsignmentReport";
 import { ConsignmentIncomeReport } from "@/components/reports/ConsignmentIncomeReport";
+import { CompactConsignmentReport } from "@/components/reports/CompactConsignmentReport";
+import { PodImageReport } from "@/components/reports/PodImageReport";
 import { TransporterExpenditureReport } from "@/components/reports/TransporterExpenditureReport";
 import { LoadingChargesReport } from "@/components/reports/LoadingChargesReport";
 import { TripExpenditureReport } from "@/components/reports/TripExpenditureReport";
@@ -37,6 +41,18 @@ const TABS = [
     label: "E-Way Bill",
     desc: "Saved daily assigned-EWB snapshots",
     icon: FileSearch,
+  },
+  {
+    id: "compact-consignment",
+    label: "Consignment Report",
+    desc: "Compact 26-column consignment data with role-controlled exports",
+    icon: FileSpreadsheet,
+  },
+  {
+    id: "pod-images",
+    label: "POD Image Report",
+    desc: "Outward POD front, back and signature copies with Excel export",
+    icon: Images,
   },
   {
     id: "update-consignment",
@@ -168,6 +184,8 @@ function ReportsPage() {
           {safeTab === "eway-bill" && <EwayBillList />}
           {safeTab === "movements" && <MovementList />}
           {safeTab === "update-consignment" && <UpdateConsignmentReport />}
+          {safeTab === "compact-consignment" && <CompactConsignmentReport />}
+          {safeTab === "pod-images" && <PodImageReport />}
           {safeTab === "consignment-income" && <ConsignmentIncomeReport />}
           {safeTab === "transporter-expenditure" && <TransporterExpenditureReport />}
           {safeTab === "unloading-income" && <UnloadingIncomeReport />}

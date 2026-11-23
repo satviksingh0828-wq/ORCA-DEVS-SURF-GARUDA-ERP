@@ -109,6 +109,8 @@ const NAVIGATION: LtmsSidebarGroup[] = [
       { id: "movements", label: "Movements" },
       { id: "eway-bill", label: "E-Way Bill" },
       { id: "update-consignment", label: "Update Consignment" },
+      { id: "compact-consignment", label: "Consignment Report" },
+      { id: "pod-images", label: "POD Image Report" },
       { id: "consignment-income", label: "Consignment Income" },
       { id: "transporter-expenditure", label: "Transporter Expenditure" },
       { id: "unloading-income", label: "Unloading Income" },
