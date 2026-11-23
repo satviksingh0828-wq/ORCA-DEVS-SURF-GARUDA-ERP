@@ -8,6 +8,8 @@ type ConsignmentPdfOptions = {
   consignment: AnyRecord;
   shipments: AnyRecord[];
   packages: AnyRecord[];
+  /** LR uses the identical first-page reference; only filename differs. */
+  filenamePrefix?: "LR";
 };
 
 const A4_WIDTH = 595;
@@ -58,7 +60,7 @@ function billingCheckboxes(status: unknown) {
   return {
     toPay: normalized === "billed",
     paid: normalized === "billed_and_paid",
-    tbb: normalized === "to_be_billed" || !normalized,
+    tbb: normalized === "to_be_billed",
   };
 }
 
@@ -124,7 +126,10 @@ function checkbox(doc: jsPDF, x: number, y: number, label: string, checked: bool
   doc.rect(x, y - 8, 10, 8);
   if (checked) {
     doc.setFont("helvetica", "bold");
-    doc.text("✓", x + 1, y - 1);
+    doc.setLineWidth(1.1);
+    doc.line(x + 2, y - 4, x + 4.5, y - 1.8);
+    doc.line(x + 4.5, y - 1.8, x + 8.5, y - 7);
+    doc.setLineWidth(0.55);
   }
 }
 
@@ -275,6 +280,10 @@ function appendConsignmentDetails(
   const rental = (consignment.rental ?? {}) as AnyRecord;
 
   const extras: Array<[string, string]> = [
+    ["Lorry Receipt Mode", text(consignment.lr_mode)],
+    ["Calculated LR Income", text(consignment.lr_calculated_income)],
+    ["Linked Manifest", text(consignment.manifest_number)],
+    ["Linked Trip", text(consignment.trip_number)],
     ["Issuing Branch", text(((consignment.branch ?? {}) as AnyRecord).branch_name)],
     ["Branch Address", join(
       ((consignment.branch ?? {}) as AnyRecord).address_line1,
@@ -478,6 +487,7 @@ export async function printConsignorCopyPdf({
   consignment,
   shipments,
   packages,
+  filenamePrefix,
 }: ConsignmentPdfOptions) {
   const [companyResult, branchResult, logo] = await Promise.all([
     supabase.from("company").select("company_name").limit(1).maybeSingle(),
@@ -508,7 +518,7 @@ export async function printConsignorCopyPdf({
   const packageRows = packages as AnyRecord[];
   const actualWeight = items.reduce((sum, item) => sum + num(item.weight_kg), 0);
   const packageWeight = packageRows.reduce((sum, item) => sum + num(item.weight_kg), 0);
-  const chargedWeight = packageWeight;
+  const chargedWeight = packageWeight || actualWeight;
   const articleCount =
     packageRows.reduce((sum, item) => sum + num(item.quantity), 0) ||
     items.reduce((sum, item) => sum + num(item.quantity), 0);
@@ -578,7 +588,10 @@ export async function printConsignorCopyPdf({
   pdf.line(438.8, 187.1, FORM_X + FORM_W, 187.1);
   pdf.line(518, 172.6, 518, 187.1);
 
-  if (logo) pdf.addImage(logo, "PNG", 18.5, 62.3, 70, 61);
+  if (logo) {
+    try { pdf.addImage(logo, "PNG", 18.5, 62.3, 70, 61); }
+    catch { singleLine(pdf, "GARUDA LOGISTICS", 20, 97, 68, 10, true); }
+  }
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(6.5);
   field(pdf, "SAC Code :", "9965", 20, 57, 78);
@@ -600,7 +613,7 @@ export async function printConsignorCopyPdf({
   pdf.text("CONSIGNOR COPY", 391, 58);
   pdf.text("GR", 476, 58);
   pdf.text("No. :", 476, 64);
-  pdf.text(text(consignment.consignment_number), 499, 58);
+  singleLine(pdf, text(consignment.consignment_number), 499, 58, 76, 7.1, true);
   field(
     pdf,
     "DATE :",
@@ -730,6 +743,8 @@ export async function printConsignorCopyPdf({
 
   appendConsignmentDetails(pdf, { ...consignment, branch }, shipments, packages, items);
 
-  const filename = `Consignor-Copy-${text(consignment.consignment_number) || "consignment"}.pdf`;
+  const filename = filenamePrefix === "LR"
+    ? `LR-${text(consignment.consignment_number) || "receipt"}.pdf`
+    : `Consignor-Copy-${text(consignment.consignment_number) || "consignment"}.pdf`;
   pdf.save(filename);
 }

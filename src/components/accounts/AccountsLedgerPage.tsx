@@ -773,6 +773,7 @@ export function AccountsLedgerPage() {
         subtitle: `${report.branch?.branch_name ?? "Branch"} | ${dateText(viewStart)} to ${dateText(viewEnd)}`,
         filename: `${report.ledger.account_name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-ledger.pdf`,
         orientation: "landscape",
+        branchId: report.ledger.branch_id,
         columns: [
           "Dr Date",
           "Dr Voucher",

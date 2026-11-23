@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, Eye, Link2, Pencil, Plus, Search, Trash2, Truck, X } from "lucide-react";
+import { ArrowLeft, Eye, Link2, Pencil, Plus, Printer, Search, Trash2, Truck, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,6 +26,7 @@ import { useSession } from "@/lib/session";
 import { toast } from "sonner";
 import { findEntry, manifestCharges, num, type EntryLite } from "@/lib/trip-calc";
 import { serverFetchEwayBillDetails } from "@/lib/ewaybill-details";
+import { printLorryReceiptPdf } from "@/lib/lorry-receipt-pdf";
 
 type Shipment = {
   id: string;
@@ -537,7 +538,14 @@ function LorryReceiptView({
     <div className="space-y-6">
       <div className="flex items-center gap-3 border-b border-border pb-4">
         <Button variant="ghost" size="icon" onClick={onBack}><ArrowLeft className="size-5" /></Button>
-        <div><h2 className="text-xl font-semibold">Lorry Receipt Details — {row.lr_number}</h2><p className="text-sm text-muted-foreground">View all LR and attached shipment details.</p></div>
+        <div className="min-w-0 flex-1"><h2 className="text-xl font-semibold">Lorry Receipt Details — {row.lr_number}</h2><p className="text-sm text-muted-foreground">View all LR and attached shipment details.</p></div>
+        <Button
+          variant="outline"
+          onClick={() => void printLorryReceiptPdf(row).catch((error) =>
+            toast.error(error instanceof Error ? error.message : "Unable to print LR PDF"))}
+        >
+          <Printer className="mr-2 size-4" /> Print LR PDF
+        </Button>
         <Button variant="destructive" disabled={Boolean(row.trip_number || row.manifest_number)} title={row.trip_number || row.manifest_number ? `Locked while linked to ${row.manifest_number ?? row.trip_number}` : "Delete LR"} onClick={onDelete}><Trash2 className="mr-2 size-4" /> {row.trip_number || row.manifest_number ? "LR Locked" : "Delete LR"}</Button>
       </div>
       <div className="grid gap-4 rounded-xl border border-border p-4 md:grid-cols-4">

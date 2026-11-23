@@ -469,6 +469,7 @@ function JournalPage() {
       subtitle: `${branchMap.get(entry.branch_id) ?? "Branch"} · ${entry.entry_date} · ${entry.description}`,
       filename: `${entry.voucher_number}.pdf`,
       orientation: "landscape",
+      branchId: entry.branch_id,
       columns: [
         "Voucher",
         "Date",

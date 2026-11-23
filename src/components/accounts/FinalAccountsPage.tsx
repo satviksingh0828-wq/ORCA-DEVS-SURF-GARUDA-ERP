@@ -494,6 +494,7 @@ export function FinalAccountsRoute() {
       subtitle: `${branchId === "all" ? "All branches" : (branchById.get(branchId)?.branch_name ?? "Branch")} · As on ${dateText(asOf)}`,
       filename: `balance-sheet-${asOf}.pdf`,
       orientation: "landscape",
+      branchId: branchId === "all" ? null : branchId,
       columns: [
         "Liability branch",
         "Liabilities (all Cr balances)",
@@ -568,6 +569,7 @@ export function FinalAccountsRoute() {
       subtitle: `${branchId === "all" ? "All branches" : (branchById.get(branchId)?.branch_name ?? "Branch")} · ${dateText(start)} to ${dateText(end)}`,
       filename: `profit-loss-${start}-to-${end}.pdf`,
       orientation: "landscape",
+      branchId: branchId === "all" ? null : branchId,
       columns: [
         "Expenditure branch",
         "Expenditure (all Dr balances)",
@@ -624,6 +626,7 @@ export function FinalAccountsRoute() {
       subtitle: `${branchId === "all" ? "All branches" : (branchById.get(branchId)?.branch_name ?? "Branch")} · ${cashFilter === "both" ? "Cash + Bank" : cashFilter === "cash" ? "Cash only" : "Bank only"} · ${dateText(start)} to ${dateText(end)}`,
       filename: `cash-flow-${start}-to-${end}.pdf`,
       orientation: "landscape",
+      branchId: branchId === "all" ? null : branchId,
       columns: [
         "Date",
         "Branch",

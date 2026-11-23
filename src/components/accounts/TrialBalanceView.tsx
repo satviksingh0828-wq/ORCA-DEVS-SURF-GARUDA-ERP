@@ -110,6 +110,7 @@ export function TrialBalanceView() {
       subtitle: `${branchId === "all" ? "All branches" : branchById.get(branchId)?.branch_name ?? "Branch"} · As of ${dateText(asOf)}`,
       filename: `trial-balance-${asOf}.pdf`,
       orientation: "landscape",
+      branchId: branchId === "all" ? null : branchId,
       columns: ["Branch", "Ledger account", "Type", "Debit (₹)", "Credit (₹)"],
       rows: data,
       summary: [["Total debit", pdfMoney(totals.debit)], ["Total credit", pdfMoney(totals.credit)], ["Status", Math.abs(totals.debit - totals.credit) < 0.005 ? "Balanced" : `Difference ${pdfMoney(Math.abs(totals.debit - totals.credit))}`]],
