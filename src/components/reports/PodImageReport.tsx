@@ -10,7 +10,7 @@ import { useSession } from "@/lib/session";
 import {
   fetchPodImageReport, getPodImageReportLinks,
   type PodReportResponse, type PodReportRow,
-} from "@/lib/pod-image-report.server";
+} from "@/lib/pod-image-report";
 
 const HEADERS = [
   "Consignment No.", "Receiving Date", "Source", "Destination",

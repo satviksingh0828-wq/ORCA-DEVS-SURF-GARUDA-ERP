@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useSession } from "@/lib/session";
-import { fetchCompactConsignmentReport, type CompactConsignmentResponse } from "@/lib/consignment-report.server";
+import { fetchCompactConsignmentReport, type CompactConsignmentResponse } from "@/lib/consignment-report";
 import {
   CONSIGNMENT_REPORT_COLUMNS, columnsForConsignmentRole, reportSummary,
   type ConsignmentColumn, type ConsignmentReportRecord,
