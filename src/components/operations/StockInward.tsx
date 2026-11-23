@@ -10,10 +10,12 @@ import {
   RefreshCw,
   Trash2,
   Eye,
+  Printer,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { printStockMovementPdf } from "@/lib/manifest-stock-pdf";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
@@ -186,7 +188,7 @@ export function StockInward() {
     let query = db
       .from("stock_inward_receipts")
       .select(
-        "id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_received_journal_entry_id,additional_income_mode,approval_amount,approval_income_journal_entry_id,wms_purchase_order_id,wms_purchase_order_number,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_documents(id,document_no,vehicle_number),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,inward_document_id,sku,item_name,source:contracts(contract_name))",
+        "id,branch_id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_received_journal_entry_id,additional_income_mode,approval_amount,approval_income_journal_entry_id,wms_purchase_order_id,wms_purchase_order_number,created_at,branch:branches(branch_name),stock_inward_sources(source_id,source:contracts(contract_name)),stock_inward_documents(id,document_no,vehicle_number),stock_inward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,inward_document_id,sku,item_name,source:contracts(contract_name))",
       )
       .gte("receipt_date", filters.from)
       .lte("receipt_date", filters.to)
@@ -1057,9 +1059,27 @@ export function StockInward() {
             </div>
             <Button
               type="button"
-              variant="destructive"
+              variant="outline"
               size="sm"
               className="ml-auto"
+              onClick={() => void printStockMovementPdf(
+                {
+                  ...selectedRow,
+                  stock_inward_packages: (selectedRow.stock_inward_packages ?? []).map((item: any) => ({
+                    ...item,
+                    pdf_amount: money(calculatePackageAmount(item.package_rate_type_id, item.quantity, item.weight_kg)),
+                  })),
+                },
+                "inward",
+                false,
+              ).catch((error) => toast.error(error instanceof Error ? error.message : "Stock Inward PDF failed"))}
+            >
+              <Printer className="size-4" /> Print PDF
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
               onClick={() => void deleteReceipt(selectedRow)}
               disabled={Boolean(
                 selectedRow.source_bill_items?.length ||

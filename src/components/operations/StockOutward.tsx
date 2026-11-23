@@ -10,10 +10,12 @@ import {
   RefreshCw,
   Trash2,
   Eye,
+  Printer,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
+import { printStockMovementPdf } from "@/lib/manifest-stock-pdf";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
@@ -209,7 +211,7 @@ export function StockOutward() {
     let query = db
       .from("stock_outward_receipts")
       .select(
-        "id,outward_number,outward_date,loading_date,loading_amount_received,additional_income_mode,source_income_amount,approval_amount,workmen_loading_bill_id,loading_received_journal_entry_id,approval_income_journal_entry_id,wms_sales_order_id,wms_sales_order_number,created_at,ltms_source_bill_stock_outward_items(id),branch:branches(branch_name),stock_outward_sources(source_id,source:contracts(contract_name)),stock_outward_documents(id,document_no,vehicle_number),stock_outward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,outward_document_id,wms_item_id,sku,item_name,source:contracts(contract_name))",
+        "id,branch_id,outward_number,outward_date,loading_date,loading_amount_received,additional_income_mode,source_income_amount,approval_amount,workmen_loading_bill_id,loading_received_journal_entry_id,approval_income_journal_entry_id,wms_sales_order_id,wms_sales_order_number,created_at,ltms_source_bill_stock_outward_items(id),branch:branches(branch_name),stock_outward_sources(source_id,source:contracts(contract_name)),stock_outward_documents(id,document_no,vehicle_number),stock_outward_packages(id,package_rate_type_id,package_type,quantity,weight_kg,source_id,outward_document_id,wms_item_id,sku,item_name,source:contracts(contract_name))",
       )
       .gte("outward_date", filters.from)
       .lte("outward_date", filters.to)
@@ -1137,9 +1139,27 @@ export function StockOutward() {
             </div>
             <Button
               type="button"
-              variant="destructive"
+              variant="outline"
               size="sm"
               className="ml-auto"
+              onClick={() => void printStockMovementPdf(
+                {
+                  ...selectedRow,
+                  stock_outward_packages: (selectedRow.stock_outward_packages ?? []).map((item: any) => ({
+                    ...item,
+                    pdf_amount: money(calculatePackageAmount(item.package_rate_type_id, item.quantity, item.weight_kg)),
+                  })),
+                },
+                "outward",
+                canViewSourceIncome,
+              ).catch((error) => toast.error(error instanceof Error ? error.message : "Stock Outward PDF failed"))}
+            >
+              <Printer className="size-4" /> Print PDF
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
               onClick={() => void deleteReceipt(selectedRow)}
               disabled={isReceiptLocked(selectedRow)}
             >
