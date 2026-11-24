@@ -5,6 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
+import { PackageRateExcelIO } from "@/components/masters/PackageRateExcelIO";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -300,6 +301,15 @@ export function PackageRates() {
             </SelectContent>
           </Select>
         </div>
+        {branchId && (
+          <PackageRateExcelIO
+            key={branchId}
+            branchId={branchId}
+            branchName={branches.find((branch) => branch.id === branchId)?.branch_name || "Selected branch"}
+            canImport={admin}
+            onImported={load}
+          />
+        )}
         {admin && branchId && (
           <form
             onSubmit={createType}
