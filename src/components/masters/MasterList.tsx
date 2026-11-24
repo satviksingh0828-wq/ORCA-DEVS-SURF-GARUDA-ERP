@@ -25,6 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { CsvIO } from "@/components/CsvIO";
+import { MasterExcelIO } from "@/components/masters/MasterExcelIO";
 import { BranchSelect } from "@/components/BranchSelect";
 import { useBranches, branchName } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
@@ -173,6 +174,7 @@ export function MasterList({
   const pinDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const isLocations = config.table === "locations";
+  const isTransporter = config.table === "transporters" || config.table === "ltms_transporters";
   const PAGE_SIZE = 100;
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -376,7 +378,56 @@ export function MasterList({
   }
 
   async function onImport(rows: Record<string, string>[]) {
-    const nameToId = new Map(branches.map((b) => [b.branch_name.toLowerCase(), b.id] as const));
+    const nameToId = new Map(branches.map((b) => [b.branch_name.trim().toLowerCase(), b.id] as const));
+    if (isTransporter) {
+      // Do not silently import an invalid branch as NULL or bypass a Basic
+      // user's assigned branches. Errors are counted per row.
+      let inserted = 0;
+      let failed = 0;
+      const seen = new Set<string>();
+      const errors: string[] = [];
+      for (let i = 0; i < rows.length; i += 1) {
+        const row = rows[i];
+        const branch = (row.branch_name || "").trim().toLowerCase();
+        const branchId = nameToId.get(branch);
+        const required = ["transporter_name", "gstin", "pan", "pin_code"];
+        const missing = required.filter((key) => !(row[key] || "").trim());
+        if (!branchId || missing.length ||
+          (allowedBranchIds !== null && !allowedBranchIds.includes(branchId))) {
+          failed += 1;
+          errors.push("Row " + (i + 2) + ": " +
+            (!branchId ? "unknown or missing Branch" : "missing " + missing.join(", ")));
+          continue;
+        }
+        const identity = branchId + "|" + row.transporter_name.trim().toLowerCase() +
+          "|" + row.gstin.trim().toUpperCase();
+        if (seen.has(identity)) {
+          failed += 1;
+          errors.push("Row " + (i + 2) + ": duplicate transporter in file");
+          continue;
+        }
+        seen.add(identity);
+        const payload = Object.fromEntries(
+          allFieldKeys.map((key) => [key, (row[key] || "").trim()]),
+        ) as Record<string, string>;
+        payload.gstin = payload.gstin.toUpperCase();
+        payload.pan = payload.pan.toUpperCase();
+        const { error } = await supabase.from(config.table)
+          .insert({ ...payload, branch_id: branchId } as never);
+        if (error) {
+          failed += 1;
+          errors.push("Row " + (i + 2) + ": " + error.message);
+        } else {
+          inserted += 1;
+        }
+      }
+      if (errors.length) toast.warning(errors.slice(0, 3).join("; "));
+      if (inserted) {
+        logAction("imported", config.singular, { details: { count: inserted } });
+        await load();
+      }
+      return { inserted, failed };
+    }
     const payload = rows
       .filter((r) => (r[config.titleKey] || "").trim() !== "")
       .map((r) => {
@@ -635,13 +686,27 @@ export function MasterList({
         )}
         <div className="flex flex-wrap items-center gap-2">
           {!isViewer ? (
-            <CsvIO
-              entityLabel={config.entityLabel}
-              filename={config.table}
-              columns={columns}
-              rows={rowsForExport}
-              onImport={onImport}
-            />
+            isTransporter ? (
+              <MasterExcelIO
+                entityName={config.entityLabel}
+                fields={[
+                  { key: "branch_name", label: "Branch", required: true },
+                  ...config.sections.flatMap((section) => section.fields.map((field) => ({
+                    key: field.key, label: field.label, required: field.required,
+                  }))),
+                ]}
+                rows={rowsForExport}
+                onImport={onImport}
+              />
+            ) : (
+              <CsvIO
+                entityLabel={config.entityLabel}
+                filename={config.table}
+                columns={columns}
+                rows={rowsForExport}
+                onImport={onImport}
+              />
+            )
           ) : null}
           {!isViewer ? (
             <Button onClick={() => setEditing({ ...emptyRow })}>

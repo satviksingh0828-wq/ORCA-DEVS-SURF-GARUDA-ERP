@@ -1744,7 +1744,9 @@ export function ConsignmentList({
                       )}
                       <Button
                         variant="ghost"
-                        size="sm"
+                        size="icon"
+                        className="size-8"
+                        aria-label={`Delete Consignment ${row.consignment_number}`}
                         disabled={
                           Boolean(row.trip_id) ||
                           ["partial", "updated"].includes(
@@ -1762,7 +1764,7 @@ export function ConsignmentList({
                         }
                         onClick={() => void deleteRow(row)}
                       >
-                        <Trash2 className="mr-1 size-4 text-destructive" /> Delete
+                        <Trash2 className="size-4 text-destructive" />
                       </Button>
                     </div>
                   </td>

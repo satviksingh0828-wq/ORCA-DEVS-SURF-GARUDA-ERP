@@ -7,6 +7,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useSession } from "@/lib/session";
+import { useBranches, branchName } from "@/lib/use-branches";
+import { fetchAll } from "@/lib/fetch-all";
+import { MasterExcelIO } from "@/components/masters/MasterExcelIO";
 
 type PartyType = "consignor" | "consignee";
 type Party = {
@@ -51,6 +54,8 @@ const empty = (): Omit<Party, "id" | "party_type"> => ({
 
 export function PartyMaster({ partyType, embedded = false }: { partyType: PartyType; embedded?: boolean }) {
   const { user } = useSession();
+  const branches = useBranches();
+  const basicAllowedBranches = user?.role === "basic" ? (user?.branchIds ?? []) : null;
   // The repository's generated Supabase types predate the party_masters migration.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any;
@@ -67,6 +72,13 @@ export function PartyMaster({ partyType, embedded = false }: { partyType: PartyT
 
   async function load(reset = true) {
     setLoading(true);
+    if (basicAllowedBranches !== null && !basicAllowedBranches.length) {
+      setRows([]);
+      setOffset(0);
+      setHasMore(false);
+      setLoading(false);
+      return;
+    }
     const from = reset ? 0 : offset;
     let query = db
       .from("party_masters")
@@ -74,6 +86,7 @@ export function PartyMaster({ partyType, embedded = false }: { partyType: PartyT
       .eq("party_type", partyType)
       .order("updated_at", { ascending: false })
       .range(from, from + PAGE_SIZE - 1);
+    if (basicAllowedBranches !== null) query = query.in("branch_id", basicAllowedBranches);
     if (branchId) query = query.eq("branch_id", branchId);
     if (search.trim()) query = query.ilike("gstin", `%${search.trim().toUpperCase()}%`);
     const { data, error } = await query;
@@ -90,6 +103,75 @@ export function PartyMaster({ partyType, embedded = false }: { partyType: PartyT
     // Search is intentionally submitted by the filter form.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [partyType, branchId]);
+
+  const excelFields = [
+    { key: "branch_name", label: "Branch", required: true },
+    ...fields.map(([key, label, required]) => ({ key, label, required })),
+  ];
+
+  async function importExcel(rows: Record<string, string>[]) {
+    const byName = new Map(branches.map((branch) =>
+      [branch.branch_name.trim().toLowerCase(), branch.id] as const));
+    let inserted = 0;
+    let failed = 0;
+    const messages: string[] = [];
+    const known = new Set<string>();
+    for (let i = 0; i < rows.length; i += 1) {
+      const item = rows[i];
+      const gstin = (item.gstin || "").trim().toUpperCase();
+      const branchKey = (item.branch_name || "").trim().toLowerCase();
+      const resolvedBranch = byName.get(branchKey);
+      if (!resolvedBranch || !gstin ||
+        (basicAllowedBranches !== null && !basicAllowedBranches.includes(resolvedBranch))) {
+        failed += 1;
+        messages.push("Row " + (i + 2) + ": GSTIN or authorised Branch missing");
+        continue;
+      }
+      if (known.has(gstin)) {
+        failed += 1;
+        messages.push("Row " + (i + 2) + ": duplicate GSTIN in file");
+        continue;
+      }
+      known.add(gstin);
+      const payload = {
+        party_type: partyType,
+        branch_id: resolvedBranch,
+        gstin,
+        phone_number: (item.phone_number || "").trim(),
+        trade_name: (item.trade_name || "").trim(),
+        legal_name: (item.legal_name || "").trim(),
+        address_1: (item.address_1 || "").trim(),
+        address_2: (item.address_2 || "").trim(),
+        place: (item.place || "").trim(),
+        pincode: (item.pincode || "").trim(),
+        state: (item.state || "").trim(),
+        source: "manual",
+      };
+      const { error } = await db.from("party_masters").insert(payload);
+      if (error) {
+        failed += 1;
+        messages.push("Row " + (i + 2) + ": " + error.message);
+      } else inserted += 1;
+    }
+    if (messages.length) toast.warning(messages.slice(0, 3).join("; "));
+    if (inserted) await load(true);
+    return { inserted, failed };
+  }
+
+  async function exportExcelRows() {
+    if (basicAllowedBranches !== null && !basicAllowedBranches.length) return [];
+    const records = await fetchAll<Party>(() => {
+      let query = db.from("party_masters").select("*")
+        .eq("party_type", partyType).order("updated_at", { ascending: false });
+      if (basicAllowedBranches !== null) query = query.in("branch_id", basicAllowedBranches);
+      if (branchId) query = query.eq("branch_id", branchId);
+      if (search.trim()) query = query.ilike("gstin", `%${search.trim().toUpperCase()}%`);
+      return query;
+    });
+    return records.map((party) => ({
+      ...party, branch_name: branchName(branches, party.branch_id),
+    }));
+  }
 
   async function save(event: React.FormEvent) {
     event.preventDefault();
@@ -174,13 +256,27 @@ export function PartyMaster({ partyType, embedded = false }: { partyType: PartyT
             </p>
           </div>
         )}
-        <Button
-          onClick={() =>
-            setEditing({ party_type: partyType, ...empty(), branch_id: branchId } as Party)
-          }
-        >
-          <Plus className="size-4" /> New {title}
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <MasterExcelIO
+            entityName={title === "Consignor" ? "Consignors" : "Consignees"}
+            fields={excelFields}
+            rows={rows.map((party) => ({
+              ...party, branch_name: branchName(branches, party.branch_id),
+            }))}
+            exportRows={exportExcelRows}
+            onImport={importExcel}
+            readOnly={user?.role === "viewer"}
+          />
+          {user?.role !== "viewer" && (
+            <Button
+              onClick={() =>
+                setEditing({ party_type: partyType, ...empty(), branch_id: branchId } as Party)
+              }
+            >
+              <Plus className="size-4" /> New {title}
+            </Button>
+          )}
+        </div>
       </div>
       <form
         onSubmit={(e) => {
