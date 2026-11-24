@@ -250,6 +250,17 @@ export const TRANSPORTER_CONFIG: MasterConfig = {
         { key: "upi_id", label: "UPI ID" },
       ],
     },
+    {
+      title: "Commercial charges",
+      fields: [
+        {
+          key: "per_consignment_charges",
+          label: "Per Consignment Charges (₹)",
+          type: "number",
+          full: true,
+        },
+      ],
+    },
   ],
 };
 
@@ -267,7 +278,9 @@ export const RENTAL_CONFIG: MasterConfig = {
   titleKey: "rental_name",
   emptyMsg: "Rental vehicle providers available for Own → Rental consignments.",
   sections: [
-    ...(TRANSPORTER_CONFIG.sections.map((section) => ({
+    ...(TRANSPORTER_CONFIG.sections
+      .filter((section) => section.title !== "Commercial charges")
+      .map((section) => ({
       ...section,
       fields: section.fields.map((field) =>
         field.key === "transporter_name"

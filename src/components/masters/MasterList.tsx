@@ -26,6 +26,7 @@ import {
 } from "@/components/ui/select";
 import { CsvIO } from "@/components/CsvIO";
 import { MasterExcelIO } from "@/components/masters/MasterExcelIO";
+import { parsePerConsignmentCharges } from "@/lib/transporter-charges";
 import { BranchSelect } from "@/components/BranchSelect";
 import { useBranches, branchName } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
@@ -331,6 +332,15 @@ export function MasterList({
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!editing) return;
+    let charge = 0;
+    if (isTransporter) {
+      try {
+        charge = parsePerConsignmentCharges(editing.per_consignment_charges);
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Invalid per consignment charges");
+        return;
+      }
+    }
     setSaving(true);
     const {
       id,
@@ -346,7 +356,9 @@ export function MasterList({
     const payload = Object.fromEntries(
       Object.entries(rest).map(([key, value]) => [
         key,
-        dateFieldKeys.has(key) && value === "" ? null : value,
+        isTransporter && key === "per_consignment_charges"
+          ? charge
+          : dateFieldKeys.has(key) && value === "" ? null : value,
       ]),
     ) as never;
     const res = id
@@ -407,11 +419,23 @@ export function MasterList({
           continue;
         }
         seen.add(identity);
-        const payload = Object.fromEntries(
-          allFieldKeys.map((key) => [key, (row[key] || "").trim()]),
-        ) as Record<string, string>;
-        payload.gstin = payload.gstin.toUpperCase();
-        payload.pan = payload.pan.toUpperCase();
+        let charge: number;
+        try {
+          charge = parsePerConsignmentCharges(row.per_consignment_charges);
+        } catch (error) {
+          failed += 1;
+          errors.push("Row " + (i + 2) + ": " +
+            (error instanceof Error ? error.message : "Invalid per consignment charges"));
+          continue;
+        }
+        const payload = {
+          ...Object.fromEntries(
+            allFieldKeys.map((key) => [key, (row[key] || "").trim()]),
+          ),
+          per_consignment_charges: charge,
+        } as Record<string, string | number>;
+        payload.gstin = String(payload.gstin).toUpperCase();
+        payload.pan = String(payload.pan).toUpperCase();
         const { error } = await supabase.from(config.table)
           .insert({ ...payload, branch_id: branchId } as never);
         if (error) {
@@ -617,6 +641,8 @@ export function MasterList({
                       type={f.type ?? "text"}
                       value={val}
                       required={f.required}
+                      min={f.key === "per_consignment_charges" ? 0 : undefined}
+                      step={f.key === "per_consignment_charges" ? "0.01" : undefined}
                       onChange={(e) => set(f.key)(e.target.value)}
                       className="h-10"
                     />
