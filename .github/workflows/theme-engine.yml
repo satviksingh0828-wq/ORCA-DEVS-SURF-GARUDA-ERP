@@ -24,5 +24,7 @@ jobs:
         run: node --test test/ui-page-headings.test.mjs
       - name: Consignment report role and Excel-column tests
         run: node --test --experimental-strip-types test/consignment-report-model.test.ts
+      - name: Compact and Complete table view tests
+        run: node --test --experimental-strip-types test/table-view-mode.test.ts
       - name: Build
         run: npm run build

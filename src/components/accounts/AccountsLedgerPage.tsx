@@ -23,6 +23,7 @@ import {
 } from "@/components/accounts/AccountsSectionNav";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { Button } from "@/components/ui/button";
+import { TableViewMode } from "@/components/ui/table-view-mode";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
@@ -1122,6 +1123,7 @@ export function AccountsLedgerPage() {
                   </Button>
                 )}
               </div>
+              <TableViewMode label="Accounts Ledger List" compactColumns={[1, 2, 3, 4, 7]}>
               <section className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
@@ -1204,6 +1206,7 @@ export function AccountsLedgerPage() {
                   </table>
                 </div>
               </section>
+              </TableViewMode>
               {isAdmin && assignmentLedgerId && (
                 <section className="surface-card space-y-4 p-5">
                   <div>

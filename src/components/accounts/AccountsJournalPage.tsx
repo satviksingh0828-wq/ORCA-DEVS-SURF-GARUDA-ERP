@@ -19,6 +19,7 @@ import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { consumeAccountsTabNavigation } from "@/components/accounts/AccountsSectionNav";
 import { AccountsSectionNav, type JournalTab } from "@/components/accounts/AccountsSectionNav";
 import { Button } from "@/components/ui/button";
+import { TableViewMode } from "@/components/ui/table-view-mode";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
@@ -899,6 +900,7 @@ function JournalPage() {
                   Create entry
                 </Button>
               </div>
+              <TableViewMode label="Accounts Journal List" compactColumns={[1, 2, 3, 4, 6]}>
               <section className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-sm">
@@ -1095,6 +1097,7 @@ function JournalPage() {
                   </table>
                 </div>
               </section>
+              </TableViewMode>
             </div>
           )}
         </div>

@@ -28,6 +28,7 @@ import { SourcesReport } from "@/components/reports/SourcesReport";
 import { MovementList } from "@/components/operations/MovementList";
 import { UnloadingIncomeReport } from "@/components/reports/UnloadingIncomeReport";
 import { useSession } from "@/lib/session";
+import { TableViewMode } from "@/components/ui/table-view-mode";
 
 const TABS = [
   {
@@ -106,6 +107,23 @@ const TABS = [
 
 type TabId = (typeof TABS)[number]["id"];
 
+/** Main-table columns retained in Compact mode; Complete always displays all.
+ * Totals, expandable rows, buttons and existing exports stay untouched.
+ */
+const COMPACT_REPORT_COLUMNS: Partial<Record<TabId, readonly number[]>> = {
+  "movements": [1, 2, 4, 5, 6, 8, 9, 10],
+  "eway-bill": [1, 2, 3, 5, 7, 8],
+  "pod-images": [1, 2, 3, 4, 7, 8, 9, 10, 11, 13],
+  "update-consignment": [1, 2, 4, 5, 7],
+  "consignment-income": [1, 2, 3, 7, 8, 9, 11],
+  "transporter-expenditure": [1, 2, 3, 4, 9, 10, 13, 14],
+  "unloading-income": [1, 2, 3, 4, 7],
+  "loading-charges": [1, 2, 3, 4, 6, 7, 10, 11, 12],
+  "trip-expenditure": [1, 3, 5, 6, 7, 8, 11],
+  "consignment-net": [1, 2, 3, 7, 8],
+  "sources": [1, 2, 3, 4, 5, 7],
+};
+
 export const Route = createFileRoute("/ltms_/reports")({
   head: () => ({
     meta: [
@@ -181,6 +199,8 @@ function ReportsPage() {
             <h1 className="text-2xl font-semibold tracking-tight">{active.label}</h1>
             <p className="mt-1 text-sm text-muted-foreground">{active.desc}</p>
           </header>
+          <TableViewMode key={safeTab} compactColumns={COMPACT_REPORT_COLUMNS[safeTab] ?? []}
+            label={active.label}>
           {safeTab === "eway-bill" && <EwayBillList />}
           {safeTab === "movements" && <MovementList />}
           {safeTab === "update-consignment" && <UpdateConsignmentReport />}
@@ -193,6 +213,7 @@ function ReportsPage() {
           {safeTab === "trip-expenditure" && <TripExpenditureReport />}
           {safeTab === "consignment-net" && <ConsignmentNetReport />}
           {safeTab === "sources" && <SourcesReport />}
+          </TableViewMode>
         </div>
       </div>
     </AppShell>
