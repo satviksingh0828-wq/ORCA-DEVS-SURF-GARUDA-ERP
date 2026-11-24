@@ -268,18 +268,30 @@ export function UnloadingIncomeReport({
                 const showSource =
                   row.additional_income_mode === "source" || row.additional_income_mode === "both";
                 const open = expanded === row.id;
+                const packageTypes = [
+                  ...new Set(
+                    (row.stock_inward_packages ?? [])
+                      .map((item) => item.package_type)
+                      .filter(Boolean),
+                  ),
+                ].join(", ") || "—";
+                const compactPackageTypes = packageTypes.length > 32
+                  ? packageTypes.slice(0, 32).trimEnd() + "..."
+                  : packageTypes;
                 return (
-                  <tbody key={row.id} className="contents">
+                  <Fragment key={row.id}>
                     <tr className="border-t border-border align-top">
                       <td className="px-3 py-3 font-medium">
                         {row.receipt_number ?? row.id.slice(0, 8)}
                       </td>
-                      <td className="px-3 py-3">
-                        {[
-                          ...new Set(
-                            (row.stock_inward_packages ?? []).map((item) => item.package_type),
-                          ),
-                        ].join(", ") || "—"}
+                      <td className="min-w-0 px-3 py-3" title={packageTypes}>
+                        <span data-table-view-compact-only="true"
+                          className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap">
+                          {compactPackageTypes}
+                        </span>
+                        <span data-table-view-complete-only="true">
+                          {packageTypes}
+                        </span>
                       </td>
                       <td className="px-3 py-3">
                         {(row.stock_inward_sources ?? [])
@@ -363,7 +375,7 @@ export function UnloadingIncomeReport({
                         </td>
                       </tr>
                     )}
-                  </tbody>
+                  </Fragment>
                 );
               })
             )}

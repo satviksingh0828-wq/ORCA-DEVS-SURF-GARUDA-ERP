@@ -911,7 +911,7 @@ function JournalPage() {
                         <th className="px-4 py-3">Branch</th>
                         <th className="px-4 py-3">Description</th>
                         <th className="px-4 py-3">Source</th>
-                        <th className="px-4 py-3">Actions</th>
+                        <th className="w-[210px] px-2 py-3 whitespace-nowrap">Actions</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
@@ -981,20 +981,23 @@ function JournalPage() {
                                       : "Manual"}
                                   </span>
                                 </td>
-                                <td className="px-3 py-3 align-middle">
-                                  <div className="flex flex-wrap items-center gap-1.5">
+                                <td className="w-[210px] px-2 py-3 align-middle">
+                                  <div className="flex flex-nowrap items-center gap-1.5 whitespace-nowrap">
                                   <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
+                                    className="shrink-0 whitespace-nowrap"
                                     onClick={() => setExpandedEntryId(expanded ? null : entry.id)}
                                   >
-                                    {expanded ? "Hide lines" : "View lines"}
+                                    <span data-table-view-compact-only="true">{expanded ? "Hide" : "View"}</span>
+                                    <span data-table-view-complete-only="true">{expanded ? "Hide lines" : "View lines"}</span>
                                   </Button>
                                   <Button
                                     type="button"
                                     variant="outline"
                                     size="sm"
+                                    className="shrink-0 whitespace-nowrap"
                                     onClick={() => void exportPdf(entry)}
                                   >
                                     PDF
@@ -1002,8 +1005,9 @@ function JournalPage() {
                                   <Button
                                     type="button"
                                     variant="ghost"
-                                    size="sm"
-                                    className="gap-1.5 text-destructive hover:text-destructive"
+                                    size="icon"
+                                    className="size-8 shrink-0 text-destructive hover:text-destructive"
+                                    aria-label={`Delete journal entry ${entry.voucher_number}`}
                                     disabled={
                                       entry.source_module !== "manual" || deletingId === entry.id
                                     }
@@ -1017,9 +1021,8 @@ function JournalPage() {
                                     {deletingId === entry.id ? (
                                       <Loader2 className="size-3.5 animate-spin" />
                                     ) : (
-                                      <Trash2 className="size-3.5" />
+                                      <Trash2 className="size-4" />
                                     )}
-                                    Delete
                                   </Button>
                                   </div>
                                 </td>

@@ -72,3 +72,24 @@ test("Journal description is abbreviated in Compact and actions stay a native ta
   assert.match(style, /data-view-mode="complete".*data-table-view-compact-only/);
   assert.match(style, /text-overflow: ellipsis/);
 });
+
+
+test("Unloading Income shortens package types in Compact and retains full names in Complete", () => {
+  const source = readFileSync("src/components/reports/UnloadingIncomeReport.tsx", "utf8");
+  assert.match(source, /packageTypes\.slice\(0, 32\)\.trimEnd\(\) \+ "\.\.\."/);
+  assert.match(source, /data-table-view-compact-only="true"/);
+  assert.match(source, /data-table-view-complete-only="true"/);
+  assert.match(source, /title=\{packageTypes\}/);
+  assert.match(source, /<Fragment key=\{row\.id\}>/);
+  assert.doesNotMatch(source, /<tbody key=\{row\.id\}/);
+});
+
+test("Journal entry actions remain one row with an accessible icon-only Delete control", () => {
+  const source = readFileSync("src/components/accounts/AccountsJournalPage.tsx", "utf8");
+  assert.match(source, /flex flex-nowrap items-center gap-1\.5 whitespace-nowrap/);
+  assert.match(source, /size="icon"[\s\S]*?aria-label=\{.{0,3}Delete journal entry/);
+  assert.match(source, /title=\{[\s\S]*?"Delete journal entry"/);
+  assert.doesNotMatch(source, /\}\s*Delete\s*<\/Button>/);
+  assert.match(source, /data-table-view-compact-only="true">\{expanded \? "Hide" : "View"\}/);
+  assert.match(source, /data-table-view-complete-only="true">\{expanded \? "Hide lines" : "View lines"\}/);
+});
