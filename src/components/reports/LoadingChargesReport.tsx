@@ -1062,13 +1062,13 @@ export function InwardReceiptChargesReport({
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={11} className="py-12 text-center text-muted-foreground">
                     <RefreshCw className="mx-auto mb-2 size-6 animate-spin opacity-20" /> Loading…
                   </td>
                 </tr>
               ) : !filtered.length ? (
                 <tr>
-                  <td colSpan={10} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={11} className="py-12 text-center text-muted-foreground">
                     No Inward Receipt records found for these filters.
                   </td>
                 </tr>
