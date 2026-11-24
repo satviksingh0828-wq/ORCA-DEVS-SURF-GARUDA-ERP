@@ -41,5 +41,17 @@ export function tableViewCss(scope: string, _keep: TableViewColumnPolicy, _max =
     'white-space: normal !important; overflow-wrap: anywhere !important; ' +
     'word-break: normal !important; vertical-align: middle; }\n' +
     main + ' > :is(thead,tbody,tfoot) > tr > [data-table-view-hidden="true"] ' +
-    '{ display: none !important; }\n';
+    '{ display: none !important; }\n' +
+    // Keep all footer cells native table cells. Totals use individual blank
+    // placeholders (not a multi-column label), so numeric totals stay aligned.
+    main + ' > tfoot > tr > td:first-child {' +
+    'text-align: left !important; white-space: nowrap !important; }\n' +
+    main + ' > tfoot > tr > td:not([data-table-view-hidden="true"]) {' +
+    'vertical-align: middle !important; }\n' +
+    root + ' [data-table-view-complete-only="true"] { display: none !important; }\n' +
+    root + ' [data-table-view-compact-only="true"] { display: inline-block !important; ' +
+    'max-width: 100% !important; white-space: nowrap !important; ' +
+    'overflow: hidden !important; text-overflow: ellipsis !important; }\n' +
+    '[data-table-view-id="' + scope + '"][data-view-mode="complete"] ' +
+    '[data-table-view-compact-only="true"] { display: none !important; }\n';
 }

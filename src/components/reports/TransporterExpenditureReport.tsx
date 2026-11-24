@@ -585,9 +585,16 @@ export function TransporterExpenditureReport({
             {!loading && filtered.length > 0 ? (
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <td className="px-4 py-3" colSpan={8}>
+                  <td className="px-4 py-3 font-semibold">
                     Total ({filtered.length} consignments)
                   </td>
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
                   <td className="px-4 py-3 text-right tabular-nums">
                     {displayNumber(totals.quantity)}
                   </td>

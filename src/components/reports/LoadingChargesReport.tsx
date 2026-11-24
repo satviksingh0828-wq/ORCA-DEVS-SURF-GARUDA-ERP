@@ -674,9 +674,15 @@ export function LoadingChargesReportContent({
             {!loading && filtered.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <td className="px-4 py-3" colSpan={7}>
+                  <td className="px-4 py-3 font-semibold">
                     Total ({filtered.length} consignments)
                   </td>
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
                   <td className="px-4 py-3 text-right tabular-nums">
                     {displayMoney(totals.calculated)}
                   </td>
@@ -1149,9 +1155,14 @@ export function InwardReceiptChargesReport({
             {!loading && filtered.length > 0 && (
               <tfoot>
                 <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <td className="px-4 py-3" colSpan={6}>
+                  <td className="px-4 py-3 font-semibold">
                     Total ({filtered.length} consignments)
                   </td>
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
+                  <td aria-hidden="true" className="px-1 py-3" />
                   <td className="px-4 py-3 text-right tabular-nums">
                     {displayMoney(totals.calculated)}
                   </td>

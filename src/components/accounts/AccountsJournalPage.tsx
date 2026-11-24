@@ -954,9 +954,22 @@ function JournalPage() {
                                   {branchMap.get(entry.branch_id) ?? "—"}
                                 </td>
                                 <td className="px-4 py-3">
-                                  <p>{entry.description || "—"}</p>
+                                  <p className="min-w-0" title={entry.description || undefined}>
+                                    <span data-table-view-compact-only="true"
+                                      className="block max-w-full overflow-hidden text-ellipsis whitespace-nowrap">
+                                      {entry.description
+                                        ? entry.description.length > 32
+                                          ? entry.description.slice(0, 32).trimEnd() + "..."
+                                          : entry.description
+                                        : "—"}
+                                    </span>
+                                    <span data-table-view-complete-only="true">
+                                      {entry.description || "—"}
+                                    </span>
+                                  </p>
                                   {entry.reference && (
-                                    <p className="text-xs text-muted-foreground">
+                                    <p data-table-view-complete-only="true"
+                                      className="text-xs text-muted-foreground">
                                       Ref: {entry.reference}
                                     </p>
                                   )}
@@ -968,7 +981,8 @@ function JournalPage() {
                                       : "Manual"}
                                   </span>
                                 </td>
-                                <td className="flex gap-2 px-4 py-3">
+                                <td className="px-3 py-3 align-middle">
+                                  <div className="flex flex-wrap items-center gap-1.5">
                                   <Button
                                     type="button"
                                     variant="outline"
@@ -1007,6 +1021,7 @@ function JournalPage() {
                                     )}
                                     Delete
                                   </Button>
+                                  </div>
                                 </td>
                               </tr>
                               {expanded && (
