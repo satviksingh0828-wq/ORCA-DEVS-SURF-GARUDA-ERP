@@ -132,7 +132,7 @@ export function FinalAccountsRoute() {
       pending === "profit-loss" ||
       pending === "cash-flow"
       ? pending
-      : "balance-sheet";
+      : "trial-balance";
   });
   const [branchId, setBranchId] = useState("all");
   const [asOf, setAsOf] = useState(today);

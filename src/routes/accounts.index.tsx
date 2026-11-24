@@ -10,7 +10,7 @@ function AccountsIndex() {
     </AccountsAccessGuard>
   ) : (
     <AccountsAccessGuard>
-      <Navigate to="/accounts/masters/bank" replace />
+      <Navigate to="/accounts/final" replace />
     </AccountsAccessGuard>
   );
 }

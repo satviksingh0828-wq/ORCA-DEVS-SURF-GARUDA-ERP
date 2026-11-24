@@ -111,10 +111,10 @@ function activeFor(pathname: string, to: string) {
 }
 
 export const accountModules = [
+  { id: "final", label: "Final Accounts", to: "/accounts/final", prefix: "/accounts/final" },
   { id: "masters", label: "Masters", to: "/accounts/masters/bank", prefix: "/accounts/masters" },
   { id: "journal", label: "Journal", to: "/accounts/journal", prefix: "/accounts/journal" },
   { id: "ledger", label: "Ledger", to: "/accounts/ledger", prefix: "/accounts/ledger" },
-  { id: "final", label: "Final Accounts", to: "/accounts/final", prefix: "/accounts/final" },
   { id: "finance", label: "Finance", to: "/accounts/finance", prefix: "/accounts/finance" },
   { id: "gst", label: "GST", to: "/accounts/gst", prefix: "/accounts/gst" },
   {
@@ -155,6 +155,16 @@ export type AccountsArea =
 
 export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
   {
+    section: "final",
+    label: "Final Accounts",
+    items: [
+      { id: "trial-balance", label: "Trial Balance", to: "/accounts/final" },
+      { id: "balance-sheet", label: "Balance Sheet", to: "/accounts/final" },
+      { id: "profit-loss", label: "Profit & Loss", to: "/accounts/final" },
+      { id: "cash-flow", label: "Cash Flow", to: "/accounts/final" },
+    ],
+  },
+  {
     section: "masters",
     label: "Masters",
     items: masterLinks.map(({ label, to }) => ({ id: to, label, to })),
@@ -168,16 +178,6 @@ export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
     section: "ledger",
     label: "Ledger",
     items: ledgerLinks.map(({ key, label }) => ({ id: key, label, to: "/accounts/ledger" })),
-  },
-  {
-    section: "final",
-    label: "Final Accounts",
-    items: [
-      { id: "trial-balance", label: "Trial Balance", to: "/accounts/final" },
-      { id: "balance-sheet", label: "Balance Sheet", to: "/accounts/final" },
-      { id: "profit-loss", label: "Profit & Loss", to: "/accounts/final" },
-      { id: "cash-flow", label: "Cash Flow", to: "/accounts/final" },
-    ],
   },
   {
     section: "finance",

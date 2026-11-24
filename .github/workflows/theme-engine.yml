@@ -26,6 +26,8 @@ jobs:
         run: node --test --experimental-strip-types test/consignment-report-model.test.ts
       - name: Compact and Complete table view tests
         run: node --test --experimental-strip-types test/table-view-mode.test.ts
+      - name: Accounts navigation regression tests
+        run: node --test test/accounts-navigation.test.mjs
       - name: Branch-wise Package Rate Excel validation tests
         run: node --test --experimental-strip-types test/package-rate-excel.test.ts
       - name: Build
