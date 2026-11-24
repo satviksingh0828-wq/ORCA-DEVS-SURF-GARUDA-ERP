@@ -45,7 +45,7 @@ test("complete view restores original spans using remembered values", () => {
 test("all report Total rows have one native table cell per logical column", () => {
   const reports: Array<[string, number[]]> = [
     ["ConsignmentIncomeReport.tsx", [11]],
-    ["TransporterExpenditureReport.tsx", [14]],
+    ["TransporterExpenditureReport.tsx", [15]],
     ["LoadingChargesReport.tsx", [12, 11]],
     ["TripExpenditureReport.tsx", [11]],
   ];

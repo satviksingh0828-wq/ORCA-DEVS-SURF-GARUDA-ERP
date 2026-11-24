@@ -15,6 +15,7 @@ import {
 import { fetchAll } from "@/lib/fetch-all";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { manifestCharges, num, type ContractLite, type EntryLite } from "@/lib/trip-calc";
+import { fixedLRChargeForConsignment, transporterExpenditureAmount } from "@/lib/transporter-charges";
 
 type BranchOption = { id: string; branch_name: string };
 type ConsignmentRow = {
@@ -31,6 +32,7 @@ type ConsignmentRow = {
   transporter_bill_id?: string | null;
   transporter_id: string | null;
   transporter_source_id: string | null;
+  transporter?: { per_consignment_charges?: number | string | null } | null;
   freight_deduction: number | string | null;
   additional_freight: number | string | null;
   loading_deduction: number | string | null;
@@ -97,6 +99,7 @@ export type ConsignmentNetReportRow = {
   consignment_date: string;
   income: number;
   transporter_expenditure: number | null;
+  fixed_lr_charges: number;
   loading_charges: number;
   trip_expenditure: number | null;
   total_expenditure: number;
@@ -220,7 +223,7 @@ export function ConsignmentNetReport({
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,branch_id,consignment_date,consignment_type,movement_mode,transport_mode,trip_id,source_id,source_bill_id,transporter_id,transporter_source_id,transporter_bill_id,freight_deduction,additional_freight,loading_deduction,additional_loading,from_pin_code,to_pin_code,to_details",
+          "id,consignment_number,branch_id,consignment_date,consignment_type,movement_mode,transport_mode,trip_id,source_id,source_bill_id,transporter_id,transporter_source_id,transporter_bill_id,freight_deduction,additional_freight,loading_deduction,additional_loading,from_pin_code,to_pin_code,to_details,transporter:ltms_transporters(per_consignment_charges)",
         )
         .gte("consignment_date", fromDate)
         .lte("consignment_date", toDate)
@@ -474,16 +477,24 @@ export function ConsignmentNetReport({
               : eligibleTrip && tripTotal > 0 && tripCount > 0
                 ? tripTotal / tripCount
                 : null;
-          const transporterExpenditure = transporter
-            ? Math.max(
-                0,
-                transporter.freight - num(row.freight_deduction) + num(row.additional_freight),
-              ) +
-              Math.max(
-                0,
-                transporter.loading - num(row.loading_deduction) + num(row.additional_loading),
-              )
-            : null;
+          const fixedLRCharges = fixedLRChargeForConsignment(
+            row.consignment_type, row.transporter_id, row.transporter?.per_consignment_charges,
+          );
+          const transporterExpenditure =
+            String(row.consignment_type ?? "").toLowerCase() === "third_party" &&
+              row.transporter_id
+              ? transporterExpenditureAmount(
+                  transporter
+                    ? Math.max(0, transporter.freight - num(row.freight_deduction) +
+                        num(row.additional_freight))
+                    : 0,
+                  transporter
+                    ? Math.max(0, transporter.loading - num(row.loading_deduction) +
+                        num(row.additional_loading))
+                    : 0,
+                  fixedLRCharges,
+                )
+              : null;
           const totalExpenditure = (transporterExpenditure ?? 0) + loading + (tripExpenditure ?? 0);
           return {
             id: row.id,
@@ -495,6 +506,7 @@ export function ConsignmentNetReport({
             consignment_date: row.consignment_date ?? "",
             income: income.freight + income.loading,
             transporter_expenditure: transporterExpenditure,
+            fixed_lr_charges: fixedLRCharges,
             loading_charges: loading,
             trip_expenditure: tripExpenditure,
             total_expenditure: totalExpenditure,
@@ -552,6 +564,7 @@ export function ConsignmentNetReport({
         "Total Income": row.income,
         "Transporter Expenditure":
           row.transporter_expenditure == null ? "" : -row.transporter_expenditure,
+        "Fixed LR Charges (included in Transporter Expenditure)": -row.fixed_lr_charges,
         "Loading Charges": -row.loading_charges,
         "Trip Expenditure": row.trip_expenditure == null ? "" : -row.trip_expenditure,
         "Total Expenditure": -row.total_expenditure,
@@ -562,6 +575,7 @@ export function ConsignmentNetReport({
         "Date",
         "Total Income",
         "Transporter Expenditure",
+        "Fixed LR Charges (included in Transporter Expenditure)",
         "Loading Charges",
         "Trip Expenditure",
         "Total Expenditure",

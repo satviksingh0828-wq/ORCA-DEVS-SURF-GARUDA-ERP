@@ -14,6 +14,7 @@ export type LtmsDashboardAmounts = {
   trip: number;
   workmen: number;
   transporter: number;
+  transporterFixedLR: number;
   consignment: number;
   net: number;
   unloading: number;
@@ -33,6 +34,7 @@ const zero = (): LtmsDashboardAmounts => ({
   trip: 0,
   workmen: 0,
   transporter: 0,
+  transporterFixedLR: 0,
   consignment: 0,
   net: 0,
   unloading: 0,
@@ -46,6 +48,7 @@ const metrics: Array<[keyof LtmsDashboardAmounts, string]> = [
   ["trip", "Trip Expenditure"],
   ["workmen", "Workmen Charges"],
   ["transporter", "Transporter Expenditure"],
+  ["transporterFixedLR", "Fixed LR Charges (included in Transporter)"],
   ["unloading", "Unloading Income"],
   ["outwardSourceIncome", "Stock Outward Source Income"],
   ["outwardLoadingReceived", "Loading Received (Stock Outward)"],
@@ -68,6 +71,7 @@ const add = (rows: ConsignmentNetReportRow[]) =>
       trip: sum.trip + (row.trip_expenditure ?? 0),
       workmen: sum.workmen + row.loading_charges,
       transporter: sum.transporter + (row.transporter_expenditure ?? 0),
+      transporterFixedLR: sum.transporterFixedLR + row.fixed_lr_charges,
       consignment: sum.consignment + row.income,
       net: sum.net + row.net,
       unloading: sum.unloading,
@@ -591,9 +595,12 @@ export function LtmsDashboard({
         const postedRows = rows.reduce((total, row) => {
           const income =
             row.source_bill_id && postedSources.has(row.source_bill_id) ? row.income : 0;
+          // The new fixed-LR account is mapping-only for now. Existing transporter
+          // bills do not post this charge, so exclude it from the POSTED ledger
+          // figure until a dedicated journal-posting flow is implemented.
           const transporter =
             row.transporter_bill_id && postedTransporters.has(row.transporter_bill_id)
-              ? (row.transporter_expenditure ?? 0)
+              ? Math.max(0, (row.transporter_expenditure ?? 0) - row.fixed_lr_charges)
               : 0;
           const workmen = postedWorkmenByConsignment.get(row.id) ?? 0;
           const trip =
@@ -654,6 +661,8 @@ export function LtmsDashboard({
       {!comparisonMode && (
         <p className="text-xs text-muted-foreground">
           Figures use the LTMS report calculations for the selected period and branch.
+          Fixed LR Charges are included in In System Transporter Expenditure, but not in
+          posted amounts until journal posting for this mapping is configured.
         </p>
       )}
       <div className={comparisonMode ? "hidden" : undefined}>

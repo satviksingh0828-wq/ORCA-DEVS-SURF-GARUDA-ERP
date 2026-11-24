@@ -34,5 +34,7 @@ jobs:
         run: node --test --experimental-strip-types test/package-rate-excel.test.ts
       - name: Transporter per-consignment charges regression tests
         run: node --test --experimental-strip-types test/transporter-charges.test.ts
+      - name: Fixed LR charges report and account mapping tests
+        run: node --test --experimental-strip-types test/fixed-lr-charges.test.ts
       - name: Build
         run: npm run build

@@ -34,6 +34,7 @@ type Mapping = {
   trip_dala_charges_ledger_id?: string | null;
   trip_unloading_ledger_id?: string | null;
   trip_hire_charges_ledger_id?: string | null;
+  fixed_lr_charges_ledger_id?: string | null;
   other_expenditure_ledger_id?: string | null;
   other_expenditure_payable_ledger_id?: string | null;
   other_income_ledger_id?: string | null;
@@ -76,6 +77,7 @@ const FIELDS = [
   ["trip_dala_charges_ledger_id", "Dala Charges", "expenditure"],
   ["trip_unloading_ledger_id", "Unloading", "expenditure"],
   ["trip_hire_charges_ledger_id", "Hire Charges", "expenditure"],
+  ["fixed_lr_charges_ledger_id", "Fixed LR Charges", "expenditure"],
   ["other_expenditure_ledger_id", "Other Expenditure", "expenditure"],
   ["other_expenditure_payable_ledger_id", "Other Expenditure Payable", "liability"],
   ["other_income_ledger_id", "Other Income", "income"],
@@ -207,7 +209,9 @@ export function TMSAccountsSettings() {
             its own expenditure ledger, including Fuel, Toll, Driver Bata, Hire Charges, and the
             other trip-expense types below. Other Expenditure and Other Expenditure Payable are the
             defaults for general expenditure entries. Other Income and Other Income Receivable are
-            the defaults for general income entries. Loading and Unloading use expenditure ledgers;
+            the defaults for general income entries. Fixed LR Charges uses its own branch-specific
+            expenditure ledger; the mapping is prepared for future postings but does not
+            generate journals yet. Loading and Unloading use expenditure ledgers;
             Workmen Payout uses a liability ledger; Workmen Additional Pay uses an expenditure
             ledger; Workmen Deduction uses an income ledger; Input IGST, Input CGST, and Input SGST
             use asset ledgers; Output IGST, Output CGST, and Output SGST use liability ledgers; TDS

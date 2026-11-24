@@ -116,7 +116,7 @@ const COMPACT_REPORT_COLUMNS: Partial<Record<TabId, readonly number[]>> = {
   "pod-images": [1, 2, 3, 4, 7, 8, 9, 10, 11, 13],
   "update-consignment": [1, 2, 4, 5, 7],
   "consignment-income": [1, 2, 3, 7, 8, 9, 11],
-  "transporter-expenditure": [1, 2, 3, 4, 9, 10, 13, 14],
+  "transporter-expenditure": [1, 2, 3, 4, 9, 10, 13, 14, 15],
   "unloading-income": [1, 2, 3, 4, 7],
   "loading-charges": [1, 2, 3, 4, 6, 7, 10, 11, 12],
   "trip-expenditure": [1, 3, 5, 6, 7, 8, 11],

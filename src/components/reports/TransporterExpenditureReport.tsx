@@ -21,6 +21,7 @@ import {
 import { fetchAll } from "@/lib/fetch-all";
 import { downloadCsv, toCsv } from "@/lib/csv";
 import { manifestCharges, num, type ContractLite, type EntryLite } from "@/lib/trip-calc";
+import { fixedLRChargeForConsignment, transporterExpenditureAmount } from "@/lib/transporter-charges";
 
 type TransporterOption = { id: string; transporter_name: string };
 type SourceOption = { id: string; source_name: string; transporter_id: string };
@@ -37,7 +38,11 @@ type ConsignmentRow = {
   from_pin_code: string | null;
   to_pin_code: string | null;
   to_details?: { pincode?: string | null } | null;
-  transporter?: { transporter_name?: string | null; pin_code?: string | null } | null;
+  transporter?: {
+    transporter_name?: string | null;
+    pin_code?: string | null;
+    per_consignment_charges?: number | string | null;
+  } | null;
   transporter_source?: { source_name?: string | null } | null;
   freight_deduction: number | string | null;
   additional_freight: number | string | null;
@@ -58,6 +63,7 @@ type ReportRow = ConsignmentRow & {
   total_weight: number;
   freight: number;
   loading: number;
+  fixed_lr_charges: number;
   total_income: number;
   rateMatched: boolean;
 };
@@ -186,7 +192,7 @@ export function TransporterExpenditureReport({
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,transporter_id,transporter_source_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,to_details,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code),transporter_source:ltms_transporter_sources(source_name)",
+          "id,consignment_number,transporter_id,transporter_source_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,to_details,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code,per_consignment_charges),transporter_source:ltms_transporter_sources(source_name)",
         )
         .eq("consignment_type", "third_party")
         .gte("consignment_date", fromDate)
@@ -265,29 +271,27 @@ export function TransporterExpenditureReport({
             weight_kg: String(packageTotal.weight),
             quantity: String(packageTotal.quantity),
           });
+          const fixedLRCharges = fixedLRChargeForConsignment(
+            row.consignment_type, row.transporter_id, row.transporter?.per_consignment_charges,
+          );
+          const adjustedFreight = Math.max(
+            0, charges.freight - num(row.freight_deduction) + num(row.additional_freight),
+          );
+          const adjustedLoading = Math.max(
+            0, charges.loading - num(row.loading_deduction) + num(row.additional_loading),
+          );
           return {
             ...row,
             from_pin_code: route.fromPin,
             to_pin_code: route.toPin,
             total_quantity: packageTotal.quantity,
             total_weight: packageTotal.weight,
-            freight: Math.max(
-              0,
-              charges.freight - num(row.freight_deduction) + num(row.additional_freight),
+            freight: adjustedFreight,
+            loading: adjustedLoading,
+            fixed_lr_charges: fixedLRCharges,
+            total_income: transporterExpenditureAmount(
+              adjustedFreight, adjustedLoading, fixedLRCharges,
             ),
-            loading: Math.max(
-              0,
-              charges.loading - num(row.loading_deduction) + num(row.additional_loading),
-            ),
-            total_income:
-              Math.max(
-                0,
-                charges.freight - num(row.freight_deduction) + num(row.additional_freight),
-              ) +
-              Math.max(
-                0,
-                charges.loading - num(row.loading_deduction) + num(row.additional_loading),
-              ),
             rateMatched: charges.matched && Boolean(entry),
           };
         }),
@@ -340,9 +344,10 @@ export function TransporterExpenditureReport({
           weight: result.weight + row.total_weight,
           freight: result.freight + row.freight,
           loading: result.loading + row.loading,
+          fixed: result.fixed + row.fixed_lr_charges,
           income: result.income + row.total_income,
         }),
-        { quantity: 0, weight: 0, freight: 0, loading: 0, income: 0 },
+        { quantity: 0, weight: 0, freight: 0, loading: 0, fixed: 0, income: 0 },
       ),
     [filtered],
   );
@@ -362,6 +367,7 @@ export function TransporterExpenditureReport({
         "Total Weight (KG)": row.total_weight,
         Freight: row.freight,
         Loading: row.loading,
+        "Fixed LR Charges": row.fixed_lr_charges,
         "Total Expenditure": row.total_income,
       })),
       [
@@ -377,6 +383,7 @@ export function TransporterExpenditureReport({
         "Total Weight (KG)",
         "Freight",
         "Loading",
+        "Fixed LR Charges",
         "Total Expenditure",
       ],
     );
@@ -477,7 +484,7 @@ export function TransporterExpenditureReport({
         first E-Way Bill To PIN as destination. Pickup uses the saved From/To PIN route.
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-7">
         {[
           { label: "Consignments", value: filtered.length.toLocaleString("en-IN"), color: "" },
           {
@@ -492,6 +499,8 @@ export function TransporterExpenditureReport({
           },
           { label: "Freight", value: displayMoney(totals.freight), color: "text-blue-600" },
           { label: "Loading", value: displayMoney(totals.loading), color: "text-orange-600" },
+          { label: "Fixed LR Charges", value: displayMoney(totals.fixed), color: "text-amber-600" },
+          { label: "Total Expenditure", value: displayMoney(totals.income), color: "text-rose-600" },
         ].map((card) => (
           <div key={card.label} className="rounded-xl border border-border bg-card p-4 shadow-sm">
             <p className="text-xs text-muted-foreground">{card.label}</p>
@@ -506,7 +515,7 @@ export function TransporterExpenditureReport({
           <h2 className="text-sm font-semibold">Results ({filtered.length})</h2>
         </div>
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1650px] text-left text-sm">
+          <table className="w-full min-w-[1750px] text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                 <th className="px-4 py-3">Consignment No.</th>
@@ -521,6 +530,7 @@ export function TransporterExpenditureReport({
                 <th className="px-4 py-3 text-right">Weight (KG)</th>
                 <th className="px-4 py-3 text-right">Freight</th>
                 <th className="px-4 py-3 text-right">Loading</th>
+                <th className="px-4 py-3 text-right">Fixed LR Charges</th>
                 <th className="px-4 py-3 text-right">Total Expenditure</th>
                 <th className="px-4 py-3 text-right">Options</th>
               </tr>
@@ -528,13 +538,13 @@ export function TransporterExpenditureReport({
             <tbody className="divide-y divide-border">
               {loading ? (
                 <tr>
-                  <td colSpan={14} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={15} className="py-12 text-center text-muted-foreground">
                     <RefreshCw className="mx-auto mb-2 size-6 animate-spin opacity-20" /> Loading…
                   </td>
                 </tr>
               ) : !filtered.length ? (
                 <tr>
-                  <td colSpan={14} className="py-12 text-center text-muted-foreground">
+                  <td colSpan={15} className="py-12 text-center text-muted-foreground">
                     No third-party consignments found for these filters.
                   </td>
                 </tr>
@@ -565,11 +575,14 @@ export function TransporterExpenditureReport({
                     <td className="px-4 py-3 text-right tabular-nums">
                       {displayMoney(row.loading)}
                     </td>
+                    <td className="px-4 py-3 text-right tabular-nums">
+                      {displayMoney(row.fixed_lr_charges)}
+                    </td>
                     <td className="px-4 py-3 text-right font-semibold tabular-nums">
                       {displayMoney(row.total_income)}
                       {!row.rateMatched && (
                         <span className="ml-1 text-xs font-normal text-muted-foreground">
-                          (no route)
+                          (no route rate)
                         </span>
                       )}
                     </td>
@@ -608,6 +621,9 @@ export function TransporterExpenditureReport({
                     {displayMoney(totals.loading)}
                   </td>
                   <td className="px-4 py-3 text-right tabular-nums">
+                    {displayMoney(totals.fixed)}
+                  </td>
+                  <td className="px-4 py-3 text-right tabular-nums">
                     {displayMoney(totals.income)}
                   </td>
                   <td />
@@ -630,10 +646,11 @@ export function TransporterExpenditureReport({
                   {editing.transporter?.transporter_name || "Transporter"}
                 </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-3">
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
                 {[
                   ["Freight", editing.freight],
                   ["Loading", editing.loading],
+                  ["Fixed LR Charges", editing.fixed_lr_charges],
                   ["Total", editing.total_income],
                 ].map(([label, value]) => (
                   <div key={label} className="rounded-lg border border-border bg-muted/30 p-3">
@@ -672,6 +689,7 @@ export function TransporterExpenditureReport({
               </div>
               <p className="text-xs text-muted-foreground">
                 Final freight/loading = calculated amount − deduction + additional amount.
+                Fixed LR Charges are taken from the Transporter Master per consignment and included once in Total Expenditure.
               </p>
             </div>
           )}

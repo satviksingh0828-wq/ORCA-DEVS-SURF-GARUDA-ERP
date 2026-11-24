@@ -24,6 +24,7 @@ const comparisonMetrics: Array<[keyof LtmsDashboardAmounts, string]> = [
   ["trip", "Trip Expenditure"],
   ["workmen", "Workmen Charges"],
   ["transporter", "Transporter Expenditure"],
+  ["transporterFixedLR", "Fixed LR Charges (included in Transporter)"],
   ["unloading", "Unloading Income"],
   ["outwardSourceIncome", "Stock Outward Source Income"],
   ["outwardLoadingReceived", "Loading Received (Stock Outward)"],
@@ -136,6 +137,7 @@ function ComparisonSection({
                 "trip",
                 "workmen",
                 "transporter",
+                "transporterFixedLR",
                 "financeExpenditure",
               ].includes(key);
               const changeColor =
