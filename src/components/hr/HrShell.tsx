@@ -14,6 +14,16 @@ const areaLabels: Record<HrArea, string> = {
 
 export const HR_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
   {
+    section: "hr-dashboard",
+    label: "HRMS Dashboard",
+    items: [
+      { id: "attendance-dashboard", label: "Attendance Dashboard", to: "/dashboard/attendance" },
+      { id: "employee-dashboard", label: "Employee Dashboard", to: "/dashboard/employee" },
+      { id: "payroll-dashboard", label: "Payroll Dashboard", to: "/dashboard/payroll" },
+      { id: "hierarchy-dashboard", label: "Hierarchy Dashboard", to: "/dashboard/hierarchy" },
+    ],
+  },
+  {
     section: "hr-master",
     label: "HR Master",
     items: [
@@ -31,16 +41,6 @@ export const HR_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
       { id: "attendance-history", label: "Attendance History", to: "/attendance/history" },
       { id: "holidays", label: "Holidays", to: "/attendance/holidays" },
       { id: "automarker", label: "Automarker", to: "/attendance/automarker" },
-    ],
-  },
-  {
-    section: "hr-dashboard",
-    label: "HR Dashboard",
-    items: [
-      { id: "employee-dashboard", label: "Employee Dashboard", to: "/dashboard/employee" },
-      { id: "attendance-dashboard", label: "Attendance Dashboard", to: "/dashboard/attendance" },
-      { id: "payroll-dashboard", label: "Payroll Dashboard", to: "/dashboard/payroll" },
-      { id: "hierarchy-dashboard", label: "Hierarchy Dashboard", to: "/dashboard/hierarchy" },
     ],
   },
   {

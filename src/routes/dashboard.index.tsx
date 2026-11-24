@@ -55,16 +55,16 @@ const TABS = [
     icon: Car,
   },
   {
-    id: "employee",
-    label: "Employee dashboard",
-    desc: "Employee and department insights",
+    id: "attendance",
+    label: "Attendance Dashboard",
+    desc: "Attendance trends and summaries",
     icon: Users,
     hr: true,
   },
   {
-    id: "attendance",
-    label: "Attendance Dashboard",
-    desc: "Attendance trends and summaries",
+    id: "employee",
+    label: "Employee dashboard",
+    desc: "Employee and department insights",
     icon: Users,
     hr: true,
   },
@@ -99,7 +99,7 @@ export function DashboardPage({
     scope === "hr"
       ? TABS.filter((item) => "hr" in item && item.hr)
       : TABS.filter((item) => !("hr" in item && item.hr));
-  const fallbackTab: DashboardTabId = scope === "hr" ? "employee" : "pnl";
+  const fallbackTab: DashboardTabId = scope === "hr" ? "attendance" : "pnl";
   const requestedTab = initialTab ?? fallbackTab;
   const [tab, setTab] = useState<DashboardTabId>(requestedTab);
 
