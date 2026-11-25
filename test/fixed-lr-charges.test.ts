@@ -35,7 +35,8 @@ test("both reports share the fixed-charge calculation; dashboard keeps unposted 
   assert.match(net, /fixedLRChargeForConsignment\(/);
   assert.match(net, /fixed_lr_charges: fixedLRCharges/);
   assert.match(dashboard, /transporterFixedLR: sum\.transporterFixedLR \+ row\.fixed_lr_charges/);
-  assert.match(dashboard, /Math\.max\(0, \(row\.transporter_expenditure \?\? 0\) - row\.fixed_lr_charges\)/);
+  assert.match(dashboard, /const isTransporterPosted =/);
+  assert.match(dashboard, /total\.transporterFixedLR \+= isTransporterPosted \? row\.fixed_lr_charges : 0/);
 });
 
 test("LTMS mapping exists but is not yet wired into journal postings", () => {

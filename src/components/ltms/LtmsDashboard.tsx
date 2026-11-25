@@ -595,18 +595,17 @@ export function LtmsDashboard({
         const postedRows = rows.reduce((total, row) => {
           const income =
             row.source_bill_id && postedSources.has(row.source_bill_id) ? row.income : 0;
-          // The new fixed-LR account is mapping-only for now. Existing transporter
-          // bills do not post this charge, so exclude it from the POSTED ledger
-          // figure until a dedicated journal-posting flow is implemented.
-          const transporter =
-            row.transporter_bill_id && postedTransporters.has(row.transporter_bill_id)
-              ? Math.max(0, (row.transporter_expenditure ?? 0) - row.fixed_lr_charges)
-              : 0;
+          // Fixed LR Charges are now posted with transporter bills. Historical
+          // bills get zero snapshot charges from the migration, preserving totals.
+          const isTransporterPosted =
+            Boolean(row.transporter_bill_id && postedTransporters.has(row.transporter_bill_id));
+          const transporter = isTransporterPosted ? (row.transporter_expenditure ?? 0) : 0;
           const workmen = postedWorkmenByConsignment.get(row.id) ?? 0;
           const trip =
             row.trip_id && postedTrips.has(row.trip_id) ? (row.trip_expenditure ?? 0) : 0;
           total.consignment += income;
           total.transporter += transporter;
+          total.transporterFixedLR += isTransporterPosted ? row.fixed_lr_charges : 0;
           total.workmen += workmen;
           total.trip += trip;
           total.net += income - transporter - workmen - trip;
@@ -661,8 +660,8 @@ export function LtmsDashboard({
       {!comparisonMode && (
         <p className="text-xs text-muted-foreground">
           Figures use the LTMS report calculations for the selected period and branch.
-          Fixed LR Charges are included in In System Transporter Expenditure, but not in
-          posted amounts until journal posting for this mapping is configured.
+          Fixed LR Charges are included in Transporter Expenditure, and count as
+          posted only when the corresponding transporter bill has a linked journal.
         </p>
       )}
       <div className={comparisonMode ? "hidden" : undefined}>
