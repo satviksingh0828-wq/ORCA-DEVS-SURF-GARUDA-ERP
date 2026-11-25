@@ -293,7 +293,7 @@ CREATE TRIGGER lock_workmen_outward_adjustments
 CREATE OR REPLACE FUNCTION public.prevent_workmen_billed_stock_package_changes()
 RETURNS TRIGGER LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public
-AS $
+AS $$
 DECLARE
   v_receipt_id UUID;
   v_locked BOOLEAN;
@@ -315,7 +315,7 @@ BEGIN
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
 END;
-$;
+$$;
 
 DROP TRIGGER IF EXISTS prevent_workmen_billed_inward_package_changes ON public.stock_inward_packages;
 CREATE TRIGGER prevent_workmen_billed_inward_package_changes
@@ -598,14 +598,14 @@ GRANT EXECUTE ON FUNCTION public.generate_ltms_transporter_bill(UUID, UUID, UUID
 CREATE OR REPLACE FUNCTION public.prevent_ltms_transporter_bill_item_changes()
 RETURNS TRIGGER LANGUAGE plpgsql
 SECURITY DEFINER SET search_path = public
-AS $
+AS $$
 BEGIN
   IF TG_OP = 'UPDATE' THEN
     RAISE EXCEPTION 'Generated Transporter Bill items are immutable';
   END IF;
   RAISE EXCEPTION 'Generated Transporter Bill items cannot be removed';
 END;
-$;
+$$;
 DROP TRIGGER IF EXISTS prevent_ltms_transporter_bill_item_changes
   ON public.ltms_transporter_bill_items;
 CREATE TRIGGER prevent_ltms_transporter_bill_item_changes
