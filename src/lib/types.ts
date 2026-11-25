@@ -124,7 +124,7 @@ export type HolidayInput = Omit<Holiday, 'id' | 'created_at' | 'updated_at'>;
 
 export interface AppSettings {
   id: string;
-  splash_screen_mode?: "system" | "light" | "dark";
+  splash_screen_mode?: "system" | "light" | "dark" | "app";
   company_name: string;
   company_address: string;
   /** Attendance module integration */

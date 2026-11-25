@@ -12,7 +12,7 @@ export type Database = {
         Row: {
           id: string;
           theme: string;
-          splash_screen_mode: "system" | "light" | "dark";
+          splash_screen_mode: "system" | "light" | "dark" | "app";
           login_ui: string;
           background_video_enabled: boolean;
           background_video_url: string;
@@ -24,7 +24,7 @@ export type Database = {
         Insert: {
           id?: string;
           theme?: string;
-          splash_screen_mode?: "system" | "light" | "dark";
+          splash_screen_mode?: "system" | "light" | "dark" | "app";
           login_ui?: string;
           background_video_enabled?: boolean;
           background_video_url?: string;
@@ -36,7 +36,7 @@ export type Database = {
         Update: {
           id?: string;
           theme?: string;
-          splash_screen_mode?: "system" | "light" | "dark";
+          splash_screen_mode?: "system" | "light" | "dark" | "app";
           login_ui?: string;
           background_video_enabled?: boolean;
           background_video_url?: string;

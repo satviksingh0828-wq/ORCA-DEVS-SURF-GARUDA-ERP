@@ -309,11 +309,12 @@ function SplashAppearancePanel() {
   return (
     <section className="rounded-xl border border-border bg-card p-5">
       <h2 className="text-lg font-semibold">Splash screen appearance</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Choose the LogBook startup animation mode. System follows the device appearance and is also used when the database is unavailable.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Choose the LogBook startup animation mode. App Theme follows the saved workspace background and text colours. System follows the device appearance and is also used when the database is unavailable.</p>
       <label htmlFor="splash-screen-mode" className="mt-4 block text-sm font-medium">Appearance mode</label>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <select id="splash-screen-mode" className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={draft} disabled={isLoading || isError || saving} onChange={(event) => setDraft(normalizeSplashMode(event.target.value))}>
           <option value="system">System (default)</option>
+          <option value="app">App Theme</option>
           <option value="light">Light</option>
           <option value="dark">Dark</option>
         </select>
