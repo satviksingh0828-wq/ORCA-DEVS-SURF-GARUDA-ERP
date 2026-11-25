@@ -336,3 +336,26 @@ test("all 41 new material presets round-trip and retain their dark classificatio
     assert.equal(moduleThemeInlineStyles(scoped,"wms")["--background"],undefined);
   }
 });
+
+
+test("all selectable themes have splash CSS palette and wooden texture coverage", async () => {
+  const fs = await import("node:fs");
+  const css = fs.readFileSync("src/styles.css", "utf8");
+  const splash = fs.readFileSync("src/components/SplashScreen.tsx", "utf8");
+  const root = css.match(/(?:^|\n):root\s*\{([^}]+)\}/)?.[1] ?? "";
+  const token = (source: string, key: string) => source.match(new RegExp("--" + key + ":\\s*([^;]+);"))?.[1].trim();
+  assert.equal(THEME_PRESETS.length, 69);
+  for (const item of THEME_PRESETS) {
+    const block = css.match(new RegExp('\\[data-theme="' + item.id + '"\\]\\s*\\{([^}]+)\\}'))?.[1];
+    assert.ok(block, item.id);
+    for (const key of ["background","foreground","primary"]) assert.ok(token(block,key) || token(root,key), item.id + " " + key);
+  }
+  for (const item of MATERIAL_THEME_PRESETS) {
+    const block = css.match(new RegExp('\\[data-theme="' + item.id + '"\\]\\s*\\{([^}]+)\\}'))?.[1] ?? "";
+    for (const key of ["background","foreground","primary"] as const) assert.equal(token(block,key),item.colors[key],item.id);
+    if (item.group === "Wood") assert.ok(token(block,"logbook-theme-texture"),item.id);
+  }
+  assert.match(splash, /fillColor = themeProfile \? "var\(--primary\)"/);
+  assert.match(splash, /moduleThemeInlineStyles\(themeProfile, "erp"\)/);
+  assert.match(splash, /<mask id=\{maskId\}/);
+});

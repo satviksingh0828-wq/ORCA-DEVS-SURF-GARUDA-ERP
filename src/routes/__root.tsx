@@ -156,7 +156,7 @@ function RootShell({ children }: { children: ReactNode }) {
     }
     if (theme && validThemes.has(theme)) {
       const root = document.documentElement;
-      root.setAttribute("data-theme", theme);
+      
       const segment = window.location.pathname.toLowerCase().split("/")[1] || "";
       const module = segment === "wms" ? "wms"
         : ["accounts", "cash-reports"].includes(segment) ? "accounts"
@@ -165,6 +165,7 @@ function RootShell({ children }: { children: ReactNode }) {
         : "erp";
       const routeTheme = profile && profile.modules && validThemes.has(profile.modules[module])
         ? profile.modules[module] : theme;
+      root.setAttribute("data-theme", routeTheme);
       root.classList.toggle("dark", ${JSON.stringify(THEMES.filter((item) => item.dark).map((item) => item.id))}.includes(routeTheme));
       if (profile && profile.colors && typeof profile.colors === "object") {
         const colors = profile.colors;

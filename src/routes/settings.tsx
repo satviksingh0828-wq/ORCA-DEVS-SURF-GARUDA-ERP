@@ -23,9 +23,9 @@ import { MobileTabDropdown } from "@/components/MobileTabDropdown";
 import { CompanySettings } from "@/components/settings/CompanySettings";
 import { BranchSettings } from "@/components/settings/BranchSettings";
 import { AttendanceModuleSettings } from "@/components/settings/AttendanceModuleSettings";
-import { DEFAULT_BACKGROUND_VIDEO_URL, useTheme } from "@/lib/theme";
+import { DEFAULT_BACKGROUND_VIDEO_URL, THEMES, useTheme } from "@/lib/theme";
 import { AppearanceStudio } from "@/components/settings/AppearanceStudio";
-import { normalizeSplashMode, type SplashMode } from "@/components/SplashScreen";
+import { SplashScreen, normalizeSplashMode, type SplashMode, type SplashPreview } from "@/components/SplashScreen";
 import { supabase } from "@/integrations/supabase/client";
 import { reportActiveVideoTab } from "@/lib/video-tabs";
 import { Button } from "@/components/ui/button";
@@ -287,6 +287,9 @@ function PasskeySecurityPanel() {
 }
 
 function SplashAppearancePanel() {
+  const { profile, resolveModuleTheme } = useTheme();
+  const [previewTheme, setPreviewTheme] = useState("");
+  const [preview, setPreview] = useState<SplashPreview | null>(null);
   const { data, isLoading, isError, refetch } = useAppSettings();
   const [draft, setDraft] = useState<SplashMode>("system");
   const [saving, setSaving] = useState(false);
@@ -309,7 +312,7 @@ function SplashAppearancePanel() {
   return (
     <section className="rounded-xl border border-border bg-card p-5">
       <h2 className="text-lg font-semibold">Splash screen appearance</h2>
-      <p className="mt-1 text-sm text-muted-foreground">Choose the LogBook startup animation mode. App Theme follows the saved workspace background and text colours. System follows the device appearance and is also used when the database is unavailable.</p>
+      <p className="mt-1 text-sm text-muted-foreground">Choose the LogBook startup animation mode. App Theme uses the saved ERP theme background, liquid accent, unfilled wordmark, counter and material texture. System follows the device appearance and is also used when the database is unavailable.</p>
       <label htmlFor="splash-screen-mode" className="mt-4 block text-sm font-medium">Appearance mode</label>
       <div className="mt-2 flex flex-wrap items-center gap-3">
         <select id="splash-screen-mode" className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={draft} disabled={isLoading || isError || saving} onChange={(event) => setDraft(normalizeSplashMode(event.target.value))}>
@@ -320,6 +323,11 @@ function SplashAppearancePanel() {
         </select>
         <Button type="button" disabled={isLoading || isError || saving || saved === draft} onClick={() => void save()}>{saving ? "Saving..." : "Save splash appearance"}</Button>
       </div>
+      <div className="mt-4 flex flex-wrap items-end gap-3 border-t border-border pt-4">
+        {draft === "app" && <label className="flex flex-col gap-1 text-sm font-medium">Preview theme (not saved)<select className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={previewTheme} onChange={(event) => setPreviewTheme(event.target.value)}><option value="">Current ERP theme ({THEMES.find((item) => item.id === resolveModuleTheme("erp"))?.label})</option>{THEMES.map((item) => <option key={item.id} value={item.id}>{item.label}</option>)}</select></label>}
+        <Button type="button" variant="outline" onClick={() => setPreview({ mode: draft, profile: previewTheme && draft === "app" ? { ...profile, baseTheme: previewTheme, modules: {}, colors: {} } : profile })}>Preview splash animation</Button>
+      </div>
+      {preview && <SplashScreen preview={preview} onComplete={() => setPreview(null)} />}
       {isError && <p className="mt-2 text-sm text-destructive">Could not load the saved appearance.</p>}
     </section>
   );
