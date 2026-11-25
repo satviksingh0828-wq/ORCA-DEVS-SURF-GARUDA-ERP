@@ -101,6 +101,8 @@ type ThemeValue = {
   theme: ThemeId;
   setTheme: (t: ThemeId) => Promise<void>;
   profile: ThemeProfile;
+  savedProfile: ThemeProfile;
+  previewProfile: (next: ThemeProfile | null) => void;
   updateProfile: (next: ThemeProfile) => Promise<void>;
   resolveModuleTheme: (module: ThemeModule) => ThemeId;
   ready: boolean;
@@ -212,8 +214,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   // Keep the server and first client render identical. Reading localStorage
   // here would make SSR render `sky` while the browser renders the cached
   // theme, which triggers React hydration error #418.
-  const [theme, setThemeState] = useState<ThemeId>(DEFAULT_THEME);
-  const [profile, setProfileState] = useState<ThemeProfile>({ ...DEFAULT_THEME_PROFILE });
+  const [savedProfile, setProfileState] = useState<ThemeProfile>({ ...DEFAULT_THEME_PROFILE });
+  const [temporaryProfile, setTemporaryProfile] = useState<ThemeProfile | null>(null);
+  const profile = temporaryProfile ?? savedProfile;
+  const theme = profile.baseTheme as ThemeId;
+  // Preview is session memory only; never write it to Supabase or localStorage.
+  const previewProfile = useCallback((next: ThemeProfile | null) => {
+    setTemporaryProfile(next ? normalizeThemeProfile(next, THEME_IDS) : null);
+  }, []);
   const [ready, setReady] = useState(false);
   const [loginUi, setLoginUiState] = useState<LoginUi>("plain");
   const [backgroundVideoEnabled, setBackgroundVideoEnabled] = useState(true);
@@ -225,9 +233,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [videoSaving, setVideoSaving] = useState(false);
   const [glassSaving, setGlassSaving] = useState(false);
 
-  const apply = useCallback((value: ThemeId | ThemeProfile) => {
-    applyThemeProfile(typeof value === "string" ? { ...DEFAULT_THEME_PROFILE, baseTheme: value } : value);
-  }, []);
+  useEffect(() => { applyThemeProfile(profile); }, [profile]);
 
   // Shared fetch helper — called on mount and on page-visibility regain.
   // Tries to fetch both columns; if login_ui doesn't exist yet (migration
@@ -258,9 +264,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           .maybeSingle();
         if (!previousVideoError && previousVideoSettings) {
           const next = parseThemeProfile(previousVideoSettings.theme, THEME_IDS);
-          setThemeState(next.baseTheme as ThemeId);
           setProfileState(next);
-          apply(next);
           cacheProfile(next);
           setLoginUiState((previousVideoSettings.login_ui as LoginUi) ?? "plain");
           const enabled = previousVideoSettings.background_video_enabled !== false;
@@ -285,9 +289,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           .maybeSingle();
         if (fallback) {
           const next = parseThemeProfile(fallback.theme, THEME_IDS);
-          setThemeState(next.baseTheme as ThemeId);
           setProfileState(next);
-          apply(next);
           cacheProfile(next);
           setLoginUiState((fallback.login_ui as LoginUi) ?? "plain");
         } else {
@@ -297,9 +299,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
             .limit(1)
             .maybeSingle();
           const next = parseThemeProfile(legacy?.theme, THEME_IDS);
-          setThemeState(next.baseTheme as ThemeId);
           setProfileState(next);
-          apply(next);
           cacheProfile(next);
         }
         const cachedGlass = readCachedVideoGlassAppearance();
@@ -308,9 +308,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       }
 
       const next = parseThemeProfile(data?.theme, THEME_IDS);
-      setThemeState(next.baseTheme as ThemeId);
           setProfileState(next);
-      apply(next);
       cacheProfile(next);
       setLoginUiState((data?.login_ui as LoginUi) ?? "plain");
       const enabled = data?.background_video_enabled !== false;
@@ -331,7 +329,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } catch {
       // Supabase not configured yet — keep defaults.
     }
-  }, [apply]);
+  }, []);
 
   useEffect(() => {
     const cached = readCachedProfile();
@@ -340,9 +338,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setBackgroundVideoEnabled(cachedVideo.enabled);
     setBackgroundVideoUrl(cachedVideo.url);
     setVideoGlassAppearanceState(cachedGlass);
-    setThemeState(cached.baseTheme as ThemeId);
     setProfileState(cached);
-    apply(cached);
     // Always unblock login even if Supabase is unavailable. The cached theme remains active.
     const startupDeadline = window.setTimeout(() => setReady(true), 2550);
     void fetchSettings().finally(() => setReady(true));
@@ -356,7 +352,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       document.removeEventListener("visibilitychange", onVisible);
       window.clearTimeout(startupDeadline);
     };
-  }, [apply, fetchSettings]);
+  }, [fetchSettings]);
 
   // Real-time sync: when admin saves a theme on any device, all open sessions update instantly.
   useEffect(() => {
@@ -370,9 +366,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
           const row = payload.new as Record<string, unknown>;
           if (row.theme) {
             const next = parseThemeProfile(row.theme, THEME_IDS);
-            setThemeState(next.baseTheme as ThemeId);
           setProfileState(next);
-            apply(next);
             cacheProfile(next);
           }
           if (row.login_ui) {
@@ -429,7 +423,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [apply]);
+  }, []);
 
   // Shared save helper — upserts a partial settings object.
   // Gets the existing row id first so we always UPDATE the same row, never
@@ -471,18 +465,16 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const updateProfile = useCallback(
     async (value: ThemeProfile) => {
       const next = normalizeThemeProfile(value, THEME_IDS);
-      setProfileState(next);
-      setThemeState(next.baseTheme as ThemeId);
-      apply(next);
-      cacheProfile(next);
       setSaving(true);
       try {
         await saveSettings({ theme: serializeThemeProfile(next) });
+        setProfileState(next);
+        cacheProfile(next);
       } finally {
         setSaving(false);
       }
     },
-    [apply, saveSettings],
+    [saveSettings],
   );
 
   const setTheme = useCallback(
@@ -556,6 +548,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       theme,
       setTheme,
       profile,
+      savedProfile,
+      previewProfile,
       updateProfile,
       resolveModuleTheme,
       ready,
@@ -574,6 +568,8 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       theme,
       setTheme,
       profile,
+      savedProfile,
+      previewProfile,
       updateProfile,
       resolveModuleTheme,
       ready,

@@ -359,3 +359,16 @@ test("all selectable themes have splash CSS palette and wooden texture coverage"
   assert.match(splash, /moduleThemeInlineStyles\(themeProfile, "erp"\)/);
   assert.match(splash, /<mask id=\{maskId\}/);
 });
+
+
+test("live theme preview is independent from stored appearance", async () => {
+  const fs = await import("node:fs");
+  const provider = fs.readFileSync("src/lib/theme.tsx", "utf8");
+  const studio = fs.readFileSync("src/components/settings/AppearanceStudio.tsx", "utf8");
+  assert.match(provider, /const profile = temporaryProfile \?\? savedProfile/);
+  const preview = provider.slice(provider.indexOf("const previewProfile = useCallback"), provider.indexOf("const previewProfile = useCallback") + 250);
+  assert.match(preview, /setTemporaryProfile/);
+  assert.doesNotMatch(preview, /cacheProfile\(|saveSettings\(|localStorage\./);
+  assert.match(studio, /previewProfile\(dirty && ready \? draft : null\)/);
+  assert.match(studio, /\(\) => \(\) => previewProfile\(null\)/);
+});

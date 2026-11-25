@@ -129,7 +129,7 @@ function contrast(first: string, second: string) {
 }
 
 export function AppearanceStudio() {
-  const { profile, updateProfile, saving, ready, backgroundVideoUrl, backgroundVideoEnabled } = useTheme();
+  const { savedProfile: profile, previewProfile, updateProfile, saving, ready, backgroundVideoUrl, backgroundVideoEnabled } = useTheme();
   const [draft, setDraft] = useState<ThemeProfile>(profile);
   const fileRef = useRef<HTMLInputElement>(null);
   const previewVideoRef = useRef<HTMLVideoElement>(null);
@@ -144,8 +144,17 @@ export function AppearanceStudio() {
     if (previewPaused || draft.videoPlayback.backgroundMode === "blank") video.pause();
     else void video.play().catch(() => undefined);
   }, [previewPaused, draft.videoPlayback.playbackRate, draft.videoPlayback.backgroundMode, backgroundVideoUrl]);
-  useEffect(() => setDraft(profile), [profile]);
-  const dirty = JSON.stringify(draft) !== JSON.stringify(profile);
+  const previousSaved = useRef(profile);
+  useEffect(() => {
+    const previous = previousSaved.current;
+    previousSaved.current = profile;
+    setDraft((current) => JSON.stringify(current) === JSON.stringify(previous) ? profile : current);
+  }, [profile]);
+  const dirty = JSON.stringify(normalizeThemeProfile(draft, allowedThemes)) !== JSON.stringify(normalizeThemeProfile(profile, allowedThemes));
+  useEffect(() => {
+    previewProfile(dirty && ready ? draft : null);
+  }, [draft, dirty, ready, previewProfile]);
+  useEffect(() => () => previewProfile(null), [previewProfile]);
   const preview = useMemo(() => {
     const get = (key: keyof ThemeColors) => draft.colors[key] || currentColor(draft, key);
     return {
@@ -190,14 +199,16 @@ export function AppearanceStudio() {
 
   async function save() {
     try {
-      await updateProfile(draft);
+      const submitted = normalizeThemeProfile(draft, allowedThemes);
+      await updateProfile(submitted);
+      setDraft((current) => JSON.stringify(normalizeThemeProfile(current, allowedThemes)) === JSON.stringify(submitted) ? submitted : current);
       toast.success("Appearance saved to the existing Supabase theme setting.");
     } catch {
-      toast.error("Theme applied and cached on this device, but cloud sync failed. Retry when connected.");
+      toast.error("Could not save appearance. Your unsaved live preview remains active; retry when connected.");
     }
   }
   function chooseTheme(id: string) {
-    setDraft((previous) => ({ ...previous, baseTheme: id, colors: {} }));
+    setDraft((previous) => ({ ...previous, baseTheme: id, modules: {}, colors: {} }));
   }
   function setModule(module: ThemeModule, id: string) {
     setDraft((previous) => {
@@ -250,7 +261,7 @@ export function AppearanceStudio() {
             <span className="rounded-xl bg-primary-soft p-3 text-primary"><Palette className="size-5" /></span>
             <div>
               <h2 className="text-lg font-semibold">ORCA Appearance Studio</h2>
-              <p className="mt-1 text-sm text-muted-foreground">Use the existing Supabase theme column. Preview edits locally, then save once for the whole workspace.</p>
+              <p className="mt-1 text-sm text-muted-foreground">Select a theme to preview it across the application immediately. Only Save publishes it to the workspace and device cache.</p>
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -262,13 +273,14 @@ export function AppearanceStudio() {
         <div className="mt-5 flex flex-wrap items-center gap-2">
           <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">Current saved: {themeNames.get(profile.baseTheme) ?? profile.baseTheme}</span>
           <span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{ready ? "Device cache + cloud synchronization enabled" : "Loading saved appearance…"}</span>
-          {dirty && <span className="rounded-md bg-primary-soft px-2 py-1 text-xs font-medium text-primary">Unsaved preview</span>}
+          {dirty && <span className="rounded-md bg-primary-soft px-2 py-1 text-xs font-medium text-primary">Live app preview · not saved</span>}
+          {dirty && <div className="ml-auto flex flex-wrap items-center gap-2"><button type="button" onClick={() => { setDraft(profile); previewProfile(null); }} disabled={saving} className="rounded-md border border-border px-3 py-1.5 text-xs disabled:opacity-50">Discard preview</button><button type="button" onClick={() => void save()} disabled={saving || !ready || !accessible} className="rounded-md bg-primary px-3 py-1.5 text-xs font-semibold text-primary-foreground disabled:opacity-50">{saving ? "Saving..." : "Save workspace theme"}</button></div>}
         </div>
       </section>
 
       <section className="surface-card p-5 sm:p-6">
         <h3 className="text-sm font-semibold">Choose an application theme</h3>
-        <p className="mb-4 mt-1 text-xs text-muted-foreground">Current ORCA preserves the existing application and Sentry look. Other presets also theme the newer LTMS and WMS components.</p>
+        <p className="mb-4 mt-1 text-xs text-muted-foreground">Selecting a global preset previews the whole app immediately and resets module overrides in the draft. You can set individual module themes again below. Nothing is saved until you publish.</p>
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
           {THEME_PRESETS.map((item) => {
             const active = draft.baseTheme === item.id;
@@ -772,11 +784,11 @@ export function AppearanceStudio() {
       <section className="surface-card flex flex-wrap items-center justify-between gap-3 p-5 sm:p-6">
         <div>
           <p className="text-sm font-semibold">Publish appearance</p>
-          <p className="mt-1 text-xs text-muted-foreground">Save stores the full profile in the existing theme column and updates the device cache. Cancel discards the preview.</p>
+          <p className="mt-1 text-xs text-muted-foreground">Save publishes the full profile to Supabase and device storage. Discard or leaving Appearance Studio restores the last saved theme.</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={() => setDraft({ ...DEFAULT_THEME_PROFILE })} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-xs hover:bg-muted"><RotateCcw className="size-4"/>Original look</button>
-          <button type="button" onClick={() => setDraft(profile)} disabled={!dirty} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-50">Discard</button>
+          <button type="button" onClick={() => { setDraft(profile); previewProfile(null); }} disabled={!dirty || saving} className="rounded-lg border border-border px-3 py-2 text-xs disabled:opacity-50">Discard</button>
           <button type="button" onClick={() => void save()} disabled={!dirty || saving || !ready || !accessible}
             className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground disabled:opacity-50">
             {saving ? <Loader2 className="size-4 animate-spin"/> : <Check className="size-4"/>}Save workspace theme
