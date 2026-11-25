@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { LOGBOOK_FONT_FAMILY, LOGBOOK_FONT_WEIGHT, LOGBOOK_WORDMARK } from "./LogBookWordmark";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 
 export type SplashMode = "system" | "light" | "dark";
@@ -76,13 +77,13 @@ export function SplashScreen({ onComplete }: { onComplete?: () => void } = {}) {
       ctx.clearRect(0, 0, w, h);
       ctx.globalCompositeOperation = "source-over";
       ctx.fillStyle = p === 1 ? colors.current.ink : colors.current.empty;
-      ctx.font = "900 " + h * 1.04 + "px Arial, sans-serif";
+      ctx.font = LOGBOOK_FONT_WEIGHT + " " + h * 1.04 + "px " + LOGBOOK_FONT_FAMILY;
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.save();
       ctx.translate(w / 2, h * 0.49);
-      ctx.scale(w * 0.98 / Math.max(1, ctx.measureText("LogBook").width), 1);
-      ctx.fillText("LogBook", 0, 0);
+      ctx.scale(w * 0.98 / Math.max(1, ctx.measureText(LOGBOOK_WORDMARK).width), 1);
+      ctx.fillText(LOGBOOK_WORDMARK, 0, 0);
       ctx.restore();
       if (p > 0 && p < 1) {
         const amplitude = window.innerWidth >= 1024 ? 50 : 25;

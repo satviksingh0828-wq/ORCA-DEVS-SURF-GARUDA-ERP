@@ -1,3 +1,4 @@
+import { LogBookWordmark } from "@/components/LogBookWordmark";
 /**
  * PasskeyGate — Device-level security gate using WebAuthn / Windows Hello.
  * Wraps the entire app. Every fresh page load (new tab/window) requires
@@ -92,9 +93,7 @@ function Screen({ children }: { children: ReactNode }) {
             className="ltms-app-shell-logo h-10 w-auto object-contain"
           />
           <span className="ltms-app-shell-title hidden sm:inline">Garuda Logistics Solutions</span>
-          <span className="ml-auto min-w-0 max-w-[48%] text-right text-[9px] leading-tight text-white/80 sm:max-w-none sm:text-xs sm:whitespace-nowrap">
-            <span className="font-semibold text-white">ERP</span> — Enterprise Resource Planning
-          </span>
+          <LogBookWordmark className="ml-auto shrink-0" />
         </div>
       </header>
       <main className="relative z-10 flex flex-1 items-center justify-center overflow-y-auto px-4 py-8">
