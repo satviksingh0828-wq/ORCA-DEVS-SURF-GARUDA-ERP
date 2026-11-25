@@ -25,6 +25,8 @@ import { BranchSettings } from "@/components/settings/BranchSettings";
 import { AttendanceModuleSettings } from "@/components/settings/AttendanceModuleSettings";
 import { DEFAULT_BACKGROUND_VIDEO_URL, useTheme } from "@/lib/theme";
 import { AppearanceStudio } from "@/components/settings/AppearanceStudio";
+import { normalizeSplashMode, type SplashMode } from "@/components/SplashScreen";
+import { supabase } from "@/integrations/supabase/client";
 import { reportActiveVideoTab } from "@/lib/video-tabs";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -207,7 +209,7 @@ function SettingsPage() {
                 />
               </div>
               <div key={tab} className="animate-fade-in min-w-0">
-                {tab === "appearance" ? <><AppearanceStudio /><div className="mt-5"><ThemePanel /></div></> : null}
+                {tab === "appearance" ? <><AppearanceStudio /><div className="mt-5"><SplashAppearancePanel /></div><div className="mt-5"><ThemePanel /></div></> : null}
                 {tab === "company" ? <CompanySettings /> : null}
                 {tab === "branch" ? <BranchSettings /> : null}
                 {tab === "attendance" ? <AttendanceModuleSettings /> : null}
@@ -281,6 +283,44 @@ function PasskeySecurityPanel() {
         </div>
       </section>
     </div>
+  );
+}
+
+function SplashAppearancePanel() {
+  const { data, isLoading, isError, refetch } = useAppSettings();
+  const [draft, setDraft] = useState<SplashMode>("system");
+  const [saving, setSaving] = useState(false);
+  const saved = normalizeSplashMode(data?.splash_screen_mode);
+  useEffect(() => { setDraft(saved); }, [saved]);
+  async function save() {
+    setSaving(true);
+    try {
+      const values = { splash_screen_mode: draft };
+      const result = data?.id
+        ? await supabase.from("app_settings").update(values).eq("id", data.id).select("id").single()
+        : await supabase.from("app_settings").insert(values).select("id").single();
+      if (result.error) throw result.error;
+      await refetch();
+      toast.success("Splash screen appearance saved.");
+    } catch {
+      toast.error("Could not save splash appearance. Please try again.");
+    } finally { setSaving(false); }
+  }
+  return (
+    <section className="rounded-xl border border-border bg-card p-5">
+      <h2 className="text-lg font-semibold">Splash screen appearance</h2>
+      <p className="mt-1 text-sm text-muted-foreground">Choose the LogBook startup animation mode. System follows the device appearance and is also used when the database is unavailable.</p>
+      <label htmlFor="splash-screen-mode" className="mt-4 block text-sm font-medium">Appearance mode</label>
+      <div className="mt-2 flex flex-wrap items-center gap-3">
+        <select id="splash-screen-mode" className="rounded-md border border-input bg-background px-3 py-2 text-sm" value={draft} disabled={isLoading || isError || saving} onChange={(event) => setDraft(normalizeSplashMode(event.target.value))}>
+          <option value="system">System (default)</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+        <Button type="button" disabled={isLoading || isError || saving || saved === draft} onClick={() => void save()}>{saving ? "Saving..." : "Save splash appearance"}</Button>
+      </div>
+      {isError && <p className="mt-2 text-sm text-destructive">Could not load the saved appearance.</p>}
+    </section>
   );
 }
 
