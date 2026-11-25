@@ -6,6 +6,7 @@ import { VIDEO_TAB_GROUPS, videoEnabledForTab } from "@/lib/video-tabs";
 import {
   DEFAULT_THEME_PROFILE,
   THEME_PRESETS,
+  materialTheme,
   getModuleTheme,
   isDarkTheme,
   normalizeThemeProfile,
@@ -83,6 +84,8 @@ const allowedThemes = new Set(THEMES.map((item) => item.id));
 const presetIds = new Set<string>(THEME_PRESETS.map((item) => item.id));
 
 function currentColor(theme: ThemeProfile, key: keyof ThemeColors): string {
+  const palette = materialTheme(theme.baseTheme)?.colors;
+  if (palette && key in palette) return palette[key as keyof typeof palette];
   const dark = isDarkTheme(theme.baseTheme);
   const accent = THEME_PRESETS.find((item) => item.id === theme.baseTheme)?.swatch ?? "#8b1a2c";
   const fg = dark ? "#f1f5f9" : "#1a1714";
@@ -269,16 +272,17 @@ export function AppearanceStudio() {
         <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
           {THEME_PRESETS.map((item) => {
             const active = draft.baseTheme === item.id;
+            const palette = materialTheme(item.id)?.colors;
             return (
               <button key={item.id} type="button" onClick={() => chooseTheme(item.id)} aria-pressed={active}
                 className={`relative overflow-hidden rounded-xl border p-3 text-left transition-colors hover:border-primary/70 ${active ? "border-primary ring-2 ring-primary/20" : "border-border"}`}>
-                <div className="mb-3 h-16 rounded-lg p-2" style={{ background: item.dark ? "#151c27" : "#f8f9fb", color: item.dark ? "#f2f6fc" : "#273142" }}>
+                <div className="mb-3 h-16 rounded-lg p-2" data-theme={item.id} style={{ backgroundColor: palette?.background ?? (item.dark ? "#151c27" : "#f8f9fb"), backgroundImage: "var(--logbook-theme-texture, none)", color: palette?.foreground ?? (item.dark ? "#f2f6fc" : "#273142") }}>
                   <div className="flex h-full gap-2">
-                    <div className="w-5 shrink-0 rounded" style={{ background: item.swatch }} />
+                    <div className="w-5 shrink-0 rounded" style={{ backgroundColor: palette?.sidebar ?? item.swatch, backgroundImage: "var(--logbook-theme-texture, none)" }} />
                     <div className="flex-1 space-y-1.5">
-                      <div className="h-2 w-4/5 rounded-sm" style={{ background: item.dark ? "#576273" : "#ccd3db" }}/>
-                      <div className="h-3 rounded-sm" style={{ background: item.dark ? "#344051" : "#e3e7eb" }}/>
-                      <div className="h-3 rounded-sm" style={{ background: item.dark ? "#344051" : "#e3e7eb" }}/>
+                      <div className="h-2 w-4/5 rounded-sm" style={{ background: palette?.primary ?? (item.dark ? "#576273" : "#ccd3db") }}/>
+                      <div className="h-3 rounded-sm" style={{ background: palette?.card ?? (item.dark ? "#344051" : "#e3e7eb") }}/>
+                      <div className="h-3 rounded-sm" style={{ background: palette?.card ?? (item.dark ? "#344051" : "#e3e7eb") }}/>
                     </div>
                   </div>
                 </div>

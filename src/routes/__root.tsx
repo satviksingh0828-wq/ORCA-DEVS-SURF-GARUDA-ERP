@@ -17,7 +17,7 @@ import { preloadLogo } from "../lib/logo";
 
 import appCss from "../styles.css?url";
 import { SessionProvider } from "@/lib/session";
-import { ThemeProvider, useTheme } from "../lib/theme";
+import { THEMES, ThemeProvider, useTheme } from "../lib/theme";
 import { WorkspaceBackgroundVideo } from "../components/WorkspaceBackgroundVideo";
 import { Toaster } from "../components/ui/sonner";
 import { OrcaAIProvider } from "../lib/orca-context";
@@ -145,7 +145,7 @@ function RootShell({ children }: { children: ReactNode }) {
             __html: `(() => {
   try {
     const stored = window.localStorage.getItem("garuda.theme.profile-v2") || window.localStorage.getItem("garuda.theme");
-    const validThemes = new Set(["sky", "workspace", "glass", "emerald", "violet", "amber", "rose", "graphite", "garuda", "ocean", "blaze", "tangerine", "copper", "sakura", "arctic", "terra", "vintage", "paper", "kraft", "blueprint", "linen", "chalkboard", "vellum", "cork", "neon", "midnight", "forest", "storm"]);
+    const validThemes = new Set(${JSON.stringify(THEMES.map((item) => item.id))});
     let theme = stored;
     let profile = null;
     if (stored && stored.startsWith("orca-theme-v2:") && stored.length <= 32000) {
@@ -165,7 +165,7 @@ function RootShell({ children }: { children: ReactNode }) {
         : "erp";
       const routeTheme = profile && profile.modules && validThemes.has(profile.modules[module])
         ? profile.modules[module] : theme;
-      root.classList.toggle("dark", ["neon", "midnight", "forest", "storm"].includes(routeTheme));
+      root.classList.toggle("dark", ${JSON.stringify(THEMES.filter((item) => item.dark).map((item) => item.id))}.includes(routeTheme));
       if (profile && profile.colors && typeof profile.colors === "object") {
         const colors = profile.colors;
         const hex = /^#[0-9a-fA-F]{6}$/;

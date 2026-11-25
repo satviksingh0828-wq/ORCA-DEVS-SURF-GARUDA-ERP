@@ -3,7 +3,7 @@ import { LOGBOOK_FONT_FAMILY, LOGBOOK_FONT_WEIGHT, LOGBOOK_WORDMARK } from "./Lo
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 
 import { THEMES } from "@/lib/theme";
-import { parseThemeProfile, getModuleTheme, isDarkTheme, themeInlineStyles, type ThemeProfile } from "@/lib/theme-studio";
+import { parseThemeProfile, getModuleTheme, isDarkTheme, moduleThemeInlineStyles, type ThemeProfile } from "@/lib/theme-studio";
 
 const THEME_IDS = new Set<string>(THEMES.map((theme) => theme.id));
 export type SplashMode = "system" | "light" | "dark" | "app";
@@ -76,11 +76,13 @@ export function SplashScreen({ onComplete }: { onComplete?: () => void } = {}) {
     const themed = mode === "app";
     const readThemeColors = () => {
       const computed = window.getComputedStyle(layer);
-      const fill = computed.color;
+      const fillProbe = layer.querySelector<HTMLElement>("[data-splash-fill]");
+      const fill = fillProbe ? window.getComputedStyle(fillProbe).color : computed.color;
       const probe = layer.querySelector<HTMLElement>("[data-splash-empty]");
       const muted = probe ? window.getComputedStyle(probe).color : fill;
       return { ink: fill, empty: muted };
     };
+    const themedPalette = themed ? readThemeColors() : null;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const started = performance.now();
     let frame = 0;
@@ -95,7 +97,7 @@ export function SplashScreen({ onComplete }: { onComplete?: () => void } = {}) {
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
       ctx.globalCompositeOperation = "source-over";
-      const palette = themed ? readThemeColors() : colors.current;
+      const palette = themedPalette ?? colors.current;
       ctx.fillStyle = p === 1 ? palette.ink : palette.empty;
       ctx.font = LOGBOOK_FONT_WEIGHT + " " + h * 1.04 + "px " + LOGBOOK_FONT_FAMILY;
       ctx.textAlign = "center";
@@ -141,14 +143,14 @@ export function SplashScreen({ onComplete }: { onComplete?: () => void } = {}) {
   if (gone) return null;
   return (
     <div ref={overlay} role="status" aria-label="Loading LogBook" data-theme={themeId} className={themeProfile ? "logbook-splash-app-theme" : undefined}
-      style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", ...(themeProfile ? themeInlineStyles(themeProfile) : {}), background: themeProfile ? "var(--background)" : dark ? "#151515" : "#ffffff", color: themeProfile ? "var(--foreground)" : ink, userSelect: "none" }}>
+      style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", ...(themeProfile ? moduleThemeInlineStyles(themeProfile, "erp") : {}), background: themeProfile ? "var(--background)" : dark ? "#151515" : "#ffffff", color: themeProfile ? "var(--foreground)" : ink, backgroundImage: themeProfile ? "var(--logbook-theme-texture, none)" : "none", userSelect: "none" }}>
       <style>{`
         .logbook-splash-wordmark { width: 80%; position: relative; }
         @media (min-width: 768px) { .logbook-splash-wordmark { width: 70%; } }
         @media (min-width: 1024px) { .logbook-splash-wordmark { width: min(80%, 740px); } }
         @media (min-width: 1280px) { .logbook-splash-wordmark { width: min(80%, 965px); } }
       `}</style>
-      {themeProfile && <span data-splash-empty aria-hidden="true" style={{ position: "absolute", visibility: "hidden", color: "color-mix(in srgb, var(--foreground) 30%, var(--background))" }} />}
+      {themeProfile && <><span data-splash-fill aria-hidden="true" style={{ position: "absolute", visibility: "hidden", color: "var(--primary)" }} /><span data-splash-empty aria-hidden="true" style={{ position: "absolute", visibility: "hidden", color: "color-mix(in srgb, var(--primary) 30%, var(--background))" }} /></>}
       {mode !== null && <div className="logbook-splash-wordmark" ref={logo}>
         <canvas ref={canvas} style={{ display: "block", width: "100%", aspectRatio: "962 / 192" }} aria-hidden="true" />
         <div ref={counter} style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, font: "500 12px Arial, sans-serif", fontVariantNumeric: "tabular-nums" }}>loading... <span ref={number} style={{ display: "inline-block", minWidth: "3ch", textAlign: "right" }}>0</span>%</div>

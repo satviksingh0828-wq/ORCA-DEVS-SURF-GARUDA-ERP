@@ -1317,9 +1317,9 @@
   --text-tertiary: color-mix(in oklch, var(--foreground) 55%, var(--background) 45%);
   --border: color-mix(in oklch, var(--foreground) 16%, var(--background));
   --border-dark: color-mix(in oklch, var(--foreground) 30%, var(--background));
-  --wms-chrome: color-mix(in oklch, var(--primary) 25%, #1d2533 75%);
-  --wms-chrome-card: color-mix(in oklch, var(--primary) 22%, #303848 78%);
-  --wms-chrome-text: #f7f8fa;
+  --wms-chrome: var(--logbook-preset-chrome, color-mix(in oklch, var(--primary) 25%, #1d2533 75%));
+  --wms-chrome-card: var(--logbook-preset-chrome-card, color-mix(in oklch, var(--primary) 22%, #303848 78%));
+  --wms-chrome-text: var(--logbook-preset-chrome-text, #f7f8fa);
   --wms-copper: var(--primary);
   --wms-highlight-bg: var(--card);
   --wms-group-bg: color-mix(in oklch, var(--wms-copper) 35%, var(--wms-chrome));

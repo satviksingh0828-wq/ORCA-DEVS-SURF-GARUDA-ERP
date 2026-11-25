@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
-import { applyThemeProfile, DEFAULT_THEME_PROFILE, getModuleTheme, normalizeThemeProfile, parseThemeProfile, serializeThemeProfile, type ThemeModule, type ThemeProfile } from "@/lib/theme-studio";
+import { MATERIAL_THEME_PRESETS, applyThemeProfile, DEFAULT_THEME_PROFILE, getModuleTheme, normalizeThemeProfile, parseThemeProfile, serializeThemeProfile, type ThemeModule, type ThemeProfile } from "@/lib/theme-studio";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import {
   DEFAULT_VIDEO_GLASS_APPEARANCE,
@@ -88,6 +88,7 @@ export const THEMES = [
   { id: "midnight", label: "Midnight", swatch: "#4a7fd8", hint: "Deep midnight blue", dark: true },
   { id: "forest", label: "Dark Forest", swatch: "#22d870", hint: "Pine & moss", dark: true },
   { id: "storm", label: "Storm", swatch: "#3a6fd8", hint: "Charcoal + electric blue", dark: true },
+  ...MATERIAL_THEME_PRESETS.map((item) => ({ id: item.id, label: item.name, swatch: item.swatch, hint: item.description, dark: item.dark })),
 ] as const;
 
 export type ThemeId = (typeof THEMES)[number]["id"];

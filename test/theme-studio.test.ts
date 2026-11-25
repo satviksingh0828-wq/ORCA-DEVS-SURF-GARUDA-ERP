@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   DEFAULT_THEME_PROFILE,
   THEME_PRESETS,
+  MATERIAL_THEME_PRESETS,
   getModuleTheme,
   isDarkTheme,
   normalizeThemeProfile,
@@ -319,4 +320,19 @@ test("every embedded WMS Settings surface uses the shared theme boundary", async
   assert.match(boundary, /legacy \? "wms-embedded-scope" : "wms-native-theme-scope"/);
   assert.match(home, /profile\.homeIconSize/);
   assert.match(studio, /Home module icon size/);
+});
+
+
+test("all 41 new material presets round-trip and retain their dark classification", () => {
+  assert.equal(MATERIAL_THEME_PRESETS.length, 41);
+  const ids = new Set<string>(THEME_PRESETS.map(item => item.id));
+  assert.equal(ids.size, 69);
+  for (const item of MATERIAL_THEME_PRESETS) {
+    const parsed = parseThemeProfile(item.id, ids);
+    assert.equal(serializeThemeProfile(parsed), item.id);
+    assert.equal(isDarkTheme(item.id), item.dark);
+    const scoped = normalizeThemeProfile({baseTheme:"garuda", modules:{wms:item.id}}, ids);
+    assert.equal(getModuleTheme(scoped,"wms"),item.id);
+    assert.equal(moduleThemeInlineStyles(scoped,"wms")["--background"],undefined);
+  }
 });
