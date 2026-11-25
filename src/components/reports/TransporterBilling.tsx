@@ -802,7 +802,7 @@ export function TransporterBilling() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={11} className="py-10" text-center text-muted-foreground">
+                    <td colSpan={11} className="py-10 text-center text-muted-foreground">
                       {loading ? "Loading bills…" : "No transporter bills found."}
                     </td>
                   </tr>
