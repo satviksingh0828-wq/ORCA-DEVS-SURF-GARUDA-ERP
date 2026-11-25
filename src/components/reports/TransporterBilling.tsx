@@ -52,6 +52,7 @@ type Bill = {
   transporter_source?: { source_name?: string | null } | null;
   total_freight: number | string;
   total_loading: number | string;
+  total_fixed_lr: number | string;
   paid_amount: number | string;
   paid_at?: string | null;
   paid_account_id?: string | null;
@@ -73,6 +74,8 @@ type Consignment = {
   transporter?: { transporter_name?: string | null; pin_code?: string | null } | null;
   transporter_source?: { source_name?: string | null } | null;
   transporter_bill_id: string | null;
+  charge_adjustments_locked_at: string | null;
+  fixed_lr_charges: number | string | null;
   freight_deduction: number | string | null;
   additional_freight: number | string | null;
   loading_deduction: number | string | null;
@@ -101,6 +104,7 @@ type BillLine = Consignment & {
   additional_loading: number;
   final_freight: number;
   final_loading: number;
+  fixed_lr_charges: number;
 };
 type BillItem = {
   id: string;
@@ -117,8 +121,11 @@ type BillItem = {
   loading_deduction: number | string;
   additional_loading: number | string;
   final_loading: number | string;
+  fixed_lr_charges: number | string;
 };
 
+const billTotal = (bill: Pick<Bill, "total_freight" | "total_loading" | "total_fixed_lr">) =>
+  num(bill.total_freight) + num(bill.total_loading) + num(bill.total_fixed_lr);
 const money = (value: number | string | null | undefined) =>
   `₹${num(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const monthStart = () => {
@@ -192,7 +199,8 @@ export function TransporterBilling() {
   const [journalPreviewOpen, setJournalPreviewOpen] = useState(false);
   const [journalPostStatus, setJournalPostStatus] = useState<"pending" | "success" | "error">("pending");
   const [journalPostError, setJournalPostError] = useState<string | null>(null);
-  const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{ freight: number; loading: number } | null>(null);
+  const [journalPreviewAmounts, setJournalPreviewAmounts] = useState<{ freight: number; loading: number; fixed: number } | null>(null);
+  const [fixedLRLedger, setFixedLRLedger] = useState<{ id: string; account_name: string; ledger_type: string; account_kind: string } | null>(null);
   const [postedJournalEntryId, setPostedJournalEntryId] = useState<string | null>(null);
   const [postedJournalLines, setPostedJournalLines] = useState<any[] | null>(null);
 
@@ -220,7 +228,7 @@ export function TransporterBilling() {
       let query = (supabase as any)
         .from("ltms_transporter_bills")
         .select(
-          "id,branch_id,system_number,system_date,transporter_bill_number,transporter_bill_date,period_from,period_to,total_freight,total_loading,paid_amount,paid_at,paid_account_id,journal_entry_id,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),transporter_source:ltms_transporter_sources(source_name)",
+          "id,branch_id,system_number,system_date,transporter_bill_number,transporter_bill_date,period_from,period_to,total_freight,total_loading,total_fixed_lr,paid_amount,paid_at,paid_account_id,journal_entry_id,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),transporter_source:ltms_transporter_sources(source_name)",
         )
         .gte("system_date", listFilters.from)
         .lte("system_date", listFilters.to)
@@ -263,7 +271,7 @@ export function TransporterBilling() {
       (supabase as any)
         .from("ltms_transporter_bill_items")
         .select(
-          "id,consignment_id,consignment_number,consignment_date,from_pin_code,to_pin_code,calculated_freight,freight_deduction,additional_freight,final_freight,calculated_loading,loading_deduction,additional_loading,final_loading",
+          "id,consignment_id,consignment_number,consignment_date,from_pin_code,to_pin_code,calculated_freight,freight_deduction,additional_freight,final_freight,calculated_loading,loading_deduction,additional_loading,final_loading,fixed_lr_charges",
         )
         .eq("bill_id", viewing.id)
         .order("consignment_date", { ascending: false }),
@@ -313,7 +321,7 @@ export function TransporterBilling() {
       let query = (supabase as any)
         .from("consignments")
         .select(
-          "id,consignment_number,branch_id,transporter_id,transporter_source_id,movement_mode,consignment_date,transport_mode,from_pin_code,to_pin_code,to_details,transporter:ltms_transporters(transporter_name,pin_code),transporter_source:ltms_transporter_sources(source_name),transporter_bill_id,freight_deduction,additional_freight,loading_deduction,additional_loading",
+          "id,consignment_number,branch_id,transporter_id,transporter_source_id,movement_mode,consignment_date,transport_mode,from_pin_code,to_pin_code,to_details,transporter:ltms_transporters(transporter_name,pin_code),transporter_source:ltms_transporter_sources(source_name),transporter_bill_id,charge_adjustments_locked_at,fixed_lr_charges,freight_deduction,additional_freight,loading_deduction,additional_loading",
         )
         .eq("branch_id", form.branch)
         .eq("transporter_id", form.transporter)
@@ -391,6 +399,7 @@ export function TransporterBilling() {
             additional_loading: additionalLoading,
             final_freight: Math.max(0, charges.freight - freightDeduction + additionalFreight),
             final_loading: Math.max(0, charges.loading - loadingDeduction + additionalLoading),
+            fixed_lr_charges: num(row.fixed_lr_charges),
           };
         }),
       );
@@ -416,7 +425,7 @@ export function TransporterBilling() {
   function updateLine(id: string, key: keyof BillLine, value: string) {
     setLines((current) =>
       current.map((line) => {
-        if (line.id !== id) return line;
+        if (line.id !== id || line.charge_adjustments_locked_at || key === "fixed_lr_charges") return line;
         const next = { ...line, [key]: Number(value) || 0 } as BillLine;
         next.final_freight = Math.max(
           0,
@@ -436,8 +445,9 @@ export function TransporterBilling() {
         (result, row) => ({
           freight: result.freight + row.final_freight,
           loading: result.loading + row.final_loading,
+          fixed: result.fixed + row.fixed_lr_charges,
         }),
-        { freight: 0, loading: 0 },
+        { freight: 0, loading: 0, fixed: 0 },
       ),
     [lines],
   );
@@ -451,9 +461,29 @@ export function TransporterBilling() {
       !lines.length
     )
       return toast.error("Complete bill details and select at least one consignment");
-    if (totals.freight + totals.loading <= 0)
-      return toast.error("Adjusted final Freight and Loading total must be greater than zero before posting the journal entry");
-    setJournalPreviewAmounts({ freight: totals.freight, loading: totals.loading });
+    if (totals.freight + totals.loading + totals.fixed <= 0)
+      return toast.error("Final Freight, Loading and Fixed LR Charges must total more than zero.");
+
+    // Resolve branch-level mapping for the journal PREVIEW; the SQL posting
+    // function independently validates the same mapping and snapshot amounts.
+    if (totals.fixed > 0) {
+      const { data: map, error: mapError } = await (supabase as any)
+        .from("tms_account_ledger_mappings")
+        .select("fixed_lr_charges_ledger_id")
+        .eq("branch_id", form.branch).maybeSingle();
+      if (mapError || !map?.fixed_lr_charges_ledger_id)
+        return toast.error("Map Fixed LR Charges in Settings → LTMS Accounts Map before billing.");
+      const { data: ledger, error: ledgerError } = await (supabase as any)
+        .from("ledger_accounts")
+        .select("id,account_name,ledger_type,account_kind")
+        .eq("id", map.fixed_lr_charges_ledger_id)
+        .eq("branch_id", form.branch).eq("ledger_type", "expenditure")
+        .eq("is_active", true).maybeSingle();
+      if (ledgerError || !ledger)
+        return toast.error("The mapped Fixed LR Charges account must be an active expenditure ledger.");
+      setFixedLRLedger(ledger);
+    } else setFixedLRLedger(null);
+    setJournalPreviewAmounts({ freight: totals.freight, loading: totals.loading, fixed: totals.fixed });
     setJournalPostError(null);
     setJournalPostStatus("pending");
     setPostedJournalEntryId(null);
@@ -483,6 +513,7 @@ export function TransporterBilling() {
         loading_deduction: line.loading_deduction,
         additional_loading: line.additional_loading,
         final_loading: line.final_loading,
+        fixed_lr_charges: line.fixed_lr_charges,
       })),
     });
     setGenerating(false);
@@ -536,7 +567,7 @@ export function TransporterBilling() {
     const { data, error } = await (supabase as any)
       .from("ltms_transporter_bills")
       .select(
-        "id,branch_id,system_number,system_date,transporter_bill_number,transporter_bill_date,period_from,period_to,total_freight,total_loading,paid_amount,paid_at,paid_account_id,journal_entry_id,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),transporter_source:ltms_transporter_sources(source_name)",
+        "id,branch_id,system_number,system_date,transporter_bill_number,transporter_bill_date,period_from,period_to,total_freight,total_loading,total_fixed_lr,paid_amount,paid_at,paid_account_id,journal_entry_id,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),transporter_source:ltms_transporter_sources(source_name)",
       )
       .eq("id", viewing.id)
       .maybeSingle();
@@ -548,7 +579,8 @@ export function TransporterBilling() {
   const previewLines = [
     { key: "freight", label: "Freight expenditure (debit)", account: selectedBillingSource?.freight_expenditure_ledger, id: selectedBillingSource?.freight_expenditure_ledger_id, amount: previewTotals.freight, side: "debit" },
     { key: "loading", label: "Loading expenditure (debit)", account: selectedBillingSource?.loading_expenditure_ledger, id: selectedBillingSource?.loading_expenditure_ledger_id, amount: previewTotals.loading, side: "debit" },
-    { key: "source", label: "Transporter source payable (credit)", account: selectedBillingSource?.liability_ledger, id: selectedBillingSource?.liability_ledger_id, amount: previewTotals.freight + previewTotals.loading, side: "credit" },
+    { key: "fixed", label: "Fixed LR Charges expenditure (debit)", account: fixedLRLedger, id: fixedLRLedger?.id, amount: previewTotals.fixed, side: "debit" },
+    { key: "source", label: "Transporter source payable (credit)", account: selectedBillingSource?.liability_ledger, id: selectedBillingSource?.liability_ledger_id, amount: previewTotals.freight + previewTotals.loading + previewTotals.fixed, side: "credit" },
   ].filter((line) => line.amount > 0);
   const displayedJournalLines = postedJournalLines ?? previewLines;
   const journalDebit = displayedJournalLines.reduce((sum, line) => sum + ((line.side ?? (num(line.debit) > 0 ? "debit" : "credit")) === "debit" ? num(line.amount ?? line.debit) : 0), 0);
@@ -699,6 +731,7 @@ export function TransporterBilling() {
                   <th className="px-3 py-3">Transporter / Source</th>
                   <th className="px-3 py-3 text-right">Freight</th>
                   <th className="px-3 py-3 text-right">Loading</th>
+                  <th className="px-3 py-3 text-right">Fixed LR</th>
                   <th className="px-3 py-3 text-right">Payment Status / Balance</th>
                   <th className="px-3 py-3 text-center">Actions</th>
                 </tr>
@@ -723,22 +756,23 @@ export function TransporterBilling() {
                       </td>
                       <td className="px-3 py-3 text-right">{money(bill.total_freight)}</td>
                       <td className="px-3 py-3 text-right">{money(bill.total_loading)}</td>
+                      <td className="px-3 py-3 text-right">{money(bill.total_fixed_lr)}</td>
                       <td className="px-3 py-3 text-right">
-                        {num(bill.paid_amount) >= num(bill.total_freight) + num(bill.total_loading) ? (
+                        {num(bill.paid_amount) >= billTotal(bill) ? (
                           <span className="font-medium text-emerald-700">Paid</span>
                         ) : num(bill.paid_amount) > 0 ? (
                           <span className="font-medium text-amber-700">
-                            Part paid · Due {money(num(bill.total_freight) + num(bill.total_loading) - num(bill.paid_amount))}
+                            Part paid · Due {money(billTotal(bill) - num(bill.paid_amount))}
                           </span>
                         ) : (
                           <span className="font-medium text-muted-foreground">
-                            Unpaid · Due {money(num(bill.total_freight) + num(bill.total_loading))}
+                            Unpaid · Due {money(billTotal(bill))}
                           </span>
                         )}
                       </td>
                       <td className="px-3 py-3">
                         <div className="flex justify-center gap-2">
-                          {!bill.deleted_at && bill.journal_entry_id && num(bill.paid_amount) < num(bill.total_freight) + num(bill.total_loading) && (
+                          {!bill.deleted_at && bill.journal_entry_id && num(bill.paid_amount) < billTotal(bill) && (
                             <Button size="sm" onClick={() => setPayingBill(bill)}>
                               <Banknote className="size-3.5" /> Pay
                             </Button>
@@ -768,7 +802,7 @@ export function TransporterBilling() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={10} className="py-10 text-center text-muted-foreground">
+                    <td colSpan={11} className="py-10" text-center text-muted-foreground">
                       {loading ? "Loading bills…" : "No transporter bills found."}
                     </td>
                   </tr>
@@ -902,6 +936,7 @@ export function TransporterBilling() {
                   <th className="px-3 py-3">Route</th>
                   <th className="px-3 py-3 text-right">Freight</th>
                   <th className="px-3 py-3 text-right">Loading</th>
+                  <th className="px-3 py-3 text-right">Fixed LR</th>
                   <th className="px-3 py-3 text-right">Adjustments</th>
                   <th className="px-3 py-3 text-center">Action</th>
                 </tr>
@@ -924,6 +959,7 @@ export function TransporterBilling() {
                             min="0"
                             step="0.01"
                             aria-label="Additional freight"
+                            disabled={Boolean(line.charge_adjustments_locked_at)}
                             placeholder="+ freight"
                             value={line.additional_freight || ""}
                             onChange={(event) =>
@@ -936,6 +972,7 @@ export function TransporterBilling() {
                             min="0"
                             step="0.01"
                             aria-label="Freight deduction"
+                            disabled={Boolean(line.charge_adjustments_locked_at)}
                             placeholder="- freight"
                             value={line.freight_deduction || ""}
                             onChange={(event) =>
@@ -953,6 +990,7 @@ export function TransporterBilling() {
                             min="0"
                             step="0.01"
                             aria-label="Additional loading"
+                            disabled={Boolean(line.charge_adjustments_locked_at)}
                             placeholder="+ loading"
                             value={line.additional_loading || ""}
                             onChange={(event) =>
@@ -965,6 +1003,7 @@ export function TransporterBilling() {
                             min="0"
                             step="0.01"
                             aria-label="Loading deduction"
+                            disabled={Boolean(line.charge_adjustments_locked_at)}
                             placeholder="- loading"
                             value={line.loading_deduction || ""}
                             onChange={(event) =>
@@ -972,6 +1011,9 @@ export function TransporterBilling() {
                             }
                           />
                         </div>
+                      </td>
+                      <td className="px-3 py-3 text-right font-semibold" title="Saved on consignment — cannot be edited">
+                        {money(line.fixed_lr_charges)}
                       </td>
                       <td className="px-3 py-3 text-right text-xs text-muted-foreground">
                         Freight: {money(line.freight_deduction)} / {money(line.additional_freight)}
@@ -993,7 +1035,7 @@ export function TransporterBilling() {
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                    <td colSpan={8} className="py-8 text-center text-muted-foreground">
                       No consignments selected. Use Load consignments.
                     </td>
                   </tr>
@@ -1007,6 +1049,7 @@ export function TransporterBilling() {
                     </td>
                     <td className="px-3 py-3 text-right">{money(totals.freight)}</td>
                     <td className="px-3 py-3 text-right">{money(totals.loading)}</td>
+                    <td className="px-3 py-3 text-right">{money(totals.fixed)}</td>
                     <td colSpan={2} />
                   </tr>
                 </tfoot>
@@ -1056,6 +1099,7 @@ export function TransporterBilling() {
                   <th className="px-3 py-3">Route</th>
                   <th className="px-3 py-3 text-right">Freight</th>
                   <th className="px-3 py-3 text-right">Loading</th>
+                  <th className="px-3 py-3 text-right">Fixed LR</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
@@ -1084,6 +1128,7 @@ export function TransporterBilling() {
                       </td>
                       <td className="px-3 py-3 text-right">{money(row.final_freight)}</td>
                       <td className="px-3 py-3 text-right">{money(row.final_loading)}</td>
+                      <td className="px-3 py-3 text-right">{money(row.fixed_lr_charges)}</td>
                     </tr>
                   ))}
               </tbody>
@@ -1104,8 +1149,8 @@ export function TransporterBilling() {
           <DialogHeader><DialogTitle>Transporter Bill Journal Entry Preview</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="rounded-lg border border-border bg-muted/20 p-3 text-sm">
-              <div className="flex flex-wrap justify-between gap-2"><span><strong>Basis:</strong> adjusted final freight/loading only</span><span><strong>Total:</strong> {money(previewTotals.freight + previewTotals.loading)}</span></div>
-              <p className="mt-1 text-xs text-muted-foreground">Freight and Loading are posted as expenditure debits; the mapped transporter source ledger is credited.</p>
+              <div className="flex flex-wrap justify-between gap-2"><span><strong>Basis:</strong> Freight + Loading + snapshotted Fixed LR</span><span><strong>Total:</strong> {money(previewTotals.freight + previewTotals.loading + previewTotals.fixed)}</span></div>
+              <p className="mt-1 text-xs text-muted-foreground">Freight, Loading, and Fixed LR Charges are expense debits; the full amount is credited to the transporter payable ledger.</p>
             </div>
             <div className="overflow-x-auto rounded-lg border border-border"><table className="w-full text-sm"><thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground"><tr><th className="px-3 py-2">Journal line</th><th className="px-3 py-2">Mapped account</th><th className="px-3 py-2">Account kind</th><th className="px-3 py-2 text-right">Debit</th><th className="px-3 py-2 text-right">Credit</th></tr></thead><tbody className="divide-y divide-border">{displayedJournalLines.map((line: any, index: number) => { const account = line.account ?? line.ledger_account; const debit = num(line.amount ?? line.debit); const credit = num(line.amount ?? line.credit); const isDebit = line.side ? line.side === "debit" : debit > 0; return <tr key={line.key ?? `${line.line_no}-${index}`}><td className="px-3 py-2">{line.label ?? line.line_description ?? `Line ${line.line_no}`}</td><td className="px-3 py-2 font-medium">{account?.account_name ?? (line.id || line.ledger_account_id ? `Mapped ID ${line.id ?? line.ledger_account_id}` : "NOT MAPPED")}</td><td className="px-3 py-2">{account ? `${account.ledger_type} / ${account.account_kind}` : "—"}</td><td className="px-3 py-2 text-right">{isDebit ? money(debit) : "—"}</td><td className="px-3 py-2 text-right">{!isDebit ? money(credit) : "—"}</td></tr>; })}</tbody><tfoot className="border-t-2 border-border bg-muted/30 font-semibold"><tr><td colSpan={3} className="px-3 py-2">Totals {journalBalanced ? "(balanced)" : "(NOT BALANCED)"}</td><td className="px-3 py-2 text-right">{money(journalDebit)}</td><td className="px-3 py-2 text-right">{money(journalCredit)}</td></tr></tfoot></table></div>
             {generating && <p className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">Posting this exact entry now… Please wait.</p>}
@@ -1127,7 +1172,7 @@ export function TransporterBilling() {
               <p className="text-xs text-muted-foreground">Bill details and billed consignments</p>
             </div>
             <div className="flex gap-2">
-              {!viewing.deleted_at && viewing.journal_entry_id && num(viewing.paid_amount) < num(viewing.total_freight) + num(viewing.total_loading) && (
+              {!viewing.deleted_at && viewing.journal_entry_id && num(viewing.paid_amount) < billTotal(viewing) && (
                 <Button size="sm" onClick={() => setPayingBill(viewing)}>
                   <Banknote className="size-3.5" /> Pay balance
                 </Button>
@@ -1182,13 +1227,13 @@ export function TransporterBilling() {
                 <div>
                   <span className="text-muted-foreground">Bill totals</span>
                   <p className="font-semibold">
-                    {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading
+                    {money(viewing.total_freight)} freight · {money(viewing.total_loading)} loading · {money(viewing.total_fixed_lr)} fixed LR
                   </p>
                 </div>
                 <div>
                   <span className="text-muted-foreground">Paid / Balance</span>
                   <p className="font-semibold">
-                    {money(viewing.paid_amount)} paid · {money(num(viewing.total_freight) + num(viewing.total_loading) - num(viewing.paid_amount))} due
+                    {money(viewing.paid_amount)} paid · {money(billTotal(viewing) - num(viewing.paid_amount))} due
                   </p>
                 </div>
               </div>
@@ -1210,6 +1255,7 @@ export function TransporterBilling() {
                         <th className="px-3 py-2">Route</th>
                         <th className="px-3 py-2 text-right">Freight</th>
                         <th className="px-3 py-2 text-right">Loading</th>
+                        <th className="px-3 py-2 text-right">Fixed LR</th>
                         <th className="px-3 py-2 text-right">Total</th>
                         <th className="px-3 py-2 text-center">Details</th>
                       </tr>
@@ -1217,7 +1263,7 @@ export function TransporterBilling() {
                     <tbody className="divide-y divide-border">
                       {viewItemsLoading ? (
                         <tr>
-                          <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                          <td colSpan={8} className="py-8 text-center text-muted-foreground">
                             Loading billed consignments…
                           </td>
                         </tr>
@@ -1231,8 +1277,9 @@ export function TransporterBilling() {
                             </td>
                             <td className="px-3 py-2 text-right">{money(item.final_freight)}</td>
                             <td className="px-3 py-2 text-right">{money(item.final_loading)}</td>
+                            <td className="px-3 py-2 text-right">{money(item.fixed_lr_charges)}</td>
                             <td className="px-3 py-2 text-right font-medium">
-                              {money(num(item.final_freight) + num(item.final_loading))}
+                              {money(num(item.final_freight) + num(item.final_loading) + num(item.fixed_lr_charges))}
                             </td>
                             <td className="px-3 py-2 text-center">
                               <Button
@@ -1247,7 +1294,7 @@ export function TransporterBilling() {
                         ))
                       ) : (
                         <tr>
-                          <td colSpan={7} className="py-8 text-center text-muted-foreground">
+                          <td colSpan={8} className="py-8 text-center text-muted-foreground">
                             No consignments found for this bill.
                           </td>
                         </tr>
@@ -1293,7 +1340,7 @@ function TransporterBillPaymentDialog({
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [loadingAccounts, setLoadingAccounts] = useState(false);
   const [saving, setSaving] = useState(false);
-  const due = bill ? Math.max(0, num(bill.total_freight) + num(bill.total_loading) - num(bill.paid_amount)) : 0;
+  const due = bill ? Math.max(0, billTotal(bill) - num(bill.paid_amount)) : 0;
 
   useEffect(() => {
     if (!bill) return;

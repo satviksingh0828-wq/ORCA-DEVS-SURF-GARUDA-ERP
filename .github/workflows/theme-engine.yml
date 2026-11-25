@@ -36,5 +36,7 @@ jobs:
         run: node --test --experimental-strip-types test/transporter-charges.test.ts
       - name: Fixed LR charges report and account mapping tests
         run: node --test --experimental-strip-types test/fixed-lr-charges.test.ts
+      - name: Billed charge locks and Fixed LR journal posting tests
+        run: node --test test/ltms-billing-locks.test.mjs
       - name: Build
         run: npm run build

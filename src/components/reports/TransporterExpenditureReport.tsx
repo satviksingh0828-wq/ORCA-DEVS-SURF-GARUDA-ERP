@@ -31,6 +31,10 @@ type ConsignmentRow = {
   consignment_number: string;
   transporter_id: string | null;
   transporter_source_id: string | null;
+  transporter_bill_id: string | null;
+  workmen_loading_bill_id: string | null;
+  charge_adjustments_locked_at: string | null;
+  fixed_lr_charges: number | string | null;
   movement_mode: string | null;
   consignment_date: string | null;
   consignment_type: string | null;
@@ -151,6 +155,10 @@ export function TransporterExpenditureReport({
 
   async function saveAdjustment() {
     if (!editing) return;
+    if (editing.transporter_bill_id || editing.workmen_loading_bill_id ||
+        editing.charge_adjustments_locked_at) {
+      return toast.error("This consignment is billed. Its financial adjustments are locked.");
+    }
     setSavingAdjustment(true);
     const { error } = await supabase
       .from("consignments")
@@ -192,7 +200,7 @@ export function TransporterExpenditureReport({
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,transporter_id,transporter_source_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,to_details,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code,per_consignment_charges),transporter_source:ltms_transporter_sources(source_name)",
+          "id,consignment_number,transporter_id,transporter_source_id,transporter_bill_id,workmen_loading_bill_id,charge_adjustments_locked_at,fixed_lr_charges,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,to_details,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code),transporter_source:ltms_transporter_sources(source_name)",
         )
         .eq("consignment_type", "third_party")
         .gte("consignment_date", fromDate)
@@ -272,7 +280,7 @@ export function TransporterExpenditureReport({
             quantity: String(packageTotal.quantity),
           });
           const fixedLRCharges = fixedLRChargeForConsignment(
-            row.consignment_type, row.transporter_id, row.transporter?.per_consignment_charges,
+            row.consignment_type, row.transporter_id, row.fixed_lr_charges,
           );
           const adjustedFreight = Math.max(
             0, charges.freight - num(row.freight_deduction) + num(row.additional_freight),
@@ -587,9 +595,16 @@ export function TransporterExpenditureReport({
                       )}
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <Button variant="outline" size="sm" onClick={() => openAdjustment(row)}>
-                        <Pencil className="mr-1 size-3.5" /> Adjust
-                      </Button>
+                      {row.transporter_bill_id || row.workmen_loading_bill_id ||
+                        row.charge_adjustments_locked_at ? (
+                        <span className="text-xs text-muted-foreground" title="Billed — adjustments are locked">
+                          Locked
+                        </span>
+                      ) : (
+                        <Button variant="outline" size="sm" onClick={() => openAdjustment(row)}>
+                          <Pencil className="mr-1 size-3.5" /> Adjust
+                        </Button>
+                      )}
                     </td>
                   </tr>
                 ))
@@ -689,7 +704,7 @@ export function TransporterExpenditureReport({
               </div>
               <p className="text-xs text-muted-foreground">
                 Final freight/loading = calculated amount − deduction + additional amount.
-                Fixed LR Charges are taken from the Transporter Master per consignment and included once in Total Expenditure.
+                Fixed LR Charges use the immutable amount saved on each consignment and are included once in Total Expenditure.
               </p>
             </div>
           )}

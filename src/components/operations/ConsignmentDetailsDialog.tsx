@@ -34,7 +34,7 @@ export function ConsignmentDetailsDialog({
       supabase
         .from("consignments")
         .select(
-          "id,consignment_number,consignment_date,billing_status,consignment_type,movement_mode,transport_mode,from_pin_code,to_pin_code,delivery_date,transporter_lr_number,transporter_lr_date,source:contracts(contract_name),branch:branches(branch_name),transporter:ltms_transporters(transporter_name)",
+          "id,consignment_number,consignment_date,billing_status,consignment_type,movement_mode,transport_mode,from_pin_code,to_pin_code,delivery_date,transporter_lr_number,transporter_lr_date,fixed_lr_charges,charge_adjustments_locked_at,source:contracts(contract_name),branch:branches(branch_name),transporter:ltms_transporters(transporter_name)",
         )
         .eq("id", consignmentId)
         .single(),
@@ -90,6 +90,15 @@ export function ConsignmentDetailsDialog({
               <Field label="Movement" value={row.movement_mode} />
               <Field label="Transport Mode" value={row.transport_mode} />
               <Field label="Transporter" value={row.transporter?.transporter_name} />
+              {row.consignment_type === "third_party" && (
+                <Field label="Fixed LR Charges (Saved)" value={
+                  row.fixed_lr_charges == null ? "Pending transporter assignment" :
+                  `₹${Number(row.fixed_lr_charges).toFixed(2)} (locked)`
+                } />
+              )}
+              {row.charge_adjustments_locked_at && (
+                <Field label="Financial Adjustments" value="Locked after billing" />
+              )}
               <Field label="From PIN" value={row.from_pin_code} />
               <Field label="To PIN" value={row.to_pin_code} />
               <Field label="Delivery Date" value={row.delivery_date} />

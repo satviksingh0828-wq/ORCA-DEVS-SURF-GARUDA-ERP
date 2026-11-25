@@ -32,6 +32,7 @@ type ConsignmentRow = {
   transporter_bill_id?: string | null;
   transporter_id: string | null;
   transporter_source_id: string | null;
+  fixed_lr_charges: number | string | null;
   transporter?: { per_consignment_charges?: number | string | null } | null;
   freight_deduction: number | string | null;
   additional_freight: number | string | null;
@@ -223,7 +224,7 @@ export function ConsignmentNetReport({
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,branch_id,consignment_date,consignment_type,movement_mode,transport_mode,trip_id,source_id,source_bill_id,transporter_id,transporter_source_id,transporter_bill_id,freight_deduction,additional_freight,loading_deduction,additional_loading,from_pin_code,to_pin_code,to_details,transporter:ltms_transporters(per_consignment_charges)",
+          "id,consignment_number,branch_id,consignment_date,consignment_type,movement_mode,transport_mode,trip_id,source_id,source_bill_id,transporter_id,transporter_source_id,transporter_bill_id,fixed_lr_charges,freight_deduction,additional_freight,loading_deduction,additional_loading,from_pin_code,to_pin_code,to_details",
         )
         .gte("consignment_date", fromDate)
         .lte("consignment_date", toDate)
@@ -478,7 +479,7 @@ export function ConsignmentNetReport({
                 ? tripTotal / tripCount
                 : null;
           const fixedLRCharges = fixedLRChargeForConsignment(
-            row.consignment_type, row.transporter_id, row.transporter?.per_consignment_charges,
+            row.consignment_type, row.transporter_id, row.fixed_lr_charges,
           );
           const transporterExpenditure =
             String(row.consignment_type ?? "").toLowerCase() === "third_party" &&

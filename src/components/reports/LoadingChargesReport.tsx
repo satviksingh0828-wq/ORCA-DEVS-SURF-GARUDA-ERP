@@ -31,6 +31,9 @@ type ConsignmentRow = {
   consignment_date: string | null;
   loading_deduction: number | string | null;
   additional_loading: number | string | null;
+  transporter_bill_id?: string | null;
+  workmen_loading_bill_id?: string | null;
+  charge_adjustments_locked_at?: string | null;
   branch?: { branch_name?: string | null } | null;
 };
 type PackageRow = {
@@ -167,7 +170,7 @@ export function LoadingChargesReportContent({
       let query = supabase
         .from("consignments")
         .select(
-          "id,consignment_number,branch_id,consignment_date,loading_deduction,additional_loading,branch:branches(branch_name)",
+          "id,consignment_number,branch_id,consignment_date,loading_deduction,additional_loading,transporter_bill_id,workmen_loading_bill_id,charge_adjustments_locked_at,branch:branches(branch_name)",
         )
         .gte("consignment_date", fromDate)
         .lte("consignment_date", toDate)
@@ -328,6 +331,8 @@ export function LoadingChargesReportContent({
     });
   }
   async function saveAdjustment(row: ReportRow) {
+    if (row.transporter_bill_id || row.workmen_loading_bill_id || row.charge_adjustments_locked_at)
+      return toast.error("Billed consignment loading charges are locked.");
     const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
     setSavingId(row.id);
     const { error } = await supabase
@@ -562,6 +567,8 @@ export function LoadingChargesReportContent({
                             min="0"
                             step="0.01"
                             value={value.deduction}
+                            disabled={Boolean(row.transporter_bill_id || row.workmen_loading_bill_id ||
+                              row.charge_adjustments_locked_at)}
                             onChange={(event) =>
                               updateAdjustment(row.id, "deduction", event.target.value)
                             }
@@ -574,6 +581,8 @@ export function LoadingChargesReportContent({
                             min="0"
                             step="0.01"
                             value={value.addition}
+                            disabled={Boolean(row.transporter_bill_id || row.workmen_loading_bill_id ||
+                              row.charge_adjustments_locked_at)}
                             onChange={(event) =>
                               updateAdjustment(row.id, "addition", event.target.value)
                             }
@@ -587,7 +596,11 @@ export function LoadingChargesReportContent({
                             variant="outline"
                             size="sm"
                             onClick={() => void saveAdjustment(row)}
-                            disabled={savingId === row.id}
+                            disabled={savingId === row.id ||
+                              Boolean(row.transporter_bill_id || row.workmen_loading_bill_id ||
+                                row.charge_adjustments_locked_at)}
+                            title={row.charge_adjustments_locked_at || row.transporter_bill_id ||
+                              row.workmen_loading_bill_id ? "Billed — charges locked" : "Save adjustments"}
                           >
                             <Save className="mr-1 size-3.5" />
                             {savingId === row.id ? "Saving…" : "Save"}
@@ -713,6 +726,8 @@ type InwardReceiptRow = {
   calculated_unloading: number;
   unloading_deduction: number | string | null;
   additional_unloading: number | string | null;
+  workmen_unloading_bill_id?: string | null;
+  workmen_adjustments_locked_at?: string | null;
   branch?: { branch_name?: string | null } | null;
   stock_inward_packages?: {
     package_rate_type_id: string;
@@ -759,7 +774,7 @@ export function InwardReceiptChargesReport({
       let query = supabase
         .from("stock_inward_receipts")
         .select(
-          "id,branch_id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_deduction,additional_unloading,branch:branches(branch_name),stock_inward_packages(package_rate_type_id,package_type,quantity,weight_kg)",
+          "id,branch_id,receipt_number,receipt_date,unloading_date,unloading_amount_received,unloading_deduction,additional_unloading,workmen_unloading_bill_id,workmen_adjustments_locked_at,branch:branches(branch_name),stock_inward_packages(package_rate_type_id,package_type,quantity,weight_kg)",
         )
         .gte("receipt_date", fromDate)
         .lte("receipt_date", toDate)
@@ -883,6 +898,8 @@ export function InwardReceiptChargesReport({
   }
 
   async function saveAdjustment(row: InwardReceiptRow) {
+    if (row.workmen_unloading_bill_id || row.workmen_adjustments_locked_at)
+      return toast.error("Workmen-billed unloading charges are locked.");
     const value = adjustments[row.id] ?? { deduction: "0", addition: "0" };
     setSavingId(row.id);
     const { error } = await supabase
@@ -1116,6 +1133,7 @@ export function InwardReceiptChargesReport({
                           min="0"
                           step="0.01"
                           value={value.deduction}
+                          disabled={Boolean(row.workmen_unloading_bill_id || row.workmen_adjustments_locked_at)}
                           onChange={(event) =>
                             updateAdjustment(row.id, "deduction", event.target.value)
                           }
@@ -1128,6 +1146,7 @@ export function InwardReceiptChargesReport({
                           min="0"
                           step="0.01"
                           value={value.addition}
+                          disabled={Boolean(row.workmen_unloading_bill_id || row.workmen_adjustments_locked_at)}
                           onChange={(event) =>
                             updateAdjustment(row.id, "addition", event.target.value)
                           }
@@ -1141,7 +1160,10 @@ export function InwardReceiptChargesReport({
                           variant="outline"
                           size="sm"
                           onClick={() => void saveAdjustment(row)}
-                          disabled={savingId === row.id}
+                          disabled={savingId === row.id ||
+                            Boolean(row.workmen_unloading_bill_id || row.workmen_adjustments_locked_at)}
+                          title={row.workmen_unloading_bill_id || row.workmen_adjustments_locked_at
+                            ? "Workmen billed — charges locked" : "Save adjustments"}
                         >
                           <Save className="mr-1 size-3.5" />
                           {savingId === row.id ? "Saving…" : "Save"}
