@@ -29,6 +29,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { fetchAll } from "@/lib/fetch-all";
 import { useBranches, type BranchOption } from "@/lib/use-branches";
 import { openBrandedTablePdf } from "@/lib/branded-pdf";
+import { buildLedgerStatement, ledgerBalanceLabel } from "@/lib/ledger-statement";
 import { useSession } from "@/lib/session";
 import { isAdminLike } from "@/lib/roles";
 
@@ -58,6 +59,7 @@ type LedgerRow = {
 
 type JournalLine = {
   id: string;
+  line_no?: number | null;
   debit: number | string | null;
   credit: number | string | null;
   line_description: string | null;
@@ -117,10 +119,6 @@ function labelForType(type: LedgerType) {
       : type === "capital"
         ? "Capital"
         : type[0].toUpperCase() + type.slice(1);
-}
-
-function balanceSide(value: number): OpeningSide {
-  return value < 0 ? "cr" : "dr";
 }
 
 function makeSheet(rows: Record<string, unknown>[], headers: string[]) {
@@ -505,14 +503,15 @@ export function AccountsLedgerPage() {
       db
         .from("journal_lines")
         .select(
-          "id,debit,credit,line_description,journal_entry:journal_entries!inner(id,voucher_number,entry_date,description,reference,status)",
+          "id,line_no,debit,credit,line_description,journal_entry:journal_entries!inner(id,voucher_number,entry_date,description,reference,status)",
         )
         .eq("ledger_account_id", selectedLedger.id)
         .eq("branch_id", selectedLedger.branch_id)
         .eq("journal_entry.status", "approved")
         .lte("journal_entry.entry_date", endDate)
         .order("entry_date", { foreignTable: "journal_entries", ascending: true })
-        .order("line_no", { ascending: true }),
+        .order("line_no", { ascending: true })
+        .order("id", { ascending: true }),
     );
   }
 
@@ -696,26 +695,8 @@ export function AccountsLedgerPage() {
       const opening = money(selectedLedger.opening_balance);
       openingNet = selectedLedger.opening_balance_side === "cr" ? -opening : opening;
     }
-    let running = openingNet;
-    const rows = period.map((line) => {
-      const debit = money(line.debit);
-      const credit = money(line.credit);
-      running += debit - credit;
-      return {
-        date: line.journal_entry?.entry_date ?? "",
-        voucher: line.journal_entry?.voucher_number ?? "—",
-        particulars: line.line_description || line.journal_entry?.description || "—",
-        debit,
-        credit,
-        balanceDr: Math.max(running, 0),
-        balanceCr: Math.max(-running, 0),
-      };
-    });
-    const closing = running;
     return {
-      openingNet,
-      closing,
-      rows,
+      ...buildLedgerStatement(period, openingNet),
       ledger: selectedLedger,
       branch: selectedLedger ? ledgerBranchById.get(selectedLedger.branch_id) : undefined,
     };
@@ -777,74 +758,32 @@ export function AccountsLedgerPage() {
     try {
       const report = await getPeriodReport();
       if (!report || !report.ledger) return toast.error("Load a ledger first.");
+      const amount = (value: number) => value === 0 ? "—" : pdfMoneyText(value);
+      const balance = (value: number) => ledgerBalanceLabel(value, pdfMoneyText);
       const rows = [
-        ...(report.openingNet !== 0
-          ? [
-              [
-                report.openingNet > 0 ? dateText(viewStart) : "—",
-                report.openingNet > 0 ? "B/F" : "—",
-                report.openingNet > 0 ? "Balance brought forward" : "—",
-                report.openingNet > 0 ? pdfMoneyText(report.openingNet) : "—",
-                report.openingNet < 0 ? dateText(viewStart) : "—",
-                report.openingNet < 0 ? "B/F" : "—",
-                report.openingNet < 0 ? "Balance brought forward" : "—",
-                report.openingNet < 0 ? pdfMoneyText(Math.abs(report.openingNet)) : "—",
-              ],
-            ]
-          : []),
-        ...report.rows.map((row) => [
-          row.debit > 0 ? dateText(row.date) : "—",
-          row.debit > 0 ? row.voucher : "—",
-          row.debit > 0 ? row.particulars : "—",
-          row.debit > 0 ? pdfMoneyText(row.debit) : "—",
-          row.credit > 0 ? dateText(row.date) : "—",
-          row.credit > 0 ? row.voucher : "—",
-          row.credit > 0 ? row.particulars : "—",
-          row.credit > 0 ? pdfMoneyText(row.credit) : "—",
+        [dateText(viewStart), "B/F", "Opening Balance", "—", "—", balance(report.openingNet)],
+        ...report.rows.map(row => [
+          dateText(row.date), row.voucher,
+          row.reference ? row.particulars + "\n" + row.reference : row.particulars,
+          amount(row.debit), amount(row.credit), balance(row.balance),
         ]),
-        ...(report.closing !== 0
-          ? [
-              [
-                report.closing > 0 ? dateText(viewEnd) : "—",
-                report.closing > 0 ? "C/F" : "—",
-                report.closing > 0 ? "Balance carried forward" : "—",
-                report.closing > 0 ? pdfMoneyText(report.closing) : "—",
-                report.closing < 0 ? dateText(viewEnd) : "—",
-                report.closing < 0 ? "C/F" : "—",
-                report.closing < 0 ? "Balance carried forward" : "—",
-                report.closing < 0 ? pdfMoneyText(Math.abs(report.closing)) : "—",
-              ],
-            ]
-          : []),
+        ["", "", "Total", pdfMoneyText(report.totalDebit), pdfMoneyText(report.totalCredit), balance(report.closing)],
       ];
       await openBrandedTablePdf({
-        title: `Ledger — ${report.ledger.account_name}`,
+        title: `Account Ledger — ${report.ledger.account_name}`,
         subtitle: `${report.branch?.branch_name ?? "Branch"} | ${dateText(viewStart)} to ${dateText(viewEnd)}`,
         filename: `${report.ledger.account_name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-ledger.pdf`,
-        orientation: "landscape",
+        orientation: "portrait",
         branchId: report.ledger.branch_id,
-        columns: [
-          "Dr Date",
-          "Dr Voucher",
-          "Dr Particulars",
-          "Dr balance",
-          "Cr Date",
-          "Cr Voucher",
-          "Cr Particulars",
-          "Cr balance",
-        ],
+        columns: ["Date", "Voucher", "Particulars", "Debit (Rs.)", "Credit (Rs.)", "Balance (Rs.)"],
         rows,
+        rightAlignColumns: [3, 4, 5],
+        emphasisRows: [0, rows.length - 1],
         summary: [
-          [
-            "Opening balance",
-            pdfMoneyText(Math.abs(report.openingNet)) +
-              ` ${balanceSide(report.openingNet).toUpperCase()}`,
-          ],
-          [
-            "Closing balance",
-            pdfMoneyText(Math.abs(report.closing)) +
-              ` ${balanceSide(report.closing).toUpperCase()}`,
-          ],
+          ["Opening balance", balance(report.openingNet)],
+          ["Total debit", pdfMoneyText(report.totalDebit)],
+          ["Total credit", pdfMoneyText(report.totalCredit)],
+          ["Closing balance", balance(report.closing)],
         ],
       });
     } catch (error) {
@@ -1461,9 +1400,9 @@ function LedgerStatement({
   start: string;
   end: string;
 }) {
-  const opening = openingNet;
-  const closing =
-    opening + rows.reduce((sum, row) => sum + money(row.debit) - money(row.credit), 0);
+  const statement = buildLedgerStatement(rows, openingNet);
+  const { openingNet: opening, closing, totalDebit, totalCredit } = statement;
+  const balance = (value: number) => ledgerBalanceLabel(value, moneyText);
   return (
     <section className="overflow-hidden rounded-2xl border border-border bg-card">
       <div className="border-b border-border bg-muted/30 px-5 py-4">
@@ -1489,145 +1428,68 @@ function LedgerStatement({
         </div>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] text-left text-sm">
+          <table className="w-full min-w-[680px] text-left text-sm">
             <thead>
               <tr className="border-b border-border bg-muted/50 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                <th className="px-4 py-3">Dr Date</th>
-                <th className="px-4 py-3">Dr Voucher</th>
-                <th className="px-4 py-3">Dr Particulars</th>
-                <th className="px-4 py-3 text-right">Dr balance</th>
-                <th className="px-4 py-3">Cr Date</th>
-                <th className="px-4 py-3">Cr Voucher</th>
-                <th className="px-4 py-3">Cr Particulars</th>
-                <th className="px-4 py-3 text-right">Cr balance</th>
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">Voucher</th>
+                <th className="px-4 py-3">Particulars</th>
+                <th className="px-4 py-3 text-right">Debit (₹)</th>
+                <th className="px-4 py-3 text-right">Credit (₹)</th>
+                <th className="px-4 py-3 text-right">Balance (₹)</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
-              {opening !== 0 && (
-                <tr className="bg-primary/5">
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {opening > 0 ? dateText(start) : "—"}
+              <tr className="bg-primary/5 font-semibold">
+                <td className="px-4 py-3 whitespace-nowrap">{dateText(start)}</td>
+                <td className="px-4 py-3">B/F</td>
+                <td className="px-4 py-3">Opening Balance</td>
+                <td className="px-4 py-3 text-right">—</td>
+                <td className="px-4 py-3 text-right">—</td>
+                <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">{balance(opening)}</td>
+              </tr>
+              {statement.rows.map(row => (
+                <tr key={row.id} className="hover:bg-muted/30">
+                  <td className="px-4 py-3 whitespace-nowrap">{dateText(row.date)}</td>
+                  <td className="px-4 py-3 break-words">{row.voucher}</td>
+                  <td className="px-4 py-3 break-words">
+                    <p>{row.particulars}</p>
+                    {row.reference && <p className="text-xs text-muted-foreground">{row.reference}</p>}
                   </td>
-                  <td className="px-4 py-3 font-medium">{opening > 0 ? "B/F" : "—"}</td>
-                  <td className="px-4 py-3 font-medium">
-                    {opening > 0 ? "Balance brought forward" : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold">
-                    {opening > 0 ? moneyText(opening) : "—"}
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {opening < 0 ? dateText(start) : "—"}
-                  </td>
-                  <td className="px-4 py-3 font-medium">{opening < 0 ? "B/F" : "—"}</td>
-                  <td className="px-4 py-3 font-medium">
-                    {opening < 0 ? "Balance brought forward" : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-right font-semibold">
-                    {opening < 0 ? moneyText(Math.abs(opening)) : "—"}
-                  </td>
+                  <td className="px-4 py-3 text-right font-medium text-emerald-700 whitespace-nowrap tabular-nums">{row.debit ? moneyText(row.debit) : "—"}</td>
+                  <td className="px-4 py-3 text-right font-medium text-rose-700 whitespace-nowrap tabular-nums">{row.credit ? moneyText(row.credit) : "—"}</td>
+                  <td className="px-4 py-3 text-right font-semibold whitespace-nowrap tabular-nums">{balance(row.balance)}</td>
                 </tr>
-              )}
-              {rows.map((row) => {
-                const debit = money(row.debit);
-                const credit = money(row.credit);
-                return (
-                  <tr key={row.id} className="hover:bg-muted/30">
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {debit ? dateText(row.journal_entry?.entry_date) : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {debit ? (row.journal_entry?.voucher_number ?? "—") : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {debit ? (
-                        <>
-                          <p>{row.line_description || row.journal_entry?.description || "—"}</p>
-                          {row.journal_entry?.reference && (
-                            <p className="text-xs text-muted-foreground">
-                              {row.journal_entry.reference}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-emerald-700">
-                      {debit ? moneyText(debit) : "—"}
-                    </td>
-                    <td className="px-4 py-3 whitespace-nowrap">
-                      {credit ? dateText(row.journal_entry?.entry_date) : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {credit ? (row.journal_entry?.voucher_number ?? "—") : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      {credit ? (
-                        <>
-                          <p>{row.line_description || row.journal_entry?.description || "—"}</p>
-                          {row.journal_entry?.reference && (
-                            <p className="text-xs text-muted-foreground">
-                              {row.journal_entry.reference}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        "—"
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-rose-700">
-                      {credit ? moneyText(credit) : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-              {closing !== 0 && (
-                <tr className="border-t-2 border-border bg-muted/30 font-semibold">
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {closing > 0 ? dateText(end) : "—"}
-                  </td>
-                  <td className="px-4 py-3">{closing > 0 ? "C/F" : "—"}</td>
-                  <td className="px-4 py-3">{closing > 0 ? "Balance carried forward" : "—"}</td>
-                  <td className="px-4 py-3 text-right">{closing > 0 ? moneyText(closing) : "—"}</td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    {closing < 0 ? dateText(end) : "—"}
-                  </td>
-                  <td className="px-4 py-3">{closing < 0 ? "C/F" : "—"}</td>
-                  <td className="px-4 py-3">{closing < 0 ? "Balance carried forward" : "—"}</td>
-                  <td className="px-4 py-3 text-right">
-                    {closing < 0 ? moneyText(Math.abs(closing)) : "—"}
-                  </td>
-                </tr>
-              )}
-              {rows.length === 0 && opening === 0 && (
-                <tr>
-                  <td colSpan={8} className="py-10 text-center text-muted-foreground">
-                    No entries in this period.
-                  </td>
-                </tr>
+              ))}
+              {statement.rows.length === 0 && (
+                <tr><td colSpan={6} className="py-8 text-center text-muted-foreground">No entries in this period.</td></tr>
               )}
             </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-border bg-muted/50 font-semibold">
+                <td colSpan={3} className="px-4 py-3">Total</td>
+                <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">{moneyText(totalDebit)}</td>
+                <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">{moneyText(totalCredit)}</td>
+                <td className="px-4 py-3 text-right whitespace-nowrap tabular-nums">{balance(closing)}</td>
+              </tr>
+            </tfoot>
           </table>
         </div>
       )}
       {ledger && (
-        <div className="grid gap-3 border-t border-border bg-muted/20 p-4 text-sm sm:grid-cols-3">
-          <div>
-            <span className="text-muted-foreground">Opening balance</span>
-            <p className="mt-1 font-semibold">
-              {moneyText(Math.abs(opening))} {balanceSide(opening).toUpperCase()}
-            </p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Period entries</span>
-            <p className="mt-1 font-semibold">{rows.length}</p>
-          </div>
-          <div>
-            <span className="text-muted-foreground">Closing balance</span>
-            <p className="mt-1 font-semibold">
-              {moneyText(Math.abs(closing))} {balanceSide(closing).toUpperCase()}
-            </p>
-          </div>
+        <div className="grid gap-3 border-t border-border bg-muted/20 p-4 text-sm sm:grid-cols-2 xl:grid-cols-5">
+          {[
+            ["Opening balance", balance(opening)],
+            ["Period entries", String(statement.rows.length)],
+            ["Total debit", moneyText(totalDebit)],
+            ["Total credit", moneyText(totalCredit)],
+            ["Closing balance", balance(closing)],
+          ].map(([label, value]) => (
+            <div key={label}>
+              <span className="text-muted-foreground">{label}</span>
+              <p className="mt-1 font-semibold tabular-nums">{value}</p>
+            </div>
+          ))}
         </div>
       )}
     </section>

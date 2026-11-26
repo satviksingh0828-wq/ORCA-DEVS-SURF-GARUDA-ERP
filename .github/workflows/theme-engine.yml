@@ -40,5 +40,7 @@ jobs:
         run: node --test test/ltms-billing-locks.test.mjs
       - name: Ledger assignment regression tests
         run: node --test --experimental-strip-types test/ledger-assignment-ui.test.ts
+      - name: Running ledger statement regression tests
+        run: node --test --experimental-strip-types test/ledger-statement.test.ts
       - name: Build
         run: npm run build

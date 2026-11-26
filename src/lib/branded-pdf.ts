@@ -10,6 +10,9 @@ type PdfOptions = {
   columns: string[];
   rows: PdfTableRow[];
   summary?: Array<[string, string]>;
+  /** Optional presentation overrides, indexed from zero. */
+  rightAlignColumns?: readonly number[];
+  emphasisRows?: readonly number[];
   orientation?: "portrait" | "landscape";
   /** The actual issuing branch. Null means a consolidated multi-branch report. */
   branchId?: string | null;
@@ -209,7 +212,8 @@ export async function openBrandedTablePdf(options: PdfOptions) {
       pdf.setFont("helvetica", "bold");
       pdf.setFontSize(fontSize);
       lines.forEach((line, lineIndex) => {
-        pdf.text(line, x + 1.3, y + 3.5 + lineIndex * lineHeight);
+        const right = options.rightAlignColumns?.includes(i);
+        pdf.text(line, right ? x + colWidths[i] - 1.3 : x + 1.3, y + 3.5 + lineIndex * lineHeight, { align: right ? "right" : "left" });
       });
       x += colWidths[i];
     });
@@ -219,9 +223,10 @@ export async function openBrandedTablePdf(options: PdfOptions) {
   const rawRows = options.rows;
   header();
   columnHeader();
-  rawRows.forEach((row) => {
+  rawRows.forEach((row, rowIndex) => {
+    const emphasized = options.emphasisRows?.includes(rowIndex) ?? false;
     const contents = options.columns.map((_, i) =>
-      wrappedCell(row[i], colWidths[i] - 2.8));
+      wrappedCell(row[i], colWidths[i] - 2.8, emphasized));
     const lineCount = Math.max(1, ...contents.map((v) => v.length));
     let lineOffset = 0;
     while (lineOffset < lineCount) {
@@ -234,13 +239,15 @@ export async function openBrandedTablePdf(options: PdfOptions) {
       contents.forEach((pieces, i) => {
         pdf.setDrawColor(...LINE);
         pdf.setLineWidth(0.12);
+        if (emphasized) { pdf.setFillColor(...PALE); pdf.rect(x, y, colWidths[i], rowHeight, "F"); }
         pdf.rect(x, y, colWidths[i], rowHeight, "S");
         pdf.setTextColor(...PT_BLACK);
-        pdf.setFont("helvetica", "normal");
+        pdf.setFont("helvetica", emphasized ? "bold" : "normal");
         pdf.setFontSize(fontSize);
         const fragment = pieces.slice(lineOffset, lineOffset + take);
+        const right = options.rightAlignColumns?.includes(i);
         fragment.forEach((line, lineIndex) =>
-          pdf.text(line, x + 1.3, y + 3.5 + lineIndex * lineHeight));
+          pdf.text(line, right ? x + colWidths[i] - 1.3 : x + 1.3, y + 3.5 + lineIndex * lineHeight, { align: right ? "right" : "left" }));
         x += colWidths[i];
       });
       y += rowHeight;
