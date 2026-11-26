@@ -188,6 +188,7 @@ export const ACCOUNTS_SIDEBAR_GROUPS: LtmsSidebarGroup[] = [
       { id: "credit-notes", label: "Credit Notes", to: "/accounts/finance" },
       { id: "cash-receipt", label: "Cash Receipt", to: "/accounts/finance" },
       { id: "cash-payment", label: "Cash Payment", to: "/accounts/finance" },
+      { id: "bank-withdrawal-deposit", label: "Bank Withdrawal / Deposit", to: "/accounts/finance" },
     ],
   },
   {
@@ -234,6 +235,7 @@ export function AccountsSidebar({
         items: group.items.filter((item) => !["list", "view"].includes(item.id)),
       };
     }
+    if (group.section === "finance" && mode !== "finance" && !["basic","admin"].includes(user?.role??"")) return {...group,items:group.items.filter(item=>item.id!=="bank-withdrawal-deposit")};
     if (mode === "finance" && group.section === "finance") {
       return {
         ...group,
@@ -243,6 +245,7 @@ export function AccountsSidebar({
           { id: "credit-notes", label: "Credit Notes" },
           { id: "cash-receipt", label: "Cash Receipt" },
           { id: "cash-payment", label: "Cash Payment" },
+          ...(["basic","admin"].includes(user?.role??"") ? [{ id: "bank-withdrawal-deposit", label: "Bank Withdrawal / Deposit" }] : []),
         ],
       };
     }

@@ -23,6 +23,8 @@ import { TableViewMode } from "@/components/ui/table-view-mode";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
 import { useBranches } from "@/lib/use-branches";
+import { useSession } from "@/lib/session";
+import { serverAdminBankCashTransfer } from "@/lib/account-finance-actions";
 import { openBrandedTablePdf } from "@/lib/branded-pdf";
 
 // The generated Supabase types predate the Accounts journal tables.
@@ -67,6 +69,7 @@ const pdfAmount = (value: string | number | null | undefined) =>
   `Rs. ${amount(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 function JournalPage() {
+  const {user}=useSession();
   const branches = useBranches();
   const [tab, setTab] = useState<JournalTab>(() => {
     const pending = consumeAccountsTabNavigation("journal");
@@ -286,8 +289,8 @@ function JournalPage() {
     }
     setTransferSaving(true);
     try {
-      const { error } = await db.rpc("post_bank_cash_transfer", {
-        p_payload: {
+      if(!user?.sessionToken)throw new Error("Sign in again.");
+      await serverAdminBankCashTransfer({data:{sessionToken:user.sessionToken,payload: {
           entry_date: transferDate,
           source_branch_id: transferSourceBranch,
           destination_branch_id: transferDestinationBranch,
@@ -296,9 +299,7 @@ function JournalPage() {
           amount: numericAmount,
           description: transferDescription.trim() || null,
           reference: transferReference.trim() || null,
-        },
-      });
-      if (error) throw new Error(error.message);
+        }}});
       toast.success(
         transferSourceBranch === transferDestinationBranch
           ? "Bank / cash transfer posted."

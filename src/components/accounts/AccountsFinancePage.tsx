@@ -19,6 +19,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { openBrandedTablePdf } from "@/lib/branded-pdf";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
+import { serverSubmitAccountFinance } from "@/lib/account-finance-actions";
+import { FinanceApprovalQueue, BankWithdrawalDeposit } from "./FinanceApprovalQueue";
 
 const db = supabase as any;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -28,6 +30,7 @@ const tabs = [
   { id: "credit-notes", label: "Credit Notes" },
   { id: "cash-receipt", label: "Cash Receipt" },
   { id: "cash-payment", label: "Cash Payment" },
+  { id: "bank-withdrawal-deposit", label: "Bank Withdrawal / Deposit" },
 ] as const;
 type TabId = (typeof tabs)[number]["id"];
 type Line = { account: string; amount: string };
@@ -75,6 +78,8 @@ export function AccountsFinancePage() {
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [approvalRevision,setApprovalRevision]=useState(0);
+  const visibleTabs=tabs.filter(t=>t.id!=="bank-withdrawal-deposit"||user?.role==="basic"||user?.role==="admin");
   const [form, setForm] = useState({
     branch: "",
     date: today(),
@@ -87,6 +92,7 @@ export function AccountsFinancePage() {
   const isReceipt = tab === "cash-receipt";
   const isCashTab = tab === "cash-receipt" || tab === "cash-payment";
   const changeTab = (nextTab: TabId) => {
+    if(nextTab==="bank-withdrawal-deposit"&&!["basic","admin"].includes(user?.role??""))return;
     setTab(nextTab);
     setOpen(false);
   };
@@ -161,6 +167,7 @@ export function AccountsFinancePage() {
   }
   async function createVoucher(event: React.FormEvent) {
     event.preventDefault();
+    if (!user?.sessionToken || !["basic","admin","semi_admin"].includes(user.role)) return toast.error("Posting access required.");
     if (!form.branch || !form.name.trim()) return toast.error("Branch and name are required.");
     if (!allowed.has(form.branch)) return toast.error("You do not have access to this branch.");
     const invalid = (lines: Line[]) =>
@@ -182,25 +189,9 @@ export function AccountsFinancePage() {
           .upload(documentPath, form.file, { upsert: false });
         if (error) throw new Error(`Document upload failed: ${error.message}`);
       }
-      const { error } = await db.rpc("post_account_cash_voucher", {
-        p_voucher_type: isReceipt ? "receipt" : "payment",
-        p_branch_id: form.branch,
-        p_voucher_date: form.date,
-        p_name: form.name.trim(),
-        p_description: form.description.trim() || null,
-        p_supporting_document: documentPath,
-        p_created_by: user?.id,
-        p_income_expense_lines: incomeLines.map((l) => ({
-          account_id: l.account,
-          amount: Number(l.amount),
-        })),
-        p_cash_bank_lines: cashLines.map((l) => ({
-          account_id: l.account,
-          amount: Number(l.amount),
-        })),
-      });
-      if (error) throw new Error(error.message);
-      toast.success(`${isReceipt ? "Cash receipt" : "Cash payment"} posted to journal.`);
+      const result = await serverSubmitAccountFinance({data:{sessionToken:user.sessionToken,kind:isReceipt?"receipt":"payment",branch:form.branch,date:form.date,name:form.name.trim(),description:form.description.trim()||null,document:documentPath,first:incomeLines.map(l=>({account_id:l.account,amount:Number(l.amount)})),second:cashLines.map(l=>({account_id:l.account,amount:Number(l.amount)}))}});
+      toast.success(result.pending?"Submitted for admin verification.":`${isReceipt ? "Cash receipt" : "Cash payment"} posted to journal.`);
+      setApprovalRevision(n=>n+1);
       setOpen(false);
       setForm({ branch: "", date: today(), name: "", description: "", file: null });
       setIncomeLines([{ account: "", amount: "" }]);
@@ -244,7 +235,7 @@ export function AccountsFinancePage() {
           <AccountsMobileNav pathname="/accounts/finance" />
           <div className="lg:hidden">
             <MobileTabDropdown
-              tabs={tabs.map((item) => ({
+              tabs={visibleTabs.map((item) => ({
                 id: item.id,
                 label: item.label,
                 desc: item.label,
@@ -259,10 +250,12 @@ export function AccountsFinancePage() {
           {(tab === "parties" || tab === "debit-notes" || tab === "credit-notes") && (
             <LtmsAccountingBilling initialTab={tab} />
           )}
+          {tab === "bank-withdrawal-deposit" && (user?.role === "basic" || user?.role === "admin") && <BankWithdrawalDeposit branches={branches} ledgers={ledgers} onDocument={(path)=>void downloadDocument(path)} />}
           {isCashTab && !open && (
             <div className="space-y-4">
+              <FinanceApprovalQueue kind={isReceipt?"receipt":"payment"} branches={branches} ledgers={ledgers} revision={approvalRevision} onPosted={()=>void load()} onDocument={(path)=>void downloadDocument(path)} />
               <div className="flex justify-end">
-                <Button
+                <Button disabled={user?.role==="viewer"}
                   onClick={() => {
                     setForm((f) => ({ ...f, branch: branches[0]?.id ?? "" }));
                     setOpen(true);
@@ -485,7 +478,7 @@ export function AccountsFinancePage() {
                     Cancel
                   </Button>
                   <Button type="submit" disabled={saving}>
-                    {saving ? "Posting…" : "Post voucher & journal"}
+                    {saving ? "Submitting…" : user?.role==="basic" ? "Submit for verification" : "Post voucher & journal"}
                   </Button>
                 </div>
               </form>
