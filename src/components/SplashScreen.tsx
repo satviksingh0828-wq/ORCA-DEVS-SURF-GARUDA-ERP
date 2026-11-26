@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { LOGBOOK_FONT_FAMILY, LOGBOOK_FONT_WEIGHT, LOGBOOK_WORDMARK } from "./LogBookWordmark";
+import { LogBookSplashText } from "./LogBookWordmark";
 import { isSupabaseConfigured, supabase } from "@/integrations/supabase/client";
 import { THEMES } from "@/lib/theme";
 import { parseThemeProfile, getModuleTheme, moduleThemeInlineStyles, type ThemeProfile } from "@/lib/theme-studio";
@@ -132,17 +132,11 @@ export function SplashScreen({ onComplete, preview }: { onComplete?: () => void;
   return (
     <div ref={overlay} role="status" aria-label="Loading LogBook" data-theme={themeId} className={themeProfile ? "logbook-splash-app-theme" : undefined}
       style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", ...(themeProfile ? moduleThemeInlineStyles(themeProfile, "erp") : {}), backgroundColor: themeProfile ? "var(--background)" : dark ? "#151515" : "#ffffff", color: themeProfile ? "var(--foreground)" : ink, backgroundImage: themeProfile ? "var(--logbook-theme-texture, none)" : "none", userSelect: "none" }}>
-      <style>{`
-        .logbook-splash-wordmark { width: 80%; position: relative; }
-        @media (min-width: 768px) { .logbook-splash-wordmark { width: 70%; } }
-        @media (min-width: 1024px) { .logbook-splash-wordmark { width: min(80%, 740px); } }
-        @media (min-width: 1280px) { .logbook-splash-wordmark { width: min(80%, 965px); } }
-      `}</style>
       {mode !== null && <div className="logbook-splash-wordmark" ref={logo}>
         <svg ref={svg} viewBox="0 0 962 192" style={{ display: "block", width: "100%", aspectRatio: "962 / 192", overflow: "visible" }} aria-hidden="true">
           <defs>
             <mask id={maskId} maskUnits="userSpaceOnUse" x="0" y="0" width="962" height="192" style={{ maskType: "alpha" }}>
-              <text x="481" y="145" textAnchor="middle" fontFamily={LOGBOOK_FONT_FAMILY} fontWeight={LOGBOOK_FONT_WEIGHT} fontSize="188" textLength="942.76" lengthAdjust="spacingAndGlyphs" fill="white">{LOGBOOK_WORDMARK}</text>
+              <LogBookSplashText fill="white" />
             </mask>
           </defs>
           <g mask={`url(#${maskId})`}>
@@ -150,7 +144,7 @@ export function SplashScreen({ onComplete, preview }: { onComplete?: () => void;
             <path ref={wavePath} fill={fillColor} />
           </g>
         </svg>
-        <div ref={counter} style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, font: "500 12px Arial, sans-serif", fontVariantNumeric: "tabular-nums" }}>loading... <span ref={number} style={{ display: "inline-block", minWidth: "3ch", textAlign: "right" }}>0</span>%</div>
+        <div ref={counter} style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, font: "500 12px Arial, sans-serif", fontVariantNumeric: "tabular-nums" }}><span ref={number} style={{ display: "inline-block", minWidth: "3ch", textAlign: "right" }}>0</span>%</div>
       </div>}
       {preview && <button type="button" onClick={() => { setGone(true); complete.current?.(); }} style={{ position: "absolute", top: 18, right: 18, border: "1px solid currentColor", borderRadius: 8, padding: "6px 12px", font: "inherit", color: "inherit", background: "transparent" }}>Close preview</button>}
     </div>

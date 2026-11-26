@@ -3387,3 +3387,11 @@ html[data-video-background="on"] :is(.auth-abstract-background .bg-card,
     background-image: var(--logbook-theme-texture, none);
   }
 }
+
+
+/* Identical responsive wordmark size in the startup splash and idle saver. */
+.logbook-splash-wordmark { width: 80%; position: relative; }
+@media (min-width: 768px) { .logbook-splash-wordmark { width: 70%; } }
+@media (min-width: 1024px) { .logbook-splash-wordmark { width: min(80%, 740px); } }
+@media (min-width: 1280px) { .logbook-splash-wordmark { width: min(80%, 965px); } }
+.logbook-screensaver::backdrop { background: transparent; }

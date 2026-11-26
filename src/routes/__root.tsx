@@ -25,6 +25,7 @@ import { MeetPanel } from "../components/MeetPanel";
 import { useOrcaAI } from "../lib/orca-context";
 import { useSession } from "../lib/session";
 import { SplashScreen } from "../components/SplashScreen";
+import { IdleScreensaver } from "../components/IdleScreensaver";
 import { OrcaLogo } from "../components/OrcaLogo";
 import { PasskeyGate } from "../components/PasskeyGate";
 import { ScreenControlWidget } from "../components/ScreenControlWidget";
@@ -379,6 +380,7 @@ function RootComponent() {
           maxAge: 24 * 60 * 60 * 1000,
         }}
       >
+        <IdleScreensaver enabled={!showEntrySplash && pathname !== "/" && pathname !== "/share" && !pathname.startsWith("/picking-tickets")} />
         <SupabaseStatusGate>
           {pathname === "/share" ? (
             <>
