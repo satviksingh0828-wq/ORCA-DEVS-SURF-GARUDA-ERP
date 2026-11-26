@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import {
   BookOpen,
@@ -23,7 +23,6 @@ import {
 } from "@/components/accounts/AccountsSectionNav";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { TableViewMode } from "@/components/ui/table-view-mode";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -240,6 +239,8 @@ export function AccountsLedgerPage() {
   const [assignmentLoading, setAssignmentLoading] = useState(false);
   const [assignmentError, setAssignmentError] = useState<string | null>(null);
   const [assignmentSearch, setAssignmentSearch] = useState("");
+  const assignmentDialog = useRef<HTMLDialogElement>(null);
+  const [assignmentTarget, setAssignmentTarget] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [listBranch, setListBranch] = useState("all");
@@ -428,6 +429,19 @@ export function AccountsLedgerPage() {
     setAssignmentUserIds([]);
     setAssignmentLedgerId(ledgerId);
   }
+
+  useEffect(() => {
+    const element = assignmentDialog.current;
+    if (!element) return;
+    if (isAdmin && assignmentLedgerId) {
+      if (!element.open) {
+        try { element.showModal(); }
+        catch { element.setAttribute("open", ""); }
+      }
+    } else if (element.open) {
+      element.close();
+    }
+  }, [assignmentLedgerId, isAdmin]);
 
   useEffect(() => {
     if (!assignmentLedgerId || !isAdmin) return;
@@ -1157,6 +1171,18 @@ export function AccountsLedgerPage() {
                   </Button>
                 )}
               </div>
+              {isAdmin && (
+                <section className="surface-card flex flex-wrap items-end gap-3 p-3">
+                  <label className="min-w-0 flex-1 space-y-1">
+                    <span className="text-xs font-medium">Manage ledger access</span>
+                    <select aria-label="Ledger to assign" value={assignmentTarget} onChange={event => setAssignmentTarget(event.target.value)} className="block h-9 w-full rounded-md border border-input bg-background px-2 text-sm">
+                      <option value="">Select a ledger</option>
+                      {filteredList.map(ledger => <option key={ledger.id} value={ledger.id}>{ledger.account_name} · {ledgerBranchById.get(ledger.branch_id)?.branch_name ?? "—"}</option>)}
+                    </select>
+                  </label>
+                  <Button type="button" disabled={!assignmentTarget || !filteredList.some(l => l.id === assignmentTarget)} onClick={() => openAssignment(assignmentTarget)}>Assign users</Button>
+                </section>
+              )}
               <TableViewMode label="Accounts Ledger List" compactColumns={[1, 2, 3, 4, 7]}>
               <section className="overflow-hidden rounded-2xl border border-border bg-card">
                 <div className="overflow-x-auto">
@@ -1227,7 +1253,9 @@ export function AccountsLedgerPage() {
                                   type="button"
                                   size="sm"
                                   variant="outline"
-                                  onClick={() => openAssignment(ledger.id)}
+                                  className="relative z-10 h-auto min-h-9 w-full min-w-0 whitespace-normal break-words px-1 py-1.5 pointer-events-auto"
+                                  aria-label={`Assign users to ${ledger.account_name}`}
+                                  onClick={(event) => { event.stopPropagation(); openAssignment(ledger.id); }}
                                 >
                                   Assign ({(ledgerAssignments[ledger.id] ?? []).length})
                                 </Button>
@@ -1372,16 +1400,17 @@ export function AccountsLedgerPage() {
           )}
         </div>
       </div>
-      <Dialog open={isAdmin && assignmentLedgerId !== null} onOpenChange={(open) => {
-        if (!open && !assignmentSaving) setAssignmentLedgerId(null);
-      }}>
-        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto" onEscapeKeyDown={(event) => { if (assignmentSaving) event.preventDefault(); }} onPointerDownOutside={(event) => { if (assignmentSaving) event.preventDefault(); }}>
-          <DialogHeader>
-            <DialogTitle>Assign Basic users</DialogTitle>
-            <DialogDescription>
+      <dialog ref={assignmentDialog} aria-labelledby="ledger-assignment-title"
+        className="fixed inset-0 m-auto max-h-[85vh] w-[calc(100%-2rem)] max-w-lg overflow-y-auto rounded-xl border border-border bg-background p-5 text-foreground shadow-xl backdrop:bg-black/60"
+        style={{ width: "min(32rem, calc(100% - 2rem))", zIndex: 10001 }}
+        onCancel={event => { event.preventDefault(); if (!assignmentSaving) setAssignmentLedgerId(null); }}>
+        <div className="space-y-4">
+          <div className="space-y-1">
+            <h2 id="ledger-assignment-title" className="text-lg font-semibold">Assign Basic users</h2>
+            <p className="text-sm text-muted-foreground">
               {ledgers.find(ledger => ledger.id === assignmentLedgerId)?.account_name ?? "Selected ledger"} · Select users who should have access to this ledger.
-            </DialogDescription>
-          </DialogHeader>
+            </p>
+          </div>
           {assignmentLoading ? (
             <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading user access…</div>
           ) : assignmentError ? (
@@ -1405,14 +1434,14 @@ export function AccountsLedgerPage() {
               </div>
             </div>
           )}
-          <DialogFooter>
+          <div className="flex flex-wrap justify-end gap-2">
             <Button type="button" variant="outline" disabled={assignmentSaving} onClick={() => setAssignmentLedgerId(null)}>Cancel</Button>
             <Button type="button" onClick={() => void saveAssignment()} disabled={assignmentSaving || assignmentLoading || Boolean(assignmentError)}>
               {assignmentSaving ? "Saving…" : "Save access"}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          </div>
+        </div>
+      </dialog>
     </AppShell>
   );
 }

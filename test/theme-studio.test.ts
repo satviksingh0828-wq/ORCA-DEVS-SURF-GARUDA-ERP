@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
 import {
   DEFAULT_THEME_PROFILE,
   THEME_PRESETS,
