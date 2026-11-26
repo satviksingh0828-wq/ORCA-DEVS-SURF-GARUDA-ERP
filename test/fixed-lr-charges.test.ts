@@ -50,3 +50,14 @@ test("LTMS mapping exists but is not yet wired into journal postings", () => {
   assert.match(sql, /fixed_lr_charges_ledger_id IS NULL/);
   assert.doesNotMatch(sql, /journal_entries|journal_lines/);
 });
+
+
+test("consignment create/edit and view show fixed LR charges and hide net from basic users", () => {
+  const source = readFileSync("src/components/operations/ConsignmentList.tsx", "utf8");
+  assert.match(source, /select\("id,transporter_name,pin_code,gstin,per_consignment_charges"\)/);
+  assert.match(source, /fixedLRCharges: editingRow\?\.fixed_lr_charges != null\s*\? num\(editingRow.fixed_lr_charges\)\s*: fixedLRChargeForConsignment\(type, transporterId, selectedTransporter\?\.per_consignment_charges\)/);
+  assert.match(source, /fixedLRCharges=\{props.fixedLRCharges\}/);
+  assert.match(source, /fixedLRCharges=\{num\(row.fixed_lr_charges\)\}/);
+  assert.match(source, /label: "Fixed LR Charges", value: fixedLRCharges/);
+  assert.match(source, /\.\.\.\(hideSourceIncome\s*\? \[\]\s*: \[\s*\{ label: "Source Income"[^\n]*\n\s*\{ label: "NET"/);
+});

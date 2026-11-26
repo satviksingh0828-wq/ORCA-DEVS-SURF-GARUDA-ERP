@@ -13,6 +13,7 @@ import {
 } from "@/lib/wms-stock-inward";
 import { useSession } from "@/lib/session";
 import { manifestCharges, num, type ContractLite, type EntryLite } from "@/lib/trip-calc";
+import { fixedLRChargeForConsignment } from "@/lib/transporter-charges";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,7 +34,7 @@ import {
 } from "@/components/ui/select";
 
 type Item = Record<string, string | number>;
-type Master = { id: string; label: string; pin_code?: string | null; gstin?: string | null };
+type Master = { id: string; label: string; pin_code?: string | null; gstin?: string | null; per_consignment_charges?: number | string | null };
 type PackageTypeOption = {
   id: string;
   branch_id: string;
@@ -709,7 +710,7 @@ export function ConsignmentList({
         db.from("rentals").select("id,rental_name,pin_code,gstin").order("rental_name"),
         db
           .from("ltms_transporters")
-          .select("id,transporter_name,pin_code,gstin")
+          .select("id,transporter_name,pin_code,gstin,per_consignment_charges")
           .order("transporter_name"),
       ]);
     setContracts(
@@ -741,6 +742,7 @@ export function ConsignmentList({
         label: row.transporter_name,
         pin_code: row.pin_code,
         gstin: row.gstin,
+        per_consignment_charges: row.per_consignment_charges,
       })),
     );
   }
@@ -1556,6 +1558,9 @@ export function ConsignmentList({
             packageEntries,
             setPackageEntries,
             showLiveCalculationPreview: true,
+            fixedLRCharges: editingRow?.fixed_lr_charges != null
+              ? num(editingRow.fixed_lr_charges)
+              : fixedLRChargeForConsignment(type, transporterId, selectedTransporter?.per_consignment_charges),
             hideSourceIncome: user?.role === "basic",
             transportMode,
             fromPin,
@@ -2650,6 +2655,7 @@ function ConsignmentForm(props: any) {
             loadingDeduction={0}
             additionalLoading={0}
             hideSourceIncome={props.hideSourceIncome}
+            fixedLRCharges={props.fixedLRCharges}
           />
         )}
         <div className="mt-5 flex justify-end gap-2 border-t border-border pt-4">
@@ -2736,6 +2742,7 @@ function ConsignmentCalculationPreview({
   loadingDeduction,
   additionalLoading,
   hideSourceIncome,
+  fixedLRCharges,
 }: {
   branchId: string;
   sourceId: string;
@@ -2755,6 +2762,7 @@ function ConsignmentCalculationPreview({
   loadingDeduction: number;
   additionalLoading: number;
   hideSourceIncome: boolean;
+  fixedLRCharges: number;
 }) {
   const [sourceEntries, setSourceEntries] = useState<PreviewEntry[]>([]);
   const [transporterEntries, setTransporterEntries] = useState<PreviewEntry[]>([]);
@@ -2922,10 +2930,13 @@ function ConsignmentCalculationPreview({
       value: adjustedPackageLoading,
       tone: "text-amber-700",
     },
+    { label: "Fixed LR Charges", value: fixedLRCharges, tone: "text-rose-700" },
     ...(hideSourceIncome
       ? []
-      : [{ label: "Source Income", value: sourceIncome, tone: "text-emerald-700" }]),
-    { label: "NET", value: net, tone: net >= 0 ? "text-emerald-700" : "text-rose-700" },
+      : [
+          { label: "Source Income", value: sourceIncome, tone: "text-emerald-700" },
+          { label: "NET", value: net, tone: net >= 0 ? "text-emerald-700" : "text-rose-700" },
+        ]),
   ];
   return (
     <section className="consignment-section mt-5 space-y-3 border-t-2 border-sky-700 pt-3">
@@ -4208,6 +4219,7 @@ function ConsignmentView({
           packageEntries={packages}
           type={String(row.consignment_type ?? "own")}
           hideSourceIncome={hideSourceIncome}
+          fixedLRCharges={num(row.fixed_lr_charges)}
           movement={String(row.movement_mode ?? "pickup")}
           transporterId={String(row.transporter_id ?? "")}
           selectedTransporterSourceId={String(row.transporter_source_id ?? "")}
