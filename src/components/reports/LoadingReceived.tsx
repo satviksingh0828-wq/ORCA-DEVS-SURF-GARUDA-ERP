@@ -419,8 +419,7 @@ export function LoadingReceived() {
         )}
       </section>
       <p className="text-xs leading-relaxed text-muted-foreground">
-        Posting debits the selected branch Cash / Bank ledger and credits the mapped Loading Income
-        ledger. The amount posted is the loading amount captured on the Stock Outward receipt.
+        Posting debits the selected branch Cash / Bank ledger and credits the source’s mapped Loading Income ledger. For multiple sources, the captured amount is allocated using package loading charges. Additional Source Income and Approval Income are independent and are not required for Loading Received.
       </p>
     </div>
   );
