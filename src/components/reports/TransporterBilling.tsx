@@ -7,6 +7,8 @@ import { fetchAll } from "@/lib/fetch-all";
 import { manifestCharges, num, type EntryLite } from "@/lib/trip-calc";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
+import { serverSubmitTransporterBill } from "@/lib/transporter-approval-actions";
+import { TransporterApprovalQueue } from "./TransporterApprovalQueue";
 import { ConsignmentDetailsDialog } from "@/components/operations/ConsignmentDetailsDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -159,8 +161,9 @@ function findEntry(entries: Entry[], row: Consignment, sourceId: string) {
 }
 
 export function TransporterBilling() {
-  const branches = useBranches();
+  const allBranches = useBranches();
   const { user } = useSession();
+  const branches = user?.role==="basic"?allBranches.filter(b=>user.branchIds?.includes(b.id)):allBranches;
   const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [bills, setBills] = useState<Bill[]>([]);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);
@@ -185,6 +188,7 @@ export function TransporterBilling() {
   const [selectedCandidateIds, setSelectedCandidateIds] = useState<string[]>([]);
   const [pickerLoading, setPickerLoading] = useState(false);
   const [lines, setLines] = useState<BillLine[]>([]);
+  const needsApproval=lines.some(l=>l.freight_deduction>0||l.additional_freight>0||l.loading_deduction>0||l.additional_loading>0);
   const [form, setForm] = useState({
     branch: "",
     transporter: "",
@@ -233,6 +237,7 @@ export function TransporterBilling() {
         .gte("system_date", listFilters.from)
         .lte("system_date", listFilters.to)
         .order("system_date", { ascending: false });
+      if(user?.role==="basic")query=query.in("branch_id",user.branchIds?.length?user.branchIds:["00000000-0000-0000-0000-000000000000"]);
       if (listFilters.branch !== "all") query = query.eq("branch_id", listFilters.branch);
       if (listFilters.transporter !== "all")
         query = query.eq("transporter_id", listFilters.transporter);
@@ -260,6 +265,7 @@ export function TransporterBilling() {
     listFilters.from,
     listFilters.to,
     showDeleted,
+    user?.id,
   ]);
   useEffect(() => {
     if (!viewing) {
@@ -452,6 +458,8 @@ export function TransporterBilling() {
     [lines],
   );
   async function generate() {
+    if(!user?.sessionToken||user.role==="viewer")return toast.error("Posting access required.");
+    if(!branches.some(b=>b.id===form.branch))return toast.error("Branch access denied.");
     if (
       !form.branch ||
       !form.transporter ||
@@ -490,38 +498,15 @@ export function TransporterBilling() {
     setPostedJournalLines(null);
     setJournalPreviewOpen(true);
     setGenerating(true);
-    const { data: generatedBillId, error } = await (supabase as any).rpc("generate_ltms_transporter_bill", {
-      p_branch_id: form.branch,
-      p_transporter_id: form.transporter,
-      p_transporter_source_id: form.source,
-      p_system_date: form.systemDate,
-      p_transporter_bill_number: form.billNumber.trim(),
-      p_transporter_bill_date: form.billDate,
-      p_period_from: form.from || null,
-      p_period_to: form.to || null,
-      p_created_by: user?.id ?? null,
-      p_items: lines.map((line) => ({
-        consignment_id: line.id,
-        consignment_number: line.consignment_number,
-        from_pin_code: line.from_pin_code,
-        to_pin_code: line.to_pin_code,
-        calculated_freight: line.calculated_freight,
-        freight_deduction: line.freight_deduction,
-        additional_freight: line.additional_freight,
-        final_freight: line.final_freight,
-        calculated_loading: line.calculated_loading,
-        loading_deduction: line.loading_deduction,
-        additional_loading: line.additional_loading,
-        final_loading: line.final_loading,
-        fixed_lr_charges: line.fixed_lr_charges,
-      })),
-    });
-    setGenerating(false);
-    if (error) {
-      setJournalPostStatus("error");
-      setJournalPostError(error.message);
-      return toast.error(`Could not generate transporter bill: ${error.message}`);
-    }
+    let generatedBillId:string;
+    try {
+      const result=await serverSubmitTransporterBill({data:{sessionToken:user.sessionToken,branch:form.branch,transporter:form.transporter,source:form.source,systemDate:form.systemDate,number:form.billNumber.trim(),date:form.billDate,from:form.from||null,to:form.to||null,items:lines.map(line=>({consignment_id:line.id,consignment_number:line.consignment_number,from_pin_code:line.from_pin_code,to_pin_code:line.to_pin_code,calculated_freight:line.calculated_freight,freight_deduction:line.freight_deduction,additional_freight:line.additional_freight,final_freight:line.final_freight,calculated_loading:line.calculated_loading,loading_deduction:line.loading_deduction,additional_loading:line.additional_loading,final_loading:line.final_loading,fixed_lr_charges:line.fixed_lr_charges}))}});
+      if(result.pending){setJournalPreviewOpen(false);setLines([]);setForm(current=>({...current,billNumber:""}));setScreen("list");toast.success("Adjusted Transporter Bill submitted for administrator verification.");await loadBills();return;}
+      generatedBillId=result.id;
+    } catch(error) {
+      const message=error instanceof Error?error.message:String(error);
+      setJournalPostStatus("error");setJournalPostError(message);return toast.error(message);
+    } finally {setGenerating(false);}
     const { data: savedBill, error: savedBillError } = await (supabase as any)
       .from("ltms_transporter_bills")
       .select("journal_entry_id")
@@ -607,6 +592,7 @@ export function TransporterBilling() {
 
   return (
     <div className="space-y-6">
+      {screen === "list" && <TransporterApprovalQueue branches={branches} transporters={transporters} sources={sources} onReviewed={()=>void loadBills()} />}
       {screen === "list" && (
         <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -1058,7 +1044,7 @@ export function TransporterBilling() {
           </div>
           <div className="flex justify-end">
             <Button onClick={() => void generate()} disabled={generating || !lines.length}>
-              {generating ? "Generating…" : "Generate Transporter Bill"}
+              {generating ? "Submitting…" : needsApproval ? "Submit for verification" : "Generate Transporter Bill"}
             </Button>
           </div>
         </section>
@@ -1153,7 +1139,7 @@ export function TransporterBilling() {
               <p className="mt-1 text-xs text-muted-foreground">Freight, Loading, and Fixed LR Charges are expense debits; the full amount is credited to the transporter payable ledger.</p>
             </div>
             <div className="overflow-x-auto rounded-lg border border-border"><table className="w-full text-sm"><thead className="bg-muted/40 text-left text-xs uppercase text-muted-foreground"><tr><th className="px-3 py-2">Journal line</th><th className="px-3 py-2">Mapped account</th><th className="px-3 py-2">Account kind</th><th className="px-3 py-2 text-right">Debit</th><th className="px-3 py-2 text-right">Credit</th></tr></thead><tbody className="divide-y divide-border">{displayedJournalLines.map((line: any, index: number) => { const account = line.account ?? line.ledger_account; const debit = num(line.amount ?? line.debit); const credit = num(line.amount ?? line.credit); const isDebit = line.side ? line.side === "debit" : debit > 0; return <tr key={line.key ?? `${line.line_no}-${index}`}><td className="px-3 py-2">{line.label ?? line.line_description ?? `Line ${line.line_no}`}</td><td className="px-3 py-2 font-medium">{account?.account_name ?? (line.id || line.ledger_account_id ? `Mapped ID ${line.id ?? line.ledger_account_id}` : "NOT MAPPED")}</td><td className="px-3 py-2">{account ? `${account.ledger_type} / ${account.account_kind}` : "—"}</td><td className="px-3 py-2 text-right">{isDebit ? money(debit) : "—"}</td><td className="px-3 py-2 text-right">{!isDebit ? money(credit) : "—"}</td></tr>; })}</tbody><tfoot className="border-t-2 border-border bg-muted/30 font-semibold"><tr><td colSpan={3} className="px-3 py-2">Totals {journalBalanced ? "(balanced)" : "(NOT BALANCED)"}</td><td className="px-3 py-2 text-right">{money(journalDebit)}</td><td className="px-3 py-2 text-right">{money(journalCredit)}</td></tr></tfoot></table></div>
-            {generating && <p className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">Posting this exact entry now… Please wait.</p>}
+            {generating && <p className="rounded-lg border border-blue-300 bg-blue-50 p-3 text-sm text-blue-900">Submitting bill for posting or administrator verification…</p>}
             {postedJournalEntryId && <p className="rounded-lg border border-slate-300 bg-slate-50 p-3 text-sm text-slate-800">Verified from saved journal entry <strong>{postedJournalEntryId}</strong>. The lines above are the actual posted voucher.</p>}
             {journalPostStatus === "success" && <p className="rounded-lg border border-green-300 bg-green-50 p-3 text-sm text-green-900">Journal entry passed and the transporter bill was generated successfully.</p>}
             {journalPostError && <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-900">Journal entry was not passed:
