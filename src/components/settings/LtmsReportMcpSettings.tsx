@@ -133,7 +133,7 @@ export function LtmsReportMcpSettings() {
             or post ERP data. HRMS reports include sensitive staff and compensation information and
             are available only through MCP keys issued by active administrators. Report calls can be limited by date and,
             where that report supports it, branch. An administrator-level key can read every branch.
-            MCP returns persisted report values; unsaved browser-only edits are not visible.
+            MCP returns persisted report values, including Fixed LR Charges, transporter bill totals and finance/billing approval requests; pending or rejected requests are separate from posted journals. Unsaved browser-only edits are not visible.
           </p>
         </div>
 

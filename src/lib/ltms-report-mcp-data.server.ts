@@ -2,6 +2,7 @@
 import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { manifestCharges, num, type ContractLite, type EntryLite } from "@/lib/trip-calc";
+import { fixedLRChargeForConsignment, transporterExpenditureAmount } from "@/lib/transporter-charges";
 
 const PAGE_SIZE = 1000;
 const SOURCE_ROW_CAP = 500_000;
@@ -45,6 +46,17 @@ const INCOME_SCHEMA = z.object({
     .uuid()
     .optional()
     .describe("Optional source/contract UUID, matching the report's source selector."),
+});
+const APPROVAL_REPORT_SCHEMA = z.object({
+  ...BASE_INPUT,
+  branch_id: z.string().uuid().optional(),
+  status: z.enum(["pending", "approved", "rejected"]).optional(),
+  kind: z.enum(["receipt", "payment", "withdrawal", "deposit", "workmen", "transporter"]).optional(),
+});
+const TRANSPORTER_BILLS_SCHEMA = z.object({
+  ...BASE_INPUT,
+  branch_id: z.string().uuid().optional(),
+  include_deleted: z.boolean().optional(),
 });
 const TRANSPORTER_SCHEMA = z.object({
   ...BASE_INPUT,
@@ -479,7 +491,7 @@ async function transporterExpenditure(
   let query = db
     .from("consignments")
     .select(
-      "id,consignment_number,transporter_id,transporter_source_id,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,to_details,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code),transporter_source:ltms_transporter_sources(source_name)",
+      "id,consignment_number,transporter_id,transporter_source_id,transporter_bill_id,fixed_lr_charges,movement_mode,consignment_date,consignment_type,transport_mode,from_pin_code,to_pin_code,to_details,freight_deduction,additional_freight,loading_deduction,additional_loading,transporter:ltms_transporters(transporter_name,pin_code),transporter_source:ltms_transporter_sources(source_name)",
     )
     .eq("consignment_type", "third_party")
     .gte("consignment_date", range.from)
@@ -569,7 +581,9 @@ async function transporterExpenditure(
       "Weight (KG)": total.weight,
       Freight: freight,
       Loading: loading,
-      "Total Expenditure": freight + loading,
+      "Fixed LR Charges": fixedLRChargeForConsignment(row.consignment_type, row.transporter_id, row.fixed_lr_charges),
+      "Total Expenditure": transporterExpenditureAmount(freight, loading, fixedLRChargeForConsignment(row.consignment_type, row.transporter_id, row.fixed_lr_charges)),
+      Billed: Boolean(row.transporter_bill_id),
     };
   });
   return page("Transporter Expenditure", range, input, rows);
@@ -1148,7 +1162,7 @@ async function consignmentNet(db: AnyDb, input: QueryInput): Promise<DataResult>
   let query = db
     .from("consignments")
     .select(
-      "id,consignment_number,branch_id,consignment_date,consignment_type,movement_mode,transport_mode,trip_id,source_id,source_bill_id,transporter_id,transporter_source_id,transporter_bill_id,freight_deduction,additional_freight,loading_deduction,additional_loading,from_pin_code,to_pin_code,to_details",
+      "id,consignment_number,branch_id,consignment_date,consignment_type,movement_mode,transport_mode,trip_id,source_id,source_bill_id,transporter_id,transporter_source_id,transporter_bill_id,fixed_lr_charges,freight_deduction,additional_freight,loading_deduction,additional_loading,from_pin_code,to_pin_code,to_details",
     )
     .gte("consignment_date", range.from)
     .lte("consignment_date", range.to)
@@ -1378,13 +1392,15 @@ async function consignmentNet(db: AnyDb, input: QueryInput): Promise<DataResult>
         : eligibleTrip && tripCost > 0 && tripCount > 0
           ? tripCost / tripCount
           : null;
-    const transporterExpenditure = transporter
-      ? Math.max(
-          0,
-          transporter.freight - num(row.freight_deduction) + num(row.additional_freight),
-        ) +
-        Math.max(0, transporter.loading - num(row.loading_deduction) + num(row.additional_loading))
-      : null;
+    const fixedLRCharges = fixedLRChargeForConsignment(row.consignment_type, row.transporter_id, row.fixed_lr_charges);
+    const transporterExpenditure =
+      String(row.consignment_type ?? "").toLowerCase() === "third_party" && row.transporter_id
+        ? transporterExpenditureAmount(
+            transporter ? Math.max(0, transporter.freight - num(row.freight_deduction) + num(row.additional_freight)) : 0,
+            transporter ? Math.max(0, transporter.loading - num(row.loading_deduction) + num(row.additional_loading)) : 0,
+            fixedLRCharges,
+          )
+        : null;
     const totalExpenditure = (transporterExpenditure ?? 0) + loading + (tripExpenditure ?? 0);
     const incomeTotal = income.freight + income.loading;
     return {
@@ -1392,6 +1408,7 @@ async function consignmentNet(db: AnyDb, input: QueryInput): Promise<DataResult>
       Date: row.consignment_date ?? "",
       "Total Income": incomeTotal,
       "Transporter Expenditure": transporterExpenditure,
+      "Fixed LR Charges (included in Transporter Expenditure)": fixedLRCharges,
       "Loading Charges": loading,
       "Trip Expenditure": tripExpenditure,
       "Total Expenditure": totalExpenditure,
@@ -2371,7 +2388,56 @@ function registerReadTool(
   );
 }
 
+// Approval requests are workflow records, not ledger movements. Read-only
+// projections deliberately omit IDs, raw JSON, session data and document paths.
+type ApprovalReportInput = QueryInput & {status?: "pending"|"approved"|"rejected";kind?: "receipt"|"payment"|"withdrawal"|"deposit"|"workmen"|"transporter"};
+async function financeApprovalRequests(db: AnyDb, input: ApprovalReportInput): Promise<DataResult> {
+  const range=resolveRange(input);
+  const config=[
+    {table:"account_finance_requests",date:"entry_date",kind:"account",columns:"kind,name,entry_date,amount,status,created_at,reviewed_at,review_note,journal_entry_id,branch:branches(branch_name)"},
+    {table:"workmen_bill_approval_requests",date:"bill_date",kind:"workmen",columns:"bill_date,grand_total,additional_pay_amount,deduction_amount,items,status,created_at,reviewed_at,review_note,bill_id,branch:branches(branch_name)"},
+    {table:"transporter_bill_approval_requests",date:"transporter_bill_date",kind:"transporter",columns:"transporter_bill_number,transporter_bill_date,grand_total,items,status,created_at,reviewed_at,review_note,bill_id,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),source:ltms_transporter_sources(source_name)"},
+  ];
+  const groups=await Promise.all(config.filter(c=>!input.kind||(c.kind==="account"?["receipt","payment","withdrawal","deposit"].includes(input.kind):input.kind===c.kind)).map(async c=>{
+    let q=db.from(c.table).select(c.columns).gte(c.date,range.from).lte(c.date,range.to).order(c.date,{ascending:false}).order("created_at",{ascending:false});
+    if(input.branch_id)q=q.eq("branch_id",input.branch_id);
+    if(input.status)q=q.eq("status",input.status);
+    if(c.kind==="account"&&input.kind)q=q.eq("kind",input.kind);
+    const records=await fetchAll<any>((from,to)=>q.range(from,to));
+    return records.map(r=>{
+      const items=Array.isArray(r.items)?r.items:[];
+      const common={Date:r[c.date],Branch:r.branch?.branch_name??null,Type:c.kind==="account"?r.kind:c.kind,Status:r.status,Amount:num(r.amount??r.grand_total),"Submitted At":r.created_at,"Reviewed At":r.reviewed_at??null,"Review Note":r.review_note??null,"Journal Posted":r.status==="approved"&&Boolean(r.journal_entry_id??r.bill_id)};
+      if(c.kind==="account")return {...common,Name:r.name};
+      if(c.kind==="workmen")return {...common,"Bill Additional Pay":num(r.additional_pay_amount),"Bill Deduction":num(r.deduction_amount),"Entry Additions":items.reduce((n:number,i:any)=>n+num(i.addition),0),"Entry Deductions":items.reduce((n:number,i:any)=>n+num(i.deduction),0),"Source Entries":items.length};
+      return {...common,"Transporter Bill No.":r.transporter_bill_number,Transporter:r.transporter?.transporter_name??null,Source:r.source?.source_name??null,"Freight Additions":items.reduce((n:number,i:any)=>n+num(i.additional_freight),0),"Freight Deductions":items.reduce((n:number,i:any)=>n+num(i.freight_deduction),0),"Loading Additions":items.reduce((n:number,i:any)=>n+num(i.additional_loading),0),"Loading Deductions":items.reduce((n:number,i:any)=>n+num(i.loading_deduction),0),"Fixed LR Charges (included in Amount)":items.reduce((n:number,i:any)=>n+num(i.fixed_lr_charges),0),"Consignments":items.length};
+    });
+  }));
+  const rows=groups.flat().sort((a,b)=>String(b.Date).localeCompare(String(a.Date))||String(b["Submitted At"]).localeCompare(String(a["Submitted At"])));
+  return page("Finance and Billing Approval Requests (not ledger balances)",range,input,rows);
+}
+async function transporterBills(db:AnyDb,input:QueryInput&{include_deleted?:boolean}):Promise<DataResult>{
+ const range=resolveRange(input);
+ let q=db.from("ltms_transporter_bills").select("system_number,system_date,transporter_bill_number,transporter_bill_date,total_freight,total_loading,total_fixed_lr,paid_amount,journal_entry_id,deleted_at,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),source:ltms_transporter_sources(source_name)").gte("system_date",range.from).lte("system_date",range.to).order("system_date",{ascending:false}).order("system_number",{ascending:false});
+ if(input.branch_id)q=q.eq("branch_id",input.branch_id);
+ if(!input.include_deleted)q=q.is("deleted_at",null);
+ const records=await fetchAll<any>((from,to)=>q.range(from,to));
+ return page("Transporter Bills",range,input,records.map(r=>{
+  const freight=num(r.total_freight),loading=num(r.total_loading),fixed=num(r.total_fixed_lr),total=transporterExpenditureAmount(freight,loading,fixed),paid=num(r.paid_amount);
+  return {"System No.":r.system_number,"System Date":r.system_date,"Transporter Bill No.":r.transporter_bill_number,"Bill Date":r.transporter_bill_date,Branch:r.branch?.branch_name??null,Transporter:r.transporter?.transporter_name??null,Source:r.source?.source_name??null,Freight:freight,Loading:loading,"Fixed LR Charges":fixed,"Total Expenditure":total,Paid:paid,"Balance Due":Math.max(0,total-paid),"Journal Posted":Boolean(r.journal_entry_id),Deleted:Boolean(r.deleted_at)};
+ }));
+}
+
 export function registerLtmsReportTools(server: McpServer, db: AnyDb, actorId: string) {
+  registerReadTool(server, db, {
+    name: "finance_approval_requests", title: "Finance and Billing Approval Requests",
+    description: "Read-only account cash receipt/payment, bank withdrawal/deposit, Workmen Bill and Transporter Bill approval requests. Optional kind, status, date and branch filters. Pending/rejected amounts are not posted accounting transactions; do not add them to journal balances. Fixed LR is included in transporter totals. No approval or write action.",
+    schema: APPROVAL_REPORT_SCHEMA, load: (input) => financeApprovalRequests(db,input),
+  });
+  registerReadTool(server, db, {
+    name: "transporter_bills", title: "Transporter Bills",
+    description: "Read-only generated transporter bills by system date, with saved freight, loading, fixed LR charges included once, total expenditure, paid amount, balance and journal status. Pending requests are in finance_approval_requests instead.",
+    schema: TRANSPORTER_BILLS_SCHEMA, load: (input) => transporterBills(db,input),
+  });
   registerReadTool(server, db, {
     name: "wms_warehouses",
     title: "WMS Warehouses",
@@ -2528,7 +2594,7 @@ export function registerLtmsReportTools(server: McpServer, db: AnyDb, actorId: s
     name: "transporter_expenditure",
     title: "Transporter Expenditure report",
     description:
-      "Read-only rows from the app's Transporter Expenditure report. Returns only the report columns and applies stored deductions/additions, but does not expose the report's save-adjustment action. This report has no branch filter in the existing UI. Optional filters: from_date, to_date, transporter_id, source_id, limit, offset. Defaults to the current month.",
+      "Read-only rows from the app's Transporter Expenditure report. Includes stored additions/deductions, immutable per-consignment Fixed LR Charges exactly once (even without a matching route), total expenditure and billed flag. Calculated report values are not necessarily posted journal expenses. No save-adjustment action. This report has no branch filter in the existing UI. Optional filters: from_date, to_date, transporter_id, source_id, limit, offset. Defaults to the current month.",
     schema: TRANSPORTER_SCHEMA,
     load: (input) => transporterExpenditure(db, input),
   });
@@ -2552,7 +2618,7 @@ export function registerLtmsReportTools(server: McpServer, db: AnyDb, actorId: s
     name: "stock_outward_loading_received",
     title: "Stock Outward — Loading Received",
     description:
-      "Read-only Stock Outward loading-received rows by loading_date (inclusive). Posted indicates a linked loading-received journal entry. Optional filters: from_date, to_date, branch_id, limit, offset; defaults to current month. System UUIDs are not returned.",
+      "Read-only Stock Outward loading-received rows by loading_date (inclusive). Posted indicates a linked loading-received journal entry. Independent of optional Additional Source Income snapshots. Optional filters: from_date, to_date, branch_id, limit, offset; defaults to current month. System UUIDs are not returned.",
     schema: BRANCH_SCHEMA,
     load: (input) => stockOutwardIncomeRows(db, input, "loading"),
   });
@@ -2600,7 +2666,7 @@ export function registerLtmsReportTools(server: McpServer, db: AnyDb, actorId: s
     name: "consignment_net",
     title: "Consignment Net report",
     description:
-      "Read-only rows from the app's Consignment Net report using its source, transporter, loading and trip-allocation calculations. Optional filters: from_date, to_date, branch_id, limit, offset. Defaults to the current month. Null expenditure values are blank/not applicable in the report.",
+      "Read-only rows from the app's Consignment Net report using its source, transporter, loading and trip-allocation calculations. Saved Fixed LR Charges are included once in transporter expenditure, total expenditure and net; the separate fixed LR column is informational and must not be added again. Optional filters: from_date, to_date, branch_id, limit, offset. Defaults to the current month. Null expenditure values are blank/not applicable in the report.",
     schema: BRANCH_SCHEMA,
     load: (input) => consignmentNet(db, input),
   });

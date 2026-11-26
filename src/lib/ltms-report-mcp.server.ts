@@ -84,7 +84,7 @@ export async function handleLtmsReportMcpRequest(request: Request): Promise<Resp
 
     const server = new McpServer({
       name: "ORCA DEVS SURF Reports and WMS",
-      version: "1.0.0",
+      version: "1.1.0",
     });
     registerLtmsReportTools(server, db, key.created_by);
     const transport = new WebStandardStreamableHTTPServerTransport({
