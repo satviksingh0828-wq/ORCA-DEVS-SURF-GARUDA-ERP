@@ -268,7 +268,7 @@ export async function printLtmsManifestPdf(manifest: Row) {
   const data = await loadHeader(text(manifest.branch_id), record(manifest.branch));
   const doc = new jsPDF({ unit: "pt", format: "a4", orientation: "portrait" });
   doc.setTextColor(...ink);
-  heading(doc, "MANIFEST AUTO", number, data);
+  heading(doc, "MANIFEST DETAILS", number, data);
   const items = Array.isArray(manifest.items) ? manifest.items as Row[] : [];
   const getConsignment = (item: Row) => record(item.consignment);
   const first = items[0] || {};
@@ -302,12 +302,12 @@ export async function printLtmsManifestPdf(manifest: Row) {
   fit(doc, manifestDate + "  " + time, X + 442, 145, 87, 7.2);
   const billNumbers = unique(items.map((item) =>
     text(item.eway_bill_number || record(item.shipment).eway_bill_number)));
-  const headerBill = billNumbers.length > 1 ? billNumbers.length + " bills" : (billNumbers[0] || "");
+  const headerBill = String(billNumbers.length);
   const validUntil = items
     .map((item) => text(record(item.shipment).valid_until))
     .filter(Boolean).sort()[0] || "";
   let y = infoRow(doc, 152,
-    ["PAN No.", "GSTIN", "CIN", "E-way Bill No.", "E-way Bill Date"],
+    ["PAN No.", "GSTIN", "CIN", "No. of E-Way Bills", "E-way Bill Date"],
     [text(data.branch.pan), text(data.branch.gstin), "",
       headerBill, billNumbers.length === 1 ? date(shipment.eway_bill_date) : ""],
     [87, 132, 124, 94, 95]);
@@ -361,10 +361,10 @@ export async function printLtmsManifestPdf(manifest: Row) {
     ];
   });
   const widths = [26, 77, 59, 58, 33, 55, 50, 86, 88];
-  const tab = table(doc, "MANIFEST AUTO", number,
-    ["S. No.", "CN No.", "From", "To", "Pkgs", "Weight", "To Pay", "Consignor", "Consignee"],
+  const tab = table(doc, "MANIFEST DETAILS", number,
+    ["S. No.", "Consignment No.", "From", "To", "Pkgs", "Weight", "Bill Status", "Consignor", "Consignee"],
     widths, rows, y);
-  totals(doc, "Total / No. of CN: " + rows.length, tab.y,
+  totals(doc, "Total / No. of Consignments: " + rows.length, tab.y,
     [["Pkgs", money(totalPieces)], ["Weight (KG)", money(totalWeight)]]);
   // Transfer metadata that is not part of the source's nine-column table is
   // retained in a separate appendix instead of being silently discarded.
@@ -518,14 +518,14 @@ export async function printDeliveryManifestPdf(
   ) || {};
   const driver = record(representative.driver);
   const packageTotals = await loadPackageTotals(consignmentIds);
-  heading(doc, "MANIFEST AUTO", number, data);
+  const deliveryBillNumbers = unique(linkedShipments.map((shipment) => text(shipment.eway_bill_number)));
+  heading(doc, "MANIFEST DETAILS", number, data);
   fit(doc, date(manifest.manifest_date), X + 442, 145, 88, 7.8);
   let y = infoRow(doc, 152,
-    ["PAN No.", "GSTIN", "CIN", "E-way Bill No.", "E-way Bill Date"],
+    ["PAN No.", "GSTIN", "CIN", "No. of E-Way Bills", "E-way Bill Date"],
     [text(data.branch.pan), text(data.branch.gstin), "",
-      linkedShipments.length === 1 ? text(linkedShipments[0].eway_bill_number)
-        : linkedShipments.length > 1 ? linkedShipments.length + " bills" : "",
-      linkedShipments.length === 1 ? date(linkedShipments[0].eway_bill_date) : ""],
+      String(deliveryBillNumbers.length),
+      deliveryBillNumbers.length === 1 ? date(linkedShipments.find((shipment) => text(shipment.eway_bill_number) === deliveryBillNumbers[0])?.eway_bill_date) : ""],
     [87, 132, 124, 94, 95]);
   y = infoRow(doc, y,
     ["From", "Vehicle No.", "Load Type", "E-way Bill Valid", "Mode"],
@@ -573,7 +573,7 @@ export async function printDeliveryManifestPdf(
     ];
   });
   const widths = [26, 77, 59, 58, 33, 55, 50, 86, 88];
-  const result = table(doc, "MANIFEST AUTO", number,
+  const result = table(doc, "MANIFEST DETAILS", number,
     ["S. No.", "LR No.", "From", "To", "Pkgs", "Weight", "Status", "Consignor", "Consignee"],
     widths, rows, y);
   totals(doc, "Total / No. of LR: " + links.length, result.y,
