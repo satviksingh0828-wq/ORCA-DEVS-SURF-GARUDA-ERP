@@ -20,8 +20,6 @@ export function SplashScreen({ onComplete, preview }: { onComplete?: () => void;
   const wavePath = useRef<SVGPathElement>(null);
   const logo = useRef<HTMLDivElement>(null);
   const overlay = useRef<HTMLDivElement>(null);
-  const counter = useRef<HTMLDivElement>(null);
-  const number = useRef<HTMLSpanElement>(null);
   const complete = useRef(onComplete);
   const maskId = "logbook-mask-" + useId().replace(/[^a-zA-Z0-9_-]/g, "");
   useEffect(() => { complete.current = onComplete; }, [onComplete]);
@@ -87,8 +85,8 @@ export function SplashScreen({ onComplete, preview }: { onComplete?: () => void;
   }, [preview]);
 
   useEffect(() => {
-    if (gone || mode === null || !svg.current || !wavePath.current || !logo.current || !overlay.current || !counter.current || !number.current) return;
-    const graphic = svg.current, wave = wavePath.current, stage = logo.current, layer = overlay.current, label = counter.current, digits = number.current;
+    if (gone || mode === null || !svg.current || !wavePath.current || !logo.current || !overlay.current) return;
+    const graphic = svg.current, wave = wavePath.current, stage = logo.current, layer = overlay.current;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     const started = performance.now();
     let frame = 0;
@@ -114,8 +112,6 @@ export function SplashScreen({ onComplete, preview }: { onComplete?: () => void;
         }
         wave.setAttribute("d", d + " L962 " + (192 + amplitude) + "Z");
       }
-      digits.textContent = String(Math.round(p * 100));
-      label.style.opacity = String(reduced ? 1 : Math.max(0, 1 - (t - 4) / 0.25));
       const zoom = reduced ? 0 : Math.max(0, Math.min(1, t - 4.7));
       const target = window.innerWidth / Math.max(graphic.clientWidth, 1) * (window.innerWidth >= 1024 ? 2 : 1.5);
       stage.style.transform = "scale(" + (1 + zoom * (target - 1)) + ")";
@@ -144,7 +140,6 @@ export function SplashScreen({ onComplete, preview }: { onComplete?: () => void;
             <path ref={wavePath} fill={fillColor} />
           </g>
         </svg>
-        <div ref={counter} style={{ position: "absolute", right: 0, top: "100%", marginTop: 4, font: "500 12px Arial, sans-serif", fontVariantNumeric: "tabular-nums" }}><span ref={number} style={{ display: "inline-block", minWidth: "3ch", textAlign: "right" }}>0</span>%</div>
       </div>}
       {preview && <button type="button" onClick={() => { setGone(true); complete.current?.(); }} style={{ position: "absolute", top: 18, right: 18, border: "1px solid currentColor", borderRadius: 8, padding: "6px 12px", font: "inherit", color: "inherit", background: "transparent" }}>Close preview</button>}
     </div>

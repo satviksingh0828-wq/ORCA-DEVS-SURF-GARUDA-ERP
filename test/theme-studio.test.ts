@@ -374,12 +374,13 @@ test("live theme preview is independent from stored appearance", async () => {
 });
 
 
-test("startup shows percentage only and idle saver uses static shared wordmark", async () => {
+test("startup shows only animated wordmark and idle saver uses static shared wordmark", async () => {
   const fs = await import("node:fs");
   const splash = fs.readFileSync("src/components/SplashScreen.tsx", "utf8");
   const saver = fs.readFileSync("src/components/IdleScreensaver.tsx", "utf8");
   const root = fs.readFileSync("src/routes/__root.tsx", "utf8");
   assert.doesNotMatch(splash, />loading\.\.\./);
+  assert.doesNotMatch(splash, /ref=\{counter\}|ref=\{number\}|digits\.textContent/);
   assert.match(splash, /LogBookSplashText fill="white"/);
   assert.match(saver, /SCREENSAVER_IDLE_MS = 3 \* 60 \* 1000/);
   assert.match(saver, /LogBookSplashText fill=\{themed \? "var\(--primary\)"/);
