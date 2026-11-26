@@ -23,6 +23,7 @@ import {
 } from "@/components/accounts/AccountsSectionNav";
 import { AccountsAccessGuard } from "@/components/accounts/AccountsAccessGuard";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { TableViewMode } from "@/components/ui/table-view-mode";
 import { Input } from "@/components/ui/input";
 import { supabase } from "@/integrations/supabase/client";
@@ -236,6 +237,9 @@ export function AccountsLedgerPage() {
   const [assignmentLedgerId, setAssignmentLedgerId] = useState<string | null>(null);
   const [assignmentUserIds, setAssignmentUserIds] = useState<string[]>([]);
   const [assignmentSaving, setAssignmentSaving] = useState(false);
+  const [assignmentLoading, setAssignmentLoading] = useState(false);
+  const [assignmentError, setAssignmentError] = useState<string | null>(null);
+  const [assignmentSearch, setAssignmentSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [listBranch, setListBranch] = useState("all");
@@ -417,12 +421,42 @@ export function AccountsLedgerPage() {
   const showLedgerListView = true;
 
   function openAssignment(ledgerId: string) {
+    if (!isAdmin || assignmentSaving) return;
+    setAssignmentSearch("");
+    setAssignmentError(null);
+    setAssignmentLoading(true);
+    setAssignmentUserIds([]);
     setAssignmentLedgerId(ledgerId);
-    setAssignmentUserIds(ledgerAssignments[ledgerId] ?? []);
   }
 
+  useEffect(() => {
+    if (!assignmentLedgerId || !isAdmin) return;
+    let active = true;
+    setAssignmentLoading(true);
+    setAssignmentError(null);
+    void (async () => {
+      try {
+        const [users, access] = await Promise.all([
+          db.from("app_users").select("id,full_name,username").eq("role","basic").eq("is_active",true).order("full_name"),
+          db.from("ledger_basic_user_access").select("basic_user_id").eq("ledger_account_id",assignmentLedgerId),
+        ]);
+        if (users.error || access.error) throw new Error(users.error?.message ?? access.error?.message);
+        if (!active) return;
+        const assigned = (access.data ?? []).map((row: {basic_user_id:string}) => row.basic_user_id);
+        setBasicUsers((users.data ?? []) as BasicUser[]);
+        setAssignmentUserIds(assigned);
+        setLedgerAssignments(current => ({...current,[assignmentLedgerId]:assigned}));
+      } catch(error) {
+        if (active) setAssignmentError(error instanceof Error ? error.message : String(error));
+      } finally {
+        if (active) setAssignmentLoading(false);
+      }
+    })();
+    return () => { active = false; };
+  }, [assignmentLedgerId, isAdmin]);
+
   async function saveAssignment() {
-    if (!assignmentLedgerId) return;
+    if (!isAdmin || !assignmentLedgerId || assignmentLoading || assignmentError || assignmentSaving) return;
     setAssignmentSaving(true);
     try {
       const { error: deleteError } = await db
@@ -1207,50 +1241,7 @@ export function AccountsLedgerPage() {
                 </div>
               </section>
               </TableViewMode>
-              {isAdmin && assignmentLedgerId && (
-                <section className="surface-card space-y-4 p-5">
-                  <div>
-                    <h3 className="font-semibold">Assign Basic users to a ledger</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Select one or more Basic users. Clear all selections to hide this ledger from
-                      Basic users.
-                    </p>
-                  </div>
-                  <select
-                    multiple
-                    size={Math.min(Math.max(basicUsers.length, 3), 8)}
-                    value={assignmentUserIds}
-                    onChange={(event) =>
-                      setAssignmentUserIds(
-                        Array.from(event.target.selectedOptions, (option) => option.value),
-                      )
-                    }
-                    className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    {basicUsers.map((basicUser) => (
-                      <option key={basicUser.id} value={basicUser.id}>
-                        {basicUser.full_name || basicUser.username} ({basicUser.username})
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setAssignmentLedgerId(null)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="button"
-                      onClick={() => void saveAssignment()}
-                      disabled={assignmentSaving}
-                    >
-                      {assignmentSaving ? "Saving…" : "Save access"}
-                    </Button>
-                  </div>
-                </section>
-              )}
+
             </div>
           )}
 
@@ -1361,48 +1352,12 @@ export function AccountsLedgerPage() {
                 </div>
               </section>
               {isAdmin && selectedLedger && (
-                <section className="surface-card space-y-4 p-5">
-                  <div>
-                    <h3 className="font-semibold">Basic-user access</h3>
-                    <p className="text-sm text-muted-foreground">
-                      Assign this ledger to Basic users. Remove all selections to hide it from them.
-                    </p>
-                  </div>
-                  <select
-                    multiple
-                    size={Math.min(Math.max(basicUsers.length, 3), 8)}
-                    value={
-                      assignmentLedgerId === selectedLedger.id
-                        ? assignmentUserIds
-                        : (ledgerAssignments[selectedLedger.id] ?? [])
-                    }
-                    onFocus={() => {
-                      if (assignmentLedgerId !== selectedLedger.id)
-                        openAssignment(selectedLedger.id);
-                    }}
-                    onChange={(event) => {
-                      openAssignment(selectedLedger.id);
-                      setAssignmentUserIds(
-                        Array.from(event.target.selectedOptions, (option) => option.value),
-                      );
-                    }}
-                    className="min-h-28 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                  >
-                    {basicUsers.map((basicUser) => (
-                      <option key={basicUser.id} value={basicUser.id}>
-                        {basicUser.full_name || basicUser.username} ({basicUser.username})
-                      </option>
-                    ))}
-                  </select>
-                  <div className="flex justify-end">
-                    <Button
-                      type="button"
-                      onClick={() => void saveAssignment()}
-                      disabled={assignmentSaving || assignmentLedgerId !== selectedLedger.id}
-                    >
-                      {assignmentSaving ? "Saving…" : "Save access"}
-                    </Button>
-                  </div>
+                <section className="surface-card flex flex-wrap items-center justify-between gap-3 p-5">
+                  <div><h3 className="font-semibold">Basic-user access</h3>
+                    <p className="text-sm text-muted-foreground">Manage users assigned to this ledger.</p></div>
+                  <Button type="button" variant="outline" onClick={() => openAssignment(selectedLedger.id)}>
+                    Assign ({(ledgerAssignments[selectedLedger.id] ?? []).length})
+                  </Button>
                 </section>
               )}
               <LedgerStatement
@@ -1417,6 +1372,47 @@ export function AccountsLedgerPage() {
           )}
         </div>
       </div>
+      <Dialog open={isAdmin && assignmentLedgerId !== null} onOpenChange={(open) => {
+        if (!open && !assignmentSaving) setAssignmentLedgerId(null);
+      }}>
+        <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto" onEscapeKeyDown={(event) => { if (assignmentSaving) event.preventDefault(); }} onPointerDownOutside={(event) => { if (assignmentSaving) event.preventDefault(); }}>
+          <DialogHeader>
+            <DialogTitle>Assign Basic users</DialogTitle>
+            <DialogDescription>
+              {ledgers.find(ledger => ledger.id === assignmentLedgerId)?.account_name ?? "Selected ledger"} · Select users who should have access to this ledger.
+            </DialogDescription>
+          </DialogHeader>
+          {assignmentLoading ? (
+            <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted-foreground"><Loader2 className="size-4 animate-spin" /> Loading user access…</div>
+          ) : assignmentError ? (
+            <p role="alert" className="rounded-md border border-destructive p-3 text-sm text-destructive">Could not load assignments: {assignmentError}. Close and reopen to retry.</p>
+          ) : (
+            <div className="space-y-3">
+              <Input value={assignmentSearch} onChange={(event) => setAssignmentSearch(event.target.value)} placeholder="Search Basic users" aria-label="Search Basic users" />
+              <p className="text-xs text-muted-foreground">{assignmentUserIds.length} assigned · Clear all selections to remove access.</p>
+              <div className="max-h-64 space-y-1 overflow-y-auto rounded-md border border-border p-2">
+                {basicUsers.filter(u => (u.full_name + " " + u.username).toLowerCase().includes(assignmentSearch.trim().toLowerCase())).map(u => (
+                  <label key={u.id} className="flex cursor-pointer items-center gap-3 rounded-md p-2 hover:bg-muted">
+                    <input type="checkbox" className="size-4 accent-primary" checked={assignmentUserIds.includes(u.id)} disabled={assignmentSaving} onChange={event => {
+                      const checked = event.target.checked;
+                      setAssignmentUserIds(current => checked ? [...new Set([...current,u.id])] : current.filter(id => id !== u.id));
+                    }} />
+                    <span className="min-w-0 text-sm"><span className="block font-medium">{u.full_name || u.username}</span><span className="text-xs text-muted-foreground">{u.username}</span></span>
+                  </label>
+                ))}
+                {!basicUsers.length && <p className="p-3 text-sm text-muted-foreground">No active Basic users found.</p>}
+                {basicUsers.length > 0 && !basicUsers.some(u => (u.full_name + " " + u.username).toLowerCase().includes(assignmentSearch.trim().toLowerCase())) && <p className="p-3 text-sm text-muted-foreground">No matching users.</p>}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={assignmentSaving} onClick={() => setAssignmentLedgerId(null)}>Cancel</Button>
+            <Button type="button" onClick={() => void saveAssignment()} disabled={assignmentSaving || assignmentLoading || Boolean(assignmentError)}>
+              {assignmentSaving ? "Saving…" : "Save access"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
