@@ -7,6 +7,8 @@ import { fetchAll } from "@/lib/fetch-all";
 import { num } from "@/lib/trip-calc";
 import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
+import { serverSubmitWorkmenBill } from "@/lib/workmen-approval-actions";
+import { WorkmenApprovalQueue } from "./WorkmenApprovalQueue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -96,7 +98,8 @@ function chargeForPackage(
 export function WorkmenBilling() {
   const db = supabase as any;
   const { user } = useSession();
-  const branches = useBranches();
+  const allBranches = useBranches();
+  const branches = user?.role === "basic" ? allBranches.filter(b => user.branchIds?.includes(b.id)) : allBranches;
   const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [branchId, setBranchId] = useState("");
   const [billDate, setBillDate] = useState(isoToday);
@@ -126,6 +129,7 @@ export function WorkmenBilling() {
 
   const selectedLoading = selected.filter((item) => item.chargeType === "loading");
   const selectedUnloading = selected.filter((item) => item.chargeType === "unloading");
+  const needsApproval = selected.some(i=>i.addition>0||i.deduction>0)||num(additionalPayAmount)>0||num(deductionAmount)>0;
   const candidates = activeType === "loading" ? loadingCandidates : unloadingCandidates;
   const entryKey = (item: Entry) => `${item.origin}:${item.id}`;
   const visibleCandidates = candidates.filter((item) => {
@@ -299,6 +303,7 @@ export function WorkmenBilling() {
       )
       .is("deleted_at", null)
       .order("bill_date", { ascending: false });
+    if (user?.role === "basic") query = query.in("branch_id", user.branchIds?.length ? user.branchIds : ["00000000-0000-0000-0000-000000000000"]);
     if (listBranch !== "all") query = query.eq("branch_id", listBranch);
     if (listDateFrom) query = query.gte("bill_date", listDateFrom);
     if (listDateTo) query = query.lte("bill_date", listDateTo);
@@ -362,7 +367,7 @@ export function WorkmenBilling() {
     void loadBills();
     // loadBills intentionally follows the list filters.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [listBranch, listDateFrom, listDateTo]);
+  }, [listBranch, listDateFrom, listDateTo, user?.id, user?.role]);
   useEffect(() => {
     if (screen === "create" && branchId) void loadCandidates();
     // loadCandidates intentionally follows the create form filters.
@@ -417,41 +422,25 @@ export function WorkmenBilling() {
     if (!branchId) return toast.error("Select a branch");
     if (!selected.length) return toast.error("Add at least one loading or unloading entry");
     if (periodFrom > periodTo) return toast.error("Billing period is invalid");
+    if (!user?.sessionToken || user.role==="viewer") return toast.error("Posting access required.");
+    if (!branches.some(b=>b.id===branchId)) return toast.error("Branch access denied.");
     setSaving(true);
-    const { data, error } = await db.rpc("create_workmen_bill", {
-      p_branch_id: branchId,
-      p_bill_date: billDate,
-      p_period_from: periodFrom,
-      p_period_to: periodTo,
-      p_created_by: user?.id ?? null,
-      p_additional_pay_amount: totals.additionalPay,
-      p_additional_pay_note: additionalPayNote.trim() || null,
-      p_deduction_amount: totals.deduction,
-      p_deduction_note: deductionNote.trim() || null,
-      p_items: selected.map((item) => ({
-        charge_type: item.chargeType,
-        consignment_id: item.origin === "consignment" ? item.id : null,
-        stock_inward_receipt_id: item.origin === "inward" ? item.id : null,
-        stock_outward_receipt_id: item.origin === "outward" ? item.id : null,
-        package_type: item.packageType,
-        calculated_amount: item.calculated,
-        deduction: item.deduction,
-        addition: item.addition,
-        final_amount: Math.max(0, item.calculated - item.deduction + item.addition),
-      })),
-    });
-    setSaving(false);
-    if (error) return toast.error(`Could not create Workmen Bill: ${error.message}`);
-    toast.success("Workmen Bill created and journal entry posted");
-    setScreen("list");
-    setSelected([]);
-    await Promise.all([loadCandidates(), loadBills()]);
-    if (data) toast.info(`Bill ${data} is ready`);
+    try {
+      const result=await serverSubmitWorkmenBill({data:{
+        sessionToken:user.sessionToken,branch:branchId,date:billDate,from:periodFrom,to:periodTo,
+        add:totals.additionalPay,addNote:additionalPayNote.trim()||null,deduct:totals.deduction,deductNote:deductionNote.trim()||null,
+        items:selected.map(item=>({charge_type:item.chargeType,consignment_id:item.origin==="consignment"?item.id:null,stock_inward_receipt_id:item.origin==="inward"?item.id:null,stock_outward_receipt_id:item.origin==="outward"?item.id:null,package_type:item.packageType,calculated_amount:item.calculated,deduction:item.deduction,addition:item.addition,final_amount:Math.max(0,item.calculated-item.deduction+item.addition)}))
+      }});
+      toast.success(result.pending?"Adjusted Workmen Bill submitted for administrator verification.":"Workmen Bill created and journal entry posted.");
+      setScreen("list");setSelected([]);await loadBills();
+    } catch(error){toast.error(error instanceof Error?error.message:String(error));}
+    finally{setSaving(false);}
   }
 
   if (screen === "list") {
     return (
       <div className="space-y-5">
+        <WorkmenApprovalQueue branches={branches} onReviewed={()=>void loadBills()} />
         <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -461,7 +450,7 @@ export function WorkmenBilling() {
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={openCreate}>
+              <Button size="sm" onClick={openCreate} disabled={user?.role==="viewer"}>
                 <FilePlus2 className="size-4" /> Create Workmen Bill
               </Button>
               <Button
@@ -952,8 +941,9 @@ export function WorkmenBilling() {
                 Net Total <strong>{money(totals.grand)}</strong>
               </span>
             </div>
+            {needsApproval && <span className="text-xs font-medium text-muted-foreground">Adjustments require administrator approval before posting.</span>}
             <Button type="submit" disabled={saving || !selected.length}>
-              {saving ? "Generating…" : "Generate Workmen Bill"}
+              {saving ? "Submitting…" : needsApproval ? "Submit for verification" : "Generate Workmen Bill"}
             </Button>
           </div>
         </form>
