@@ -116,7 +116,7 @@ function IdleScreensaverSession() {
   };
 
   return (
-    <dialog ref={dialog} aria-label="LogBook screensaver" data-theme={themeId}
+    <dialog ref={dialog} aria-label="GarudaERP screensaver" data-theme={themeId}
       className={themed ? "logbook-screensaver logbook-splash-app-theme" : "logbook-screensaver"}
       style={surface} onCancel={(event) => { event.preventDefault(); dismiss(); }}>
       <button type="button" aria-label="Dismiss screensaver" onClick={dismiss}

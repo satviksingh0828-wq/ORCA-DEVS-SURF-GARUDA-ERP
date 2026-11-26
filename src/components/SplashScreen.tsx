@@ -126,7 +126,7 @@ export function SplashScreen({ onComplete, preview }: { onComplete?: () => void;
 
   if (gone) return null;
   return (
-    <div ref={overlay} role="status" aria-label="Loading LogBook" data-theme={themeId} className={themeProfile ? "logbook-splash-app-theme" : undefined}
+    <div ref={overlay} role="status" aria-label="Loading GarudaERP" data-theme={themeId} className={themeProfile ? "logbook-splash-app-theme" : undefined}
       style={{ position: "fixed", inset: 0, zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", ...(themeProfile ? moduleThemeInlineStyles(themeProfile, "erp") : {}), backgroundColor: themeProfile ? "var(--background)" : dark ? "#151515" : "#ffffff", color: themeProfile ? "var(--foreground)" : ink, backgroundImage: themeProfile ? "var(--logbook-theme-texture, none)" : "none", userSelect: "none" }}>
       {mode !== null && <div className="logbook-splash-wordmark" ref={logo}>
         <svg ref={svg} viewBox="0 0 962 192" style={{ display: "block", width: "100%", aspectRatio: "962 / 192", overflow: "visible" }} aria-hidden="true">

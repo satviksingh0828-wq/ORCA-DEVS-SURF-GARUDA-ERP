@@ -1,5 +1,5 @@
 // Splash and screensaver typography remains independent of the app header font.
-export const LOGBOOK_WORDMARK = "LogBook";
+export const LOGBOOK_WORDMARK = "GarudaERP";
 export const LOGBOOK_FONT_FAMILY = "Arial, sans-serif";
 export const LOGBOOK_FONT_WEIGHT = 900;
 
@@ -9,7 +9,7 @@ export function LogBookWordmark({ className = "" }: { className?: string }) {
       className={`text-right text-[11px] font-semibold leading-tight sm:text-sm whitespace-nowrap ${className}`}
       style={{ color: "var(--ltms-chrome-text, #ffffff)", fontFamily: "inherit" }}
     >
-      LogBook - ERP
+      {LOGBOOK_WORDMARK}
     </span>
   );
 }

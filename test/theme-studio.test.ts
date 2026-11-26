@@ -389,3 +389,14 @@ test("startup shows only animated wordmark and idle saver uses static shared wor
   assert.doesNotMatch(saver, /requestAnimationFrame|signOut\(/);
   assert.match(root, /<IdleScreensaver enabled=/);
 });
+
+
+test("GarudaERP branding is shared across the header, splash and screensaver", () => {
+  const wordmark = readFileSync("src/components/LogBookWordmark.tsx", "utf8");
+  const splash = readFileSync("src/components/SplashScreen.tsx", "utf8");
+  const saver = readFileSync("src/components/IdleScreensaver.tsx", "utf8");
+  assert.match(wordmark, /LOGBOOK_WORDMARK = "GarudaERP"/);
+  assert.doesNotMatch(wordmark, /LogBook - ERP/);
+  assert.match(splash, /aria-label="Loading GarudaERP"/);
+  assert.match(saver, /aria-label="GarudaERP screensaver"/);
+});
