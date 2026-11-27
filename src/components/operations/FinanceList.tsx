@@ -1,3 +1,4 @@
+import { serverManagePendingApproval } from "@/lib/pending-approval-actions";
 import { useEffect, useMemo, useState } from "react";
 import { Check, Download, Loader2, Plus } from "lucide-react";
 import { toast } from "sonner";
@@ -358,8 +359,16 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
       payload.income_receivable_ledger_id = editing.income_receivable_ledger_id;
       payload.payment_ledger_id = editing.payment_ledger_id;
     }
+    if (editing.verification_id) {
+      try {
+        if(!user?.sessionToken)throw new Error("Sign in again");
+        await serverManagePendingApproval({data:{sessionToken:user.sessionToken,category:kind,id:editing.verification_id,action:"edit",patch:payload}});
+        toast.success("Changes saved; awaiting approval");setEditing(null);await load();
+      }catch(error){toast.error(error instanceof Error?error.message:String(error));}finally{setSaving(false);}
+      return;
+    }
     if (isBasic) {
-      if (!user?.sessionToken) return toast.error("Your session has expired. Please sign in again.");
+      if (!user?.sessionToken) {setSaving(false);return toast.error("Your session has expired. Please sign in again.");}
       try {
         await serverSubmitPendingFinance({
           data: {
@@ -893,6 +902,13 @@ export function FinanceList({ kind }: { kind: FinanceKind }) {
                           Approve
                         </Button>
                       ) : null}
+                      {r.verification_id && user?.role==="admin" && <>
+                        <Button variant="outline" size="sm" onClick={()=>setEditing({...r})}>Edit</Button>
+                        <Button variant="destructive" size="sm" onClick={async()=>{
+                          if(!user?.sessionToken||!window.confirm("Reject and delete this pending request?"))return;
+                          try{await serverManagePendingApproval({data:{sessionToken:user.sessionToken,category:kind,id:r.verification_id!,action:"reject"}});toast.success("Request deleted");await load();}catch(e){toast.error(e instanceof Error?e.message:String(e));}
+                        }}>Reject</Button>
+                      </>}
                       {!r.verification_id && !r.settled ? (
                         <Button variant="outline" size="sm" onClick={() => (kind === "expenditure" || kind === "income" || r.is_fixed_income || r.is_payroll || r.is_emi) ? (setPaymentRow(r), setPaymentLedgerId("")) : void settle(r)}>
                           <Check className="size-4" />

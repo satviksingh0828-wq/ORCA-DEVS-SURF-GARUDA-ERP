@@ -37,7 +37,7 @@ export type FinanceRequestRow={id:string;kind:string;branch_id:string;entry_date
 export const serverListAccountFinance = createServerFn({method:"POST"}).validator(z.object({sessionToken:token,kind:z.enum(["receipt","payment","transfer"])})).handler(async({data}):Promise<FinanceRequestRow[]>=>{
  const {db,user}=await actor(data.sessionToken);
  if(!["basic","admin"].includes(user.role)) return [];
- let q=db.from("account_finance_requests").select("*").order("created_at",{ascending:false}).limit(500);
+ let q=db.from("account_finance_requests").select("*").neq("status","rejected").order("created_at",{ascending:false}).limit(500);
  q=data.kind==="transfer"?q.in("kind",["withdrawal","deposit"]):q.eq("kind",data.kind);
  if(user.role==="basic"){
   const {data:access,error}=await db.from("user_branch_access").select("branch_id").eq("user_id",user.id);

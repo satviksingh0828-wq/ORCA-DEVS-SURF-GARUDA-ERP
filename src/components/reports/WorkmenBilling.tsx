@@ -440,7 +440,6 @@ export function WorkmenBilling() {
   if (screen === "list") {
     return (
       <div className="space-y-5">
-        <WorkmenApprovalQueue branches={branches} onReviewed={()=>void loadBills()} />
         <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -514,6 +513,7 @@ export function WorkmenBilling() {
                 </tr>
               </thead>
               <tbody>
+                <WorkmenApprovalQueue branches={branches} onReviewed={()=>void loadBills()} branchFilter={listBranch} from={listDateFrom} to={listDateTo} empty={!bills.length} />
                 {bills.map((bill) => (
                   <tr key={bill.id} className="border-t border-border">
                     <td className="px-3 py-3 font-medium">
@@ -568,13 +568,6 @@ export function WorkmenBilling() {
                     </td>
                   </tr>
                 ))}
-                {!bills.length && (
-                  <tr>
-                    <td colSpan={10} className="px-3 py-10 text-center text-muted-foreground">
-                      No Workmen Bills found.
-                    </td>
-                  </tr>
-                )}
               </tbody>
             </table>
           </div>

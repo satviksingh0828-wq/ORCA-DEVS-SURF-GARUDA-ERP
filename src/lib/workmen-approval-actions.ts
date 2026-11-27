@@ -24,7 +24,7 @@ export const serverSubmitWorkmenBill=createServerFn({method:"POST"}).validator(z
 });
 export type WorkmenApproval={id:string;branch_id:string;bill_date:string;period_from:string;period_to:string;items:Array<{reference_number:string;charge_type:string;calculated_amount:number;addition:number;deduction:number;final_amount:number;source_kind:string;source_id:string}>;additional_pay_amount:number;additional_pay_note:string|null;deduction_amount:number;deduction_note:string|null;grand_total:number;status:string;requested_by:string;reviewed_by:string|null;review_note:string|null;bill_id:string|null};
 export const serverListWorkmenApprovals=createServerFn({method:"POST"}).validator(z.object({sessionToken:token})).handler(async({data}):Promise<WorkmenApproval[]>=>{
- const {db,user}=await actor(data.sessionToken);let q=db.from("workmen_bill_approval_requests").select("*").order("created_at",{ascending:false}).limit(500);
+ const {db,user}=await actor(data.sessionToken);let q=db.from("workmen_bill_approval_requests").select("*").eq("status","pending").order("created_at",{ascending:false}).limit(500);
  if(user.role!=="admin")q=q.eq("requested_by",user.id);
  if(user.role==="basic"){const {data:access,error}=await db.from("user_branch_access").select("branch_id").eq("user_id",user.id);if(error)throw new Error(error.message);if(!access?.length)return [];q=q.in("branch_id",access.map((x:{branch_id:string})=>x.branch_id));}
  const {data:rows,error}=await q;if(error)throw new Error(error.message);return rows??[];

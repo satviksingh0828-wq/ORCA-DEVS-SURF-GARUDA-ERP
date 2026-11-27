@@ -18,9 +18,9 @@ export const serverSubmitTransporterBill=createServerFn({method:"POST"}).validat
  const {data:r,error}=await db.rpc("submit_transporter_bill_approval",{p_actor:user.id,p_branch:data.branch,p_transporter:data.transporter,p_source:data.source,p_system_date:data.systemDate,p_number:data.number,p_date:data.date,p_from:data.from,p_to:data.to,p_items:data.items});
  if(error)throw new Error(error.message);return {id:String(r.id),pending:Boolean(r.pending)};
 });
-export type TransporterApproval={id:string;branch_id:string;transporter_id:string;transporter_source_id:string;transporter_bill_number:string;transporter_bill_date:string;items:Array<z.infer<typeof item>>;grand_total:number;status:string;requested_by:string;reviewed_by:string|null;review_note:string|null;bill_id:string|null};
+export type TransporterApproval={id:string;branch_id:string;transporter_id:string;transporter_source_id:string;system_date:string;transporter_bill_number:string;transporter_bill_date:string;items:Array<z.infer<typeof item>>;grand_total:number;status:string;requested_by:string;reviewed_by:string|null;review_note:string|null;bill_id:string|null};
 export const serverListTransporterApprovals=createServerFn({method:"POST"}).validator(z.object({sessionToken:token})).handler(async({data}):Promise<TransporterApproval[]>=>{
- const {db,user}=await actor(data.sessionToken);let q=db.from("transporter_bill_approval_requests").select("*").order("created_at",{ascending:false}).limit(500);
+ const {db,user}=await actor(data.sessionToken);let q=db.from("transporter_bill_approval_requests").select("*").eq("status","pending").order("created_at",{ascending:false}).limit(500);
  if(user.role!=="admin")q=q.eq("requested_by",user.id);
  if(user.role==="basic"){const {data:access,error}=await db.from("user_branch_access").select("branch_id").eq("user_id",user.id);if(error)throw new Error(error.message);if(!access?.length)return [];q=q.in("branch_id",access.map((x:{branch_id:string})=>x.branch_id));}
  const {data:rows,error}=await q;if(error)throw new Error(error.message);return rows??[];

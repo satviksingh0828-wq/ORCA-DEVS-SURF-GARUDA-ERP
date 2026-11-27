@@ -253,7 +253,6 @@ export function AccountsFinancePage() {
           {tab === "bank-withdrawal-deposit" && (user?.role === "basic" || user?.role === "admin") && <BankWithdrawalDeposit branches={branches} ledgers={ledgers} onDocument={(path)=>void downloadDocument(path)} />}
           {isCashTab && !open && (
             <div className="space-y-4">
-              <FinanceApprovalQueue kind={isReceipt?"receipt":"payment"} branches={branches} ledgers={ledgers} revision={approvalRevision} onPosted={()=>void load()} onDocument={(path)=>void downloadDocument(path)} />
               <div className="flex justify-end">
                 <Button disabled={user?.role==="viewer"}
                   onClick={() => {
@@ -311,8 +310,8 @@ export function AccountsFinancePage() {
                         "Name",
                         "Description",
                         "Amount",
-                        "Journal",
-                        "Document",
+                        "Status / Journal",
+                        "Actions",
                       ].map((x) => (
                         <th className="px-3 py-3" key={x}>
                           {x}
@@ -321,6 +320,7 @@ export function AccountsFinancePage() {
                     </tr>
                   </thead>
                   <tbody>
+                    <FinanceApprovalQueue kind={isReceipt?"receipt":"payment"} branches={branches} ledgers={ledgers} revision={approvalRevision} onPosted={()=>void load()} onDocument={(path)=>void downloadDocument(path)} inline branchFilter={branchFilter} from={from} to={to} search={search} empty={!visibleRows.length} />
                     {visibleRows.map((r) => (
                       <tr className="border-t border-border" key={r.id}>
                         <td className="px-3 py-3 font-medium">{r.voucher_number}</td>
@@ -372,13 +372,6 @@ export function AccountsFinancePage() {
                         </td>
                       </tr>
                     ))}
-                    {!visibleRows.length && (
-                      <tr>
-                        <td colSpan={8} className="py-8 text-center text-muted-foreground">
-                          No vouchers found.
-                        </td>
-                      </tr>
-                    )}
                   </tbody>
                 </table>
               </div>

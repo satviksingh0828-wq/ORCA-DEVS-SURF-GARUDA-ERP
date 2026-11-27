@@ -7,6 +7,8 @@ import { useBranches } from "@/lib/use-branches";
 import { useSession } from "@/lib/session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { PendingApprovalActions } from "@/components/accounts/PendingApprovalActions";
+import {serverSubmitNoteApproval,serverListNoteApprovals,serverManagePendingApproval,type NoteApproval} from "@/lib/pending-approval-actions";
 
 const db = supabase as any;
 const today = () => new Date().toISOString().slice(0, 10);
@@ -364,6 +366,8 @@ function NotesTab({
   user: any;
 }) {
   const [rows, setRows] = useState<Note[]>([]);
+  const [pending,setPending]=useState<NoteApproval[]>([]);
+  const [editingRequest,setEditingRequest]=useState<NoteApproval|null>(null);
   const [parties, setParties] = useState<Party[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [branch, setBranch] = useState("all");
@@ -396,14 +400,16 @@ function NotesTab({
     if (user?.role === "basic")
       q = q.in("branch_id", user.branchIds ?? ["00000000-0000-0000-0000-000000000000"]);
     if (branch !== "all") q = q.eq("branch_id", branch);
-    if (status !== "all") q = q.eq("status", status);
+    if (status !== "all" && status!=="pending") q = q.eq("status", status);
+    if(status==="pending")q=q.eq("id","00000000-0000-0000-0000-000000000000");
     const { data, error } = await q;
     if (error) toast.error(error.message);
     else setRows((data ?? []) as Note[]);
+    try{setPending(user?.sessionToken?await serverListNoteApprovals({data:{sessionToken:user.sessionToken,type:noteType}}):[]);}catch(e){setPending([]);toast.error(e instanceof Error?e.message:String(e));}
   }
   useEffect(() => {
     void load();
-  }, [noteType, branch, from, to, status]);
+  }, [noteType, branch, from, to, status,user?.sessionToken]);
   useEffect(() => {
     void db
       .from("ltms_billing_parties")
@@ -431,6 +437,7 @@ function NotesTab({
   const filtered = rows.filter((r) =>
     `${r.note_number} ${r.party?.party_name ?? ""}`.toLowerCase().includes(search.toLowerCase()),
   );
+  const visiblePending=pending.filter(r=>(status==="all"||status==="pending")&&(branch==="all"||r.branch_id===branch)&&r.note_date>=from&&r.note_date<=to&&(r.party?.party_name??"").toLowerCase().includes(search.toLowerCase()));
   const branchParties = parties.filter((p) => p.branch_id === form.branch);
   const selectedParty = branchParties.find((p) => p.id === form.party);
   const otherParties = branchParties.filter((p) => p.id !== form.party);
@@ -440,33 +447,17 @@ function NotesTab({
     if ((!form.offsetParty && !form.offsetAccount) || (form.offsetParty && form.offsetAccount))
       return toast.error("Select either another party or an account");
     setSaving(true);
-    const { error } = await db.rpc("create_ltms_accounting_note", {
-      p_note_type: noteType,
-      p_branch_id: form.branch,
-      p_party_id: form.party,
-      p_note_date: form.date,
-      p_amount: Number(form.amount),
-      p_description: form.description.trim() || null,
-      p_offset_party_id: form.offsetParty || null,
-      p_offset_ledger_id: form.offsetAccount || null,
-      p_created_by: user?.id ?? null,
-    });
-    setSaving(false);
-    if (error) toast.error(error.message);
-    else {
-      toast.success(`${noteType === "debit" ? "Debit" : "Credit"} Note created and journal posted`);
-      setOpen(false);
-      setForm({
-        branch: "",
-        party: "",
-        offsetParty: "",
-        offsetAccount: "",
-        amount: "",
-        date: today(),
-        description: "",
-      });
-      await load();
-    }
+    try {
+      if(!user?.sessionToken)throw new Error("Sign in again");
+      if(editingRequest){
+        await serverManagePendingApproval({data:{sessionToken:user.sessionToken,category:"note",id:editingRequest.id,action:"edit",patch:{party_id:form.party,note_date:form.date,amount:Number(form.amount),description:form.description.trim()||null,offset_party_id:form.offsetParty||null,offset_ledger_id:form.offsetAccount||null}}});
+        toast.success("Changes saved; awaiting approval.");
+      }else{
+        const result=await serverSubmitNoteApproval({data:{sessionToken:user.sessionToken,type:noteType,branch:form.branch,party:form.party,date:form.date,amount:Number(form.amount),description:form.description.trim()||null,offsetParty:form.offsetParty||null,offsetLedger:form.offsetAccount||null}});
+        toast.success(result.pending?"Submitted for verification":"Note created and journal posted");
+      }
+      setOpen(false);setEditingRequest(null);setForm({branch:"",party:"",offsetParty:"",offsetAccount:"",amount:"",date:today(),description:""});await load();
+    }catch(e){toast.error(e instanceof Error?e.message:String(e));}finally{setSaving(false);}
   }
   async function settle(note: Note, account: string, amount: string, date: string) {
     if (!account || Number(amount) <= 0)
@@ -508,9 +499,10 @@ function NotesTab({
   return (
     <div className={`space-y-4 ${open ? "[&>*:not(:last-child)]:hidden" : ""}`}>
       <div className="flex flex-wrap items-end justify-end gap-3">
-        <Button
+        <Button disabled={user?.role==="viewer"}
           onClick={() => {
-            setForm((f) => ({ ...f, branch: branches[0]?.id ?? "" }));
+            setEditingRequest(null);
+            setForm({branch:branches[0]?.id??"",party:"",offsetParty:"",offsetAccount:"",amount:"",date:today(),description:""});
             setOpen(true);
           }}
         >
@@ -537,6 +529,7 @@ function NotesTab({
         </label>
         <SelectField label="Status" value={status} onChange={setStatus}>
           <option value="all">All</option>
+          <option value="pending">Awaiting approval</option>
           <option value="open">Not {noteType === "debit" ? "Paid" : "Received"}</option>
           <option value="settled">{noteType === "debit" ? "Paid" : "Received"}</option>
         </SelectField>
@@ -563,6 +556,7 @@ function NotesTab({
             </tr>
           </thead>
           <tbody>
+            {visiblePending.map(r=><tr key={"pending-"+r.id} className="border-t bg-amber-500/5"><td className="p-3">Pending</td><td className="p-3">{r.note_date}</td><td className="p-3">{r.branch?.branch_name??"—"}</td><td className="p-3">{r.party?.party_name??"—"}</td><td className="p-3">{money(r.amount)}</td><td className="p-3 text-amber-700">Awaiting approval</td><td className="p-3"><PendingApprovalActions category="note" row={r} onChanged={()=>void load()} onEdit={()=>{setEditingRequest(r);setForm({branch:r.branch_id,party:r.party_id,offsetParty:r.offset_party_id??"",offsetAccount:r.offset_ledger_id??"",amount:String(r.amount),date:r.note_date,description:r.description??""});setOpen(true);}}/></td></tr>)}
             {filtered.map((r) => (
               <tr className="border-t border-border" key={r.id}>
                 <td className="px-3 py-3 font-medium">
@@ -594,7 +588,7 @@ function NotesTab({
                 </td>
               </tr>
             ))}
-            {!filtered.length && (
+            {!filtered.length && !visiblePending.length && (
               <tr>
                 <td colSpan={7} className="py-8 text-center text-muted-foreground">
                   No notes found.
@@ -606,7 +600,7 @@ function NotesTab({
       </div>
       {open && (
         <Dialog
-          title={`Create ${noteType === "debit" ? "Debit" : "Credit"} Note`}
+          title={`${editingRequest?"Edit":"Create"} ${noteType === "debit" ? "Debit" : "Credit"} Note`}
           onClose={() => setOpen(false)}
         >
           <div className="grid gap-3 sm:grid-cols-2">
@@ -614,7 +608,7 @@ function NotesTab({
               label="Branch"
               value={form.branch}
               onChange={(v) =>
-                setForm({ ...form, branch: v, party: "", offsetParty: "", offsetAccount: "" })
+                !editingRequest && setForm({ ...form, branch: v, party: "", offsetParty: "", offsetAccount: "" })
               }
             >
               <option value="">Select branch</option>
@@ -696,7 +690,7 @@ function NotesTab({
               Cancel
             </Button>
             <Button onClick={() => void createNote()} disabled={saving}>
-              {saving ? "Posting…" : "Create and Post"}
+              {saving ? "Saving…" : editingRequest ? "Save changes" : user?.role==="basic"?"Submit for verification":"Create and Post"}
             </Button>
           </div>
         </Dialog>

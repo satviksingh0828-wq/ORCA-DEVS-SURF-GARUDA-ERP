@@ -592,7 +592,6 @@ export function TransporterBilling() {
 
   return (
     <div className="space-y-6">
-      {screen === "list" && <TransporterApprovalQueue branches={branches} transporters={transporters} sources={sources} onReviewed={()=>void loadBills()} />}
       {screen === "list" && (
         <section className="space-y-4 rounded-xl border border-border bg-card p-4 shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -723,6 +722,7 @@ export function TransporterBilling() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
+                <TransporterApprovalQueue branches={branches} transporters={transporters} sources={sources} onReviewed={()=>void loadBills()} filters={listFilters} search={search} empty={!visibleBills.length} />
                 {visibleBills.length ? (
                   visibleBills.map((bill) => (
                     <tr key={bill.id} className="hover:bg-muted/20">
@@ -786,13 +786,7 @@ export function TransporterBilling() {
                       </td>
                     </tr>
                   ))
-                ) : (
-                  <tr>
-                    <td colSpan={11} className="py-10 text-center text-muted-foreground">
-                      {loading ? "Loading bills…" : "No transporter bills found."}
-                    </td>
-                  </tr>
-                )}
+                ) : null}
               </tbody>
             </table>
           </div>
