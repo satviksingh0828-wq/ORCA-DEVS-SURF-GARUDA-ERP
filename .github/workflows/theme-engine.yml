@@ -42,5 +42,7 @@ jobs:
         run: node --test --experimental-strip-types test/ledger-assignment-ui.test.ts
       - name: Running ledger statement regression tests
         run: node --test --experimental-strip-types test/ledger-statement.test.ts
+      - name: Inline approval regression tests
+        run: node --test test/inline-finance-approval.test.mjs
       - name: Build
         run: npm run build

@@ -51,7 +51,7 @@ const APPROVAL_REPORT_SCHEMA = z.object({
   ...BASE_INPUT,
   branch_id: z.string().uuid().optional(),
   status: z.enum(["pending", "approved", "rejected"]).optional(),
-  kind: z.enum(["receipt", "payment", "withdrawal", "deposit", "workmen", "transporter"]).optional(),
+  kind: z.enum(["receipt", "payment", "withdrawal", "deposit", "workmen", "transporter", "debit", "credit"]).optional(),
 });
 const TRANSPORTER_BILLS_SCHEMA = z.object({
   ...BASE_INPUT,
@@ -2390,7 +2390,7 @@ function registerReadTool(
 
 // Approval requests are workflow records, not ledger movements. Read-only
 // projections deliberately omit IDs, raw JSON, session data and document paths.
-type ApprovalReportInput = QueryInput & {status?: "pending"|"approved"|"rejected";kind?: "receipt"|"payment"|"withdrawal"|"deposit"|"workmen"|"transporter"};
+type ApprovalReportInput = QueryInput & {status?: "pending"|"approved"|"rejected";kind?: "receipt"|"payment"|"withdrawal"|"deposit"|"workmen"|"transporter"|"debit"|"credit"};
 async function financeApprovalRequests(db: AnyDb, input: ApprovalReportInput): Promise<DataResult> {
   const range=resolveRange(input);
   const config=[
@@ -2398,7 +2398,7 @@ async function financeApprovalRequests(db: AnyDb, input: ApprovalReportInput): P
     {table:"workmen_bill_approval_requests",date:"bill_date",kind:"workmen",columns:"bill_date,grand_total,additional_pay_amount,deduction_amount,items,status,created_at,reviewed_at,review_note,bill_id,branch:branches(branch_name)"},
     {table:"transporter_bill_approval_requests",date:"transporter_bill_date",kind:"transporter",columns:"transporter_bill_number,transporter_bill_date,grand_total,items,status,created_at,reviewed_at,review_note,bill_id,branch:branches(branch_name),transporter:ltms_transporters(transporter_name),source:ltms_transporter_sources(source_name)"},
   ];
-  const groups=await Promise.all(config.filter(c=>!input.kind||(c.kind==="account"?["receipt","payment","withdrawal","deposit"].includes(input.kind):input.kind===c.kind)).map(async c=>{
+  const groups: Record<string,unknown>[][]=await Promise.all(config.filter(c=>!input.kind||(c.kind==="account"?["receipt","payment","withdrawal","deposit"].includes(input.kind):input.kind===c.kind)).map(async c=>{
     let q=db.from(c.table).select(c.columns).gte(c.date,range.from).lte(c.date,range.to).order(c.date,{ascending:false}).order("created_at",{ascending:false});
     if(input.branch_id)q=q.eq("branch_id",input.branch_id);
     if(input.status)q=q.eq("status",input.status);
@@ -2412,6 +2412,14 @@ async function financeApprovalRequests(db: AnyDb, input: ApprovalReportInput): P
       return {...common,"Transporter Bill No.":r.transporter_bill_number,Transporter:r.transporter?.transporter_name??null,Source:r.source?.source_name??null,"Freight Additions":items.reduce((n:number,i:any)=>n+num(i.additional_freight),0),"Freight Deductions":items.reduce((n:number,i:any)=>n+num(i.freight_deduction),0),"Loading Additions":items.reduce((n:number,i:any)=>n+num(i.additional_loading),0),"Loading Deductions":items.reduce((n:number,i:any)=>n+num(i.loading_deduction),0),"Fixed LR Charges (included in Amount)":items.reduce((n:number,i:any)=>n+num(i.fixed_lr_charges),0),"Consignments":items.length};
     });
   }));
+  // Debit / credit notes exist in the request table only until approval or rejection.
+  if ((!input.kind || input.kind==="debit" || input.kind==="credit") && (!input.status || input.status==="pending")) {
+    let q=db.from("ltms_note_approval_requests").select("note_type,note_date,amount,description,created_at,branch:branches(branch_name),party:ltms_billing_parties!ltms_note_approval_requests_party_id_fkey(party_name)").gte("note_date",range.from).lte("note_date",range.to).order("note_date",{ascending:false}).order("created_at",{ascending:false});
+    if(input.branch_id)q=q.eq("branch_id",input.branch_id);
+    if(input.kind)q=q.eq("note_type",input.kind);
+    const notes=await fetchAll<any>((from,to)=>q.range(from,to));
+    groups.push(notes.map(r=>({Date:r.note_date,Branch:r.branch?.branch_name??null,Type:r.note_type,Status:"pending",Amount:num(r.amount),Party:r.party?.party_name??null,Description:r.description??null,"Submitted At":r.created_at,"Journal Posted":false})));
+  }
   const rows=groups.flat().sort((a,b)=>String(b.Date).localeCompare(String(a.Date))||String(b["Submitted At"]).localeCompare(String(a["Submitted At"])));
   return page("Finance and Billing Approval Requests (not ledger balances)",range,input,rows);
 }
@@ -2430,7 +2438,7 @@ async function transporterBills(db:AnyDb,input:QueryInput&{include_deleted?:bool
 export function registerLtmsReportTools(server: McpServer, db: AnyDb, actorId: string) {
   registerReadTool(server, db, {
     name: "finance_approval_requests", title: "Finance and Billing Approval Requests",
-    description: "Read-only account cash receipt/payment, bank withdrawal/deposit, Workmen Bill and Transporter Bill approval requests. Optional kind, status, date and branch filters. Pending/rejected amounts are not posted accounting transactions; do not add them to journal balances. Fixed LR is included in transporter totals. No approval or write action.",
+    description: "Read-only account cash receipt/payment, bank withdrawal/deposit, Workmen Bill and Transporter Bill approval requests, plus pending debit/credit notes. Rejected requests deleted by the administrator are absent. Approved notes appear in the posted journal rather than this pending-note report. Optional kind, status, date and branch filters. Pending/rejected amounts are not posted accounting transactions; do not add them to journal balances. Fixed LR is included in transporter totals. No approval or write action.",
     schema: APPROVAL_REPORT_SCHEMA, load: (input) => financeApprovalRequests(db,input),
   });
   registerReadTool(server, db, {

@@ -38,7 +38,7 @@ export const serverListAccountFinance = createServerFn({method:"POST"}).validato
  const {db,user}=await actor(data.sessionToken);
  if(!["basic","admin"].includes(user.role)) return [];
  let q=db.from("account_finance_requests").select("*").neq("status","rejected").order("created_at",{ascending:false}).limit(500);
- q=data.kind==="transfer"?q.in("kind",["withdrawal","deposit"]):q.eq("kind",data.kind);
+ q=data.kind==="transfer"?q.in("kind",["withdrawal","deposit"]):q.eq("kind",data.kind).eq("status","pending");
  if(user.role==="basic"){
   const {data:access,error}=await db.from("user_branch_access").select("branch_id").eq("user_id",user.id);
   if(error) throw new Error(error.message);

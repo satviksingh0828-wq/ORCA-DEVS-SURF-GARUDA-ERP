@@ -111,6 +111,7 @@ export function WorkmenBilling() {
   const [selected, setSelected] = useState<Entry[]>([]);
   const [candidateIds, setCandidateIds] = useState<string[]>([]);
   const [bills, setBills] = useState<Bill[]>([]);
+  const [approvalRevision,setApprovalRevision]=useState(0);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [viewing, setViewing] = useState<Bill | null>(null);
   const [viewItems, setViewItems] = useState<BillItem[]>([]);
@@ -296,6 +297,7 @@ export function WorkmenBilling() {
   }
 
   async function loadBills() {
+    setApprovalRevision(n=>n+1);
     let query = db
       .from("workmen_bills")
       .select(
@@ -513,7 +515,7 @@ export function WorkmenBilling() {
                 </tr>
               </thead>
               <tbody>
-                <WorkmenApprovalQueue branches={branches} onReviewed={()=>void loadBills()} branchFilter={listBranch} from={listDateFrom} to={listDateTo} empty={!bills.length} />
+                <WorkmenApprovalQueue branches={branches} onReviewed={()=>void loadBills()} revision={approvalRevision} branchFilter={listBranch} from={listDateFrom} to={listDateTo} empty={!bills.length} />
                 {bills.map((bill) => (
                   <tr key={bill.id} className="border-t border-border">
                     <td className="px-3 py-3 font-medium">

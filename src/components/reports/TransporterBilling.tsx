@@ -166,6 +166,7 @@ export function TransporterBilling() {
   const branches = user?.role==="basic"?allBranches.filter(b=>user.branchIds?.includes(b.id)):allBranches;
   const [screen, setScreen] = useState<"list" | "create" | "view">("list");
   const [bills, setBills] = useState<Bill[]>([]);
+  const [approvalRevision,setApprovalRevision]=useState(0);
   const [payingBill, setPayingBill] = useState<Bill | null>(null);
   const [transporters, setTransporters] = useState<Transporter[]>([]);
   const [sources, setSources] = useState<TransporterSource[]>([]);
@@ -225,6 +226,7 @@ export function TransporterBilling() {
     else setSources((sourceResult.data ?? []) as TransporterSource[]);
   }
   async function loadBills() {
+    setApprovalRevision(n=>n+1);
     if (!listFilters.from || !listFilters.to || listFilters.from > listFilters.to)
       return toast.error("Enter a valid system date range");
     setLoading(true);
@@ -722,7 +724,7 @@ export function TransporterBilling() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                <TransporterApprovalQueue branches={branches} transporters={transporters} sources={sources} onReviewed={()=>void loadBills()} filters={listFilters} search={search} empty={!visibleBills.length} />
+                <TransporterApprovalQueue branches={branches} transporters={transporters} sources={sources} onReviewed={()=>void loadBills()} revision={approvalRevision} filters={listFilters} search={search} empty={!visibleBills.length} hidePending={showDeleted} />
                 {visibleBills.length ? (
                   visibleBills.map((bill) => (
                     <tr key={bill.id} className="hover:bg-muted/20">

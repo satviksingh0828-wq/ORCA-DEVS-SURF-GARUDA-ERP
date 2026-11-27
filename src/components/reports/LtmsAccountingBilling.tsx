@@ -435,9 +435,9 @@ function NotesTab({
       });
   }, [form.branch]);
   const filtered = rows.filter((r) =>
-    `${r.note_number} ${r.party?.party_name ?? ""}`.toLowerCase().includes(search.toLowerCase()),
+    r.note_type === noteType && `${r.note_number} ${r.party?.party_name ?? ""}`.toLowerCase().includes(search.toLowerCase()),
   );
-  const visiblePending=pending.filter(r=>(status==="all"||status==="pending")&&(branch==="all"||r.branch_id===branch)&&r.note_date>=from&&r.note_date<=to&&(r.party?.party_name??"").toLowerCase().includes(search.toLowerCase()));
+  const visiblePending=pending.filter(r=>r.note_type===noteType&&(status==="all"||status==="pending")&&(branch==="all"||r.branch_id===branch)&&r.note_date>=from&&r.note_date<=to&&(r.party?.party_name??"").toLowerCase().includes(search.toLowerCase()));
   const branchParties = parties.filter((p) => p.branch_id === form.branch);
   const selectedParty = branchParties.find((p) => p.id === form.party);
   const otherParties = branchParties.filter((p) => p.id !== form.party);
